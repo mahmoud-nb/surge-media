@@ -1,0 +1,25 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "core",
+      "runtimeExecutable": "pnpm",
+      "runtimeArgs": [
+        "--filter",
+        "@surge-media/core",
+        "dev"
+      ],
+      "port": 3000
+    },
+    {
+      "name": "core-start",
+      "runtimeExecutable": "pnpm",
+      "runtimeArgs": [
+        "--filter",
+        "@surge-media/core",
+        "start"
+      ],
+      "port": 3000
+    }
+  ]
+}

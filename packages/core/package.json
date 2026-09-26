@@ -1,0 +1,51 @@
+{
+  "name": "@surge-media/core",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Cœur de surgeMedia : interface d'administration, API médias et traitement d'images (Nuxt 3 + Nitro + Prisma).",
+  "license": "MIT",
+  "engines": {
+    "node": "^22.12.0 || >=24.0.0"
+  },
+  "scripts": {
+    "dev": "nuxt dev",
+    "build": "nuxt build && pnpm build:cli",
+    "build:cli": "tsdown",
+    "preview": "nuxt preview",
+    "start": "node --env-file-if-exists=.env .output/server/index.mjs",
+    "typecheck": "nuxt typecheck",
+    "postinstall": "nuxt prepare && prisma generate",
+    "cli": "tsx cli/index.ts",
+    "db:init": "tsx cli/index.ts init",
+    "db:migrate": "tsx cli/index.ts db migrate",
+    "db:reset": "tsx cli/index.ts db reset",
+    "db:generate": "prisma generate",
+    "db:studio": "prisma studio",
+    "db:migration": "tsx scripts/db-migration.ts"
+  },
+  "dependencies": {
+    "@clack/prompts": "^1.8.1",
+    "@prisma/adapter-better-sqlite3": "7.10.0",
+    "@prisma/adapter-mariadb": "7.10.0",
+    "@prisma/adapter-pg": "7.10.0",
+    "@prisma/client": "7.10.0",
+    "citty": "^0.2.2",
+    "nuxt": "^3.21.11",
+    "prisma": "7.10.0",
+    "sharp": "^0.35.4",
+    "unstorage": "^1.17.5",
+    "vue": "^3.5.43",
+    "vue-router": "^5.3.1"
+  },
+  "devDependencies": {
+    "@types/node": "^24.13.6",
+    "tsdown": "^0.23.0",
+    "tsx": "^4.23.15",
+    "typescript": "~6.0.3",
+    "vue-tsc": "^3.3.11"
+  },
+  "bin": {
+    "surge-media": "./dist/cli/index.mjs"
+  }
+}
