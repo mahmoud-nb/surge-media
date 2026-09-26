@@ -1,3 +1,4 @@
+import { randomBytes } from 'node:crypto'
 import { mkdirSync, readFileSync } from 'node:fs'
 import { dirname, join, resolve } from 'node:path'
 import { cancel, confirm, intro, isCancel, log, note, outro, select, spinner, text } from '@clack/prompts'
@@ -61,20 +62,25 @@ export async function runInit(ctx: CliContext, args: TargetArgs & { skipMigrate?
   outro(t('outro.init'))
 }
 
-/** `surge-media db migrate` : applique les migrations en attente, sans toucher à la configuration. */
+/**
+ * `surge-media db migrate` : après une mise à jour, régénère le client Prisma et
+ * applique les migrations en attente, sans toucher à la configuration.
+ */
 export async function runMigrate(ctx: CliContext): Promise<void> {
   const { t } = ctx
   intro(t('intro.migrate'))
 
   const current = readCurrentTarget(ctx)
   if (!current.provider || !current.url) fail(t('error.notConfigured'))
+  const target = current as DatabaseTarget
 
   const schemaProvider = readSchemaProvider(readFileSync(join(ctx.root, SCHEMA_FILE), 'utf8'))
-  if (schemaProvider !== current.provider) {
-    fail(t('error.providerMismatch', { schema: schemaProvider ?? '?', env: current.provider }))
+  if (schemaProvider !== target.provider) {
+    fail(t('error.providerMismatch', { schema: schemaProvider ?? '?', env: target.provider }))
   }
 
-  await prismaStep(ctx, ['migrate', 'deploy'], t('step.migrate'), t('step.migrateDone'), current as DatabaseTarget)
+  await prismaStep(ctx, ['generate'], t('step.generate'), t('step.generateDone'), target)
+  await prismaStep(ctx, ['migrate', 'deploy'], t('step.migrate'), t('step.migrateDone'), target)
   outro(t('outro.migrate'))
 }
 
@@ -201,12 +207,15 @@ function showSummary(ctx: CliContext, target: DatabaseTarget): void {
 async function applyTarget(ctx: CliContext, target: DatabaseTarget, mode: MigrationMode): Promise<void> {
   const { t, root } = ctx
 
-  updateEnvFile(
-    join(root, ENV_FILE),
-    { DATABASE_PROVIDER: target.provider, DATABASE_URL: target.url },
-    join(root, ENV_EXAMPLE_FILE),
-  )
+  const envPath = join(root, ENV_FILE)
+  const values: Record<string, string> = { DATABASE_PROVIDER: target.provider, DATABASE_URL: target.url }
+  // Secret de chiffrement des cookies de session (nuxt-auth-utils), généré une seule fois.
+  const newSessionSecret = !readEnvFile(envPath).NUXT_SESSION_PASSWORD
+  if (newSessionSecret) values.NUXT_SESSION_PASSWORD = randomBytes(32).toString('base64url')
+
+  updateEnvFile(envPath, values, join(root, ENV_EXAMPLE_FILE))
   log.success(t('step.env'))
+  if (newSessionSecret) log.success(t('step.sessionSecret'))
   for (const name of DATABASE_ENV_KEYS) {
     if (process.env[name] !== undefined) log.warn(t('config.shellOverride', { name }))
   }

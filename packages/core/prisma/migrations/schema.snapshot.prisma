@@ -26,9 +26,9 @@ datasource db {
 // ─── Utilisateurs & sessions (interface d'administration) ────────────────────
 
 enum Role {
-  ADMIN // gestion complète : utilisateurs, projets, jetons d'accès, médias
-  EDITOR // gestion des médias et des dossiers
-  VIEWER // consultation uniquement
+  ADMIN // tous les privilèges, y compris la gestion des utilisateurs
+  EDITOR // gestion des médias uniquement
+  DEVELOPER // gestion des médias, des jetons d'accès et des API (projets, CORS)
 }
 
 model User {
@@ -37,7 +37,8 @@ model User {
   name         String?
   /// Empreinte du mot de passe ; null tant qu'un utilisateur invité ne l'a pas défini
   passwordHash String?
-  role         Role      @default(VIEWER)
+  /// Détail des permissions de chaque rôle : shared/utils/permissions.ts
+  role         Role      @default(EDITOR)
   /// Langue de l'interface d'administration (code BCP 47 : "fr", "en"…)
   locale       String    @default("fr")
   isActive     Boolean   @default(true)

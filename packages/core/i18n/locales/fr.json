@@ -1,0 +1,201 @@
+{
+  "app": {
+    "name": "surgeMedia"
+  },
+  "a11y": {
+    "skipToContent": "Aller au contenu principal"
+  },
+  "nav": {
+    "homeSuffix": ", accueil",
+    "admin": "Administration",
+    "login": "Se connecter"
+  },
+  "footer": {
+    "text": "surgeMedia · plateforme open source et auto-hébergée de gestion des médias."
+  },
+  "theme": {
+    "label": "Thème",
+    "system": "Thème du système",
+    "light": "Thème clair",
+    "dark": "Thème sombre"
+  },
+  "locale": {
+    "current": "Langue : {name}"
+  },
+  "form": {
+    "requiredNote": "Les champs marqués d'un astérisque (*) sont obligatoires."
+  },
+  "validation": {
+    "required": "Ce champ est obligatoire.",
+    "email": "Saisissez une adresse e-mail valide, par exemple nom{'@'}exemple.fr.",
+    "tooLong": "Ce champ ne doit pas dépasser {max} caractères.",
+    "tooShort": "Ce champ doit contenir au moins {min} caractères."
+  },
+  "auth": {
+    "logout": "Se déconnecter"
+  },
+  "landing": {
+    "meta": {
+      "title": "Gestion et traitement des médias, auto-hébergés",
+      "description": "surgeMedia centralise vos images et médias, les transforme à la demande et les diffuse à vos applications par une API sécurisée."
+    },
+    "hero": {
+      "eyebrow": "Open source · auto-hébergé",
+      "title": "Vos médias, sous votre contrôle.",
+      "description": "Centralisez les images de tous vos projets, recadrez, redimensionnez et optimisez-les à la demande, puis diffusez-les à vos applications par une API sécurisée, sur votre propre infrastructure.",
+      "ctaLogin": "Accéder à l'administration",
+      "ctaAdmin": "Ouvrir l'administration"
+    },
+    "example": {
+      "caption": "Une transformation d'image en une seule URL",
+      "response": "→ 200 OK · image/webp · 800 × 600 px · 38 Ko"
+    },
+    "features": {
+      "title": "Tout ce qu'il faut pour servir vos médias",
+      "transform": {
+        "title": "Transformations à la demande",
+        "description": "Recadrage, redimensionnement, conversion WebP ou AVIF et compression, générés au premier appel puis mis en cache."
+      },
+      "api": {
+        "title": "API sécurisée",
+        "description": "Jetons d'accès par projet, permissions précises et origines CORS autorisées pour chaque application."
+      },
+      "selfHosted": {
+        "title": "Auto-hébergé",
+        "description": "Vos fichiers et vos données restent chez vous : SQLite, PostgreSQL ou MySQL, stockage local ou objet."
+      },
+      "sdk": {
+        "title": "Composants prêts à l'emploi",
+        "description": "Images optimisées, galeries et téléversement pour Vue, React et Svelte, quel que soit votre framework."
+      }
+    }
+  },
+  "login": {
+    "meta": {
+      "title": "Connexion"
+    },
+    "title": "Connexion",
+    "description": "Connectez-vous pour accéder à l'administration de surgeMedia.",
+    "email": {
+      "label": "Adresse e-mail"
+    },
+    "password": {
+      "label": "Mot de passe",
+      "show": "Afficher le mot de passe"
+    },
+    "submit": "Se connecter",
+    "submitting": "Connexion en cours…",
+    "noAccount": "Pas encore de compte ? Les comptes sont créés par un administrateur de votre organisation.",
+    "errors": {
+      "invalidCredentials": "Adresse e-mail ou mot de passe incorrect.",
+      "tooManyAttempts": "Trop de tentatives de connexion. Réessayez dans {minutes} min.",
+      "invalid": "Les informations saisies ne sont pas valides.",
+      "unexpected": "La connexion a échoué. Réessayez dans un instant."
+    }
+  },
+  "admin": {
+    "nav": {
+      "label": "Navigation de l'administration",
+      "menu": "Menu",
+      "homeSuffix": ", tableau de bord",
+      "dashboard": "Tableau de bord",
+      "media": "Médias",
+      "projects": "Projets et API",
+      "tokens": "Jetons d'accès",
+      "users": "Utilisateurs"
+    },
+    "dashboard": {
+      "meta": {
+        "title": "Tableau de bord"
+      },
+      "title": "Tableau de bord",
+      "greeting": "Bonjour {name}, bienvenue dans l'administration.",
+      "bootstrapWarning": {
+        "title": "Identifiants d'amorçage encore définis",
+        "description": "Votre compte administrateur existe : supprimez NUXT_BOOTSTRAP_ADMIN_EMAIL et NUXT_BOOTSTRAP_ADMIN_PASSWORD de l'environnement du serveur, puis redémarrez-le."
+      },
+      "account": {
+        "title": "Votre compte",
+        "name": "Nom",
+        "noName": "Non renseigné",
+        "email": "Adresse e-mail",
+        "role": "Rôle",
+        "loggedInAt": "Connecté depuis le"
+      },
+      "permissions": {
+        "title": "Vos permissions",
+        "granted": "Autorisé",
+        "notGranted": "Non inclus"
+      }
+    },
+    "upcoming": {
+      "title": "Section en préparation",
+      "description": "Cette section sera disponible dans une prochaine version. Votre rôle vous y donne déjà accès."
+    },
+    "media": {
+      "title": "Médias",
+      "description": "Téléversez, organisez et transformez les médias de vos projets."
+    },
+    "projects": {
+      "title": "Projets et API",
+      "description": "Gérez les projets, leurs origines autorisées (CORS) et l'intégration de l'API."
+    },
+    "tokens": {
+      "title": "Jetons d'accès",
+      "description": "Créez et révoquez les jetons utilisés par vos applications pour appeler l'API."
+    },
+    "users": {
+      "title": "Utilisateurs",
+      "description": "Créez les comptes de votre équipe et attribuez-leur un rôle."
+    }
+  },
+  "roles": {
+    "ADMIN": {
+      "label": "Administrateur",
+      "description": "Tous les privilèges, y compris la gestion des utilisateurs."
+    },
+    "EDITOR": {
+      "label": "Éditeur",
+      "description": "Gestion des médias uniquement."
+    },
+    "DEVELOPER": {
+      "label": "Développeur",
+      "description": "Gestion des médias, des jetons d'accès et des API."
+    }
+  },
+  "permissions": {
+    "media": {
+      "manage": "Gérer les médias"
+    },
+    "tokens": {
+      "manage": "Gérer les jetons d'accès"
+    },
+    "api": {
+      "manage": "Gérer les projets et les API"
+    },
+    "users": {
+      "manage": "Gérer les utilisateurs"
+    }
+  },
+  "errors": {
+    "code": "Erreur {code}",
+    "backHome": "Retour à l'accueil",
+    "backToAdmin": "Retour au tableau de bord",
+    "unauthorized": {
+      "title": "Connexion requise",
+      "description": "Votre session a expiré. Reconnectez-vous pour continuer."
+    },
+    "forbidden": {
+      "title": "Accès refusé",
+      "description": "Votre rôle ne donne pas accès à cette page. Contactez un administrateur si besoin."
+    },
+    "notFound": {
+      "title": "Page introuvable",
+      "description": "L'adresse demandée n'existe pas ou a été déplacée."
+    },
+    "unexpected": {
+      "title": "Une erreur est survenue",
+      "description": "Le service n'a pas pu traiter la demande. Réessayez dans un instant."
+    }
+  }
+}

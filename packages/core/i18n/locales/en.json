@@ -1,0 +1,201 @@
+{
+  "app": {
+    "name": "surgeMedia"
+  },
+  "a11y": {
+    "skipToContent": "Skip to main content"
+  },
+  "nav": {
+    "homeSuffix": ", home",
+    "admin": "Administration",
+    "login": "Sign in"
+  },
+  "footer": {
+    "text": "surgeMedia · open-source, self-hosted media management platform."
+  },
+  "theme": {
+    "label": "Theme",
+    "system": "System theme",
+    "light": "Light theme",
+    "dark": "Dark theme"
+  },
+  "locale": {
+    "current": "Language: {name}"
+  },
+  "form": {
+    "requiredNote": "Fields marked with an asterisk (*) are required."
+  },
+  "validation": {
+    "required": "This field is required.",
+    "email": "Enter a valid email address, for example name{'@'}example.com.",
+    "tooLong": "This field must not exceed {max} characters.",
+    "tooShort": "This field must contain at least {min} characters."
+  },
+  "auth": {
+    "logout": "Sign out"
+  },
+  "landing": {
+    "meta": {
+      "title": "Self-hosted media management and processing",
+      "description": "surgeMedia centralises your images and media, transforms them on demand and delivers them to your applications through a secure API."
+    },
+    "hero": {
+      "eyebrow": "Open source · self-hosted",
+      "title": "Your media, under your control.",
+      "description": "Centralise the images of all your projects, crop, resize and optimise them on demand, then deliver them to your applications through a secure API, on your own infrastructure.",
+      "ctaLogin": "Go to the administration",
+      "ctaAdmin": "Open the administration"
+    },
+    "example": {
+      "caption": "An image transformation in a single URL",
+      "response": "→ 200 OK · image/webp · 800 × 600 px · 38 KB"
+    },
+    "features": {
+      "title": "Everything you need to serve your media",
+      "transform": {
+        "title": "On-demand transformations",
+        "description": "Cropping, resizing, WebP or AVIF conversion and compression, generated on first request and then cached."
+      },
+      "api": {
+        "title": "Secure API",
+        "description": "Per-project access tokens, fine-grained permissions and allowed CORS origins for each application."
+      },
+      "selfHosted": {
+        "title": "Self-hosted",
+        "description": "Your files and data stay with you: SQLite, PostgreSQL or MySQL, local or object storage."
+      },
+      "sdk": {
+        "title": "Ready-to-use components",
+        "description": "Optimised images, galleries and uploads for Vue, React and Svelte, whatever your framework."
+      }
+    }
+  },
+  "login": {
+    "meta": {
+      "title": "Sign in"
+    },
+    "title": "Sign in",
+    "description": "Sign in to access the surgeMedia administration.",
+    "email": {
+      "label": "Email address"
+    },
+    "password": {
+      "label": "Password",
+      "show": "Show password"
+    },
+    "submit": "Sign in",
+    "submitting": "Signing in…",
+    "noAccount": "No account yet? Accounts are created by an administrator of your organisation.",
+    "errors": {
+      "invalidCredentials": "Incorrect email address or password.",
+      "tooManyAttempts": "Too many sign-in attempts. Try again in {minutes} min.",
+      "invalid": "The information entered is not valid.",
+      "unexpected": "Sign-in failed. Please try again in a moment."
+    }
+  },
+  "admin": {
+    "nav": {
+      "label": "Administration navigation",
+      "menu": "Menu",
+      "homeSuffix": ", dashboard",
+      "dashboard": "Dashboard",
+      "media": "Media",
+      "projects": "Projects and API",
+      "tokens": "Access tokens",
+      "users": "Users"
+    },
+    "dashboard": {
+      "meta": {
+        "title": "Dashboard"
+      },
+      "title": "Dashboard",
+      "greeting": "Hello {name}, welcome to the administration.",
+      "bootstrapWarning": {
+        "title": "Bootstrap credentials still set",
+        "description": "Your administrator account exists: remove NUXT_BOOTSTRAP_ADMIN_EMAIL and NUXT_BOOTSTRAP_ADMIN_PASSWORD from the server environment, then restart it."
+      },
+      "account": {
+        "title": "Your account",
+        "name": "Name",
+        "noName": "Not provided",
+        "email": "Email address",
+        "role": "Role",
+        "loggedInAt": "Signed in since"
+      },
+      "permissions": {
+        "title": "Your permissions",
+        "granted": "Allowed",
+        "notGranted": "Not included"
+      }
+    },
+    "upcoming": {
+      "title": "Section in progress",
+      "description": "This section will be available in an upcoming release. Your role already grants you access to it."
+    },
+    "media": {
+      "title": "Media",
+      "description": "Upload, organise and transform the media of your projects."
+    },
+    "projects": {
+      "title": "Projects and API",
+      "description": "Manage projects, their allowed origins (CORS) and the API integration."
+    },
+    "tokens": {
+      "title": "Access tokens",
+      "description": "Create and revoke the tokens your applications use to call the API."
+    },
+    "users": {
+      "title": "Users",
+      "description": "Create your team's accounts and assign them a role."
+    }
+  },
+  "roles": {
+    "ADMIN": {
+      "label": "Administrator",
+      "description": "All privileges, including user management."
+    },
+    "EDITOR": {
+      "label": "Editor",
+      "description": "Media management only."
+    },
+    "DEVELOPER": {
+      "label": "Developer",
+      "description": "Management of media, access tokens and APIs."
+    }
+  },
+  "permissions": {
+    "media": {
+      "manage": "Manage media"
+    },
+    "tokens": {
+      "manage": "Manage access tokens"
+    },
+    "api": {
+      "manage": "Manage projects and APIs"
+    },
+    "users": {
+      "manage": "Manage users"
+    }
+  },
+  "errors": {
+    "code": "Error {code}",
+    "backHome": "Back to home",
+    "backToAdmin": "Back to the dashboard",
+    "unauthorized": {
+      "title": "Sign-in required",
+      "description": "Your session has expired. Sign in again to continue."
+    },
+    "forbidden": {
+      "title": "Access denied",
+      "description": "Your role does not grant access to this page. Contact an administrator if needed."
+    },
+    "notFound": {
+      "title": "Page not found",
+      "description": "The requested address does not exist or has been moved."
+    },
+    "unexpected": {
+      "title": "Something went wrong",
+      "description": "The service could not process the request. Please try again in a moment."
+    }
+  }
+}
