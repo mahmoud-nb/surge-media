@@ -44,7 +44,7 @@ export const fr = {
   'confirm.reset': 'Confirmez-vous la suppression définitive des données ?',
 
   'step.env': 'Fichier .env mis à jour',
-  'step.sessionSecret': 'Secret de session généré (NUXT_SESSION_PASSWORD)',
+  'step.secretGenerated': 'Secret généré ({name})',
   'step.schema': 'Schéma Prisma configuré pour {provider}',
   'step.generate': 'Génération du client Prisma…',
   'step.generateDone': 'Client Prisma généré',

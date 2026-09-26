@@ -42,9 +42,23 @@ export default defineNuxtConfig({
       email: '',
       password: '',
     },
-    storage: {
-      // Dossier des fichiers médias (pilote unstorage « fs ») — NUXT_STORAGE_BASE
-      base: './data/media',
+    // Médias — variables NUXT_MEDIA_* (voir .env.example et setup.md § 7).
+    media: {
+      maxUploadSize: 25 * 1024 * 1024, // octets — NUXT_MEDIA_MAX_UPLOAD_SIZE
+      signingSecret: '', // liens signés des médias privés — NUXT_MEDIA_SIGNING_SECRET
+      storage: {
+        driver: 'local', // local | s3 — NUXT_MEDIA_STORAGE_DRIVER
+        root: './data/media', // pilote local — NUXT_MEDIA_STORAGE_ROOT
+        prefix: '', // préfixe de toutes les clés — NUXT_MEDIA_STORAGE_PREFIX
+        s3: {
+          bucket: '', // NUXT_MEDIA_STORAGE_S3_BUCKET
+          region: '', // NUXT_MEDIA_STORAGE_S3_REGION
+          endpoint: '', // services compatibles S3 — NUXT_MEDIA_STORAGE_S3_ENDPOINT
+          accessKeyId: '', // NUXT_MEDIA_STORAGE_S3_ACCESS_KEY_ID
+          secretAccessKey: '', // NUXT_MEDIA_STORAGE_S3_SECRET_ACCESS_KEY
+          forcePathStyle: false, // NUXT_MEDIA_STORAGE_S3_FORCE_PATH_STYLE
+        },
+      },
     },
   },
 

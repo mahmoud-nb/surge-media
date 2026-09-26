@@ -50,6 +50,16 @@ export function textContains(value: string): { contains: string } {
 }
 
 /**
+ * Recherche « contient » sur plusieurs champs. SQLite ne compare sans tenir compte de la casse
+ * que les lettres non accentuées (« ÉTÉ » ne trouve pas « été ») : la saisie est donc aussi
+ * cherchée en minuscules, cas le plus courant.
+ */
+export function textSearch<F extends string>(fields: readonly F[], query: string): Record<F, { contains: string }>[] {
+  const terms = [...new Set([query, query.toLowerCase()])]
+  return fields.flatMap(field => terms.map(term => ({ [field]: textContains(term) }) as Record<F, { contains: string }>))
+}
+
+/**
  * Violation de contrainte d'unicité (P2002). Test par le code d'erreur plutôt que par
  * `instanceof Prisma.PrismaClientKnownRequestError`, qui imposerait un import statique
  * du client généré (voir createClient).

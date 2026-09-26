@@ -107,6 +107,13 @@
   }
 }
 
+/* Damier derrière les aperçus d'images : rend visibles les zones transparentes. */
+@utility bg-checker {
+  background-color: var(--color-surface);
+  background-image: conic-gradient(var(--color-muted) 25%, transparent 0 50%, var(--color-muted) 0 75%, transparent 0);
+  background-size: 16px 16px;
+}
+
 @media (prefers-reduced-motion: reduce) {
   *,
   ::before,

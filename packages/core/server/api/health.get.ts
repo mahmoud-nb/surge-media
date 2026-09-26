@@ -1,3 +1,5 @@
+import { useMediaStorage } from '../lib/storage'
+
 type CheckStatus = 'ok' | 'error'
 
 async function probe(check: () => unknown): Promise<CheckStatus> {
@@ -17,7 +19,7 @@ async function probe(check: () => unknown): Promise<CheckStatus> {
 export default defineEventHandler(async (event) => {
   const checks = {
     database: await probe(async () => (await usePrisma()).$queryRaw`SELECT 1`),
-    storage: await probe(() => useStorage(MEDIA_STORAGE).hasItem('.healthcheck')),
+    storage: await probe(async () => (await useMediaStorage()).healthcheck()),
     // Import dynamique : un binaire sharp absent ou incompatible est signalé sans faire tomber la route.
     imageProcessing: await probe(async () => (await import('sharp')).default.versions.vips),
   }

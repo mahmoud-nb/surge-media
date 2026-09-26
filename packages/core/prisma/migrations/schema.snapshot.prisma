@@ -189,8 +189,10 @@ model Media {
   folderId     String?
   kind         MediaKind
   visibility   Visibility @default(PUBLIC)
-  /// Clé du fichier original dans le stockage unstorage (montage "media")
+  /// Clé opaque du fichier original dans le stockage (générée par le serveur, jamais exposée)
   storageKey   String     @unique
+  /// Incrémentée à chaque remplacement du fichier : fait partie des URL de diffusion (cache immuable)
+  version      Int        @default(1)
   originalName String
   mimeType     String
   /// Taille en octets (entier 32 bits sous PostgreSQL/MySQL : 2 Gio maximum)
@@ -229,7 +231,7 @@ model MediaVariant {
   mediaId        String
   /// Transformation normalisée, dans un ordre canonique (ex. "c_fill,w_800,h_600,f_webp,q_80")
   transformation String
-  /// Clé du fichier dérivé dans le stockage unstorage
+  /// Clé du fichier dérivé dans le stockage
   storageKey     String   @unique
   /// Format de sortie (webp, avif, jpeg, png…)
   format         String

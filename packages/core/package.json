@@ -6,7 +6,7 @@
   "description": "Cœur de surgeMedia : interface d'administration, API médias et traitement d'images (Nuxt 3 + Nitro + Prisma).",
   "license": "MIT",
   "engines": {
-    "node": "^22.12.0 || >=24.0.0"
+    "node": ">=24.0.0"
   },
   "scripts": {
     "dev": "prisma generate && nuxt dev",
@@ -27,6 +27,8 @@
     "a11y:contrast": "tsx scripts/check-contrast.ts"
   },
   "dependencies": {
+    "@aws-sdk/client-s3": "^3.1141.0",
+    "@aws-sdk/s3-request-presigner": "^3.1141.0",
     "@clack/prompts": "^1.8.1",
     "@fontsource-variable/inter": "^5.3.0",
     "@lucide/vue": "^1.48.0",
@@ -38,20 +40,22 @@
     "@prisma/adapter-pg": "7.10.0",
     "@prisma/client": "7.10.0",
     "@tailwindcss/vite": "^4.3.3",
+    "busboy": "^1.6.0",
     "citty": "^0.2.2",
     "clsx": "^2.1.1",
+    "flydrive": "^2.1.0",
     "nuxt": "^3.21.11",
     "nuxt-auth-utils": "^0.5.30",
     "prisma": "7.10.0",
     "sharp": "^0.35.4",
     "tailwind-merge": "^3.7.0",
     "tailwindcss": "^4.3.3",
-    "unstorage": "^1.17.5",
     "vue": "^3.5.43",
     "vue-router": "^5.3.1",
     "zod": "^4.6.5"
   },
   "devDependencies": {
+    "@types/busboy": "^1.5.4",
     "@types/node": "^24.13.6",
     "tsdown": "^0.23.0",
     "tsx": "^4.23.15",
