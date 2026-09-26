@@ -1,0 +1,216 @@
+// surgeMedia — schéma de la base de données
+//
+// Ce schéma doit rester PORTABLE entre SQLite, PostgreSQL et MySQL/MariaDB :
+//   - le `provider` du bloc `datasource` est réécrit par `surge-media init` et
+//     `surge-media db reset` : ne pas le modifier à la main ;
+//   - pas d'attributs natifs `@db.*` (non supportés par SQLite) ;
+//   - pas de listes scalaires `String[]` (non supportées par SQLite et MySQL) ;
+//   - sous MySQL, `String` devient VARCHAR(191) : les longueurs maximales sont
+//     validées par la couche API ;
+//   - toute modification doit être suivie de `pnpm db:migration <nom>` pour
+//     générer la migration de CHAQUE fournisseur (voir setup.md).
+//
+// Prisma 7 : l'URL de connexion n'est plus déclarée ici mais dans
+// `prisma.config.ts` (variable d'environnement DATABASE_URL).
+
+generator client {
+  provider     = "prisma-client"
+  output       = "../server/generated/prisma"
+  moduleFormat = "esm"
+}
+
+datasource db {
+  provider = "sqlite"
+}
+
+// ─── Utilisateurs & sessions (interface d'administration) ────────────────────
+
+enum Role {
+  ADMIN // gestion complète : utilisateurs, projets, jetons d'accès, médias
+  EDITOR // gestion des médias et des dossiers
+  VIEWER // consultation uniquement
+}
+
+model User {
+  id           String    @id @default(cuid())
+  email        String    @unique
+  name         String?
+  /// Empreinte du mot de passe ; null tant qu'un utilisateur invité ne l'a pas défini
+  passwordHash String?
+  role         Role      @default(VIEWER)
+  /// Langue de l'interface d'administration (code BCP 47 : "fr", "en"…)
+  locale       String    @default("fr")
+  isActive     Boolean   @default(true)
+  lastLoginAt  DateTime?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  sessions      Session[]
+  uploadedMedia Media[]       @relation("MediaUploadedBy")
+  accessTokens  AccessToken[] @relation("AccessTokenCreatedBy")
+}
+
+model Session {
+  id         String   @id @default(cuid())
+  userId     String
+  /// Empreinte SHA-256 du jeton de session (le jeton en clair n'est jamais stocké)
+  tokenHash  String   @unique
+  ipAddress  String?
+  /// Tronqué à 191 caractères par l'API
+  userAgent  String?
+  expiresAt  DateTime
+  createdAt  DateTime @default(now())
+  lastSeenAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([expiresAt])
+}
+
+// ─── Projets, jetons d'accès API & CORS ──────────────────────────────────────
+
+/// Regroupe les médias, dossiers, jetons et origines d'une application cliente
+model Project {
+  id          String   @id @default(cuid())
+  name        String
+  /// Identifiant lisible utilisé dans les URLs et les SDK frontend
+  slug        String   @unique
+  description String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  media          Media[]
+  folders        Folder[]
+  accessTokens   AccessToken[]
+  allowedOrigins AllowedOrigin[]
+}
+
+/// Jeton d'accès API d'une application tierce, rattaché à un seul projet
+model AccessToken {
+  id          String    @id @default(cuid())
+  projectId   String
+  name        String
+  /// Début lisible du jeton (ex. "sm_3f9a2c"), affiché dans l'admin pour l'identifier
+  prefix      String
+  /// Empreinte SHA-256 du jeton ; le jeton en clair n'est montré qu'une fois, à sa création
+  tokenHash   String    @unique
+  /// Portées séparées par des espaces, à la manière d'OAuth (ex. "media:read media:write")
+  scopes      String
+  expiresAt   DateTime?
+  lastUsedAt  DateTime?
+  revokedAt   DateTime?
+  createdById String?
+  createdAt   DateTime  @default(now())
+
+  project   Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  createdBy User?   @relation("AccessTokenCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
+
+  @@index([projectId])
+}
+
+/// Origine autorisée (CORS) à appeler l'API d'un projet depuis un navigateur
+model AllowedOrigin {
+  id        String   @id @default(cuid())
+  projectId String
+  /// Origine exacte : schéma + hôte + port éventuel, sans chemin (ex. "https://app.example.com")
+  origin    String
+  createdAt DateTime @default(now())
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@unique([projectId, origin])
+}
+
+// ─── Médias ──────────────────────────────────────────────────────────────────
+
+enum MediaKind {
+  IMAGE
+  VIDEO
+  AUDIO
+  DOCUMENT
+  OTHER
+}
+
+enum Visibility {
+  PUBLIC // diffusé sans authentification (dans la limite des règles CORS)
+  PRIVATE // requiert un jeton d'accès ou une URL signée
+}
+
+/// Arborescence de dossiers d'un projet (unicité des noms par parent vérifiée par l'API)
+model Folder {
+  id        String   @id @default(cuid())
+  projectId String
+  parentId  String?
+  name      String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  project  Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  parent   Folder?  @relation("FolderTree", fields: [parentId], references: [id], onDelete: Cascade)
+  children Folder[] @relation("FolderTree")
+  media    Media[]
+
+  @@index([projectId, parentId])
+}
+
+/// Fichier original téléversé
+model Media {
+  id           String     @id @default(cuid())
+  projectId    String
+  folderId     String?
+  kind         MediaKind
+  visibility   Visibility @default(PUBLIC)
+  /// Clé du fichier original dans le stockage unstorage (montage "media")
+  storageKey   String     @unique
+  originalName String
+  mimeType     String
+  /// Taille en octets (entier 32 bits sous PostgreSQL/MySQL : 2 Gio maximum)
+  size         Int
+  /// Empreinte SHA-256 du contenu (détection des doublons)
+  checksum     String
+  width        Int?
+  height       Int?
+  /// Durée en secondes (vidéo, audio)
+  duration     Float?
+  title        String?
+  /// Texte alternatif par défaut (accessibilité)
+  altText      String?
+  /// Métadonnées techniques extraites à l'import (EXIF, profil colorimétrique…)
+  metadata     Json?
+  uploadedById String?
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
+  /// Suppression logique (corbeille) ; null = média actif
+  deletedAt    DateTime?
+
+  project    Project        @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  folder     Folder?        @relation(fields: [folderId], references: [id], onDelete: SetNull)
+  uploadedBy User?          @relation("MediaUploadedBy", fields: [uploadedById], references: [id], onDelete: SetNull)
+  variants   MediaVariant[]
+
+  @@index([projectId, createdAt])
+  @@index([projectId, checksum])
+  @@index([folderId])
+  @@index([deletedAt])
+}
+
+/// Dérivé d'un média (crop, resize, optimisation…) généré à la demande puis mis en cache
+model MediaVariant {
+  id             String   @id @default(cuid())
+  mediaId        String
+  /// Transformation normalisée, dans un ordre canonique (ex. "c_fill,w_800,h_600,f_webp,q_80")
+  transformation String
+  /// Clé du fichier dérivé dans le stockage unstorage
+  storageKey     String   @unique
+  /// Format de sortie (webp, avif, jpeg, png…)
+  format         String
+  size           Int
+  width          Int
+  height         Int
+  createdAt      DateTime @default(now())
+
+  media Media @relation(fields: [mediaId], references: [id], onDelete: Cascade)
+
+  @@unique([mediaId, transformation])
+}

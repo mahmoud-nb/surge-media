@@ -1,0 +1,18 @@
+node_modules
+dist
+.output
+.nuxt
+.nitro
+.cache
+.data
+*.log
+.DS_Store
+.idea
+.fleet
+.vscode/*
+!.vscode/extensions.json
+
+# Secrets / environnements locaux
+.env
+.env.*
+!.env.example

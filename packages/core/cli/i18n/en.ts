@@ -1,0 +1,70 @@
+import type { MessageKey } from './fr'
+
+/** CLI messages — English. Keys must match fr.ts exactly. */
+export const en: Record<MessageKey, string> = {
+  'cli.description': 'surgeMedia installation and administration tool',
+  'args.lang': 'CLI language',
+  'args.cwd': 'surgeMedia core directory (containing prisma/schema.prisma)',
+  'args.provider': 'Database provider',
+  'args.url': 'Database connection URL',
+  'args.yes': 'Non-interactive mode: accept defaults without confirmation',
+  'args.skipMigrate': 'Configure the database without applying migrations',
+
+  'command.init': 'Configure the database (provider and URL), then apply migrations',
+  'command.db': 'Database management',
+  'command.db.migrate': 'Apply pending migrations (after an upgrade)',
+  'command.db.reset': 'Recreate the database, optionally with a new provider (deletes all data)',
+
+  'intro.init': 'surgeMedia · setup',
+  'intro.migrate': 'surgeMedia · migrations',
+  'intro.reset': 'surgeMedia · database reset',
+
+  'config.current': 'Current configuration: {provider} ({url})',
+  'config.shellOverride': 'The {name} variable is set in your environment: it takes precedence over the .env file.',
+
+  'prompt.provider': 'Which database provider do you want to use?',
+  'prompt.url': 'Connection URL',
+  'provider.sqlite.label': 'SQLite',
+  'provider.sqlite.hint': 'local file, nothing to install (ideal to get started)',
+  'provider.postgresql.label': 'PostgreSQL',
+  'provider.postgresql.hint': 'recommended for production',
+  'provider.mysql.label': 'MySQL / MariaDB',
+  'provider.mysql.hint': 'MySQL 8+ or MariaDB 10.6+',
+
+  'summary.title': 'Summary',
+  'summary.provider': 'Provider',
+  'summary.url': 'URL',
+  'summary.root': 'Directory',
+
+  'warn.providerChange': 'Provider change ({from} → {to}): existing data is not transferred.',
+  'warn.reset': 'All tables and data in {url} will be deleted and recreated.',
+
+  'confirm.apply': 'Apply this configuration?',
+  'confirm.reset': 'Do you confirm the permanent deletion of the data?',
+
+  'step.env': '.env file updated',
+  'step.schema': 'Prisma schema configured for {provider}',
+  'step.generate': 'Generating the Prisma client…',
+  'step.generateDone': 'Prisma client generated',
+  'step.migrate': 'Applying migrations…',
+  'step.migrateDone': 'Migrations applied',
+  'step.migrateSkipped': 'Migrations not applied (--skip-migrate)',
+  'step.reset': 'Resetting the database…',
+  'step.resetDone': 'Database recreated and migrations applied',
+
+  'outro.init': 'Database ready. Start surgeMedia with "pnpm dev".',
+  'outro.migrate': 'Database up to date.',
+  'outro.reset': 'Database reset.',
+  'note.rebuild': 'The Prisma client depends on the provider: rebuild the application ("pnpm build") before redeploying it.',
+
+  'cancelled': 'Operation cancelled.',
+  'error.rootNotFound': 'Core directory not found: no prisma/schema.prisma file in {path}. Specify it with --cwd.',
+  'error.invalidProvider': 'Unsupported provider "{value}". Allowed values: {providers}.',
+  'error.urlRequired': 'The connection URL is required.',
+  'error.urlScheme': 'For {provider}, the URL must start with {schemes}',
+  'error.urlChars': 'The URL must not contain quotes or line breaks (percent-encode special characters, e.g. %22).',
+  'error.urlMissingNonInteractive': '--url is required for {provider} in non-interactive mode.',
+  'error.notConfigured': 'Database not configured: run "surge-media init" first.',
+  'error.providerMismatch': 'The Prisma schema targets {schema} but DATABASE_PROVIDER is {env}: run "surge-media init" again.',
+  'error.command': '"{command}" failed',
+}
