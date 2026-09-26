@@ -16,6 +16,11 @@ export default defineNuxtConfig({
   modules: ['@nuxtjs/i18n', '@nuxtjs/color-mode', 'nuxt-auth-utils'],
 
   css: ['~/assets/css/main.css'],
+
+  optimization: {
+    // Clé de cache automatique pour le wrapper de useFetch (app/composables/useApiFetch.ts).
+    keyedComposables: [{ name: 'useApiFetch', argumentLength: 3 }],
+  },
   vite: {
     plugins: [tailwindcss()],
   },
@@ -54,6 +59,7 @@ export default defineNuxtConfig({
     // Pages contenant des données personnelles : ni cache partagé, ni indexation.
     '/admin/**': { headers: { 'Cache-Control': 'no-store', 'X-Robots-Tag': 'noindex, nofollow' } },
     '/login': { headers: { 'Cache-Control': 'no-store', 'X-Robots-Tag': 'noindex, nofollow' } },
+    '/password/**': { headers: { 'Cache-Control': 'no-store', 'X-Robots-Tag': 'noindex, nofollow' } },
   },
 
   // Thème clair / sombre / système ; cookie pour un rendu serveur sans flash.

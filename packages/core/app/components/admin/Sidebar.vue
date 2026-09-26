@@ -25,6 +25,18 @@ const items = computed<NavItem[]>(() => [
   { to: '/admin/users', label: t('admin.nav.users'), icon: Users, permission: 'users:manage' as const },
 ].filter(item => !item.permission || can(item.permission)))
 
+const route = useRoute()
+
+/**
+ * Page exacte → "page" ; sous-page d'une section (/admin/users/…) → "true".
+ * Test sur le chemin : les pages d'une section sont des routes sœurs, pas imbriquées.
+ */
+function currentState(to: string): 'page' | 'true' | undefined {
+  if (route.path === to) return 'page'
+  if (to !== '/admin' && route.path.startsWith(`${to}/`)) return 'true'
+  return undefined
+}
+
 const displayName = computed(() => user.value?.name || user.value?.email || '')
 const initials = computed(() => displayName.value.slice(0, 1).toUpperCase())
 
@@ -50,12 +62,17 @@ async function onLogout() {
     <nav :aria-label="t('admin.nav.label')">
       <ul class="grid gap-1">
         <li v-for="item in items" :key="item.to">
-          <NuxtLink
-            :to="item.to"
-            class="flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground aria-[current=page]:bg-primary-soft aria-[current=page]:text-primary"
-          >
-            <component :is="item.icon" class="size-4 shrink-0" aria-hidden="true" />
-            {{ item.label }}
+          <!-- aria-current : "page" sur la page exacte, "true" sur la section parente (ex. /admin/users/…). -->
+          <NuxtLink v-slot="{ href, navigate }" :to="item.to" custom>
+            <a
+              :href="href ?? undefined"
+              :aria-current="currentState(item.to)"
+              class="flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground [&[aria-current]]:bg-primary-soft [&[aria-current]]:text-primary"
+              @click="navigate"
+            >
+              <component :is="item.icon" class="size-4 shrink-0" aria-hidden="true" />
+              {{ item.label }}
+            </a>
           </NuxtLink>
         </li>
       </ul>

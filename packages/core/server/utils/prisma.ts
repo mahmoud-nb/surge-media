@@ -38,6 +38,26 @@ export function usePrisma(): Promise<PrismaClient> {
   return client
 }
 
+/**
+ * Filtre « contient » insensible à la casse sur tous les fournisseurs : SQLite (LIKE) et
+ * MySQL (collation *_ci) le sont déjà ; PostgreSQL exige `mode: 'insensitive'`, option
+ * refusée par les autres fournisseurs (d'où l'ajout conditionnel).
+ */
+export function textContains(value: string): { contains: string } {
+  const filter: { contains: string, mode?: 'insensitive' } = { contains: value }
+  if (readDatabaseEnv().provider === 'postgresql') filter.mode = 'insensitive'
+  return filter
+}
+
+/**
+ * Violation de contrainte d'unicité (P2002). Test par le code d'erreur plutôt que par
+ * `instanceof Prisma.PrismaClientKnownRequestError`, qui imposerait un import statique
+ * du client généré (voir createClient).
+ */
+export function isUniqueViolation(error: unknown): boolean {
+  return typeof error === 'object' && error !== null && (error as { code?: unknown }).code === 'P2002'
+}
+
 export async function disconnectPrisma(): Promise<void> {
   const pending = client
   client = undefined

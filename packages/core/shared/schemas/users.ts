@@ -1,0 +1,55 @@
+import { z } from 'zod'
+import { ROLES } from '../utils/permissions'
+import { USER_STATUSES } from '../utils/users'
+import { emailSchema, PASSWORD_MAX_LENGTH, PASSWORD_MIN_LENGTH } from './auth'
+
+/** VARCHAR(191) sous MySQL. */
+export const NAME_MAX_LENGTH = 191
+export const USERS_PAGE_SIZE = 20
+
+export const roleSchema = z.enum(ROLES, 'validation.required')
+
+/** Nom affiché : facultatif, espaces retirés, chaîne vide → null. */
+export const userNameSchema = z
+  .string()
+  .trim()
+  .max(NAME_MAX_LENGTH, 'validation.tooLong')
+  .transform(value => value || null)
+  .nullable()
+
+export const createUserSchema = z.object({
+  email: emailSchema,
+  name: userNameSchema.optional(),
+  role: roleSchema,
+})
+export type CreateUserInput = z.input<typeof createUserSchema>
+
+export const updateUserSchema = z.object({
+  name: userNameSchema,
+  role: roleSchema,
+  isActive: z.boolean(),
+}).partial()
+export type UpdateUserInput = z.input<typeof updateUserSchema>
+
+/** Filtres de la liste (paramètres d'URL). */
+export const userListQuerySchema = z.object({
+  q: z.string().trim().max(NAME_MAX_LENGTH).optional().catch(undefined),
+  role: roleSchema.optional().catch(undefined),
+  status: z.enum(USER_STATUSES).optional().catch(undefined),
+  page: z.coerce.number().int().min(1).max(10_000).catch(1),
+})
+export type UserListQuery = z.infer<typeof userListQuerySchema>
+
+/** Nouveau mot de passe (invitation ou réinitialisation), saisi deux fois. */
+export const newPasswordSchema = z.object({
+  password: z
+    .string('validation.required')
+    .min(1, 'validation.required')
+    .min(PASSWORD_MIN_LENGTH, 'validation.tooShort')
+    .max(PASSWORD_MAX_LENGTH, 'validation.tooLong'),
+  confirmation: z.string('validation.required').min(1, 'validation.required'),
+}).refine(data => data.password === data.confirmation, {
+  path: ['confirmation'],
+  message: 'validation.passwordMismatch',
+})
+export type NewPasswordInput = z.input<typeof newPasswordSchema>

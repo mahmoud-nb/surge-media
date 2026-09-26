@@ -48,20 +48,22 @@ surge-media/
       ├─ app/              interface Vue (structure Nuxt 4)
       │  ├─ assets/css/    Tailwind v4 + jetons de design (clair / sombre)
       │  ├─ components/
-      │  │  ├─ ui/         composants de base : <UiButton>, <UiInput>, <UiFormField>, <UiAlert>
+      │  │  ├─ ui/         composants de base (Button, Input, FormField, Alert, Badge, Select,
+      │  │  │              Switch, PasswordInput, Dialog, Pagination) → <UiButton>…
       │  │  ├─ app/        briques transverses : logo, lien d'évitement, thème, langue
-      │  │  └─ admin/      barre latérale, en-tête de page…
-      │  ├─ composables/   useAuth(), useAppHead()
+      │  │  └─ admin/      barre latérale, en-tête de page, choix du rôle, lien de mot de passe…
+      │  ├─ composables/   useAuth(), useApiFetch(), useFormValidation(), useFlash(), useAppHead()
+      │  ├─ plugins/       api.ts ($api : appels de l'administration, gestion des sessions expirées)
       │  ├─ layouts/       default (public) et admin (barre latérale)
       │  ├─ middleware/    auth.global.ts (protection de /admin/*)
-      │  ├─ pages/         index, login, admin/…
+      │  ├─ pages/         index, login, password/[token], admin/… (users/, users/new, users/[id])
       │  └─ error.vue      pages d'erreur traduites (401, 403, 404, 500)
       ├─ i18n/locales/     traductions de l'interface (fr.json = référence, en.json)
       ├─ server/
-      │  ├─ api/           auth/login, auth/logout, admin/status, health
+      │  ├─ api/           auth/*, auth/password/*, admin/users/*, admin/status, health
       │  ├─ middleware/    csrf.ts
       │  ├─ plugins/       stockage, base, sessions, rappels d'amorçage
-      │  ├─ utils/         usePrisma(), requireAuth(), argon2, limiteur (auto-importés)
+      │  ├─ utils/         usePrisma(), requireAuth(), utilisateurs, liens de mot de passe… (auto-importés)
       │  └─ generated/     client Prisma généré (non versionné)
       ├─ shared/           code partagé app / serveur / CLI : permissions, schémas zod, BDD
       ├─ prisma/
@@ -197,6 +199,7 @@ Le fichier `packages/core/.env` est créé par `pnpm db:init` à partir de `.env
 | --- | --- |
 | `User` | comptes de l'administration (rôle `ADMIN`/`EDITOR`/`DEVELOPER`, langue préférée, actif ou non) |
 | `Session` | sessions d'administration (seule l'empreinte SHA-256 du jeton est stockée) |
+| `PasswordToken` | lien à usage unique d'invitation ou de réinitialisation du mot de passe (empreinte, échéance, date d'utilisation) |
 | `Project` | application cliente : regroupe médias, dossiers, jetons et origines CORS |
 | `AccessToken` | jeton d'API d'un projet (empreinte + préfixe lisible, portées, expiration, révocation) |
 | `AllowedOrigin` | origines autorisées (CORS) pour les appels navigateur d'un projet |
@@ -269,7 +272,8 @@ Prisma doit rester identique à `ROLES` : une vérification de type dans `server
 | --- | --- |
 | `POST /api/auth/login` | `{ email, password }` → 200 + cookie · 400 invalide · 401 refusé · 429 trop de tentatives (`Retry-After`) |
 | `POST /api/auth/logout` | ferme la session (cookie + base) |
-| `GET /api/admin/status` | exemple de route protégée (`users:manage`) |
+| `GET /api/admin/status` | état de l'instance pour les administrateurs (`users:manage`) |
+| `/api/admin/users/*`, `/api/auth/password/*` | gestion des utilisateurs, voir § 9.4 |
 
 Protéger une nouvelle route API :
 
@@ -300,8 +304,43 @@ redirection après connexion limitée aux chemins `/admin`, en-têtes `X-Frame-O
    n'existe** ; ensuite elles sont ignorées, le serveur le rappelle au démarrage et le tableau de bord
    affiche un avertissement aux administrateurs.
 
-Il n'y a pas d'inscription publique : les comptes seront créés par un administrateur (écran
-« Utilisateurs », étape à venir).
+Il n'y a pas d'inscription publique : les comptes sont créés par un administrateur (§ 9.4).
+
+### 9.4 Gestion des utilisateurs (`/admin/users`, permission `users:manage`)
+
+**Parcours** : l'administrateur crée le compte (e-mail, nom facultatif, rôle ; `EDITOR` présélectionné,
+le moins privilégié). Aucun mot de passe n'est saisi : un **lien d'invitation à usage unique** (7 jours)
+est affiché une seule fois, à copier et transmettre par un canal sûr (pas encore d'envoi d'e-mail).
+L'utilisateur ouvre `/password/<jeton>`, choisit son mot de passe (12 caractères minimum, saisi deux
+fois), puis se connecte. Mot de passe oublié : l'administrateur génère un **lien de réinitialisation**
+(24 h) depuis la fiche du compte ; l'ancien mot de passe reste valable jusqu'à son utilisation, puis
+toutes les sessions du compte sont fermées.
+
+| Endpoint | Rôle |
+| --- | --- |
+| `GET /api/admin/users?q=&role=&status=&page=` | liste paginée (20 par page) ; recherche nom / e-mail insensible à la casse ; filtres invalides ignorés |
+| `POST /api/admin/users` | création + lien d'invitation (201) · 409 `EMAIL_TAKEN` |
+| `GET /api/admin/users/:id` | fiche : profil, sessions ouvertes, lien en attente (type et échéance, jamais le jeton) |
+| `PATCH /api/admin/users/:id` | `{ name?, role?, isActive? }` ; désactiver ferme les sessions immédiatement |
+| `DELETE /api/admin/users/:id` | suppression définitive (les médias du compte sont conservés) |
+| `POST /api/admin/users/:id/password-link` | nouveau lien (invitation ou réinitialisation) ; annule le précédent · 409 si compte désactivé |
+| `DELETE /api/admin/users/:id/sessions` | ferme les sessions du compte (sur son propre compte : sauf la session en cours) |
+| `GET /api/auth/password/:token` | public : e-mail et type du lien · 404 `TOKEN_INVALID` |
+| `POST /api/auth/password/:token` | public : `{ password, confirmation }` → enregistre le mot de passe (204) · 404 `TOKEN_INVALID` |
+
+**Règles imposées par le serveur** (l'interface les reflète, mais ne les remplace pas) :
+
+- un administrateur ne peut ni changer son propre rôle, ni se désactiver, ni se supprimer
+  (403 `SELF_ACTION`) ;
+- on ne retire jamais le dernier administrateur actif (409 `LAST_ADMIN`) ;
+- un changement de rôle s'applique à la requête suivante (le rôle est relu en base) ;
+- un lien est à usage unique (consommation atomique), expire, et n'est plus valable si le compte est
+  désactivé ; seule son empreinte SHA-256 est stockée ;
+- les erreurs métier sont renvoyées dans `data.code` (`shared/utils/users.ts`) et traduites par
+  l'interface via `apiError()`.
+
+**Statuts** : `active` (mot de passe défini), `invited` (invitation pas encore acceptée),
+`inactive` (compte désactivé).
 
 ## 10. Interface d'administration
 
@@ -325,13 +364,21 @@ const classes = computed(() => cn('inline-flex items-center …', VARIANTS[props
 </script>
 ```
 
-Formulaire accessible avec `<UiFormField>` (libellé, aide et erreur reliés automatiquement) :
+Formulaire accessible avec `<UiFormField>` (libellé, aide et erreur reliés automatiquement) et
+`useFormValidation()` (schéma zod partagé avec l'API, messages traduits, focus sur le premier champ
+en erreur, erreurs serveur via `setError`) :
 
 ```vue
 <UiFormField v-slot="field" :label="t('login.email.label')" :error="errorMessage('email')" required>
   <UiInput v-bind="field" v-model="form.email" type="email" autocomplete="username" />
 </UiFormField>
 ```
+
+Appels à l'API de l'administration : `useApiFetch()` (même signature que `useFetch`) ou
+`useNuxtApp().$api(…)`. En cas de 401 (session expirée ou révoquée), l'utilisateur est renvoyé vers
+`/login?expired=1` et retrouve sa page après connexion. Messages après redirection (création,
+suppression…) : `useFlash()`. Confirmation d'une action destructive : `<UiDialog>` (élément
+`<dialog>` natif, focus sur « Annuler »).
 
 ### 10.2 Thèmes clair / sombre
 
@@ -434,6 +481,9 @@ pnpm start                          # node --env-file-if-exists=.env .output/ser
 | Première connexion refusée | aucun utilisateur ET variables d'amorçage définies ? mot de passe ≥ 12 caractères ? (message au démarrage du serveur) |
 | `403 Cross-origin request blocked` | requête modifiante d'une autre origine, ou proxy qui réécrit l'en-tête `Host` |
 | Clé affichée à la place d'un texte (`admin.nav.xxx`) | clé absente de `fr.json` : `pnpm i18n:check` l'indique |
+| Page d'administration en erreur au chargement direct, mais correcte après navigation | appel fait en rendu serveur sans le cookie de session : utiliser `useApiFetch` / `$api` (qui le transmettent) ou `useFetch`, jamais une instance `$fetch.create()` maison |
+| Lien de mot de passe « invalide ou expiré » | déjà utilisé, expiré (7 j / 24 h), remplacé par un lien plus récent, ou compte désactivé : en générer un nouveau depuis la fiche du compte |
+| Plus aucun administrateur ne peut se connecter | pas encore de commande de secours : voir « Limites connues » de l'étape 3 |
 
 ---
 
@@ -490,3 +540,41 @@ pnpm db:migrate     # rôles + client Prisma
 pnpm db:init --yes  # ajoute NUXT_SESSION_PASSWORD au .env s'il manque
 ```
 Puis renseigner `NUXT_BOOTSTRAP_ADMIN_EMAIL` / `NUXT_BOOTSTRAP_ADMIN_PASSWORD` (§ 9.3) si aucun compte n'existe.
+
+### Étape 3 — 2026-09-26 — Gestion des utilisateurs
+
+**Ajouté**
+- Modèle `PasswordToken` (migration `password_tokens` pour les 3 fournisseurs).
+- API `/api/admin/users` (liste filtrée et paginée, création, fiche, modification, suppression, lien
+  de mot de passe, fermeture des sessions) et API publique `/api/auth/password/:token`.
+- Règles serveur : pas d'action sur son propre rôle / statut / compte, jamais sans administrateur
+  actif, désactivation = sessions fermées, liens à usage unique et à durée limitée.
+- Pages `/admin/users` (recherche, filtres dans l'URL, tableau, pagination), `/admin/users/new`,
+  `/admin/users/[id]` (profil, accès et sécurité, suppression confirmée) et page publique
+  `/password/[token]` (activation du compte ou nouveau mot de passe).
+- Composants `UiBadge`, `UiSelect`, `UiSwitch`, `UiPasswordInput`, `UiDialog`, `UiPagination`,
+  `AdminRoleField`, `AdminUserStatusBadge`, `AdminPasswordLinkPanel` ; composables `useFormValidation`,
+  `useApiFetch`, `useFlash` ; plugin `$api` (session expirée → retour à la connexion).
+- Page de connexion : messages « session expirée » et « mot de passe enregistré ».
+- `pnpm i18n:check` contrôle aussi les clés de `<i18n-t keypath>`.
+
+**Vérifié** : typecheck, i18n (199 clés), contrastes, migrations. Dans le navigateur : création
+(validation, doublon d'e-mail, lien d'invitation), activation par le lien puis réutilisation refusée,
+modification du rôle et désactivation, lien de réinitialisation, suppression avec boîte de dialogue au
+clavier, session révoquée pendant l'utilisation → retour à `/login`. API : règles `SELF_ACTION`,
+403 pour un DEVELOPER, CSRF, recherche insensible à la casse, filtres invalides. axe-core : 0 violation
+WCAG 2.2 AA sur toutes les nouvelles pages (et la boîte de dialogue ouverte) en fr/en × clair/sombre.
+Non refait : build de production (un `nuxt dev` tournait déjà sur le port 3000 ; aucune nouvelle
+dépendance native dans cette étape).
+
+**Limites connues**
+- Pas d'envoi d'e-mail : les liens sont transmis à la main par l'administrateur.
+- Pas de commande de secours si le seul administrateur perd son mot de passe (à ajouter à la CLI).
+- Pas encore de page « Mon compte » pour changer soi-même son mot de passe (passer par un lien de
+  réinitialisation généré par un autre administrateur).
+
+**Après `git pull`**
+```bash
+pnpm install
+pnpm db:migrate     # table PasswordToken + client Prisma
+```
