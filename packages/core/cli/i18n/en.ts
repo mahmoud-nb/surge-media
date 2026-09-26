@@ -43,6 +43,7 @@ export const en: Record<MessageKey, string> = {
   'confirm.reset': 'Do you confirm the permanent deletion of the data?',
 
   'step.env': '.env file updated',
+  'step.sessionSecret': 'Session secret generated (NUXT_SESSION_PASSWORD)',
   'step.schema': 'Prisma schema configured for {provider}',
   'step.generate': 'Generating the Prisma client…',
   'step.generateDone': 'Prisma client generated',

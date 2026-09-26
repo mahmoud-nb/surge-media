@@ -1,0 +1,119 @@
+@import "tailwindcss";
+@import "@fontsource-variable/inter";
+
+/* Thème sombre piloté par la classe `.dark` posée sur <html> par @nuxtjs/color-mode. */
+@custom-variant dark (&:where(.dark, .dark *));
+
+/*
+ * Jetons de design. Chaque couple texte/fond et chaque bordure de contrôle est vérifié
+ * par `pnpm a11y:contrast` (WCAG 2.2 AA : texte ≥ 4.5:1, contrôles et focus ≥ 3:1).
+ * Ne modifiez pas une couleur sans relancer ce script.
+ */
+:root {
+  color-scheme: light;
+  --background: #f6f7f9;
+  --surface: #ffffff;
+  --foreground: #111827;
+  --muted: #eef0f4;
+  --muted-foreground: #4b5565;
+  --border: #e3e6ec; /* décoratif (cartes, séparateurs) */
+  --input: #838b99; /* bordure des champs : ≥ 3:1 */
+  --ring: #3b4cc0; /* contour de focus : ≥ 3:1 */
+  --primary: #3b4cc0;
+  --primary-hover: #3140a6;
+  --primary-foreground: #ffffff;
+  --primary-soft: #eceffd;
+  --destructive: #b42318;
+  --destructive-hover: #912018;
+  --destructive-foreground: #ffffff;
+  --destructive-soft: #fef3f2;
+  --success: #067647;
+  --success-soft: #ecfdf3;
+  --warning: #93370d;
+  --warning-soft: #fffaeb;
+}
+
+.dark {
+  color-scheme: dark;
+  --background: #0c111b;
+  --surface: #131a26;
+  --foreground: #e6e9ef;
+  --muted: #1c2432;
+  --muted-foreground: #9aa4b5;
+  --border: #253043;
+  --input: #6b7689;
+  --ring: #8b9cf7;
+  --primary: #8b9cf7;
+  --primary-hover: #a3b1fa;
+  --primary-foreground: #0c111b;
+  --primary-soft: #1e2748;
+  --destructive: #f97066;
+  --destructive-hover: #fb8a82;
+  --destructive-foreground: #0c111b;
+  --destructive-soft: #2d1416;
+  --success: #47cd89;
+  --success-soft: #0f2a1d;
+  --warning: #fdb022;
+  --warning-soft: #2e2410;
+}
+
+@theme inline {
+  --font-sans: "Inter Variable", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  --color-background: var(--background);
+  --color-surface: var(--surface);
+  --color-foreground: var(--foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-primary: var(--primary);
+  --color-primary-hover: var(--primary-hover);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-primary-soft: var(--primary-soft);
+  --color-destructive: var(--destructive);
+  --color-destructive-hover: var(--destructive-hover);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-destructive-soft: var(--destructive-soft);
+  --color-success: var(--success);
+  --color-success-soft: var(--success-soft);
+  --color-warning: var(--warning);
+  --color-warning-soft: var(--warning-soft);
+}
+
+@layer base {
+  *,
+  ::before,
+  ::after {
+    border-color: var(--color-border);
+  }
+
+  html {
+    @apply bg-background font-sans text-foreground antialiased;
+  }
+
+  /*
+   * Focus clavier visible partout. `outline` (et non box-shadow) reste affiché dans
+   * le mode contrastes élevés de Windows (forced-colors).
+   */
+  :focus-visible {
+    outline: 2px solid var(--color-ring);
+    outline-offset: 2px;
+  }
+
+  /* Cible du lien d'évitement : focus programmatique, sans contour. */
+  main:focus {
+    outline: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  ::before,
+  ::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
