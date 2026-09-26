@@ -30,5 +30,5 @@ export function useAuth() {
     await navigateTo('/login')
   }
 
-  return { loggedIn, user, role, permissions, loggedInAt, can, login, logout }
+  return { loggedIn, user, role, permissions, loggedInAt, can, login, logout, refresh: refreshSession }
 }

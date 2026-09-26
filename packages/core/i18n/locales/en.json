@@ -23,13 +23,16 @@
     "current": "Language: {name}"
   },
   "form": {
-    "requiredNote": "Fields marked with an asterisk (*) are required."
+    "requiredNote": "Fields marked with an asterisk (*) are required.",
+    "showPassword": "Show password"
   },
   "validation": {
     "required": "This field is required.",
     "email": "Enter a valid email address, for example name{'@'}example.com.",
     "tooLong": "This field must not exceed {max} characters.",
-    "tooShort": "This field must contain at least {min} characters."
+    "tooShort": "This field must contain at least {min} characters.",
+    "emailTaken": "This email address is already used by another account.",
+    "passwordMismatch": "The two passwords do not match."
   },
   "auth": {
     "logout": "Sign out"
@@ -80,17 +83,20 @@
       "label": "Email address"
     },
     "password": {
-      "label": "Password",
-      "show": "Show password"
+      "label": "Password"
     },
     "submit": "Sign in",
     "submitting": "Signing in…",
-    "noAccount": "No account yet? Accounts are created by an administrator of your organisation.",
+    "noAccount": "No account or forgotten password? An administrator of your organisation can send you an access link.",
     "errors": {
       "invalidCredentials": "Incorrect email address or password.",
       "tooManyAttempts": "Too many sign-in attempts. Try again in {minutes} min.",
       "invalid": "The information entered is not valid.",
       "unexpected": "Sign-in failed. Please try again in a moment."
+    },
+    "notices": {
+      "passwordSet": "Your password has been saved. You can now sign in.",
+      "expired": "Your session has expired. Sign in again to continue."
     }
   },
   "admin": {
@@ -143,10 +149,6 @@
     "tokens": {
       "title": "Access tokens",
       "description": "Create and revoke the tokens your applications use to call the API."
-    },
-    "users": {
-      "title": "Users",
-      "description": "Create your team's accounts and assign them a role."
     }
   },
   "roles": {
@@ -196,6 +198,150 @@
     "unexpected": {
       "title": "Something went wrong",
       "description": "The service could not process the request. Please try again in a moment."
+    }
+  },
+  "common": {
+    "retry": "Try again",
+    "cancel": "Cancel",
+    "save": "Save",
+    "saving": "Saving…",
+    "unexpectedError": "The operation failed. Please try again in a moment."
+  },
+  "pagination": {
+    "label": "Pagination",
+    "previous": "Previous",
+    "next": "Next",
+    "page": "Page"
+  },
+  "users": {
+    "backToList": "Back to users",
+    "status": {
+      "active": "Active",
+      "invited": "Invitation pending",
+      "inactive": "Deactivated"
+    },
+    "list": {
+      "meta": {
+        "title": "Users"
+      },
+      "title": "Users",
+      "description": "Accounts with access to the administration and the role of each one.",
+      "create": "New user",
+      "caption": "List of users",
+      "count": "No users | {count} user | {count} users",
+      "you": "You",
+      "never": "Never",
+      "empty": "No users yet.",
+      "emptyFiltered": "No users match these filters.",
+      "loadError": "Unable to load users."
+    },
+    "filters": {
+      "label": "Filter users",
+      "search": "Name or email address",
+      "role": "Role",
+      "status": "Status",
+      "allRoles": "All roles",
+      "allStatuses": "All statuses",
+      "apply": "Filter",
+      "reset": "Reset filters"
+    },
+    "columns": {
+      "user": "User",
+      "role": "Role",
+      "status": "Status",
+      "lastLogin": "Last sign-in"
+    },
+    "fields": {
+      "email": "Email address",
+      "name": "Name",
+      "nameHint": "Optional. Displayed in the administration.",
+      "role": "Role",
+      "active": "Active account",
+      "activeHint": "A deactivated account can no longer sign in and its sessions are closed immediately."
+    },
+    "create": {
+      "meta": {
+        "title": "New user"
+      },
+      "title": "New user",
+      "description": "Create the account, then send the invitation link to the person concerned.",
+      "invitationNote": "No password is set here: an invitation link valid for 7 days will be generated so that the user chooses their own password.",
+      "submit": "Create account",
+      "success": "The account {email} has been created."
+    },
+    "edit": {
+      "profileTitle": "Profile",
+      "saved": "Changes saved.",
+      "loadError": "Unable to load this user.",
+      "selfRoleHint": "You cannot change your own role.",
+      "selfActiveHint": "You cannot deactivate your own account."
+    },
+    "access": {
+      "title": "Access and security",
+      "password": "Password",
+      "passwordSet": "Set",
+      "passwordPending": "Not set yet",
+      "sessions": "Open sessions",
+      "pending": {
+        "invitation": "An invitation link is pending until {date}.",
+        "reset": "A reset link is pending until {date}."
+      },
+      "newInvitation": "Generate a new invitation link",
+      "resetLink": "Generate a reset link",
+      "revokeSessions": "Close all sessions",
+      "revokeOtherSessions": "Close my other sessions",
+      "sessionsRevoked": "No session closed. | {count} session closed. | {count} sessions closed.",
+      "inactiveHint": "Reactivate the account to generate a link."
+    },
+    "link": {
+      "label": "Link to send",
+      "copy": "Copy link",
+      "copied": "Link copied to the clipboard.",
+      "expires": "Valid until {date}.",
+      "once": "This link will not be shown again: copy it now and send it through a secure channel.",
+      "invitation": {
+        "title": "Invitation link",
+        "description": "Send this link to {email}: it lets them choose their password and activate their account."
+      },
+      "reset": {
+        "title": "Reset link",
+        "description": "Send this link to {email}: it lets them choose a new password. The current password remains valid until then."
+      }
+    },
+    "delete": {
+      "title": "Delete account",
+      "description": "Deletion is permanent. To suspend access while keeping the history, deactivate the account instead.",
+      "open": "Delete this account",
+      "confirmTitle": "Delete this account?",
+      "confirmDescription": "The account {email} and its sessions will be permanently deleted. The media it uploaded are kept.",
+      "confirm": "Delete permanently",
+      "success": "The account {email} has been deleted."
+    },
+    "errors": {
+      "selfAction": "You cannot change the role of, deactivate or delete your own account.",
+      "lastAdmin": "Not possible: this account is the last active administrator."
+    }
+  },
+  "password": {
+    "backToLogin": "Go to sign-in",
+    "invitation": {
+      "title": "Activate your account",
+      "description": "Choose the password for your surgeMedia account.",
+      "submit": "Activate my account"
+    },
+    "reset": {
+      "title": "New password",
+      "description": "Choose a new password. Your open sessions will be closed.",
+      "submit": "Save password"
+    },
+    "invalid": {
+      "title": "Invalid or expired link",
+      "description": "This link has already been used, has expired or has been replaced. Ask an administrator for a new link."
+    },
+    "fields": {
+      "password": "New password",
+      "passwordHint": "{min} characters minimum. A phrase of several words is both secure and easy to remember.",
+      "confirmation": "Confirm password"
     }
   }
 }

@@ -72,10 +72,10 @@ let usages = 0
 for (const file of SOURCE_DIRS.flatMap(name => sourceFiles(join(root, name)))) {
   const code = readFileSync(file, 'utf8')
   const where = relative(root, file).replaceAll('\\', '/')
-  // t('clé') / t("clé")
-  for (const [, key] of code.matchAll(/\bt\(\s*['"]([\w.-]+)['"]/g)) {
+  // t('clé') / t("clé") / <i18n-t keypath="clé">
+  for (const key of Array.from(code.matchAll(/\bt\(\s*['"]([\w.-]+)['"]|\bkeypath="([\w.-]+)"/g), match => match[1] ?? match[2]!)) {
     usages++
-    if (!reference.has(key!)) problems.push(`${where} : clé inconnue « ${key} »`)
+    if (!reference.has(key)) problems.push(`${where} : clé inconnue « ${key} »`)
   }
   // t(`préfixe.${…}…`) : au moins une clé doit commencer par le préfixe statique
   for (const [, prefix] of code.matchAll(/\bt\(\s*`([\w.-]*)\$\{/g)) {

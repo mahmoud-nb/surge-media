@@ -46,9 +46,11 @@ model User {
   createdAt    DateTime  @default(now())
   updatedAt    DateTime  @updatedAt
 
-  sessions      Session[]
-  uploadedMedia Media[]       @relation("MediaUploadedBy")
-  accessTokens  AccessToken[] @relation("AccessTokenCreatedBy")
+  sessions             Session[]
+  uploadedMedia        Media[]         @relation("MediaUploadedBy")
+  accessTokens         AccessToken[]   @relation("AccessTokenCreatedBy")
+  passwordTokens       PasswordToken[] @relation("PasswordTokenUser")
+  issuedPasswordTokens PasswordToken[] @relation("PasswordTokenCreatedBy")
 }
 
 model Session {
@@ -67,6 +69,31 @@ model Session {
 
   @@index([userId])
   @@index([expiresAt])
+}
+
+enum PasswordTokenPurpose {
+  INVITATION // premier mot de passe d'un compte créé par un administrateur
+  RESET // réinitialisation d'un mot de passe existant
+}
+
+/// Lien à usage unique pour définir (invitation) ou réinitialiser un mot de passe.
+/// Généré par un administrateur, qui le transmet lui-même (pas d'envoi d'e-mail à ce stade).
+model PasswordToken {
+  id          String               @id @default(cuid())
+  userId      String
+  purpose     PasswordTokenPurpose
+  /// Empreinte SHA-256 du jeton ; le lien en clair n'est affiché qu'une fois, à sa création
+  tokenHash   String               @unique
+  expiresAt   DateTime
+  /// Date d'utilisation ; un jeton utilisé n'est plus valable (conservé pour l'historique)
+  usedAt      DateTime?
+  createdById String?
+  createdAt   DateTime             @default(now())
+
+  user      User  @relation("PasswordTokenUser", fields: [userId], references: [id], onDelete: Cascade)
+  createdBy User? @relation("PasswordTokenCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
+
+  @@index([userId])
 }
 
 // ─── Projets, jetons d'accès API & CORS ──────────────────────────────────────

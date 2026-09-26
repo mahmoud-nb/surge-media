@@ -23,13 +23,16 @@
     "current": "Langue : {name}"
   },
   "form": {
-    "requiredNote": "Les champs marqués d'un astérisque (*) sont obligatoires."
+    "requiredNote": "Les champs marqués d'un astérisque (*) sont obligatoires.",
+    "showPassword": "Afficher le mot de passe"
   },
   "validation": {
     "required": "Ce champ est obligatoire.",
     "email": "Saisissez une adresse e-mail valide, par exemple nom{'@'}exemple.fr.",
     "tooLong": "Ce champ ne doit pas dépasser {max} caractères.",
-    "tooShort": "Ce champ doit contenir au moins {min} caractères."
+    "tooShort": "Ce champ doit contenir au moins {min} caractères.",
+    "emailTaken": "Cette adresse e-mail est déjà utilisée par un autre compte.",
+    "passwordMismatch": "Les deux mots de passe ne sont pas identiques."
   },
   "auth": {
     "logout": "Se déconnecter"
@@ -80,17 +83,20 @@
       "label": "Adresse e-mail"
     },
     "password": {
-      "label": "Mot de passe",
-      "show": "Afficher le mot de passe"
+      "label": "Mot de passe"
     },
     "submit": "Se connecter",
     "submitting": "Connexion en cours…",
-    "noAccount": "Pas encore de compte ? Les comptes sont créés par un administrateur de votre organisation.",
+    "noAccount": "Pas de compte ou mot de passe oublié ? Un administrateur de votre organisation peut vous transmettre un lien d'accès.",
     "errors": {
       "invalidCredentials": "Adresse e-mail ou mot de passe incorrect.",
       "tooManyAttempts": "Trop de tentatives de connexion. Réessayez dans {minutes} min.",
       "invalid": "Les informations saisies ne sont pas valides.",
       "unexpected": "La connexion a échoué. Réessayez dans un instant."
+    },
+    "notices": {
+      "passwordSet": "Votre mot de passe est enregistré. Vous pouvez maintenant vous connecter.",
+      "expired": "Votre session a expiré. Reconnectez-vous pour continuer."
     }
   },
   "admin": {
@@ -143,10 +149,6 @@
     "tokens": {
       "title": "Jetons d'accès",
       "description": "Créez et révoquez les jetons utilisés par vos applications pour appeler l'API."
-    },
-    "users": {
-      "title": "Utilisateurs",
-      "description": "Créez les comptes de votre équipe et attribuez-leur un rôle."
     }
   },
   "roles": {
@@ -196,6 +198,150 @@
     "unexpected": {
       "title": "Une erreur est survenue",
       "description": "Le service n'a pas pu traiter la demande. Réessayez dans un instant."
+    }
+  },
+  "common": {
+    "retry": "Réessayer",
+    "cancel": "Annuler",
+    "save": "Enregistrer",
+    "saving": "Enregistrement en cours…",
+    "unexpectedError": "L'opération a échoué. Réessayez dans un instant."
+  },
+  "pagination": {
+    "label": "Pagination",
+    "previous": "Précédent",
+    "next": "Suivant",
+    "page": "Page"
+  },
+  "users": {
+    "backToList": "Retour aux utilisateurs",
+    "status": {
+      "active": "Actif",
+      "invited": "Invitation en attente",
+      "inactive": "Désactivé"
+    },
+    "list": {
+      "meta": {
+        "title": "Utilisateurs"
+      },
+      "title": "Utilisateurs",
+      "description": "Comptes ayant accès à l'administration et rôle de chacun.",
+      "create": "Nouvel utilisateur",
+      "caption": "Liste des utilisateurs",
+      "count": "Aucun utilisateur | {count} utilisateur | {count} utilisateurs",
+      "you": "Vous",
+      "never": "Jamais",
+      "empty": "Aucun utilisateur pour le moment.",
+      "emptyFiltered": "Aucun utilisateur ne correspond à ces filtres.",
+      "loadError": "Impossible de charger les utilisateurs."
+    },
+    "filters": {
+      "label": "Filtrer les utilisateurs",
+      "search": "Nom ou adresse e-mail",
+      "role": "Rôle",
+      "status": "Statut",
+      "allRoles": "Tous les rôles",
+      "allStatuses": "Tous les statuts",
+      "apply": "Filtrer",
+      "reset": "Réinitialiser les filtres"
+    },
+    "columns": {
+      "user": "Utilisateur",
+      "role": "Rôle",
+      "status": "Statut",
+      "lastLogin": "Dernière connexion"
+    },
+    "fields": {
+      "email": "Adresse e-mail",
+      "name": "Nom",
+      "nameHint": "Facultatif. Affiché dans l'administration.",
+      "role": "Rôle",
+      "active": "Compte actif",
+      "activeHint": "Un compte désactivé ne peut plus se connecter et ses sessions sont fermées immédiatement."
+    },
+    "create": {
+      "meta": {
+        "title": "Nouvel utilisateur"
+      },
+      "title": "Nouvel utilisateur",
+      "description": "Créez le compte puis transmettez le lien d'invitation à la personne concernée.",
+      "invitationNote": "Aucun mot de passe n'est défini ici : un lien d'invitation valable 7 jours sera généré, pour que l'utilisateur choisisse lui-même son mot de passe.",
+      "submit": "Créer le compte",
+      "success": "Le compte {email} a été créé."
+    },
+    "edit": {
+      "profileTitle": "Profil",
+      "saved": "Modifications enregistrées.",
+      "loadError": "Impossible de charger cet utilisateur.",
+      "selfRoleHint": "Vous ne pouvez pas modifier votre propre rôle.",
+      "selfActiveHint": "Vous ne pouvez pas désactiver votre propre compte."
+    },
+    "access": {
+      "title": "Accès et sécurité",
+      "password": "Mot de passe",
+      "passwordSet": "Défini",
+      "passwordPending": "Pas encore défini",
+      "sessions": "Sessions ouvertes",
+      "pending": {
+        "invitation": "Un lien d'invitation est en attente jusqu'au {date}.",
+        "reset": "Un lien de réinitialisation est en attente jusqu'au {date}."
+      },
+      "newInvitation": "Générer un nouveau lien d'invitation",
+      "resetLink": "Générer un lien de réinitialisation",
+      "revokeSessions": "Fermer toutes les sessions",
+      "revokeOtherSessions": "Fermer mes autres sessions",
+      "sessionsRevoked": "Aucune session fermée. | {count} session fermée. | {count} sessions fermées.",
+      "inactiveHint": "Réactivez le compte pour pouvoir générer un lien."
+    },
+    "link": {
+      "label": "Lien à transmettre",
+      "copy": "Copier le lien",
+      "copied": "Lien copié dans le presse-papiers.",
+      "expires": "Valable jusqu'au {date}.",
+      "once": "Ce lien ne sera plus affiché : copiez-le maintenant et transmettez-le par un canal sûr.",
+      "invitation": {
+        "title": "Lien d'invitation",
+        "description": "Transmettez ce lien à {email} : il lui permet de choisir son mot de passe et d'activer son compte."
+      },
+      "reset": {
+        "title": "Lien de réinitialisation",
+        "description": "Transmettez ce lien à {email} : il lui permet de choisir un nouveau mot de passe. Le mot de passe actuel reste valable jusque-là."
+      }
+    },
+    "delete": {
+      "title": "Supprimer le compte",
+      "description": "La suppression est définitive. Pour suspendre l'accès en conservant l'historique, désactivez plutôt le compte.",
+      "open": "Supprimer ce compte",
+      "confirmTitle": "Supprimer ce compte ?",
+      "confirmDescription": "Le compte {email} et ses sessions seront supprimés définitivement. Les médias qu'il a téléversés sont conservés.",
+      "confirm": "Supprimer définitivement",
+      "success": "Le compte {email} a été supprimé."
+    },
+    "errors": {
+      "selfAction": "Vous ne pouvez pas modifier le rôle, désactiver ou supprimer votre propre compte.",
+      "lastAdmin": "Impossible : ce compte est le dernier administrateur actif."
+    }
+  },
+  "password": {
+    "backToLogin": "Aller à la connexion",
+    "invitation": {
+      "title": "Activez votre compte",
+      "description": "Choisissez le mot de passe de votre compte surgeMedia.",
+      "submit": "Activer mon compte"
+    },
+    "reset": {
+      "title": "Nouveau mot de passe",
+      "description": "Choisissez un nouveau mot de passe. Vos sessions ouvertes seront fermées.",
+      "submit": "Enregistrer le mot de passe"
+    },
+    "invalid": {
+      "title": "Lien invalide ou expiré",
+      "description": "Ce lien a déjà été utilisé, a expiré ou a été remplacé. Demandez un nouveau lien à un administrateur."
+    },
+    "fields": {
+      "password": "Nouveau mot de passe",
+      "passwordHint": "{min} caractères minimum. Une phrase de plusieurs mots est à la fois sûre et facile à retenir.",
+      "confirmation": "Confirmation du mot de passe"
     }
   }
 }

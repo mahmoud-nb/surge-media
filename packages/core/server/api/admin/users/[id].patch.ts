@@ -1,0 +1,23 @@
+import { updateUserSchema } from '#shared/schemas/users'
+
+/**
+ * PATCH /api/admin/users/:id — { name?, role?, isActive? }.
+ * 403 SELF_ACTION (son propre rôle ou sa désactivation) · 409 LAST_ADMIN.
+ * Désactiver un compte ferme immédiatement toutes ses sessions ; un changement de rôle
+ * s'applique à la requête suivante (le rôle est relu en base à chaque vérification).
+ */
+export default defineEventHandler(async (event) => {
+  const actor = await requireAuth(event, 'users:manage')
+  const target = await findUserOr404(getRouterParam(event, 'id') ?? '')
+  const input = await readValidatedBody(event, body => updateUserSchema.parse(body))
+
+  await assertUserChangeAllowed(actor, target, { role: input.role, isActive: input.isActive })
+
+  const prisma = await usePrisma()
+  const [user] = await prisma.$transaction([
+    prisma.user.update({ where: { id: target.id }, data: input }),
+    ...(input.isActive === false ? [prisma.session.deleteMany({ where: { userId: target.id } })] : []),
+  ])
+
+  return { user: toUserSummary(user) }
+})
