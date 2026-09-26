@@ -138,10 +138,6 @@
       "title": "Section en préparation",
       "description": "Cette section sera disponible dans une prochaine version. Votre rôle vous y donne déjà accès."
     },
-    "media": {
-      "title": "Médias",
-      "description": "Téléversez, organisez et transformez les médias de vos projets."
-    },
     "projects": {
       "title": "Projets et API",
       "description": "Gérez les projets, leurs origines autorisées (CORS) et l'intégration de l'API."
@@ -205,7 +201,9 @@
     "cancel": "Annuler",
     "save": "Enregistrer",
     "saving": "Enregistrement en cours…",
-    "unexpectedError": "L'opération a échoué. Réessayez dans un instant."
+    "unexpectedError": "L'opération a échoué. Réessayez dans un instant.",
+    "copy": "Copier",
+    "copied": "Copié dans le presse-papiers."
   },
   "pagination": {
     "label": "Pagination",
@@ -296,7 +294,6 @@
     "link": {
       "label": "Lien à transmettre",
       "copy": "Copier le lien",
-      "copied": "Lien copié dans le presse-papiers.",
       "expires": "Valable jusqu'au {date}.",
       "once": "Ce lien ne sera plus affiché : copiez-le maintenant et transmettez-le par un canal sûr.",
       "invitation": {
@@ -342,6 +339,136 @@
       "password": "Nouveau mot de passe",
       "passwordHint": "{min} caractères minimum. Une phrase de plusieurs mots est à la fois sûre et facile à retenir.",
       "confirmation": "Confirmation du mot de passe"
+    }
+  },
+  "media": {
+    "dimensions": "{width} × {height} px",
+    "visibility": {
+      "PUBLIC": {
+        "label": "Public",
+        "description": "Accessible à toute personne disposant de l'adresse, et mis en cache par les navigateurs et les CDN."
+      },
+      "PRIVATE": {
+        "label": "Privé",
+        "description": "Accessible uniquement depuis l'administration ou avec un lien temporaire signé."
+      }
+    },
+    "list": {
+      "meta": {
+        "title": "Médias"
+      },
+      "title": "Médias",
+      "description": "Téléversez, retrouvez et gérez les images de vos projets.",
+      "trashTitle": "Corbeille",
+      "trashDescription": "Médias retirés de la diffusion. Restaurez-les ou supprimez-les définitivement.",
+      "count": "Aucun média | {count} média | {count} médias",
+      "gridLabel": "Médias",
+      "empty": "Aucun média pour le moment : téléversez vos premières images ci-dessus.",
+      "emptyFiltered": "Aucun média ne correspond à ces filtres.",
+      "emptyTrash": "La corbeille est vide.",
+      "loadError": "Impossible de charger les médias.",
+      "results": "Résultats"
+    },
+    "filters": {
+      "label": "Filtrer les médias",
+      "search": "Nom, titre ou texte alternatif",
+      "visibility": "Visibilité",
+      "allVisibilities": "Toutes",
+      "sort": "Trier par",
+      "sorts": {
+        "newest": "Plus récents",
+        "oldest": "Plus anciens",
+        "name": "Nom",
+        "size": "Taille"
+      },
+      "show": "Afficher",
+      "library": "Médiathèque",
+      "trash": "Corbeille",
+      "apply": "Filtrer",
+      "reset": "Réinitialiser"
+    },
+    "upload": {
+      "title": "Téléverser des images",
+      "dropHint": "Glissez-déposez vos images ici, ou",
+      "dropHintSingle": "Glissez-déposez la nouvelle image ici, ou",
+      "choose": "Choisir des fichiers",
+      "chooseSingle": "Choisir un fichier",
+      "constraints": "Formats acceptés : {types}. Taille maximale : {max} par fichier.",
+      "visibility": "Visibilité des fichiers envoyés",
+      "queue": "Envois en cours et terminés",
+      "progress": "Progression de l'envoi de {name}",
+      "statusPending": "En attente",
+      "statusDone": "Envoyé",
+      "statusError": "Échec",
+      "succeeded": "{name} a été téléversé.",
+      "failed": "Échec de l'envoi de {name} : {message}"
+    },
+    "errors": {
+      "FILE_TOO_LARGE": "Le fichier dépasse la taille maximale ({max}).",
+      "UNSUPPORTED_TYPE": "Format non pris en charge. Formats acceptés : {types}.",
+      "UNREADABLE_FILE": "Le fichier est illisible ou endommagé.",
+      "DIMENSIONS_TOO_LARGE": "L'image est trop grande (plus de 100 millions de pixels).",
+      "KIND_MISMATCH": "Le nouveau fichier doit être du même type que l'original.",
+      "VERSION_CONFLICT": "Le fichier vient d'être remplacé par quelqu'un d'autre. Rechargez la page et réessayez.",
+      "NO_FILE": "Aucun fichier reçu.",
+      "network": "La connexion a été interrompue."
+    },
+    "detail": {
+      "backToList": "Retour aux médias",
+      "backToTrash": "Retour à la corbeille",
+      "loadError": "Impossible de charger ce média.",
+      "infoTitle": "Informations",
+      "format": "Format",
+      "dimensions": "Dimensions",
+      "size": "Taille",
+      "version": "Version du fichier",
+      "uploadedBy": "Téléversé par",
+      "unknownUploader": "Compte supprimé",
+      "createdAt": "Téléversé le",
+      "checksum": "Empreinte SHA-256",
+      "editTitle": "Description",
+      "saved": "Modifications enregistrées."
+    },
+    "fields": {
+      "title": "Titre",
+      "titleHint": "Facultatif. Sert aussi au nom lisible de l'adresse du fichier.",
+      "altText": "Texte alternatif",
+      "altTextHint": "Décrivez ce que montre l'image pour les personnes qui ne la voient pas (125 caractères environ). Laissez vide si l'image est purement décorative.",
+      "visibility": "Visibilité"
+    },
+    "links": {
+      "title": "Adresse du fichier",
+      "publicDescription": "Adresse permanente à utiliser dans vos sites et applications. Elle change si le fichier est remplacé.",
+      "publicUrl": "Adresse publique",
+      "privateDescription": "Ce média est privé : générez un lien temporaire pour le partager ou l'afficher hors de l'administration.",
+      "duration": "Durée de validité",
+      "durations": {
+        "hour": "1 heure",
+        "day": "24 heures",
+        "week": "7 jours"
+      },
+      "generate": "Générer un lien temporaire",
+      "temporaryUrl": "Lien temporaire",
+      "expires": "Valable jusqu'au {date}."
+    },
+    "replace": {
+      "title": "Remplacer le fichier",
+      "description": "L'identifiant, le titre, le texte alternatif et la visibilité sont conservés. L'adresse du fichier change : les anciennes adresses redirigent vers la nouvelle.",
+      "success": "Fichier remplacé."
+    },
+    "trash": {
+      "title": "Mettre à la corbeille",
+      "description": "Le média ne sera plus diffusé, mais restera restaurable depuis la corbeille.",
+      "move": "Mettre à la corbeille",
+      "moved": "« {name} » a été mis à la corbeille.",
+      "bannerTitle": "Ce média est dans la corbeille",
+      "bannerDescription": "Il n'est plus diffusé : ses adresses renvoient une erreur 404.",
+      "restore": "Restaurer",
+      "purge": "Supprimer définitivement",
+      "confirmTitle": "Supprimer définitivement ce média ?",
+      "confirmDescription": "« {name} », son fichier et ses dérivés seront supprimés du stockage. Cette action est irréversible.",
+      "confirm": "Supprimer définitivement",
+      "purged": "« {name} » a été supprimé définitivement."
     }
   }
 }

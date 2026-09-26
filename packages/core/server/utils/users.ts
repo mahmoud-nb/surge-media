@@ -29,7 +29,7 @@ const STATUS_FILTERS: Record<UserStatus, Prisma.UserWhereInput> = {
 export function userListWhere(query: UserListQuery): Prisma.UserWhereInput {
   const and: Prisma.UserWhereInput[] = []
   if (query.q) {
-    and.push({ OR: [{ email: textContains(query.q.toLowerCase()) }, { name: textContains(query.q) }] })
+    and.push({ OR: textSearch(['email', 'name'], query.q) })
   }
   if (query.role) and.push({ role: query.role })
   if (query.status) and.push(STATUS_FILTERS[query.status])

@@ -138,10 +138,6 @@
       "title": "Section in progress",
       "description": "This section will be available in an upcoming release. Your role already grants you access to it."
     },
-    "media": {
-      "title": "Media",
-      "description": "Upload, organise and transform the media of your projects."
-    },
     "projects": {
       "title": "Projects and API",
       "description": "Manage projects, their allowed origins (CORS) and the API integration."
@@ -205,7 +201,9 @@
     "cancel": "Cancel",
     "save": "Save",
     "saving": "Saving…",
-    "unexpectedError": "The operation failed. Please try again in a moment."
+    "unexpectedError": "The operation failed. Please try again in a moment.",
+    "copy": "Copy",
+    "copied": "Copied to the clipboard."
   },
   "pagination": {
     "label": "Pagination",
@@ -296,7 +294,6 @@
     "link": {
       "label": "Link to send",
       "copy": "Copy link",
-      "copied": "Link copied to the clipboard.",
       "expires": "Valid until {date}.",
       "once": "This link will not be shown again: copy it now and send it through a secure channel.",
       "invitation": {
@@ -342,6 +339,136 @@
       "password": "New password",
       "passwordHint": "{min} characters minimum. A phrase of several words is both secure and easy to remember.",
       "confirmation": "Confirm password"
+    }
+  },
+  "media": {
+    "dimensions": "{width} × {height} px",
+    "visibility": {
+      "PUBLIC": {
+        "label": "Public",
+        "description": "Accessible to anyone with the address, and cached by browsers and CDNs."
+      },
+      "PRIVATE": {
+        "label": "Private",
+        "description": "Accessible only from the administration or with a signed temporary link."
+      }
+    },
+    "list": {
+      "meta": {
+        "title": "Media"
+      },
+      "title": "Media",
+      "description": "Upload, find and manage the images of your projects.",
+      "trashTitle": "Trash",
+      "trashDescription": "Media removed from delivery. Restore them or delete them permanently.",
+      "count": "No media | {count} media item | {count} media items",
+      "gridLabel": "Media",
+      "empty": "No media yet: upload your first images above.",
+      "emptyFiltered": "No media match these filters.",
+      "emptyTrash": "The trash is empty.",
+      "loadError": "Unable to load media.",
+      "results": "Results"
+    },
+    "filters": {
+      "label": "Filter media",
+      "search": "Name, title or alternative text",
+      "visibility": "Visibility",
+      "allVisibilities": "All",
+      "sort": "Sort by",
+      "sorts": {
+        "newest": "Newest",
+        "oldest": "Oldest",
+        "name": "Name",
+        "size": "Size"
+      },
+      "show": "Show",
+      "library": "Library",
+      "trash": "Trash",
+      "apply": "Filter",
+      "reset": "Reset"
+    },
+    "upload": {
+      "title": "Upload images",
+      "dropHint": "Drag and drop your images here, or",
+      "dropHintSingle": "Drag and drop the new image here, or",
+      "choose": "Choose files",
+      "chooseSingle": "Choose a file",
+      "constraints": "Accepted formats: {types}. Maximum size: {max} per file.",
+      "visibility": "Visibility of uploaded files",
+      "queue": "Ongoing and completed uploads",
+      "progress": "Upload progress of {name}",
+      "statusPending": "Waiting",
+      "statusDone": "Uploaded",
+      "statusError": "Failed",
+      "succeeded": "{name} has been uploaded.",
+      "failed": "Upload of {name} failed: {message}"
+    },
+    "errors": {
+      "FILE_TOO_LARGE": "The file exceeds the maximum size ({max}).",
+      "UNSUPPORTED_TYPE": "Unsupported format. Accepted formats: {types}.",
+      "UNREADABLE_FILE": "The file is unreadable or damaged.",
+      "DIMENSIONS_TOO_LARGE": "The image is too large (more than 100 million pixels).",
+      "KIND_MISMATCH": "The new file must be of the same type as the original.",
+      "VERSION_CONFLICT": "The file has just been replaced by someone else. Reload the page and try again.",
+      "NO_FILE": "No file received.",
+      "network": "The connection was interrupted."
+    },
+    "detail": {
+      "backToList": "Back to media",
+      "backToTrash": "Back to the trash",
+      "loadError": "Unable to load this media item.",
+      "infoTitle": "Information",
+      "format": "Format",
+      "dimensions": "Dimensions",
+      "size": "Size",
+      "version": "File version",
+      "uploadedBy": "Uploaded by",
+      "unknownUploader": "Deleted account",
+      "createdAt": "Uploaded on",
+      "checksum": "SHA-256 checksum",
+      "editTitle": "Description",
+      "saved": "Changes saved."
+    },
+    "fields": {
+      "title": "Title",
+      "titleHint": "Optional. Also used for the readable name in the file address.",
+      "altText": "Alternative text",
+      "altTextHint": "Describe what the image shows for people who cannot see it (about 125 characters). Leave empty if the image is purely decorative.",
+      "visibility": "Visibility"
+    },
+    "links": {
+      "title": "File address",
+      "publicDescription": "Permanent address to use in your websites and applications. It changes if the file is replaced.",
+      "publicUrl": "Public address",
+      "privateDescription": "This media item is private: generate a temporary link to share it or display it outside the administration.",
+      "duration": "Validity",
+      "durations": {
+        "hour": "1 hour",
+        "day": "24 hours",
+        "week": "7 days"
+      },
+      "generate": "Generate a temporary link",
+      "temporaryUrl": "Temporary link",
+      "expires": "Valid until {date}."
+    },
+    "replace": {
+      "title": "Replace the file",
+      "description": "The identifier, title, alternative text and visibility are kept. The file address changes: old addresses redirect to the new one.",
+      "success": "File replaced."
+    },
+    "trash": {
+      "title": "Move to trash",
+      "description": "The media item will no longer be delivered, but can be restored from the trash.",
+      "move": "Move to trash",
+      "moved": "\"{name}\" has been moved to the trash.",
+      "bannerTitle": "This media item is in the trash",
+      "bannerDescription": "It is no longer delivered: its addresses return a 404 error.",
+      "restore": "Restore",
+      "purge": "Delete permanently",
+      "confirmTitle": "Delete this media item permanently?",
+      "confirmDescription": "\"{name}\", its file and its variants will be removed from storage. This action cannot be undone.",
+      "confirm": "Delete permanently",
+      "purged": "\"{name}\" has been permanently deleted."
     }
   }
 }

@@ -40,6 +40,9 @@ type MigrationMode = 'deploy' | 'reset' | 'skip'
 
 const DATABASE_ENV_KEYS = ['DATABASE_PROVIDER', 'DATABASE_URL'] as const
 
+/** Secrets aléatoires ajoutés au .env s'ils sont absents : sessions (nuxt-auth-utils), liens signés des médias. */
+const GENERATED_SECRETS = ['NUXT_SESSION_PASSWORD', 'NUXT_MEDIA_SIGNING_SECRET'] as const
+
 // ─── Commandes ───────────────────────────────────────────────────────────────
 
 /** `surge-media init` : choisit le fournisseur et l'URL, puis applique les migrations. */
@@ -209,13 +212,15 @@ async function applyTarget(ctx: CliContext, target: DatabaseTarget, mode: Migrat
 
   const envPath = join(root, ENV_FILE)
   const values: Record<string, string> = { DATABASE_PROVIDER: target.provider, DATABASE_URL: target.url }
-  // Secret de chiffrement des cookies de session (nuxt-auth-utils), généré une seule fois.
-  const newSessionSecret = !readEnvFile(envPath).NUXT_SESSION_PASSWORD
-  if (newSessionSecret) values.NUXT_SESSION_PASSWORD = randomBytes(32).toString('base64url')
+  // Secrets générés une seule fois (jamais remplacés : cela déconnecterait tout le monde ou
+  // invaliderait les liens signés déjà partagés).
+  const existing = readEnvFile(envPath)
+  const newSecrets = GENERATED_SECRETS.filter(name => !existing[name])
+  for (const name of newSecrets) values[name] = randomBytes(32).toString('base64url')
 
   updateEnvFile(envPath, values, join(root, ENV_EXAMPLE_FILE))
   log.success(t('step.env'))
-  if (newSessionSecret) log.success(t('step.sessionSecret'))
+  for (const name of newSecrets) log.success(t('step.secretGenerated', { name }))
   for (const name of DATABASE_ENV_KEYS) {
     if (process.env[name] !== undefined) log.warn(t('config.shellOverride', { name }))
   }

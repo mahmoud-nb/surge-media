@@ -9,7 +9,7 @@ Il est tenu à jour à chaque étape du projet (voir le [Journal des étapes](#j
 
 | Outil | Version | Remarque |
 | --- | --- | --- |
-| Node.js | 22.12+ ou 24+ (recommandé : 24, cf. `.nvmrc`) | Node 20 n'est plus maintenu |
+| Node.js | 24+ (LTS active, cf. `.nvmrc`) | exigé par Flydrive 2 (stockage des médias) ; Node 22 n'est plus accepté |
 | pnpm | 12.x | `corepack enable` utilise la version du champ `packageManager` |
 | Git | récent | |
 | PostgreSQL / MySQL / MariaDB | optionnel | uniquement si vous n'utilisez pas SQLite |
@@ -49,20 +49,23 @@ surge-media/
       │  ├─ assets/css/    Tailwind v4 + jetons de design (clair / sombre)
       │  ├─ components/
       │  │  ├─ ui/         composants de base (Button, Input, FormField, Alert, Badge, Select,
-      │  │  │              Switch, PasswordInput, Dialog, Pagination) → <UiButton>…
+      │  │  │              Switch, PasswordInput, Dialog, Pagination, RadioCards, CopyField) → <UiButton>…
       │  │  ├─ app/        briques transverses : logo, lien d'évitement, thème, langue
-      │  │  └─ admin/      barre latérale, en-tête de page, choix du rôle, lien de mot de passe…
-      │  ├─ composables/   useAuth(), useApiFetch(), useFormValidation(), useFlash(), useAppHead()
+      │  │  └─ admin/      barre latérale, en-tête de page, rôle, lien de mot de passe, médias (envoi, carte)…
+      │  ├─ composables/   useAuth(), useApiFetch(), useFormValidation(), useFlash(), useMediaUpload(), useAppHead()
       │  ├─ plugins/       api.ts ($api : appels de l'administration, gestion des sessions expirées)
       │  ├─ layouts/       default (public) et admin (barre latérale)
       │  ├─ middleware/    auth.global.ts (protection de /admin/*)
-      │  ├─ pages/         index, login, password/[token], admin/… (users/, users/new, users/[id])
+      │  ├─ pages/         index, login, password/[token], admin/… (media/, media/[id], users/, users/new, users/[id])
       │  └─ error.vue      pages d'erreur traduites (401, 403, 404, 500)
       ├─ i18n/locales/     traductions de l'interface (fr.json = référence, en.json)
       ├─ server/
-      │  ├─ api/           auth/*, auth/password/*, admin/users/*, admin/status, health
+      │  ├─ api/           auth/*, auth/password/*, admin/users/*, admin/media/*, admin/config/*, health
+      │  ├─ routes/m/      diffusion des médias : /m/<id>/v<version>/…
+      │  ├─ lib/storage/   interface MediaStorage + adaptateur Flydrive (local, S3)
+      │  ├─ lib/media/     métier des médias : service, gestionnaires par genre, envoi, signature, diffusion
       │  ├─ middleware/    csrf.ts
-      │  ├─ plugins/       stockage, base, sessions, rappels d'amorçage
+      │  ├─ plugins/       base, sessions, rappels d'amorçage
       │  ├─ utils/         usePrisma(), requireAuth(), utilisateurs, liens de mot de passe… (auto-importés)
       │  └─ generated/     client Prisma généré (non versionné)
       ├─ shared/           code partagé app / serveur / CLI : permissions, schémas zod, BDD
@@ -102,6 +105,11 @@ pnpm --filter @surge-media/core add -D typescript@~6.0.3 vue-tsc tsx tsdown @typ
 pnpm --filter @surge-media/core add nuxt-auth-utils @node-rs/argon2 zod \
   @nuxtjs/i18n @nuxtjs/color-mode tailwindcss @tailwindcss/vite \
   clsx tailwind-merge @lucide/vue @fontsource-variable/inter
+
+# étape 4 — médias (stockage multi-backend, envoi en flux)
+pnpm --filter @surge-media/core add flydrive busboy @aws-sdk/client-s3 @aws-sdk/s3-request-presigner
+pnpm --filter @surge-media/core add -D @types/busboy
+pnpm --filter @surge-media/core remove unstorage   # remplacé par Flydrive pour les fichiers
 
 # pnpm 12 bloque les scripts d'installation : autoriser les modules natifs nécessaires
 pnpm approve-builds better-sqlite3 esbuild @prisma/engines prisma
@@ -185,13 +193,18 @@ Le fichier `packages/core/.env` est créé par `pnpm db:init` à partir de `.env
 | --- | --- | --- |
 | `DATABASE_PROVIDER` | `sqlite` | fournisseur de base de données |
 | `DATABASE_URL` | `file:./data/surge-media.db` | URL de connexion (obligatoire hors SQLite) |
-| `NUXT_STORAGE_BASE` | `./data/media` | dossier des fichiers médias (originaux et dérivés) |
 | `NUXT_SESSION_PASSWORD` | généré par `db:init` | secret des cookies de session (≥ 32 caractères ; le changer déconnecte tout le monde) |
 | `NUXT_SESSION_MAX_AGE` | `43200` (12 h) | durée d'une session, en secondes |
 | `NUXT_SESSION_COOKIE_SECURE` | `true` | cookie réservé à HTTPS (localhost excepté) ; `false` uniquement pour un test en HTTP |
 | `NUXT_BOOTSTRAP_ADMIN_EMAIL` | — | compte d'amorçage (§ 9.3), à supprimer après la première connexion |
 | `NUXT_BOOTSTRAP_ADMIN_PASSWORD` | — | mot de passe d'amorçage (12 caractères minimum) |
 | `SURGE_MEDIA_LANG` | locale système, sinon `fr` | langue de la CLI |
+| `NUXT_MEDIA_MAX_UPLOAD_SIZE` | `26214400` (25 Mio) | taille maximale d'un fichier envoyé, en octets |
+| `NUXT_MEDIA_SIGNING_SECRET` | généré par `db:init` | secret des liens signés des médias privés (le changer invalide les liens partagés) |
+| `NUXT_MEDIA_STORAGE_DRIVER` | `local` | stockage des fichiers : `local` ou `s3` (§ 7) |
+| `NUXT_MEDIA_STORAGE_ROOT` | `./data/media` | dossier du pilote `local` (relatif à `packages/core` ou absolu) |
+| `NUXT_MEDIA_STORAGE_PREFIX` | — | préfixe de toutes les clés (partage d'un bucket) |
+| `NUXT_MEDIA_STORAGE_S3_*` | — | `BUCKET`, `REGION`, `ENDPOINT` (services compatibles), `ACCESS_KEY_ID`, `SECRET_ACCESS_KEY`, `FORCE_PATH_STYLE` |
 
 ### 6.4 Modèle de données (`prisma/schema.prisma`)
 
@@ -204,8 +217,8 @@ Le fichier `packages/core/.env` est créé par `pnpm db:init` à partir de `.env
 | `AccessToken` | jeton d'API d'un projet (empreinte + préfixe lisible, portées, expiration, révocation) |
 | `AllowedOrigin` | origines autorisées (CORS) pour les appels navigateur d'un projet |
 | `Folder` | arborescence de dossiers d'un projet |
-| `Media` | fichier original (type, visibilité publique/privée, dimensions, empreinte, alt, corbeille) |
-| `MediaVariant` | dérivé généré à la demande (crop, resize, format, qualité) et mis en cache |
+| `Media` | fichier original : genre, visibilité publique/privée, clé de stockage opaque, version (incrémentée à chaque remplacement), dimensions, empreinte, alt, corbeille |
+| `MediaVariant` | dérivé généré à la demande puis conservé (v1 : aperçu ; bientôt crop, resize, format, qualité) |
 
 **Règles de portabilité** (le schéma doit fonctionner sur SQLite, PostgreSQL et MySQL) :
 pas d'attribut natif `@db.*`, pas de liste scalaire (`String[]`), chaînes limitées à 191 caractères
@@ -231,17 +244,125 @@ courant, écrit une migration par fournisseur puis met l'instantané à jour. En
 `pnpm --filter @surge-media/core db:migration --check` échoue si le schéma a changé sans migration.
 Ne modifiez jamais une migration déjà publiée.
 
-## 7. Stockage des fichiers (unstorage)
+## 7. Médias
 
-Le plugin `server/plugins/storage.ts` monte le pilote `fs` d'unstorage sur `useStorage('media')`
-(constante `MEDIA_STORAGE`) au démarrage, dans le dossier `NUXT_STORAGE_BASE`. Le montage se fait à
-l'exécution pour que le dossier reste configurable sans rebuild. D'autres pilotes (S3, Azure…)
-pourront être branchés au même endroit.
+### 7.1 Architecture
+
+```text
+ Admin (cookie + media:manage)    API v1 (jeton, étape à venir)    Diffusion /m/:id/v:version/:nom
+             └──────────────┬──────────────┘                                │
+                            ▼                                                ▼
+          server/lib/media/service.ts — métier : envoi, remplacement, corbeille, recherche
+          ┌─────────────────┼──────────────────────┐
+          ▼                 ▼                      ▼
+  handlers/ (par genre)   Prisma : Media,      server/lib/storage — interface MediaStorage
+  image (sharp) ;         MediaVariant           ├─ local : Flydrive fs → NUXT_MEDIA_STORAGE_ROOT
+  vidéo, document…                               └─ s3    : Flydrive s3 → AWS, R2, MinIO, OVH…
+```
+
+- **Métier et stockage séparés** : la base porte les données métier, le fichier vit sous une
+  **clé opaque générée par le serveur** (`originals/2026/09/<128 bits aléatoires>.jpg`,
+  dérivés `variants/<id>/v<version>-<hash>.webp`). Jamais le nom envoyé, jamais exposée.
+- **Genres extensibles** : les types acceptés sont déclarés dans `shared/utils/media.ts`
+  (`ACCEPTED_MEDIA_TYPES`, v1 : JPEG, PNG, WebP, AVIF, GIF ; SVG exclu car il peut contenir du
+  script). Chaque genre a son gestionnaire (`server/lib/media/handlers/`) : `inspect()`
+  (dimensions, durée, métadonnées) et `preview()`. Ajouter la vidéo : signature dans `sniff.ts`,
+  types dans `ACCEPTED_MEDIA_TYPES`, gestionnaire inscrit au registre.
+- **Stockage interchangeable** : `MediaStorage` (put/getStream/stat/delete/deletePrefix en flux)
+  implémentée au-dessus de Flydrive. Nouveau backend = un `case` dans `server/lib/storage/index.ts`.
+
+### 7.2 Configurer le stockage
+
+```dotenv
+# Disque du serveur (défaut) : autre dossier possible, relatif à packages/core ou absolu
+NUXT_MEDIA_STORAGE_DRIVER="local"
+NUXT_MEDIA_STORAGE_ROOT="/var/lib/surge-media/media"
+
+# S3 ou service compatible (exemple Cloudflare R2 ; MinIO : ajouter FORCE_PATH_STYLE="true")
+NUXT_MEDIA_STORAGE_DRIVER="s3"
+NUXT_MEDIA_STORAGE_S3_BUCKET="surge-media"
+NUXT_MEDIA_STORAGE_S3_REGION="auto"
+NUXT_MEDIA_STORAGE_S3_ENDPOINT="https://<compte>.r2.cloudflarestorage.com"
+NUXT_MEDIA_STORAGE_S3_ACCESS_KEY_ID="…"
+NUXT_MEDIA_STORAGE_S3_SECRET_ACCESS_KEY="…"
+```
+
+Changer de stockage ne modifie ni le code, ni les API, ni la base : copier les fichiers existants
+(mêmes clés, même préfixe) vers le nouvel emplacement, puis redémarrer. Les objets S3 restent privés :
+la diffusion passe toujours par surgeMedia. `GET /api/health` vérifie que le stockage répond.
+
+### 7.3 Envoi (pipeline et sécurité)
+
+1. Session + permission `media:manage`.
+2. Lecture multipart **en flux** (busboy) : un seul fichier, taille plafonnée pendant la lecture
+   (`NUXT_MEDIA_MAX_UPLOAD_SIZE`) → 413 sans jamais charger le fichier en mémoire.
+3. Fichier temporaire + empreinte SHA-256 et taille calculées au fil de l'eau (toujours supprimé).
+4. **Type réel** d'après la signature binaire (`server/lib/media/sniff.ts`, liste d'autorisation) ;
+   nom et type annoncés par le client ignorés → 415.
+5. Analyse par le gestionnaire (sharp) : fichier illisible → 422 `UNREADABLE_FILE` ; plus de
+   100 Mpx (bombe de décompression) → 422 `DIMENSIONS_TOO_LARGE`.
+6. Écriture dans le stockage puis en base ; l'échec de l'un annule l'autre.
+
+Remplacement (`PUT …/file`) : nouvelle clé, version + 1, mise à jour conditionnée à la version lue
+(409 `VERSION_CONFLICT` si un remplacement concurrent est passé), ancien fichier et anciens dérivés
+supprimés. Corbeille : `deletedAt` (plus diffusé, restaurable) ; suppression définitive depuis la
+corbeille uniquement (enregistrement, original et dérivés).
+
+### 7.4 Diffusion, médias publics et privés
+
+`GET|HEAD /m/<id>/v<version>/<nom>.<ext>` (original) et `/m/<id>/v<version>/preview/<nom>.webp`
+(aperçu 480 px, métadonnées EXIF retirées, généré à la première demande puis conservé).
+Le nom est indicatif ; une ancienne version redirige (302) vers l'URL courante.
+
+| Accès | Condition | Cache |
+| --- | --- | --- |
+| Public | aucune | `public, max-age=1 an, immutable` (l'URL change à chaque remplacement) |
+| Privé, lien signé | `?exp=&sig=` : HMAC-SHA256 de (id, version, dérivé, échéance), 7 jours max | `private`, jusqu'à l'échéance (1 h max) |
+| Privé, administration | session avec `media:manage` (aperçus, corbeille) | `private, no-cache` (ETag → 304) |
+| Privé, jeton d'accès | étape « API v1 » à venir (`Authorization: Bearer`, portée `media:read`) | — |
+
+En-têtes systématiques : type MIME lu en base, `X-Content-Type-Options: nosniff`,
+`Content-Security-Policy: default-src 'none'; sandbox`, `Content-Disposition` (nom d'origine encodé),
+`Cross-Origin-Resource-Policy: cross-origin`, `X-Robots-Tag: noindex` hors public.
+Invalidation des liens signés : remplacer le fichier (un seul média) ou changer
+`NUXT_MEDIA_SIGNING_SECRET` (tous).
+
+**Confidentialité** : l'original est servi tel quel, métadonnées EXIF comprises (appareil, parfois
+coordonnées GPS). Les dérivés (aperçu, transformations à venir) n'en contiennent pas.
+
+### 7.5 API d'administration (`media:manage`)
+
+| Endpoint | Rôle |
+| --- | --- |
+| `GET /api/admin/config/media` | règles d'envoi (taille max, types acceptés, durées de lien) pour l'interface |
+| `GET /api/admin/media?q=&kind=&visibility=&status=active\|trash&sort=&page=` | médiathèque paginée (24), recherche nom/titre/alt |
+| `POST /api/admin/media` | multipart `file` (+ `title`, `altText`, `visibility`) → 201 |
+| `GET /api/admin/media/:id` | métadonnées complètes (empreinte, métadonnées techniques) |
+| `PATCH /api/admin/media/:id` | `{ title?, altText?, visibility? }` |
+| `PUT /api/admin/media/:id/file` | remplacement du fichier (mêmes contrôles que l'envoi) |
+| `DELETE /api/admin/media/:id` | corbeille · `?permanent=true` : suppression définitive (409 `NOT_IN_TRASH` sinon) |
+| `POST /api/admin/media/:id/restore` | sortie de la corbeille |
+| `POST /api/admin/media/:id/signed-url` | `{ expiresIn }` (60 s à 7 jours) → lien temporaire (URL permanente si public) |
+
+Codes d'erreur (`data.code`, `shared/utils/media.ts`) : `NO_FILE`, `MULTIPART_REQUIRED` (400),
+`FILE_TOO_LARGE` (413), `UNSUPPORTED_TYPE` (415), `UNREADABLE_FILE`, `DIMENSIONS_TOO_LARGE`,
+`KIND_MISMATCH` (422), `VERSION_CONFLICT`, `NOT_IN_TRASH` (409), `MEDIA_FORBIDDEN`,
+`SIGNATURE_INVALID`, `SIGNATURE_EXPIRED` (403).
+
+### 7.6 Interface (`/admin/media`)
+
+Médiathèque (envoi par bouton ou glisser-déposer, progression par fichier annoncée aux lecteurs
+d'écran, filtres dans l'URL, grille, corbeille) et fiche d'un média (aperçu, informations, titre,
+texte alternatif, visibilité, adresse publique ou lien temporaire, remplacement, corbeille).
+Projet : tant que l'écran Projets n'existe pas, tous les médias appartiennent au projet
+`default`, créé automatiquement.
 
 ## 8. Traitement d'images (sharp)
 
 `sharp` (libvips) est installé avec ses binaires précompilés ; aucun outil de compilation n'est
 nécessaire sur Windows, macOS et Linux glibc. La sonde `/api/health` vérifie qu'il se charge.
+Son cache d'opérations est désactivé (`sharp.cache(false)`) : il garderait les fichiers temporaires
+ouverts, et donc verrouillés sous Windows.
 
 ## 9. Authentification et rôles
 
@@ -448,6 +569,8 @@ pnpm start                          # node --env-file-if-exists=.env .output/ser
   confiance) est à ajouter avant un déploiement à fort trafic.
 - Le client Prisma est lié au fournisseur choisi : tout changement de fournisseur impose un rebuild.
 - `GET /api/health` : 200 si base, stockage et sharp répondent, 503 sinon (sonde Docker / orchestrateur).
+- Stockage local : sauvegarder `NUXT_MEDIA_STORAGE_ROOT` avec la base (volume persistant en conteneur).
+- Placer un CDN ou un cache devant `/m/` est possible : les URL publiques sont immuables.
 
 ## 13. Choix techniques et versions épinglées
 
@@ -464,6 +587,10 @@ pnpm start                          # node --env-file-if-exists=.env .output/ser
 | argon2id via `@node-rs/argon2` | recommandation OWASP ; binaires précompilés (aucune compilation, embarqués par Nitro) |
 | Tailwind v4 + composants maison (pas shadcn-vue ni @nuxt/ui) | contrôle total de l'accessibilité et du thème, zéro dépendance de composants ; Reka UI pourra être ajouté pour les primitives complexes (boîtes de dialogue, menus) |
 | i18n `no_prefix` | URL stables pour l'administration (`/admin/*`), langue par cookie |
+| **Flydrive** derrière notre interface `MediaStorage` (et non unstorage) | analyse de l'étape 4 : unstorage charge les fichiers entiers en mémoire (pilotes fs et s3), sans lecture partielle ni URL signées ; `@nuxtjs/universal-storage` est un module Nuxt 2 de 2021 pour cookies/localStorage ; NuxtHub impose sa plateforme. Flydrive : flux, S3/R2/MinIO/GCS, protection des clés, remplaçable |
+| Node **≥ 24** | exigé par Flydrive 2 (Node 24 = LTS active) ; Flydrive 1.3 resterait possible pour Node 22 |
+| Détection du type maison (`sniff.ts`) plutôt que `file-type` | aucune dépendance, liste d'autorisation explicite ; `file-type` ne fonctionnait pas après build (voir Dépannage) |
+| S3 : sommes de contrôle `WHEN_REQUIRED` | les SDK récents envoient en `aws-chunked` par défaut, que certains services compatibles stockent tels quels (fichiers corrompus) |
 
 ## 14. Dépannage
 
@@ -484,6 +611,11 @@ pnpm start                          # node --env-file-if-exists=.env .output/ser
 | Page d'administration en erreur au chargement direct, mais correcte après navigation | appel fait en rendu serveur sans le cookie de session : utiliser `useApiFetch` / `$api` (qui le transmettent) ou `useFetch`, jamais une instance `$fetch.create()` maison |
 | Lien de mot de passe « invalide ou expiré » | déjà utilisé, expiré (7 j / 24 h), remplacé par un lien plus récent, ou compte désactivé : en générer un nouveau depuis la fiche du compte |
 | Plus aucun administrateur ne peut se connecter | pas encore de commande de secours : voir « Limites connues » de l'étape 3 |
+| `EBUSY … surge-media-upload-…` (Windows) | fichier temporaire verrouillé : cache libvips (désactivé depuis l'étape 4) ; redémarrer le serveur libère les anciens verrous |
+| Fichiers S3 corrompus (entourés de `x-amz-checksum`) | service compatible S3 ne gérant pas `aws-chunked` : réglage `WHEN_REQUIRED` déjà appliqué ; vérifier la version du service |
+| `Cannot find module …/strtok3/lib/index.js` après build | dépendance à exports conditionnels mal tracée par Nitro avec pnpm : c'est pourquoi `file-type` a été remplacé ; tester tout nouveau paquet **après `pnpm build`** |
+| Envoi refusé 415 alors que le fichier est une image | format non accepté (HEIC, TIFF, SVG…) ou fichier renommé : seuls JPEG, PNG, WebP, AVIF et GIF sont reconnus |
+| Média introuvable (404) juste après sa mise à la corbeille | normal : un média en corbeille n'est plus diffusé (sauf aperçu dans l'administration) |
 
 ---
 
@@ -578,3 +710,50 @@ dépendance native dans cette étape).
 pnpm install
 pnpm db:migrate     # table PasswordToken + client Prisma
 ```
+
+### Étape 4 — 2026-09-26 — Gestion des médias (phase A)
+
+**Décisions validées** : Flydrive derrière notre interface `MediaStorage` ; phase A (administration,
+diffusion, liens signés) avant les jetons et l'API v1 ; liens signés + jetons pour les médias privés ;
+projet par défaut automatique.
+
+**Ajouté**
+- Stockage : interface `MediaStorage`, adaptateur Flydrive, pilotes `local` et `s3` (AWS et compatibles),
+  préfixe de clés, configuration `NUXT_MEDIA_STORAGE_*` ; l'ancien montage unstorage est retiré.
+- Métier : `MediaService` (envoi, remplacement versionné, métadonnées, corbeille, purge, recherche),
+  registre de gestionnaires par genre (image : sharp), détection du type par signature, envoi en flux
+  (busboy) avec plafond, clés opaques, projet `default`.
+- Diffusion `/m/…` : public (cache immuable), privé (session ou lien signé HMAC), aperçus WebP générés à
+  la demande (`MediaVariant`), ETag/304, HEAD, redirection des anciennes versions, en-têtes de sécurité.
+- API d'administration (`/api/admin/media`, `/api/admin/config/media`) et écrans `/admin/media`
+  (médiathèque, envoi accessible, corbeille) et `/admin/media/[id]` ; composants `UiRadioCards`,
+  `UiCopyField` (réutilisés pour le rôle et les liens de mot de passe), `AdminMediaUploader`,
+  `AdminMediaCard`.
+- Migration `media_version` ; secret `NUXT_MEDIA_SIGNING_SECRET` généré par `db:init` ; Node ≥ 24.
+- Recherche insensible à la casse améliorée sous SQLite (lettres accentuées), aussi pour les utilisateurs.
+
+**Vérifié** : typecheck, i18n (296 clés), contrastes, migrations. API (dev **et build de production**) :
+envois valides (JPEG, PNG, WebP, AVIF, GIF animé), refus 400/413/415/422, diffusion publique et
+privée, lien signé valide, altéré et expiré, chemins malveillants (404), ETag/304, HEAD, remplacement
+(redirection de l'ancienne URL, fichiers supprimés), corbeille, restauration, purge (stockage vide),
+CSRF. S3 : adaptateur et application complète contre un serveur S3 local (`s3rver`) — contenu
+identique octet par octet, préfixe, aperçus, purge. Interface : envoi réel (valide, faux fichier,
+fichier trop lourd), fiche, lien temporaire, remplacement, corbeille et suppression au clavier ;
+axe-core : 0 violation WCAG 2.2 AA sur toutes les pages médias (et la boîte de dialogue ouverte) en
+fr/en × clair/sombre.
+Non vérifié : un vrai compte AWS S3 / Cloudflare R2 / MinIO (seulement le serveur de test `s3rver`).
+
+**Limites connues**
+- Originaux servis avec leurs métadonnées EXIF (voir § 7.4) ; les transformations à venir les retireront.
+- Pas encore de lecture partielle (`Range`) : à ajouter à `MediaStorage` avec la vidéo.
+- Copie des fichiers lors d'un changement de stockage : manuelle (commande CLI à venir).
+- Dossiers (`Folder`) présents dans le schéma mais pas encore dans l'interface.
+
+**Après `git pull`**
+```bash
+nvm use 24          # Node 24 désormais requis
+pnpm install
+pnpm db:migrate     # champ Media.version + client Prisma
+pnpm db:init --yes  # ajoute NUXT_MEDIA_SIGNING_SECRET au .env s'il manque
+```
+Dans `.env`, remplacer `NUXT_STORAGE_BASE` par `NUXT_MEDIA_STORAGE_ROOT` s'il avait été modifié.

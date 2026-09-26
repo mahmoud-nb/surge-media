@@ -1,0 +1,405 @@
+<script setup lang="ts">
+import { ArchiveRestore, ArrowLeft, Link2, Trash2 } from '@lucide/vue'
+import { MEDIA_TEXT_MAX_LENGTH, mediaMetadataSchema } from '#shared/schemas/media'
+
+definePageMeta({ layout: 'admin', permission: 'media:manage' })
+
+interface StatusMessage {
+  variant: 'success' | 'error'
+  message: string
+}
+
+const { t, locale } = useI18n()
+const route = useRoute()
+const { $api } = useNuxtApp()
+const flash = useFlash()
+
+const mediaId = computed(() => String(route.params.id))
+const { data, error, refresh } = await useApiFetch(() => `/api/admin/media/${mediaId.value}`)
+if (error.value?.statusCode === 404) {
+  throw createError({ statusCode: 404, statusMessage: 'Media not found', fatal: true })
+}
+const { data: rules } = await useApiFetch('/api/admin/config/media')
+
+const media = computed(() => data.value?.media)
+const displayName = computed(() => media.value?.title || media.value?.originalName || '')
+const inTrash = computed(() => Boolean(media.value?.deletedAt))
+
+useSeoMeta({ title: () => displayName.value || t('media.list.title') })
+
+// ─── Métadonnées ─────────────────────────────────────────────────────────────
+
+const FIELD_IDS = { title: 'media-title', altText: 'media-alt', visibility: 'media-visibility' } as const
+const form = reactive<{ title: string, altText: string, visibility: MediaVisibility | '' }>({ title: '', altText: '', visibility: '' })
+watch(media, (value) => {
+  if (value) Object.assign(form, { title: value.title ?? '', altText: value.altText ?? '', visibility: value.visibility })
+}, { immediate: true })
+
+const { validate, message, clear } = useFormValidation(mediaMetadataSchema, FIELD_IDS)
+const saveStatus = ref<StatusMessage | null>(null)
+const saving = ref(false)
+
+async function save() {
+  saveStatus.value = null
+  const input = validate(form)
+  if (!input) return
+  saving.value = true
+  try {
+    await $api(`/api/admin/media/${mediaId.value}`, { method: 'PATCH', body: input })
+    await refresh()
+    link.value = null
+    saveStatus.value = { variant: 'success', message: t('media.detail.saved') }
+  }
+  catch {
+    saveStatus.value = { variant: 'error', message: t('common.unexpectedError') }
+  }
+  finally {
+    saving.value = false
+  }
+}
+
+const visibilityOptions = computed(() => MEDIA_VISIBILITIES.map(value => ({
+  value,
+  label: t(`media.visibility.${value}.label`),
+  description: t(`media.visibility.${value}.description`),
+})))
+
+// ─── Liens d'accès ───────────────────────────────────────────────────────────
+
+const origin = useRequestURL().origin
+const publicUrl = computed(() => (media.value ? new URL(media.value.url, origin).toString() : ''))
+const durationId = useId()
+const duration = ref(String(SIGNED_URL_DURATIONS[0]))
+const DURATION_KEYS: Record<(typeof SIGNED_URL_DURATIONS)[number], string> = { 3600: 'hour', 86400: 'day', 604800: 'week' }
+const durationOptions = computed(() => SIGNED_URL_DURATIONS.map(seconds => ({ value: String(seconds), label: t(`media.links.durations.${DURATION_KEYS[seconds]}`) })))
+const link = ref<{ url: string, expiresAt: string } | null>(null)
+const linkError = ref<string>()
+const generating = ref(false)
+
+async function generateLink() {
+  linkError.value = undefined
+  generating.value = true
+  try {
+    const result = await $api(`/api/admin/media/${mediaId.value}/signed-url`, { method: 'POST', body: { expiresIn: Number(duration.value) } })
+    link.value = { url: new URL(result.path, origin).toString(), expiresAt: String(result.expiresAt) }
+  }
+  catch {
+    linkError.value = t('common.unexpectedError')
+  }
+  finally {
+    generating.value = false
+  }
+}
+
+// ─── Remplacement, corbeille ─────────────────────────────────────────────────
+
+const replaceStatus = ref<StatusMessage | null>(null)
+
+async function onReplaced() {
+  await refresh()
+  link.value = null
+  replaceStatus.value = { variant: 'success', message: t('media.replace.success') }
+}
+
+const actionError = ref<string>()
+const busy = ref(false)
+
+async function moveToTrash() {
+  actionError.value = undefined
+  busy.value = true
+  try {
+    await $api(`/api/admin/media/${mediaId.value}`, { method: 'DELETE' })
+    flash.set({ variant: 'success', message: t('media.trash.moved', { name: displayName.value }) })
+    await navigateTo('/admin/media')
+  }
+  catch {
+    actionError.value = t('common.unexpectedError')
+  }
+  finally {
+    busy.value = false
+  }
+}
+
+async function restore() {
+  actionError.value = undefined
+  busy.value = true
+  try {
+    await $api(`/api/admin/media/${mediaId.value}/restore`, { method: 'POST' })
+    await refresh()
+  }
+  catch {
+    actionError.value = t('common.unexpectedError')
+  }
+  finally {
+    busy.value = false
+  }
+}
+
+const purgeOpen = ref(false)
+const purgeError = ref<string>()
+
+async function purge() {
+  purgeError.value = undefined
+  busy.value = true
+  try {
+    await $api(`/api/admin/media/${mediaId.value}?permanent=true`, { method: 'DELETE' })
+    flash.set({ variant: 'success', message: t('media.trash.purged', { name: displayName.value }) })
+    purgeOpen.value = false
+    await navigateTo({ path: '/admin/media', query: { status: 'trash' } })
+  }
+  catch {
+    purgeError.value = t('common.unexpectedError')
+  }
+  finally {
+    busy.value = false
+  }
+}
+</script>
+
+<template>
+  <div class="mx-auto max-w-6xl">
+    <NuxtLink :to="inTrash ? { path: '/admin/media', query: { status: 'trash' } } : '/admin/media'" class="mb-4 inline-flex items-center gap-1.5 rounded-lg text-sm font-medium text-muted-foreground hover:text-foreground">
+      <ArrowLeft class="size-4" aria-hidden="true" />
+      {{ inTrash ? t('media.detail.backToTrash') : t('media.detail.backToList') }}
+    </NuxtLink>
+
+    <UiAlert v-if="error" variant="error" live="assertive" :title="t('media.detail.loadError')">
+      <UiButton variant="outline" size="sm" class="mt-2" @click="refresh()">
+        {{ t('common.retry') }}
+      </UiButton>
+    </UiAlert>
+
+    <template v-else-if="media">
+      <AdminPageHeader :title="displayName" :description="media.title ? media.originalName : undefined">
+        <template #actions>
+          <UiBadge :variant="media.visibility === 'PRIVATE' ? 'neutral' : 'primary'">
+            {{ t(`media.visibility.${media.visibility}.label`) }}
+          </UiBadge>
+        </template>
+      </AdminPageHeader>
+
+      <UiAlert v-if="inTrash" variant="warning" :title="t('media.trash.bannerTitle')" class="mb-6">
+        <p>{{ t('media.trash.bannerDescription') }}</p>
+        <div class="mt-3 flex flex-wrap gap-3">
+          <UiButton variant="outline" size="sm" :loading="busy" @click="restore">
+            <ArchiveRestore aria-hidden="true" />
+            {{ t('media.trash.restore') }}
+          </UiButton>
+          <UiButton variant="destructive" size="sm" @click="purgeOpen = true">
+            <Trash2 aria-hidden="true" />
+            {{ t('media.trash.purge') }}
+          </UiButton>
+        </div>
+      </UiAlert>
+      <UiAlert v-if="actionError" variant="error" live="assertive" class="mb-6">
+        {{ actionError }}
+      </UiAlert>
+
+      <div class="grid gap-6 lg:grid-cols-[minmax(0,2fr)_minmax(0,3fr)]">
+        <!-- Aperçu et informations -->
+        <div class="grid content-start gap-6">
+          <figure class="bg-checker overflow-hidden rounded-xl border border-border">
+            <img
+              :src="media.url"
+              :alt="media.altText ?? ''"
+              :width="media.width ?? undefined"
+              :height="media.height ?? undefined"
+              class="mx-auto max-h-[28rem] w-auto object-contain"
+            >
+          </figure>
+
+          <section aria-labelledby="info-title" class="rounded-xl border border-border bg-surface p-6 shadow-xs">
+            <h2 id="info-title" class="text-lg font-semibold text-foreground">
+              {{ t('media.detail.infoTitle') }}
+            </h2>
+            <dl class="mt-4 grid gap-x-6 gap-y-3 text-sm sm:grid-cols-2">
+              <div class="grid gap-0.5">
+                <dt class="text-muted-foreground">
+                  {{ t('media.detail.format') }}
+                </dt>
+                <dd class="font-medium text-foreground">
+                  {{ media.extension?.toUpperCase() }} <span class="text-muted-foreground">({{ media.mimeType }})</span>
+                </dd>
+              </div>
+              <div v-if="media.width && media.height" class="grid gap-0.5">
+                <dt class="text-muted-foreground">
+                  {{ t('media.detail.dimensions') }}
+                </dt>
+                <dd class="font-medium text-foreground">
+                  {{ t('media.dimensions', { width: media.width, height: media.height }) }}
+                </dd>
+              </div>
+              <div class="grid gap-0.5">
+                <dt class="text-muted-foreground">
+                  {{ t('media.detail.size') }}
+                </dt>
+                <dd class="font-medium text-foreground">
+                  {{ formatBytes(media.size, locale) }}
+                </dd>
+              </div>
+              <div class="grid gap-0.5">
+                <dt class="text-muted-foreground">
+                  {{ t('media.detail.version') }}
+                </dt>
+                <dd class="font-medium text-foreground">
+                  {{ media.version }}
+                </dd>
+              </div>
+              <div class="grid gap-0.5">
+                <dt class="text-muted-foreground">
+                  {{ t('media.detail.uploadedBy') }}
+                </dt>
+                <dd class="font-medium break-all text-foreground">
+                  {{ media.uploadedBy ? (media.uploadedBy.name || media.uploadedBy.email) : t('media.detail.unknownUploader') }}
+                </dd>
+              </div>
+              <div class="grid gap-0.5">
+                <dt class="text-muted-foreground">
+                  {{ t('media.detail.createdAt') }}
+                </dt>
+                <dd class="font-medium text-foreground">
+                  <NuxtTime :datetime="media.createdAt" :locale="locale" date-style="medium" time-style="short" />
+                </dd>
+              </div>
+              <div class="grid gap-0.5 sm:col-span-2">
+                <dt class="text-muted-foreground">
+                  {{ t('media.detail.checksum') }}
+                </dt>
+                <dd class="font-mono text-xs break-all text-foreground">
+                  {{ media.checksum }}
+                </dd>
+              </div>
+            </dl>
+          </section>
+        </div>
+
+        <div class="grid content-start gap-6">
+          <!-- Métadonnées éditoriales -->
+          <section aria-labelledby="edit-title" class="rounded-xl border border-border bg-surface p-6 shadow-xs">
+            <h2 id="edit-title" class="text-lg font-semibold text-foreground">
+              {{ t('media.detail.editTitle') }}
+            </h2>
+            <form class="mt-5 grid gap-5" novalidate @submit.prevent="save">
+              <UiAlert v-if="saveStatus" :variant="saveStatus.variant" :live="saveStatus.variant === 'error' ? 'assertive' : 'polite'">
+                {{ saveStatus.message }}
+              </UiAlert>
+              <UiFormField v-slot="field" :id="FIELD_IDS.title" :label="t('media.fields.title')" :hint="t('media.fields.titleHint')" :error="message('title')">
+                <UiInput v-bind="field" v-model="form.title" name="title" autocomplete="off" :maxlength="MEDIA_TEXT_MAX_LENGTH" @input="clear('title')" />
+              </UiFormField>
+              <UiFormField v-slot="field" :id="FIELD_IDS.altText" :label="t('media.fields.altText')" :hint="t('media.fields.altTextHint')" :error="message('altText')">
+                <UiInput v-bind="field" v-model="form.altText" name="altText" autocomplete="off" :maxlength="MEDIA_TEXT_MAX_LENGTH" @input="clear('altText')" />
+              </UiFormField>
+              <UiRadioCards
+                :id="FIELD_IDS.visibility"
+                v-model="form.visibility"
+                :legend="t('media.fields.visibility')"
+                :options="visibilityOptions"
+                :columns="2"
+                :error="message('visibility')"
+              />
+              <div class="flex justify-end">
+                <UiButton type="submit" :loading="saving" :disabled="inTrash">
+                  {{ t('common.save') }}
+                </UiButton>
+              </div>
+            </form>
+          </section>
+
+          <!-- Liens -->
+          <section v-if="!inTrash" aria-labelledby="links-title" class="rounded-xl border border-border bg-surface p-6 shadow-xs">
+            <h2 id="links-title" class="text-lg font-semibold text-foreground">
+              {{ t('media.links.title') }}
+            </h2>
+            <div v-if="media.visibility === 'PUBLIC'" class="mt-4 grid gap-2">
+              <p class="text-sm text-muted-foreground">
+                {{ t('media.links.publicDescription') }}
+              </p>
+              <UiCopyField :label="t('media.links.publicUrl')" :value="publicUrl" />
+            </div>
+            <div v-else class="mt-4 grid gap-4">
+              <p class="text-sm text-muted-foreground">
+                {{ t('media.links.privateDescription') }}
+              </p>
+              <div class="flex flex-wrap items-end gap-3">
+                <div class="grid gap-1.5">
+                  <label :for="durationId" class="text-sm font-medium text-foreground">{{ t('media.links.duration') }}</label>
+                  <UiSelect :id="durationId" v-model="duration" :options="durationOptions" class="w-44" />
+                </div>
+                <UiButton variant="outline" :loading="generating" @click="generateLink">
+                  <Link2 aria-hidden="true" />
+                  {{ t('media.links.generate') }}
+                </UiButton>
+              </div>
+              <UiAlert v-if="linkError" variant="error" live="assertive">
+                {{ linkError }}
+              </UiAlert>
+              <div v-if="link" class="grid gap-1">
+                <UiCopyField :label="t('media.links.temporaryUrl')" :value="link.url" />
+                <p class="text-sm text-muted-foreground">
+                  <i18n-t keypath="media.links.expires" tag="span" scope="global">
+                    <template #date>
+                      <NuxtTime :datetime="link.expiresAt" :locale="locale" date-style="long" time-style="short" class="font-medium text-foreground" />
+                    </template>
+                  </i18n-t>
+                </p>
+              </div>
+            </div>
+          </section>
+
+          <!-- Remplacement -->
+          <section v-if="!inTrash && rules" aria-labelledby="replace-title" class="rounded-xl border border-border bg-surface p-6 shadow-xs">
+            <h2 id="replace-title" class="text-lg font-semibold text-foreground">
+              {{ t('media.replace.title') }}
+            </h2>
+            <p class="mt-2 mb-4 text-sm text-muted-foreground">
+              {{ t('media.replace.description') }}
+            </p>
+            <UiAlert v-if="replaceStatus" :variant="replaceStatus.variant" live="polite" class="mb-4">
+              {{ replaceStatus.message }}
+            </UiAlert>
+            <AdminMediaUploader
+              :rules="rules"
+              :endpoint="`/api/admin/media/${media.id}/file`"
+              method="PUT"
+              :multiple="false"
+              :with-visibility="false"
+              @uploaded="onReplaced"
+            />
+          </section>
+
+          <!-- Corbeille -->
+          <section v-if="!inTrash" aria-labelledby="trash-title" class="rounded-xl border border-border bg-surface p-6 shadow-xs">
+            <h2 id="trash-title" class="text-lg font-semibold text-foreground">
+              {{ t('media.trash.title') }}
+            </h2>
+            <p class="mt-2 text-sm text-muted-foreground">
+              {{ t('media.trash.description') }}
+            </p>
+            <UiButton variant="outline" class="mt-4" :loading="busy" @click="moveToTrash">
+              <Trash2 aria-hidden="true" />
+              {{ t('media.trash.move') }}
+            </UiButton>
+          </section>
+        </div>
+      </div>
+
+      <UiDialog
+        v-model:open="purgeOpen"
+        :title="t('media.trash.confirmTitle')"
+        :description="t('media.trash.confirmDescription', { name: displayName })"
+      >
+        <UiAlert v-if="purgeError" variant="error" live="assertive">
+          {{ purgeError }}
+        </UiAlert>
+        <template #actions>
+          <UiButton variant="outline" autofocus @click="purgeOpen = false">
+            {{ t('common.cancel') }}
+          </UiButton>
+          <UiButton variant="destructive" :loading="busy" @click="purge">
+            {{ t('media.trash.confirm') }}
+          </UiButton>
+        </template>
+      </UiDialog>
+    </template>
+  </div>
+</template>
