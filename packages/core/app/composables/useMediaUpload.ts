@@ -79,6 +79,7 @@ export function useMediaUpload() {
       case 'KIND_MISMATCH':
       case 'VERSION_CONFLICT':
       case 'NO_FILE':
+      case 'SERVER_BUSY':
         return t(`media.errors.${data.code}`)
       default:
         return t('common.unexpectedError')

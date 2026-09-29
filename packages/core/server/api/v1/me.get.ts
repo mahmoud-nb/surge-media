@@ -1,14 +1,35 @@
 import type { ApiMe } from '#shared/schemas/api'
-import { API_CREDENTIAL_TYPES } from '#shared/utils/api'
+import { API_CREDENTIAL_TYPES, DELEGATED_TOKEN_PREFIX } from '#shared/utils/api'
 import { defineApiHandler } from '../../lib/api/context'
 import { getProjectState } from '../../lib/projects/state'
 
 /**
  * GET /api/v1/me — identifiant utilisé : type, nom, préfixe, environnement, portées déclarées,
- * échéance ; propriétaire (jeton personnel), projet (clé) ou sélection (jeton personnel).
+ * échéance ; propriétaire (jeton personnel), projet (clé, jeton délégué) ou sélection (jeton
+ * personnel) ; sujet, origine et contraintes d'un jeton délégué (sans rien révéler de son émetteur).
  * Accessible à tout identifiant valable, même si son projet est archivé (diagnostic).
  */
-export default defineApiHandler(async (_event, { credential }): Promise<ApiMe> => {
+export default defineApiHandler(async (_event, { credential, delegated }): Promise<ApiMe> => {
+  if (delegated) {
+    const project = await getProjectState(delegated.projectId)
+    return {
+      credential: {
+        id: delegated.jti,
+        type: 'delegated',
+        name: 'Delegated token',
+        prefix: DELEGATED_TOKEN_PREFIX,
+        environment: credential.environment,
+        scopes: delegated.scopes,
+        expiresAt: delegated.expiresAt.toISOString(),
+        createdAt: delegated.issuedAt.toISOString(),
+      },
+      delegated: { subject: delegated.subject, origin: delegated.origin, upload: delegated.upload },
+      user: null,
+      project: project ? { id: project.id, name: project.name, slug: project.slug, archived: project.archived } : null,
+      access: null,
+    }
+  }
+
   const project = credential.projectId ? await getProjectState(credential.projectId) : null
   let access: ApiMe['access'] = null
   if (credential.type === 'PERSONAL') {
@@ -33,6 +54,7 @@ export default defineApiHandler(async (_event, { credential }): Promise<ApiMe> =
       expiresAt: credential.expiresAt?.toISOString() ?? null,
       createdAt: credential.createdAt.toISOString(),
     },
+    delegated: null,
     user: credential.owner ? { id: credential.owner.id, name: credential.owner.name } : null,
     project: project ? { id: project.id, name: project.name, slug: project.slug, archived: project.archived } : null,
     access,

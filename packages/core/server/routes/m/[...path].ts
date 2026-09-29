@@ -1,7 +1,9 @@
 import { findDeliveryMedia } from '../../lib/media/cache'
-import { authorizeDelivery, cacheControl, contentDisposition, parseDeliveryPath, resolveDeliverable } from '../../lib/media/delivery'
+import { authorizeDelivery, cacheControl, contentDisposition, parseDeliveryPath } from '../../lib/media/delivery'
+import { BUSY_RETRY_AFTER } from '../../lib/media/processing'
 import { resolveRange } from '../../lib/media/range'
 import { mediaPath } from '../../lib/media/urls'
+import { resolveDeliverable } from '../../lib/media/variants'
 import { useMediaStorage } from '../../lib/storage'
 
 /**
@@ -44,7 +46,11 @@ export default defineEventHandler(async (event) => {
   }
 
   const access = await authorizeDelivery(event, media, target)
-  const object = await resolveDeliverable(media, target.variant)
+  const object = await resolveDeliverable(media, target.variant).catch((error: unknown) => {
+    // Génération d'un dérivé refusée (file des traitements pleine) : réessayer plus tard.
+    if ((error as { data?: { code?: string } } | null)?.data?.code === 'SERVER_BUSY') setResponseHeader(event, 'Retry-After', BUSY_RETRY_AFTER)
+    throw error
+  })
   const etag = `"${object.etag}"`
 
   setResponseHeaders(event, {

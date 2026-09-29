@@ -17,7 +17,8 @@ import { hashAccessToken, parseAccessToken } from './tokens'
  * Résolution des identifiants d'API présentés en `Authorization: Bearer` (API v1 et /m/) :
  *   1. format + CRC vérifiés sans base (parseAccessToken) ;
  *   2. empreinte SHA-256 → identité, gardée 60 s en mémoire (invalidée localement à la révocation,
- *      à la rotation, à la suppression, et pour tous les jetons d'un compte modifié) ;
+ *      à la rotation, à la suppression, et pour tous les jetons d'un compte modifié) ; l'émetteur
+ *      d'un jeton délégué est retrouvé par son identifiant, avec le même cache ;
  *   3. état : révoqué, expiré, propriétaire désactivé.
  * Les portées effectives dans un espace viennent du moteur pur `credentialScopes`
  * (shared/utils/permissions.ts). Architecture : .claude/architecture-phase-b.md § 3.4, § 4, § 9.6.
@@ -25,6 +26,7 @@ import { hashAccessToken, parseAccessToken } from './tokens'
 
 export interface CredentialRecord {
   id: string
+  tokenHash: string
   type: TokenType
   name: string
   prefix: string
@@ -47,14 +49,16 @@ export interface CredentialRecord {
 export type CredentialFailure = 'TOKEN_INVALID' | 'TOKEN_EXPIRED' | 'TOKEN_REVOKED'
 export type CredentialResolution = { ok: true, credential: CredentialRecord } | { ok: false, code: CredentialFailure }
 
+/** Identités par empreinte (identifiants présentés) et par identifiant (émetteurs de jetons délégués). */
 const cache = createLruCache<CredentialRecord | null>({ max: 10_000, ttlMs: 60_000 })
+const cacheById = createLruCache<CredentialRecord | null>({ max: 10_000, ttlMs: 60_000 })
 /** Dernière utilisation enregistrée au plus toutes les 5 minutes (pas une écriture par requête). */
 const LAST_USED_INTERVAL_MS = 5 * 60_000
 
-async function loadCredential(hash: string): Promise<CredentialRecord | null> {
+async function loadCredential(where: { tokenHash: string } | { id: string }): Promise<CredentialRecord | null> {
   const prisma = await usePrisma()
   const token = await prisma.accessToken.findUnique({
-    where: { tokenHash: hash },
+    where,
     include: {
       user: { select: { id: true, name: true, role: true, isActive: true } },
       projects: { select: { projectId: true } },
@@ -63,6 +67,7 @@ async function loadCredential(hash: string): Promise<CredentialRecord | null> {
   if (!token) return null
   return {
     id: token.id,
+    tokenHash: token.tokenHash,
     type: token.type,
     name: token.name,
     prefix: token.prefix,
@@ -86,9 +91,23 @@ export async function resolveCredential(value: string, now = Date.now()): Promis
   const hash = hashAccessToken(value)
   let credential = cache.get(hash)
   if (credential === undefined) {
-    credential = await loadCredential(hash)
+    credential = await loadCredential({ tokenHash: hash })
     cache.set(hash, credential)
   }
+  return credentialState(credential, now)
+}
+
+/** Identifiant par son identifiant en base (émetteur d'un jeton délégué), avec les mêmes contrôles. */
+export async function resolveCredentialById(id: string, now = Date.now()): Promise<CredentialResolution> {
+  let credential = cacheById.get(id)
+  if (credential === undefined) {
+    credential = await loadCredential({ id })
+    cacheById.set(id, credential, credential ? undefined : 10_000)
+  }
+  return credentialState(credential, now)
+}
+
+function credentialState(credential: CredentialRecord | null, now: number): CredentialResolution {
   if (!credential) return { ok: false, code: 'TOKEN_INVALID' }
   if (credential.revokedAt) return { ok: false, code: 'TOKEN_REVOKED' }
   if (credential.expiresAt && credential.expiresAt.getTime() <= now) return { ok: false, code: 'TOKEN_EXPIRED' }
@@ -97,13 +116,16 @@ export async function resolveCredential(value: string, now = Date.now()): Promis
   return { ok: true, credential }
 }
 
-export function invalidateCredential(hash: string): void {
-  cache.delete(hash)
+/** Identifiant révoqué, renouvelé ou supprimé : relu à sa prochaine utilisation (et ses jetons délégués). */
+export function invalidateCredential(token: { id: string, tokenHash: string }): void {
+  cache.delete(token.tokenHash)
+  cacheById.delete(token.id)
 }
 
 /** Rôle, statut ou existence d'un compte modifiés : ses jetons personnels sont relus. */
 export function invalidateUserCredentials(userId: string): void {
   cache.deleteWhere(credential => credential?.owner?.id === userId)
+  cacheById.deleteWhere(credential => credential?.owner?.id === userId)
 }
 
 /** Note la dernière utilisation (date, IP), au plus toutes les 5 minutes ; ne bloque jamais la requête. */

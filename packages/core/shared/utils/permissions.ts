@@ -137,17 +137,22 @@ export function tokenScopes(optional: readonly string[]): TokenScope[] {
  * ou bibliothèque pour un jeton personnel) — sans accès à la base :
  *   - jeton personnel : l'espace fait-il partie de sa sélection, et quelles portées son
  *     propriétaire y a-t-il aujourd'hui (spaceScopes) ;
- *   - clé secrète ou publique : l'espace est-il son projet.
+ *   - clé secrète ou publique : l'espace est-il son projet ;
+ *   - jeton délégué : l'espace est-il son projet, et quelles portées son émetteur (clé secrète ou
+ *     jeton personnel) y a-t-il aujourd'hui.
  */
 export type CredentialContext =
   | { type: 'PERSONAL', scopes: readonly string[], inSelection: boolean, ownerScopes: readonly Scope[] }
   | { type: 'SECRET', scopes: readonly string[], ownProject: boolean }
   | { type: 'PUBLISHABLE', ownProject: boolean }
+  | { type: 'DELEGATED', scopes: readonly string[], ownProject: boolean, issuerScopes: readonly TokenScope[] }
 
 /**
  * Portées effectives d'un identifiant dans un espace ; liste vide = espace invisible (404).
- * Un jeton personnel ne dépasse jamais les droits actuels de son propriétaire ; une clé publique ne
- * lit que les médias publics (restriction appliquée par l'appelant sur les requêtes).
+ * Un jeton personnel ne dépasse jamais les droits actuels de son propriétaire, un jeton délégué ceux
+ * de son émetteur ; une clé publique ne lit que les médias publics (restriction appliquée par
+ * l'appelant sur les requêtes). Un jeton délégué n'a que les portées demandées à son émission (pas
+ * de lecture d'office : un jeton d'envoi seul ne liste pas les médias).
  */
 export function credentialScopes(credential: CredentialContext): TokenScope[] {
   switch (credential.type) {
@@ -158,5 +163,8 @@ export function credentialScopes(credential: CredentialContext): TokenScope[] {
       return credential.ownProject ? TOKEN_SCOPES.filter(scope => credential.scopes.includes(scope)) : []
     case 'PUBLISHABLE':
       return credential.ownProject ? [...TOKEN_BASE_SCOPES] : []
+    case 'DELEGATED':
+      if (!credential.ownProject) return []
+      return TOKEN_SCOPES.filter(scope => credential.scopes.includes(scope) && credential.issuerScopes.includes(scope))
   }
 }

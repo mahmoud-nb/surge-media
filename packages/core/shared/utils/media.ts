@@ -64,5 +64,6 @@ export const MEDIA_ERROR_CODES = [
   'MEDIA_FORBIDDEN', // média privé sans autorisation
   'SIGNATURE_INVALID', // lien signé altéré ou obsolète
   'SIGNATURE_EXPIRED', // lien signé expiré
+  'SERVER_BUSY', // file des traitements d'images pleine : réessayer dans quelques secondes (503)
 ] as const
 export type MediaErrorCode = (typeof MEDIA_ERROR_CODES)[number]

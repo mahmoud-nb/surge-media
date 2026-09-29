@@ -101,8 +101,11 @@ export function checkSignature(secrets: readonly string[], target: SignatureTarg
 
 let derivedSecret: string | undefined
 
-/** Secret courant : NUXT_MEDIA_SIGNING_SECRET, sinon dérivé du secret des sessions. */
-function currentSecret(): string {
+/**
+ * Secret courant : NUXT_MEDIA_SIGNING_SECRET, sinon dérivé du secret des sessions. Sert aussi, par
+ * une clé dérivée, aux jetons délégués (server/lib/access/delegated.ts).
+ */
+export function currentSigningSecret(): string {
   const { media, session } = useRuntimeConfig()
   if (media.signingSecret) return media.signingSecret
   // Repli : secret dérivé de celui des sessions (le changer invaliderait aussi les liens).
@@ -114,16 +117,16 @@ function currentSecret(): string {
 }
 
 /** Secrets acceptés à la vérification : le courant, puis l'ancien pendant une rotation. */
-function acceptedSecrets(): string[] {
+export function acceptedSigningSecrets(): string[] {
   const previous = useRuntimeConfig().media.previousSigningSecret
-  return previous ? [currentSecret(), previous] : [currentSecret()]
+  return previous ? [currentSigningSecret(), previous] : [currentSigningSecret()]
 }
 
 /** Paramètres signés (sans « ? ») donnant `access` au média jusqu'à `expires` (secondes Unix). */
 export function signMediaAccess(media: { id: string, version: number }, access: SignedAccess, expires: number): string {
-  return buildSignatureQuery(currentSecret(), media, access, expires)
+  return buildSignatureQuery(currentSigningSecret(), media, access, expires)
 }
 
 export function verifyMediaSignature(target: SignatureTarget, query: SignatureQuery): SignatureCheck {
-  return checkSignature(acceptedSecrets(), target, query, Math.floor(Date.now() / 1000))
+  return checkSignature(acceptedSigningSecrets(), target, query, Math.floor(Date.now() / 1000))
 }

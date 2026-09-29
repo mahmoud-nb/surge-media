@@ -26,6 +26,13 @@ const media = computed(() => data.value?.media)
 const displayName = computed(() => media.value?.title || media.value?.originalName || '')
 const inTrash = computed(() => Boolean(media.value?.deletedAt))
 
+/** Compte à l'origine de l'envoi ; sans compte, une application (clé d'API) ou un auteur supprimé. */
+const uploaderName = computed(() => {
+  const value = media.value
+  if (value?.uploadedBy) return value.uploadedBy.name || value.uploadedBy.email
+  return value?.uploadedByToken ? t('media.detail.apiUploader') : t('media.detail.unknownUploader')
+})
+
 useSeoMeta({ title: () => displayName.value || t('media.list.title') })
 
 // ─── Espace et droits ────────────────────────────────────────────────────────
@@ -352,7 +359,24 @@ const pageFlash = flash.consume()
                   {{ t('media.detail.uploadedBy') }}
                 </dt>
                 <dd class="font-medium break-all text-foreground">
-                  {{ media.uploadedBy ? (media.uploadedBy.name || media.uploadedBy.email) : t('media.detail.unknownUploader') }}
+                  {{ uploaderName }}
+                </dd>
+              </div>
+              <div v-if="media.uploadedByToken" class="grid gap-0.5">
+                <dt class="text-muted-foreground">
+                  {{ t('media.detail.credential') }}
+                </dt>
+                <dd class="font-medium break-all text-foreground">
+                  {{ t(`credentials.named.${media.uploadedByToken.type}`, { name: media.uploadedByToken.name }) }}
+                  <code class="block font-mono text-xs font-normal text-muted-foreground">{{ media.uploadedByToken.prefix }}…</code>
+                </dd>
+              </div>
+              <div v-if="media.uploadSubject" class="grid gap-0.5">
+                <dt class="text-muted-foreground">
+                  {{ t('media.detail.subject') }}
+                </dt>
+                <dd class="font-medium break-all text-foreground">
+                  {{ media.uploadSubject }}
                 </dd>
               </div>
               <div class="grid gap-0.5">

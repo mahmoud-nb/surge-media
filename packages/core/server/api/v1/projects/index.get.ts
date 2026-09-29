@@ -4,12 +4,12 @@ import { listApiProjects } from '../../../lib/api/queries'
 import { toApiProject } from '../../../lib/api/serializers'
 
 /**
- * GET /api/v1/projects?limit&cursor — projets actifs accessibles : celui d'une clé, la sélection
- * d'un jeton personnel (limitée aux droits actuels de son propriétaire), avec les portées
- * effectives dans chacun. → { items: Project[], nextCursor }
+ * GET /api/v1/projects?limit&cursor — projets actifs accessibles : celui d'une clé ou d'un jeton
+ * délégué (s'il a project:read), la sélection d'un jeton personnel (limitée aux droits actuels de son
+ * propriétaire), avec les portées effectives dans chacun. → { items: Project[], nextCursor }
  */
-export default defineApiHandler(async (event, { credential }) => {
+export default defineApiHandler(async (event, principal) => {
   const query = parseApiQuery(event, apiProjectListQuerySchema)
-  const page = await listApiProjects(credential, query)
+  const page = await listApiProjects(principal, query)
   return { items: page.items.map(({ project, scopes }) => toApiProject(project, scopes)), nextCursor: page.nextCursor }
 })

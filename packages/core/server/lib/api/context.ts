@@ -1,29 +1,22 @@
 import type { H3Event } from 'h3'
 import type { z } from 'zod'
-import { isOriginAllowed } from '#shared/utils/origins'
 import type { TokenScope } from '#shared/utils/permissions'
-import {
-  credentialProjectScopes,
-  type CredentialRecord,
-  isBrowserRequest,
-  isSecretCredential,
-  resolveCredential,
-  touchCredential,
-} from '../access/credentials'
+import { touchCredential } from '../access/credentials'
+import { browserGuard, type Principal, principalProjectScopes, resolvePrincipal } from '../access/principal'
 import { getProjectState, type ProjectState } from '../projects/state'
 import { apiProblem, invalidRequest, sendProblem } from './problem'
 import { createTokenBucketLimiter, rateLimitHeaders } from './rate-limit'
 
 /**
- * Contexte d'une requête de l'API v1 : identité (Bearer), garde-fous (secret depuis un navigateur,
- * origine de la clé publique), limitation de débit, accès à un projet et validation des paramètres.
+ * Contexte d'une requête de l'API v1 : identité (Bearer : identifiant opaque ou jeton délégué),
+ * garde-fous (secret depuis un navigateur, origine d'une clé publique ou d'un jeton délégué),
+ * limitation de débit, accès à un projet et validation des paramètres.
  * L'authentification est faite par server/middleware/api-v1.ts avant la route ; les routes
  * s'écrivent avec `defineApiHandler`, qui transforme toute erreur en problème RFC 9457.
  */
 
-export interface ApiPrincipal {
-  credential: CredentialRecord
-}
+/** Identité de l'appelant (server/lib/access/principal.ts). */
+export type ApiPrincipal = Principal
 
 declare module 'h3' {
   interface H3EventContext {
@@ -37,8 +30,17 @@ declare module 'h3' {
 const limiter = createTokenBucketLimiter()
 let authFailures: ReturnType<typeof createRateLimiter> | undefined
 
-function rateLimits(event: H3Event) {
-  return useRuntimeConfig(event).api.rateLimit as { publishable: number, secret: number, personal: number, authFailures: number }
+interface RateLimits {
+  publishable: number
+  secret: number
+  personal: number
+  delegated: number
+  uploads: number
+  authFailures: number
+}
+
+function rateLimits(event: H3Event): RateLimits {
+  return useRuntimeConfig(event).api.rateLimit as RateLimits
 }
 
 /** Identité de l'appelant, ou problème 400/401/403/429. */
@@ -58,36 +60,51 @@ export async function authenticateApiRequest(event: H3Event): Promise<ApiPrincip
   if (blocked > 0) throw apiProblem('RATE_LIMITED', 'Too many authentication failures.', { headers: { 'Retry-After': String(blocked) } })
 
   const match = /^Bearer\s+(\S+)\s*$/i.exec(header)
-  const resolution = match ? await resolveCredential(match[1]!) : { ok: false as const, code: 'TOKEN_INVALID' as const }
+  const resolution = match ? await resolvePrincipal(match[1]!) : { ok: false as const, code: 'TOKEN_INVALID' as const }
   if (!resolution.ok) {
     authFailures.hit(ip)
     throw apiProblem(resolution.code)
   }
-  const { credential } = resolution
+  const { principal } = resolution
+  const { credential } = principal
 
-  if (isSecretCredential(credential) && isBrowserRequest(event)) {
-    throw apiProblem('SECRET_IN_BROWSER', 'Secret keys and personal tokens must never be used from a browser: use a publishable key.')
+  const refused = await browserGuard(event, principal)
+  if (refused === 'SECRET_IN_BROWSER') {
+    throw apiProblem('SECRET_IN_BROWSER', 'Secret keys and personal tokens must never be used from a browser: use a publishable key or a delegated token.')
   }
-  if (credential.type === 'PUBLISHABLE') {
-    // Contrôle anti-abus (un client hors navigateur peut forger Origin) ; sans Origin : serveur, mobile.
-    const origin = getRequestHeader(event, 'origin')
-    const project = origin && credential.projectId ? await getProjectState(credential.projectId) : null
-    if (origin && !(project && isOriginAllowed(origin, project.origins))) {
-      throw apiProblem('ORIGIN_NOT_ALLOWED', `The origin ${origin} is not allowed for this project.`)
-    }
+  if (refused === 'ORIGIN_NOT_ALLOWED') {
+    throw apiProblem('ORIGIN_NOT_ALLOWED', `The origin ${getRequestHeader(event, 'origin')} is not allowed for this credential.`)
   }
 
-  const [policy, limit, key] = credential.type === 'PUBLISHABLE'
-    ? ['publishable', limits.publishable, `pk:${credential.id}:${ip}`] as const
-    : credential.type === 'SECRET'
-      ? ['secret', limits.secret, `sk:${credential.id}`] as const
-      : ['personal', limits.personal, `pat:${credential.id}`] as const
+  // Clé publique et jeton délégué (navigateurs) : par IP ; jeton délégué : seau de son émetteur.
+  const buckets: Record<Principal['type'], [number, string]> = {
+    publishable: [limits.publishable, `pk:${credential.id}:${ip}`],
+    secret: [limits.secret, `sk:${credential.id}`],
+    personal: [limits.personal, `pat:${credential.id}`],
+    delegated: [limits.delegated, `dt:${credential.id}:${ip}`],
+  }
+  const [limit, key] = buckets[principal.type]
   const result = limiter.take(key, limit)
-  setResponseHeaders(event, rateLimitHeaders(policy, result))
+  setResponseHeaders(event, rateLimitHeaders(principal.type, result))
   if (!result.allowed) throw apiProblem('RATE_LIMITED', undefined, { headers: { 'Retry-After': String(result.retryAfter) } })
 
-  touchCredential(credential, ip)
-  return { credential }
+  // Dernière utilisation : celle de l'identifiant présenté (pas de l'émetteur d'un jeton délégué).
+  if (!principal.delegated) touchCredential(credential, ip)
+  return principal
+}
+
+/**
+ * Envois de fichiers (nouveau média, remplacement) : seau supplémentaire par identifiant (jeton
+ * délégué : par émetteur et par IP), politique « uploads » ajoutée aux en-têtes RateLimit.
+ */
+export function requireUploadAllowance(event: H3Event, principal: ApiPrincipal): void {
+  const limits = rateLimits(event)
+  const key = principal.delegated
+    ? `up:dt:${principal.credential.id}:${getRequestIP(event) ?? 'unknown'}`
+    : `up:${principal.credential.id}`
+  const result = limiter.take(key, limits.uploads)
+  for (const [name, value] of Object.entries(rateLimitHeaders('uploads', result))) appendResponseHeader(event, name, value)
+  if (!result.allowed) throw apiProblem('RATE_LIMITED', 'Too many uploads.', { headers: { 'Retry-After': String(result.retryAfter) } })
 }
 
 /** Route de l'API v1 : identité fournie, réponses privées revalidées, erreurs au format RFC 9457. */
@@ -113,17 +130,22 @@ export interface ApiProjectAccess {
 }
 
 /**
- * Projet de l'URL (`:projectId`) accessible avec la portée demandée : 404 s'il n'existe pas ou n'est
- * pas couvert par l'identifiant (son existence n'est pas révélée), 403 s'il est archivé ou si la
- * portée manque.
+ * Projet d'un identifiant de projet (`:projectId` par défaut) accessible avec la portée demandée :
+ * 404 s'il n'existe pas ou n'est pas couvert par l'identifiant (son existence n'est pas révélée),
+ * 403 s'il est archivé ou si la portée manque.
  */
-export async function requireApiProject(event: H3Event, principal: ApiPrincipal, scope: TokenScope): Promise<ApiProjectAccess> {
-  const project = await getProjectState(getRouterParam(event, 'projectId') ?? '')
-  const scopes = project ? await credentialProjectScopes(principal.credential, project) : []
+export async function requireApiProject(
+  event: H3Event,
+  principal: ApiPrincipal,
+  scope: TokenScope,
+  projectId = getRouterParam(event, 'projectId') ?? '',
+): Promise<ApiProjectAccess> {
+  const project = await getProjectState(projectId)
+  const scopes = project ? await principalProjectScopes(principal, project) : []
   if (!project || scopes.length === 0) throw apiProblem('PROJECT_NOT_FOUND')
   if (project.archived) throw apiProblem('PROJECT_ARCHIVED', 'The project is archived: API credentials are refused until it is restored.')
   if (!scopes.includes(scope)) throw apiProblem('INSUFFICIENT_SCOPE', `This credential lacks the ${scope} scope in this project.`)
-  return { project, scopes, publicOnly: principal.credential.type === 'PUBLISHABLE' }
+  return { project, scopes, publicOnly: principal.type === 'publishable' }
 }
 
 /** Paramètres d'URL validés (400 INVALID_REQUEST détaillé sinon). */

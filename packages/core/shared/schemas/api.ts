@@ -6,8 +6,14 @@ import {
   API_MAX_LIMIT,
   API_MEDIA_SORTS,
   API_SIGNED_URL_TARGETS,
+  DELEGATED_MAX_FILES,
+  DELEGATED_MAX_TYPES,
+  DELEGATED_SUBJECT_MAX_LENGTH,
+  DELEGATED_TOKEN_TTL,
 } from '../utils/api'
-import { ENABLED_MEDIA_KINDS, MEDIA_PRESETS, MEDIA_VISIBILITIES, SIGNED_URL_MAX_TTL } from '../utils/media'
+import { ORIGIN_MAX_LENGTH } from '../utils/credentials'
+import { ACCEPTED_MEDIA_TYPES, ENABLED_MEDIA_KINDS, MEDIA_PRESETS, MEDIA_VISIBILITIES, SIGNED_URL_MAX_TTL } from '../utils/media'
+import { isWildcardOrigin, normalizeOrigin } from '../utils/origins'
 import { TOKEN_SCOPES } from '../utils/permissions'
 
 /**
@@ -58,12 +64,108 @@ export const apiSignedUrlBodySchema = z.object({
   if (body.target === 'preset' && !body.preset) ctx.addIssue({ code: 'custom', path: ['preset'], message: 'Required when target is "preset".' })
 })
 
+// ─── Écritures ───────────────────────────────────────────────────────────────
+
+/** Texte facultatif (VARCHAR(191) sous MySQL) : espaces retirés, chaîne vide ou null → champ effacé. */
+const optionalText = z.string().trim().max(191).transform(value => value || null).nullable()
+
+const writableFields = {
+  title: optionalText.optional(),
+  altText: optionalText.optional().meta({ description: 'Texte alternatif (accessibilité).' }),
+  visibility: z.enum(API_VISIBILITIES).optional(),
+}
+
+/**
+ * Champs texte d'un envoi (multipart/form-data, en plus du fichier `file`). Visibilité `public`
+ * par défaut, imposée par un jeton délégué qui la fixe. Champ inconnu → 400.
+ */
+export const apiMediaUploadFieldsSchema = z.strictObject(writableFields)
+
+/** PATCH d'un média : champs absents inchangés, `null` ou texte vide efface le titre / le texte alternatif. */
+export const apiMediaUpdateSchema = z.strictObject(writableFields)
+export type ApiMediaUpdate = z.output<typeof apiMediaUpdateSchema>
+
+export const apiDuplicateBodySchema = z.strictObject({
+  target: z
+    .union([
+      z.strictObject({ projectId: z.string().regex(ID_PATTERN) }),
+      z.strictObject({ library: z.literal(true) }),
+    ])
+    .optional()
+    .meta({ description: 'Espace de la copie : un projet (`projectId`), ou la bibliothèque de l\'organisation (`library`, jeton personnel qui l\'inclut). Par défaut : le projet du média.' }),
+})
+
+/** Types de fichiers acceptés par l'installation (détectés d'après le contenu). */
+const ACCEPTED_TYPES = Object.values(ACCEPTED_MEDIA_TYPES).flatMap(types => Object.keys(types ?? {})) as [string, ...string[]]
+
+/** Contraintes d'envoi d'un jeton délégué (champ `upload`). */
+export const apiUploadConstraintsSchema = z.strictObject({
+  maxFiles: z.number().int().min(1).max(DELEGATED_MAX_FILES).optional()
+    .meta({ description: 'Nombre de fichiers que le jeton peut envoyer (nouveaux médias et remplacements).' }),
+  maxSize: z.number().int().min(1).max(2_147_483_647).optional()
+    .meta({ description: 'Taille maximale d\'un fichier, en octets (bornée par la limite de l\'installation).' }),
+  types: z.array(z.enum(ACCEPTED_TYPES)).min(1).max(DELEGATED_MAX_TYPES).optional()
+    .meta({ description: 'Types MIME acceptés, détectés d\'après le contenu du fichier.' }),
+  visibility: z.enum(API_VISIBILITIES).optional().meta({ description: 'Visibilité imposée aux médias envoyés.' }),
+})
+export type ApiUploadConstraints = z.output<typeof apiUploadConstraintsSchema>
+
+export const apiDelegatedTokenBodySchema = z.strictObject({
+  scopes: z.array(z.enum(TOKEN_SCOPES)).min(1).max(TOKEN_SCOPES.length)
+    .meta({ description: 'Portées demandées, toutes détenues par l\'émetteur dans ce projet (aucune lecture d\'office).' }),
+  expiresIn: z.number().int().min(DELEGATED_TOKEN_TTL.min).max(DELEGATED_TOKEN_TTL.max).default(DELEGATED_TOKEN_TTL.default)
+    .meta({ description: 'Durée de validité en secondes (1 à 60 minutes, 15 par défaut), bornée par l\'échéance de l\'émetteur.' }),
+  subject: z.string().trim().min(1).max(DELEGATED_SUBJECT_MAX_LENGTH).regex(/^\P{Cc}+$/u).optional()
+    .meta({ description: 'Identifiant opaque de l\'utilisateur final côté application cliente (provenance et journal d\'audit).' }),
+  origin: z
+    .string()
+    .trim()
+    .min(1)
+    .max(ORIGIN_MAX_LENGTH)
+    .transform((value, ctx) => {
+      const origin = normalizeOrigin(value)
+      if (!origin || isWildcardOrigin(origin)) {
+        ctx.addIssue({ code: 'custom', message: 'Expected an exact origin, such as https://app.example.com.' })
+        return z.NEVER
+      }
+      return origin
+    })
+    .optional()
+    .meta({ description: 'Origine exacte du site autorisé à utiliser le jeton (parmi les origines autorisées du projet).' }),
+  upload: apiUploadConstraintsSchema.optional(),
+}).superRefine((body, ctx) => {
+  if (body.upload && !body.scopes.some(scope => scope === 'media:upload' || scope === 'media:write')) {
+    ctx.addIssue({ code: 'custom', path: ['upload'], message: 'Upload constraints require the media:upload or media:write scope.' })
+  }
+})
+export type ApiDelegatedTokenBody = z.output<typeof apiDelegatedTokenBodySchema>
+
+/**
+ * Charge d'un jeton délégué (`sm_dt_<charge base64url>.<signature>`), lisible par le composant
+ * (échéance, portées, contraintes) ; seule la signature du serveur la rend valable.
+ */
+export const delegatedTokenClaimsSchema = z.strictObject({
+  v: z.literal(1),
+  jti: z.string().min(8).max(64).meta({ description: 'Identifiant unique du jeton.' }),
+  iss: z.string().regex(ID_PATTERN).meta({ description: 'Identifiant (clé secrète ou jeton personnel) qui a émis le jeton.' }),
+  project: z.string().regex(ID_PATTERN),
+  scopes: z.array(z.enum(TOKEN_SCOPES)).min(1),
+  sub: z.string().max(DELEGATED_SUBJECT_MAX_LENGTH).optional(),
+  origin: z.string().max(ORIGIN_MAX_LENGTH).optional(),
+  upload: apiUploadConstraintsSchema.optional(),
+  iat: z.number().int(),
+  exp: z.number().int().meta({ description: 'Échéance (secondes Unix).' }),
+  kid: z.string().min(1).max(16),
+})
+export type DelegatedTokenClaims = z.output<typeof delegatedTokenClaimsSchema>
+
 // ─── Réponses ────────────────────────────────────────────────────────────────
 
 const isoDate = z.iso.datetime({ offset: true })
 
 export const apiMediaSchema = z.object({
   id: z.string(),
+  projectId: z.string().nullable().meta({ description: 'Projet du média ; null = bibliothèque de l\'organisation (copie créée par duplication).' }),
   kind: z.enum(API_MEDIA_KINDS),
   visibility: z.enum(API_VISIBILITIES),
   title: z.string().nullable(),
@@ -112,15 +214,20 @@ const projectRef = z.object({ id: z.string(), name: z.string(), slug: z.string()
 
 export const apiMeSchema = z.object({
   credential: z.object({
-    id: z.string(),
-    type: z.enum(['personal', 'secret', 'publishable']),
+    id: z.string().meta({ description: 'Identifiant de l\'identifiant ; `jti` pour un jeton délégué.' }),
+    type: z.enum(['personal', 'secret', 'publishable', 'delegated']),
     name: z.string(),
     prefix: z.string(),
     environment: z.string().nullable(),
-    scopes: z.array(z.enum(TOKEN_SCOPES)).meta({ description: 'Portées déclarées (un jeton personnel reste limité aux droits actuels de son propriétaire).' }),
+    scopes: z.array(z.enum(TOKEN_SCOPES)).meta({ description: 'Portées déclarées (un jeton personnel reste limité aux droits actuels de son propriétaire, un jeton délégué à ceux de son émetteur).' }),
     expiresAt: isoDate.nullable(),
     createdAt: isoDate,
   }),
+  delegated: z.object({
+    subject: z.string().nullable(),
+    origin: z.string().nullable(),
+    upload: apiUploadConstraintsSchema.nullable(),
+  }).nullable().meta({ description: 'Jeton délégué : sujet final, origine et contraintes d\'envoi.' }),
   user: z.object({ id: z.string(), name: z.string().nullable() }).nullable().meta({ description: 'Propriétaire d\'un jeton personnel.' }),
   project: projectRef.extend({ archived: z.boolean() }).nullable().meta({ description: 'Projet d\'une clé.' }),
   access: z.object({
@@ -130,6 +237,12 @@ export const apiMeSchema = z.object({
   }).nullable().meta({ description: 'Sélection d\'un jeton personnel.' }),
 })
 export type ApiMe = z.input<typeof apiMeSchema>
+
+export const apiDelegatedTokenSchema = z.object({
+  token: z.string().meta({ description: 'Jeton à transmettre au navigateur, qui l\'envoie en `Authorization: Bearer <token>`.' }),
+  expiresAt: isoDate,
+  scopes: z.array(z.enum(TOKEN_SCOPES)),
+})
 
 export const apiSignedUrlSchema = z.object({
   url: z.url(),

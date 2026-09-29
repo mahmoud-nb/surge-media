@@ -7,7 +7,15 @@ import { etagMatches, mediaEtag, toApiMedia, weakEtag } from '../server/lib/api/
 import { createLruCache } from '../server/lib/cache/lru'
 import { resolveRange } from '../server/lib/media/range'
 import { checkSignature, keyId } from '../server/lib/media/signing'
-import { apiMediaListQuerySchema, apiMediaSchema, apiSignedUrlBodySchema } from '../shared/schemas/api'
+import { toMetadataInput } from '../server/lib/api/writes'
+import {
+  apiDuplicateBodySchema,
+  apiMediaListQuerySchema,
+  apiMediaSchema,
+  apiMediaUpdateSchema,
+  apiMediaUploadFieldsSchema,
+  apiSignedUrlBodySchema,
+} from '../shared/schemas/api'
 import { API_ERRORS } from '../shared/utils/api'
 import { credentialScopes, MEDIA_SCOPES, spaceScopes, type Scope } from '../shared/utils/permissions'
 import { mediaSearchColumns, normalizeSearchText } from '../shared/utils/search'
@@ -173,6 +181,7 @@ describe('contrat Media v1', () => {
     const result = toApiMedia(media as never, 'https://media.example.com', 0)
     expect(apiMediaSchema.parse(result)).toBeTruthy()
     expect(result).toMatchObject({
+      projectId: 'p1',
       kind: 'image',
       visibility: 'public',
       filename: 'Affiche été.jpg',
@@ -207,6 +216,29 @@ describe('paramètres de l\'API', () => {
       expect(apiMediaListQuerySchema.safeParse(query).success, JSON.stringify(query)).toBe(false)
     }
     expect(apiMediaListQuerySchema.safeParse({ ids: Array.from({ length: 101 }, (_, i) => `media${String(i).padStart(4, '0')}`).join(',') }).success).toBe(false)
+  })
+
+  it('écriture : champs d\'un envoi et d\'un PATCH (texte vide → null, visibilité en minuscules, champ inconnu refusé)', () => {
+    expect(apiMediaUploadFieldsSchema.parse({ title: '  Affiche  ', altText: '', visibility: 'private' }))
+      .toEqual({ title: 'Affiche', altText: null, visibility: 'private' })
+    expect(apiMediaUpdateSchema.parse({ title: null })).toEqual({ title: null })
+    expect(apiMediaUpdateSchema.parse({})).toEqual({})
+    for (const body of [{ visibility: 'PRIVATE' }, { title: 'x'.repeat(192) }, { folderId: 'abc' }, { titre: 'x' }]) {
+      expect(apiMediaUpdateSchema.safeParse(body).success, JSON.stringify(body)).toBe(false)
+    }
+    expect(toMetadataInput({ title: null, visibility: 'private' })).toEqual({ title: null, visibility: 'PRIVATE' })
+    // Visibilité imposée par un jeton délégué : prioritaire sur le champ envoyé.
+    expect(toMetadataInput({ visibility: 'public' }, 'private')).toEqual({ visibility: 'PRIVATE' })
+    expect(toMetadataInput({})).toEqual({})
+  })
+
+  it('duplication : projet ou bibliothèque, un seul à la fois', () => {
+    expect(apiDuplicateBodySchema.parse({})).toEqual({})
+    expect(apiDuplicateBodySchema.parse({ target: { projectId: 'cmproject0001' } })).toEqual({ target: { projectId: 'cmproject0001' } })
+    expect(apiDuplicateBodySchema.parse({ target: { library: true } })).toEqual({ target: { library: true } })
+    for (const body of [{ target: { library: false } }, { target: { projectId: '../x' } }, { target: { projectId: 'cmproject0001', library: true } }, { projectId: 'x' }]) {
+      expect(apiDuplicateBodySchema.safeParse(body).success, JSON.stringify(body)).toBe(false)
+    }
   })
 
   it('lien signé : cible, préréglage exigé, durée bornée', () => {
@@ -246,6 +278,18 @@ describe('problèmes RFC 9457', () => {
     expect(problem.options.errors).toEqual([{ path: 'limit', message: 'Too big' }])
     for (const [code, { status }] of Object.entries(API_ERRORS)) expect(new ApiProblem(code as keyof typeof API_ERRORS).status).toBe(status)
   })
+
+  it('erreurs métier des médias (data.code) → problème du catalogue, avec détail et Retry-After', () => {
+    const tooLarge = toProblem({ statusCode: 413, data: { code: 'FILE_TOO_LARGE', maxSize: 1000 } })
+    expect([tooLarge.code, tooLarge.status, tooLarge.options.detail]).toEqual(['FILE_TOO_LARGE', 413, 'The file exceeds the maximum size of 1000 bytes.'])
+    const unsupported = toProblem({ statusCode: 415, data: { code: 'UNSUPPORTED_TYPE', accepted: ['image/png'] } })
+    expect(unsupported.options.detail).toContain('image/png')
+    const busy = toProblem({ statusCode: 503, data: { code: 'SERVER_BUSY', retryAfter: 5 } })
+    expect([busy.status, busy.options.headers]).toEqual([503, { 'Retry-After': '5' }])
+    expect(toProblem({ statusCode: 409, data: { code: 'VERSION_CONFLICT' } }).status).toBe(409)
+    // Code métier inconnu du catalogue : repli sur le statut HTTP.
+    expect(toProblem({ statusCode: 400, data: { code: 'SOMETHING_ELSE' } }).code).toBe('INVALID_REQUEST')
+  })
 })
 
 describe('spécification OpenAPI', () => {
@@ -253,10 +297,18 @@ describe('spécification OpenAPI', () => {
     const document = buildOpenApiDocument('https://media.example.com/api/v1')
     expect(document.openapi).toBe('3.1.0')
     expect(Object.keys(document.paths)).toEqual([
-      '/me', '/projects', '/projects/{projectId}', '/projects/{projectId}/media', '/projects/{projectId}/media/{mediaId}',
+      '/me', '/projects', '/projects/{projectId}', '/projects/{projectId}/delegated-tokens', '/projects/{projectId}/media',
+      '/projects/{projectId}/media/{mediaId}', '/projects/{projectId}/media/{mediaId}/file', '/projects/{projectId}/media/{mediaId}/duplicate',
       '/projects/{projectId}/media/{mediaId}/signed-url', '/errors',
     ])
-    expect(Object.keys(document.components.schemas).sort()).toEqual(['Me', 'Media', 'MediaList', 'Problem', 'Project', 'ProjectList', 'SignedUrl'])
+    expect(Object.keys(document.components.schemas).sort()).toEqual([
+      'DelegatedToken', 'DelegatedTokenClaims', 'Me', 'Media', 'MediaList', 'Problem', 'Project', 'ProjectList', 'SignedUrl', 'UploadConstraints',
+    ])
+    expect(Object.keys(document.paths['/projects/{projectId}/media'])).toEqual(['get', 'post'])
+    expect(Object.keys(document.paths['/projects/{projectId}/media/{mediaId}'])).toEqual(['get', 'patch', 'delete'])
+    const upload = document.paths['/projects/{projectId}/media'].post.requestBody.content['multipart/form-data'].schema
+    expect(upload.required).toEqual(['file'])
+    expect(Object.keys(upload.properties)).toEqual(['file', 'title', 'altText', 'visibility'])
     const listParameters = document.paths['/projects/{projectId}/media'].get.parameters.map(parameter => parameter.name)
     expect(listParameters).toEqual(['projectId', 'q', 'kind', 'visibility', 'ids', 'sort', 'limit', 'cursor', 'withTotal'])
     expect(JSON.stringify(document)).not.toContain('"$schema"')

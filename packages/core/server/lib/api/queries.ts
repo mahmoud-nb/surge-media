@@ -3,7 +3,7 @@ import type { ApiMediaSort } from '#shared/utils/api'
 import { credentialScopes, hasPermission, spaceScopes, type TokenScope } from '#shared/utils/permissions'
 import { normalizeSearchText } from '#shared/utils/search'
 import type { Media, Prisma } from '../../generated/prisma/client'
-import type { CredentialRecord } from '../access/credentials'
+import { type Principal, principalProjectScopes } from '../access/principal'
 import { getProjectState } from '../projects/state'
 import { type Cursor, decodeCursor, encodeCursor } from './cursor'
 import { apiProblem } from './problem'
@@ -122,11 +122,19 @@ export interface ProjectPage {
 }
 
 /**
- * Projets accessibles avec un identifiant (actifs seulement) : son projet pour une clé ; pour un
- * jeton personnel, sa sélection (ou tous les projets de son propriétaire), limitée aux droits
- * actuels du propriétaire. Tri par nom puis identifiant.
+ * Projets accessibles avec un identifiant (actifs seulement) : son projet pour une clé ou un jeton
+ * délégué (celui-ci seulement avec project:read) ; pour un jeton personnel, sa sélection (ou tous
+ * les projets de son propriétaire), limitée aux droits actuels du propriétaire. Tri par nom puis
+ * identifiant.
  */
-export async function listApiProjects(credential: CredentialRecord, query: ApiProjectListQuery): Promise<ProjectPage> {
+export async function listApiProjects(principal: Principal, query: ApiProjectListQuery): Promise<ProjectPage> {
+  const { credential } = principal
+  if (principal.delegated) {
+    const project = await getProjectState(principal.delegated.projectId)
+    if (!project || project.archived || query.cursor) return { items: [], nextCursor: null }
+    const scopes = await principalProjectScopes(principal, project)
+    return { items: scopes.includes('project:read') ? [{ project, scopes }] : [], nextCursor: null }
+  }
   if (credential.type !== 'PERSONAL') {
     const project = credential.projectId ? await getProjectState(credential.projectId) : null
     if (!project || project.archived || query.cursor) return { items: [], nextCursor: null }
