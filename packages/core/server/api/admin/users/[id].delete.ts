@@ -1,3 +1,5 @@
+import { invalidateUserCredentials } from '../../../lib/access/credentials'
+
 /**
  * DELETE /api/admin/users/:id — suppression définitive (sessions, liens et jetons personnels
  * supprimés en cascade ; les médias, projets et clés créés par le compte sont conservés, sans
@@ -11,6 +13,7 @@ export default defineEventHandler(async (event) => {
 
   const prisma = await usePrisma()
   await prisma.user.delete({ where: { id: target.id } })
+  invalidateUserCredentials(target.id)
   await recordAudit(event, { action: 'user.deleted', targetType: 'user', targetId: target.id, data: { label: target.email, role: target.role } })
   setResponseStatus(event, 204)
   return null

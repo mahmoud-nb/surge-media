@@ -547,7 +547,9 @@
       "slugAuto": "Optional. If left empty: “{slug}”.",
       "slugAutoEmpty": "Optional. If left empty, it is derived from the name.",
       "description": "Description",
-      "descriptionHint": "Optional. For example the application and environments involved."
+      "descriptionHint": "Optional. For example the application and environments involved.",
+      "publicListing": "Public listing",
+      "publicListingHint": "Lets the publishable key list and search the project's public media (a gallery on a website). When off, it can only read a media item by its identifier."
     },
     "create": {
       "meta": {
@@ -877,6 +879,14 @@
       "submit": "Create key",
       "submitting": "Creating the key…",
       "created": "Key “{name}” created."
+    },
+    "endpoint": {
+      "title": "API access",
+      "description": "Applications call API v1 at this address, with a key in the Authorization: Bearer header.",
+      "label": "Project API address",
+      "openapi": "OpenAPI specification (JSON)",
+      "listingOn": "Public listing on",
+      "listingOff": "Public listing off"
     }
   },
   "origins": {
@@ -1098,7 +1108,8 @@
     "fields": {
       "name": "name",
       "slug": "identifier",
-      "description": "description"
+      "description": "description",
+      "publicListing": "public listing"
     }
   }
 }

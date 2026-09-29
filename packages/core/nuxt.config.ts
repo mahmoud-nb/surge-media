@@ -45,6 +45,15 @@ export default defineNuxtConfig({
       email: '',
       password: '',
     },
+    // API publique v1 : requêtes par minute (seau à jetons, en mémoire) — NUXT_API_RATE_LIMIT_*
+    api: {
+      rateLimit: {
+        publishable: 300, // par clé publique et par IP — NUXT_API_RATE_LIMIT_PUBLISHABLE
+        secret: 1200, // par clé secrète — NUXT_API_RATE_LIMIT_SECRET
+        personal: 1200, // par jeton personnel — NUXT_API_RATE_LIMIT_PERSONAL
+        authFailures: 30, // échecs d'authentification par IP — NUXT_API_RATE_LIMIT_AUTH_FAILURES
+      },
+    },
     // Médias — variables NUXT_MEDIA_* (voir .env.example et setup.md § 7).
     media: {
       maxUploadSize: 25 * 1024 * 1024, // octets — NUXT_MEDIA_MAX_UPLOAD_SIZE

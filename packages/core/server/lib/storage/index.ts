@@ -1,5 +1,7 @@
+import { createReadStream } from 'node:fs'
 import { mkdir } from 'node:fs/promises'
-import { resolve } from 'node:path'
+import { join, resolve } from 'node:path'
+import type { Readable } from 'node:stream'
 import { Disk } from 'flydrive'
 import { createFlydriveStorage } from './flydrive'
 import type { MediaStorage, MediaStorageConfig } from './types'
@@ -18,7 +20,8 @@ async function createStorage(config: MediaStorageConfig): Promise<MediaStorage> 
       // Chemin relatif résolu depuis le dossier de lancement (packages/core), comme la base SQLite.
       const location = resolve(config.root)
       await mkdir(location, { recursive: true })
-      return createFlydriveStorage('local', new Disk(new FSDriver({ location, visibility: 'private' })), config.prefix)
+      return createFlydriveStorage('local', new Disk(new FSDriver({ location, visibility: 'private' })), config.prefix,
+        async (key, { start, end }) => createReadStream(join(location, key), { start, end }))
     }
     case 's3': {
       const { bucket, region, endpoint, accessKeyId, secretAccessKey, forcePathStyle } = config.s3
@@ -27,8 +30,9 @@ async function createStorage(config: MediaStorageConfig): Promise<MediaStorage> 
         throw new Error(`[surge-media] Stockage S3 : paramètres manquants (${missing.join(', ')}), voir NUXT_MEDIA_STORAGE_S3_*.`)
       }
       const { S3Driver } = await import('flydrive/drivers/s3')
-      const driver = new S3Driver({
-        bucket,
+      const { GetObjectCommand, S3Client } = await import('@aws-sdk/client-s3')
+      // Client créé ici (et non par Flydrive) pour lire aussi des plages d'octets (requêtes Range).
+      const client = new S3Client({
         region,
         endpoint: endpoint || undefined,
         forcePathStyle,
@@ -37,12 +41,19 @@ async function createStorage(config: MediaStorageConfig): Promise<MediaStorage> 
         // l'exige : des services compatibles S3 les stockent sinon dans le fichier (corrompu).
         requestChecksumCalculation: 'WHEN_REQUIRED',
         responseChecksumValidation: 'WHEN_REQUIRED',
+      })
+      const driver = new S3Driver({
+        client,
+        bucket,
         // Objets privés : la diffusion passe toujours par surgeMedia (contrôle d'accès, en-têtes).
         visibility: 'private',
         // Beaucoup de services compatibles S3 (R2, MinIO…) ne gèrent pas les ACL.
         supportsACL: false,
       })
-      return createFlydriveStorage('s3', new Disk(driver), config.prefix)
+      return createFlydriveStorage('s3', new Disk(driver), config.prefix, async (key, { start, end }) => {
+        const object = await client.send(new GetObjectCommand({ Bucket: bucket, Key: key, Range: `bytes=${start}-${end}` }))
+        return object.Body as Readable
+      })
     }
     default:
       throw new Error(`[surge-media] NUXT_MEDIA_STORAGE_DRIVER="${config.driver}" non supporté (valeurs : local, s3).`)

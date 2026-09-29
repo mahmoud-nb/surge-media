@@ -48,6 +48,8 @@ export const updateProjectSchema = z.object({
   description: projectDescriptionSchema,
   /** true : archive le projet (lecture seule) ; false : le réactive. */
   archived: z.boolean(),
+  /** La clé publique peut lister et chercher les médias publics (API v1). */
+  publicListing: z.boolean(),
 }).partial()
 export type UpdateProjectInput = z.input<typeof updateProjectSchema>
 

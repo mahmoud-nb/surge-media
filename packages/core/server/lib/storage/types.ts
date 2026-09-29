@@ -12,8 +12,11 @@ export interface MediaStorage {
   readonly driver: string
   /** Écrit un fichier en flux (mémoire constante, quelle que soit sa taille). */
   put: (key: string, body: Readable, info: { contentType: string, size: number }) => Promise<void>
-  /** Lit un fichier en flux. */
-  getStream: (key: string) => Promise<Readable>
+  /**
+   * Lit un fichier en flux, en entier ou seulement les octets [start, end] (requêtes `Range` :
+   * reprise de téléchargement, lecture vidéo). Sous S3, la plage est demandée au service.
+   */
+  getStream: (key: string, range?: ByteRange) => Promise<Readable>
   /**
    * Copie un fichier sous une nouvelle clé (duplication d'un média). Sous S3, la copie se fait
    * côté service (CopyObject), sans transit par surgeMedia.
@@ -27,6 +30,12 @@ export interface MediaStorage {
   deletePrefix: (prefix: string) => Promise<void>
   /** Vérifie que le backend répond (GET /api/health). */
   healthcheck: () => Promise<void>
+}
+
+/** Plage d'octets incluse aux deux bornes. */
+export interface ByteRange {
+  start: number
+  end: number
 }
 
 export type MediaStorageDriver = 'local' | 's3'

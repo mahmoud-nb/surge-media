@@ -1,7 +1,7 @@
 import { updateProjectSchema } from '#shared/schemas/projects'
 import { getProjectSummary, updateProject } from '../../../lib/projects/service'
 
-const AUDITED_FIELDS = ['name', 'slug', 'description'] as const
+const AUDITED_FIELDS = ['name', 'slug', 'description', 'publicListing'] as const
 
 /**
  * PATCH /api/admin/projects/:id — { name?, slug?, description?, archived? } (portée

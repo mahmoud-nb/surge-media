@@ -227,6 +227,23 @@ async function confirmAction() {
             </div>
           </dl>
 
+          <section aria-labelledby="api-endpoint-title" class="mb-8 grid gap-3 rounded-xl border border-border bg-surface p-4">
+            <h3 id="api-endpoint-title" class="text-base font-semibold text-foreground">
+              {{ t('apiKeys.endpoint.title') }}
+            </h3>
+            <p class="text-sm text-muted-foreground">
+              {{ t('apiKeys.endpoint.description') }}
+            </p>
+            <UiCopyField :label="t('apiKeys.endpoint.label')" :value="`${data.apiBaseUrl}/projects/${project.id}`" />
+            <p class="flex flex-wrap gap-x-2 text-sm text-muted-foreground">
+              <a :href="`${data.apiBaseUrl}/openapi.json`" class="font-medium text-primary underline-offset-4 hover:underline">
+                {{ t('apiKeys.endpoint.openapi') }}
+              </a>
+              <span aria-hidden="true">·</span>
+              <span>{{ project.publicListing ? t('apiKeys.endpoint.listingOn') : t('apiKeys.endpoint.listingOff') }}</span>
+            </p>
+          </section>
+
           <div v-if="groups.length === 0" class="flex flex-col items-center gap-3 rounded-xl border border-dashed border-input bg-surface px-6 py-10 text-center">
             <KeyRound class="size-8 text-muted-foreground" aria-hidden="true" />
             <p class="text-muted-foreground">

@@ -1,6 +1,7 @@
 import type { CreatePersonalTokenData, CreateProjectKeyData } from '#shared/schemas/credentials'
 import { ROTATION_OVERLAP_SECONDS, type RotationOverlap } from '#shared/utils/credentials'
 import type { AccessToken, Prisma, User } from '../../generated/prisma/client'
+import { invalidateCredential } from '../access/credentials'
 import { generateAccessToken } from '../access/tokens'
 
 /**
@@ -157,6 +158,7 @@ export async function rotateProjectKey(key: TokenWithRelations, actor: User, ove
     })
     return next
   })
+  invalidateCredential(key.tokenHash)
   return { key: toKeySummary(created), value: generated.value }
 }
 
@@ -223,6 +225,7 @@ export async function revokeToken(token: AccessToken): Promise<void> {
   if (tokenStatus(token) !== 'active') throw credentialError(409, 'TOKEN_NOT_ACTIVE')
   const prisma = await usePrisma()
   await prisma.accessToken.update({ where: { id: token.id }, data: { revokedAt: new Date() } })
+  invalidateCredential(token.tokenHash)
 }
 
 /** Suppression d'un identifiant expiré ou révoqué (409 TOKEN_ACTIVE s'il est encore actif). */
@@ -230,4 +233,5 @@ export async function deleteToken(token: AccessToken): Promise<void> {
   if (tokenStatus(token) === 'active') throw credentialError(409, 'TOKEN_ACTIVE')
   const prisma = await usePrisma()
   await prisma.accessToken.delete({ where: { id: token.id } })
+  invalidateCredential(token.tokenHash)
 }
