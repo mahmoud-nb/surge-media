@@ -1,7 +1,18 @@
 import { Readable } from 'node:stream'
 import type { H3Event } from 'h3'
+import type { TokenScope } from '#shared/utils/permissions'
 import type { Media } from '../../generated/prisma/client'
+import {
+  credentialLibraryScopes,
+  credentialProjectScopes,
+  isBrowserRequest,
+  isSecretCredential,
+  resolveCredential,
+  touchCredential,
+} from '../access/credentials'
+import { getProjectState } from '../projects/state'
 import { useMediaStorage } from '../storage'
+import { variantCache } from './cache'
 import { mediaError } from './errors'
 import { handlerFor } from './handlers'
 import { variantKey } from './keys'
@@ -38,15 +49,17 @@ export function parseDeliveryPath(path: string): DeliveryTarget | null {
 export type DeliveryAccess =
   | { mode: 'public' }
   | { mode: 'signed', expires: number }
+  | { mode: 'credential' }
 
 /**
  * Diffusion sans cookie (aucune session lue) :
  *   - média public : libre ;
- *   - média privé : lien signé valable (fichier précis, droit « derived » ou « admin ») ;
+ *   - média privé : lien signé valable (fichier précis, droit « derived » ou « admin »), ou
+ *     identifiant d'API (`Authorization: Bearer`) ayant `media:read` dans l'espace du média
+ *     (jamais une clé publique ; jamais une clé secrète ou un jeton personnel depuis un navigateur) ;
  *   - média dans la corbeille : 404, sauf lien signé « admin » (aperçus de l'administration).
- * Phase B3 : jeton d'accès (Bearer) habilité dans l'espace du média.
  */
-export function authorizeDelivery(event: H3Event, media: Media, target: DeliveryTarget): DeliveryAccess {
+export async function authorizeDelivery(event: H3Event, media: Media, target: DeliveryTarget): Promise<DeliveryAccess> {
   const query = getQuery(event)
   if (query.sig !== undefined || query.exp !== undefined) {
     const check = verifyMediaSignature({ mediaId: media.id, version: media.version, variant: target.variant }, query)
@@ -60,7 +73,38 @@ export function authorizeDelivery(event: H3Event, media: Media, target: Delivery
 
   if (media.deletedAt) throw createError({ statusCode: 404, statusMessage: 'Not Found' })
   if (media.visibility === 'PUBLIC') return { mode: 'public' }
+  const authorization = getRequestHeader(event, 'authorization')
+  if (authorization) {
+    await authorizeCredential(event, authorization, media)
+    return { mode: 'credential' }
+  }
   throw mediaError(403, 'MEDIA_FORBIDDEN')
+}
+
+/** Identifiant d'API présenté pour un média privé : 401 s'il n'est pas valable, 403 sans `media:read`. */
+async function authorizeCredential(event: H3Event, authorization: string, media: Media): Promise<void> {
+  const match = /^Bearer\s+(\S+)\s*$/i.exec(authorization)
+  const resolution = match ? await resolveCredential(match[1]!) : { ok: false as const, code: 'TOKEN_INVALID' as const }
+  if (!resolution.ok) {
+    setResponseHeader(event, 'WWW-Authenticate', 'Bearer realm="surgeMedia", error="invalid_token"')
+    throw createError({ statusCode: 401, statusMessage: resolution.code, data: { code: resolution.code } })
+  }
+  const { credential } = resolution
+  if (isSecretCredential(credential) && isBrowserRequest(event)) {
+    throw createError({ statusCode: 403, statusMessage: 'SECRET_IN_BROWSER', data: { code: 'SECRET_IN_BROWSER' } })
+  }
+  let scopes: TokenScope[] = []
+  if (media.projectId) {
+    const project = await getProjectState(media.projectId)
+    // Projet archivé : ses identifiants sont refusés.
+    if (project && !project.archived) scopes = await credentialProjectScopes(credential, project)
+  }
+  else {
+    scopes = credentialLibraryScopes(credential)
+  }
+  // Une clé publique ne lit jamais un média privé.
+  if (credential.type === 'PUBLISHABLE' || !scopes.includes('media:read')) throw mediaError(403, 'MEDIA_FORBIDDEN')
+  touchCredential(credential, getRequestIP(event))
 }
 
 export interface DeliverableObject {
@@ -82,22 +126,29 @@ export async function resolveDeliverable(media: Media, variant: DeliveryTarget['
   // Un dérivé par version et par transformation (« v3/preview ») : un remplacement n'en réutilise aucun.
   const transformation = `v${media.version}/${variant}`
   const etag = `${media.checksum.slice(0, 24)}-${variant}`
+  const cacheKey = `${media.id}:${transformation}`
+  const cached = variantCache.get(cacheKey)
+  if (cached) return { ...cached, etag }
+
   const prisma = await usePrisma()
   const existing = await prisma.mediaVariant.findUnique({
     where: { mediaId_transformation: { mediaId: media.id, transformation } },
   })
   if (existing) {
-    return { key: existing.storageKey, mimeType: VARIANT_MIME_TYPES[existing.format] ?? 'application/octet-stream', size: existing.size, etag }
+    const object = { key: existing.storageKey, mimeType: VARIANT_MIME_TYPES[existing.format] ?? 'application/octet-stream', size: existing.size }
+    variantCache.set(cacheKey, object)
+    return { ...object, etag }
   }
 
   // Demandes simultanées du même dérivé : une seule génération par processus.
-  const pendingKey = `${media.id}:${transformation}`
-  let pending = pendingVariants.get(pendingKey)
+  let pending = pendingVariants.get(cacheKey)
   if (!pending) {
-    pending = renderVariant(media, transformation, etag).finally(() => pendingVariants.delete(pendingKey))
-    pendingVariants.set(pendingKey, pending)
+    pending = renderVariant(media, transformation, etag).finally(() => pendingVariants.delete(cacheKey))
+    pendingVariants.set(cacheKey, pending)
   }
-  return pending
+  const rendered = await pending
+  variantCache.set(cacheKey, { key: rendered.key, mimeType: rendered.mimeType, size: rendered.size })
+  return rendered
 }
 
 async function renderVariant(media: Media, transformation: string, etag: string): Promise<DeliverableObject> {
@@ -137,6 +188,8 @@ export function cacheControl(access: DeliveryAccess): string {
     case 'public': return 'public, max-age=31536000, immutable'
     // Lien signé : jamais au-delà de son échéance, et pas dans les caches partagés.
     case 'signed': return `private, max-age=${Math.max(0, Math.min(access.expires - Math.floor(Date.now() / 1000), 3600))}`
+    // Identifiant d'API : réponse propre à l'appelant, toujours revalidée (ETag).
+    case 'credential': return 'private, no-cache'
   }
 }
 

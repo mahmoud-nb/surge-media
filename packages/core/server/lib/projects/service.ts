@@ -4,7 +4,10 @@ import type { ProjectMediaOnDelete } from '#shared/utils/projects'
 import { slugify } from '#shared/utils/projects'
 import type { Prisma, Project, User } from '../../generated/prisma/client'
 import type { SpaceAccess } from '../../utils/access'
+import { bumpRevision } from '../cache/revisions'
+import { invalidateMedia } from '../media/cache'
 import { deleteStoredFiles } from '../media/service'
+import { invalidateProjectState } from './state'
 
 /**
  * Projets : création, réglages, archivage, suppression et membres. Les contrôles d'accès
@@ -26,6 +29,7 @@ export function toProjectSummary(project: ProjectWithCounts, user: User) {
     slug: project.slug,
     description: project.description,
     archivedAt: project.archivedAt,
+    publicListing: project.publicListing,
     createdAt: project.createdAt,
     updatedAt: project.updatedAt,
     /** Rôle exercé (plafonné ; OWNER pour un ADMIN) et rôle de membre enregistré. */
@@ -116,6 +120,8 @@ export async function updateProject(access: SpaceAccess, input: UpdateProjectInp
     if (isUniqueViolation(error)) throw projectError(409, 'SLUG_TAKEN')
     throw error
   }
+  // Archivage, liste publique… : l'API v1 relit l'état du projet.
+  invalidateProjectState(access.project!.id)
 }
 
 /**
@@ -143,6 +149,9 @@ export async function deleteProject(access: SpaceAccess, mediaOnDelete: ProjectM
     // Sans attendre : la réponse ne dépend pas du nombre de fichiers.
     void deleteStoredFiles(media)
   }
+  invalidateProjectState(project.id)
+  invalidateMedia(...media.map(item => item.id))
+  if (mediaOnDelete === 'library' && media.length > 0) await bumpRevision(LIBRARY)
   return { media: media.length }
 }
 

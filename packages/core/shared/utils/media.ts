@@ -38,6 +38,13 @@ export function extensionForMime(mimeType: string): string | undefined {
   return kind ? ACCEPTED_MEDIA_TYPES[kind]?.[mimeType] : undefined
 }
 
+/**
+ * Dérivés nommés (préréglages) servis par /m/<id>/v<n>/<préréglage>/<nom> ; les transformations
+ * libres (phase C) auront leur propre segment (`w_800,h_600…`), jamais de « _ » dans un nom de préréglage.
+ */
+export const MEDIA_PRESETS = ['preview'] as const
+export type MediaPreset = (typeof MEDIA_PRESETS)[number]
+
 /** Durées proposées pour les liens temporaires vers un média privé (secondes). */
 export const SIGNED_URL_DURATIONS = [3600, 86_400, 604_800] as const
 export const SIGNED_URL_MAX_TTL = 604_800

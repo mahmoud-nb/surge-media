@@ -27,7 +27,23 @@ async function createClient(): Promise<PrismaClient> {
   // dans le chunk principal, il serait évalué avant l'entrée Nitro et recevrait une URL
   // factice (« File URL path must be absolute » sous Windows).
   const { PrismaClient } = await import('../generated/prisma/client')
-  return new PrismaClient({ adapter: createAdapter(provider, url) })
+  const client = new PrismaClient({ adapter: createAdapter(provider, url) })
+  if (provider === 'sqlite') await enableWal(client)
+  return client
+}
+
+/**
+ * SQLite en mode WAL (persistant dans le fichier) : les lectures ne sont plus bloquées pendant
+ * une écriture (diffusion et API pendant un envoi). Crée les fichiers `-wal` et `-shm` à côté de
+ * la base : les sauvegarder avec elle (ou `sqlite3 base.db ".backup copie.db"`).
+ */
+async function enableWal(client: PrismaClient): Promise<void> {
+  try {
+    await client.$queryRawUnsafe('PRAGMA journal_mode = WAL')
+  }
+  catch (error) {
+    console.warn('[surge-media] SQLite : mode WAL non activé (base occupée ?), le mode par défaut reste utilisé.', error)
+  }
 }
 
 let client: Promise<PrismaClient> | undefined

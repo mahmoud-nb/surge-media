@@ -113,16 +113,18 @@ enum ProjectRole {
 
 /// Application cliente (et ses environnements) : ses médias, dossiers, membres, jetons et origines
 model Project {
-  id          String    @id @default(cuid())
-  name        String
+  id            String    @id @default(cuid())
+  name          String
   /// Identifiant lisible (minuscules, chiffres, tirets), unique dans l'installation
-  slug        String    @unique
-  description String?
+  slug          String    @unique
+  description   String?
   /// Projet archivé : lecture seule, clés d'API refusées ; étape préalable à la suppression
-  archivedAt  DateTime?
-  createdById String?
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
+  archivedAt    DateTime?
+  /// Liste publique : la clé publique peut lister et chercher les médias publics (sinon : lecture par identifiants)
+  publicListing Boolean   @default(false)
+  createdById   String?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
 
   createdBy      User?                @relation("ProjectCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
   members        ProjectMember[]
@@ -249,6 +251,14 @@ model AuditEvent {
   @@index([at])
 }
 
+/// Compteur de révision d'un espace (« project:<id> », « library ») : incrémenté par toute écriture
+/// de médias dans l'espace ; entre dans les ETag des listes de l'API (cache « générationnel »).
+model CacheRevision {
+  scope     String   @id
+  revision  Int      @default(0)
+  updatedAt DateTime @updatedAt
+}
+
 // ─── Médias ──────────────────────────────────────────────────────────────────
 
 enum MediaKind {
@@ -307,6 +317,11 @@ model Media {
   title            String?
   /// Texte alternatif par défaut (accessibilité)
   altText          String?
+  /// Colonnes de recherche : titre, nom d'origine et texte alternatif en minuscules sans accents
+  /// (remplies par l'application, shared/utils/search.ts) — recherche identique sur les 3 bases
+  searchTitle      String?
+  searchName       String     @default("")
+  searchAlt        String?
   /// Métadonnées techniques extraites à l'import (EXIF, profil colorimétrique…)
   metadata         Json?
   uploadedById     String?

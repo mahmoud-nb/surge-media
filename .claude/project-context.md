@@ -5,13 +5,13 @@
 > français, avec le « Journal des étapes »). En cas de divergence, **le code fait foi**, puis
 > `setup.md`, puis ce fichier.
 >
-> **État décrit** : commit `a0d9449` (B1) + sous-étape **B2** (2026-09-29, non commitée au moment de la
+> **État décrit** : commit `94bc9f5` (B2) + sous-étape **B3** (2026-09-29, non commitée au moment de la
 > rédaction : vérifier `git log`). Étapes terminées : 1 (monorepo, core, base), 2 (UI, auth, rôles),
 > 3 (utilisateurs), 4 (médias, phase A), 5 = **B1** (projets, espaces, autorisations), 6 = **B2**
-> (identifiants d'API, origines, mode sudo, journal d'audit).
-> **Prochaine étape** : **B3** — API v1 en lecture (résolution `Bearer`, `/me`, projets, médias, CORS par
-> projet, RFC 9457, limitation de débit, caches, dernière utilisation des identifiants). Architecture
-> validée de la phase B : `.claude/architecture-phase-b.md` (**à lire** avant B3–B5 ; en-tête = écarts B1/B2).
+> (identifiants d'API, origines, mode sudo, journal d'audit), 7 = **B3** (API publique v1 en lecture).
+> **Prochaine étape** : **B4** — API v1 en écriture (envoi, PATCH/PUT/DELETE, duplication) + jetons délégués
+> `sm_dt_`. Architecture validée de la phase B : `.claude/architecture-phase-b.md` (**à lire** avant B4–B5 ;
+> en-tête = écarts B1/B2/B3).
 >
 > Les éléments marqués **[À CONFIRMER]** sont des hypothèses ou des points non validés par
 > l'utilisateur (récapitulés en § 22).
@@ -83,7 +83,7 @@ surge-media/                         monorepo pnpm (workspaces packages/*), dép
    ├─ prisma.config.ts               config Prisma 7 (URL, dossier de migrations selon DATABASE_PROVIDER)
    ├─ cli/                           CLI surge-media (init, db migrate, db reset), i18n fr/en
    ├─ scripts/                       db-migration.ts, i18n-check.ts, check-contrast.ts
-   ├─ tests/                         Vitest : permissions, signing, projects, credentials (modules purs)
+   ├─ tests/                         Vitest : permissions, signing, projects, credentials, api (modules purs)
    ├─ i18n/locales/                  fr.json (référence), en.json
    ├─ tsdown.config.ts               build de la CLI → dist/cli/index.mjs
    └─ data/                          (non versionné) base SQLite + médias du pilote local
@@ -111,7 +111,8 @@ Couches serveur :
 - `layouts/default.vue` (public : lien d'évitement, en-tête logo/langue/thème/bouton connexion, main, footer) ;
   `layouts/admin.vue` (`<header>` = landmark banner contenant barre mobile + barre latérale, menu mobile `aria-expanded`, Échap).
 - `middleware/auth.global.ts` (protection `/admin*`, permission `definePageMeta`, redirection `/login`).
-- `plugins/api.ts` (`$api`), `types/page-meta.d.ts` (`PageMeta.permission`).
+- `plugins/api.ts` (`$api` ; en SSR transmet `cookie`, `host` et `x-forwarded-proto` aux appels internes — sinon les URL absolues
+  valent `http://localhost`), `types/page-meta.d.ts` (`PageMeta.permission`).
 - `composables/` : `useAuth`, `useApiFetch`, `useFormValidation`, `useFlash`, `useMediaUpload`, `useAppHead`,
   `useAdminSection` (section de la barre latérale imposée par une page, ex. fiche d'un média de projet → Projets),
   **`useReauth`** (`run(action)` : rejoue l'action après confirmation du mot de passe ; `ReauthCancelledError`/`isReauthCancelled`),
@@ -136,10 +137,11 @@ Couches serveur :
   `api/admin/config/media.get.ts`, `api/admin/spaces.get.ts`, `api/admin/projects/**` (`index.{get,post}`, `[id].{get,patch,delete}`,
   `[id]/members/{index.get,index.post,[userId].patch,[userId].delete}`, `[id]/candidates.get`, `[id]/keys/{index.get,index.post,[keyId].delete,[keyId]/revoke.post,[keyId]/rotate.post}`,
   `[id]/origins/{index.get,index.post,[originId].delete}`), `api/admin/tokens/{index.get,index.post,[id].delete,[id]/revoke.post}`, `api/admin/audit.get.ts`.
-- `routes/m/[...path].ts` (diffusion des médias, sans cookie).
-- `middleware/csrf.ts`.
+- `routes/m/[...path].ts` (diffusion des médias, sans cookie ; Bearer, Range, OPTIONS depuis B3).
+- `api/v1/**` (API publique, § 9.12).
+- `middleware/api-v1.ts` (entrée de l'API v1), `middleware/csrf.ts`.
 - `plugins/` : `auth-session.ts` (hooks nuxt-auth-utils), `bootstrap-admin.ts` (avertissements au démarrage), `database.ts` (déconnexion Prisma à l'arrêt),
-  `site-url.ts` (avertit en production si `NUXT_SITE_URL` est vide).
+  `site-url.ts` (avertit en production si `NUXT_SITE_URL` est vide), `search-backfill.ts` (indexe la recherche des médias existants).
 - `utils/` (auto-importés par Nitro) : `prisma.ts` (`usePrisma`, `textContains`, `textSearch`, `isUniqueViolation`, `disconnectPrisma`), `auth.ts`, `password.ts`, `rate-limit.ts`, `users.ts`, `password-tokens.ts`,
   **`access.ts`** (`Space`, `LIBRARY`, `spaceFor`, `spaceOfMedia`, `sameSpace`, `describeAccess`, `resolveSpaceAccess`, `assertScope`, `requireSpaceAccess`, `requireMediaAccess` ; vérif. de type enum `ProjectRole`),
   **`projects.ts`** (`projectError`), **`credentials.ts`** (`credentialError` ; vérif. de type enum `TokenType`), **`audit.ts`** (`recordAudit`, `AuditEntry`) ;
@@ -147,7 +149,10 @@ Couches serveur :
 - `lib/` (**imports explicites**, pas d'auto-import) : `storage/{types,flydrive,index}.ts`, `media/{service,delivery,upload,sniff,keys,urls,signing,errors}.ts`,
   `media/handlers/{types,image,index}.ts`, **`projects/service.ts`** (liste, création, réglages, archivage, suppression, membres, candidats, `listSpaces` ;
   `updateMemberRole` → `{ member, previousRole }`, `removeMember` → membre retiré), **`projects/origins.ts`**, **`access/tokens.ts`** (pur, testé : format,
-  CRC, empreinte), **`credentials/service.ts`** (clés, jetons personnels, rotation, révocation, suppression), **`audit/service.ts`** (`listAuditEvents`).
+  CRC, empreinte), **`credentials/service.ts`** (clés, jetons personnels, rotation, révocation, suppression), **`audit/service.ts`** (`listAuditEvents`),
+  B3 : **`access/credentials.ts`**, **`api/{context,problem,rate-limit,cursor,queries,serializers,openapi}.ts`**, **`cache/{lru,revisions}.ts`**,
+  **`media/{cache,range}.ts`**, **`projects/state.ts`** (§ 9.12). Les nouveaux modules **importent explicitement** les utilitaires de
+  `#shared/utils/*` (un auto-import non injecté a causé un `ReferenceError` en production, voir § 18).
   Les **types** exportés de `server/utils` (ex. `Space`) s'importent explicitement (`import type { Space } from '../../utils/access'`).
 
 **shared/**
@@ -161,7 +166,12 @@ Couches serveur :
   `utils/auth.ts` (`REAUTH_WINDOW_SECONDS` = 600, `AUTH_ERROR_CODES`, `isRecentlyVerified`), `utils/audit.ts` (`AUDIT_ACTIONS`, `AUDIT_CATEGORIES`, `auditCategory`) — auto-importés.
 - `utils/users.ts` (USER_STATUSES, userStatus, USER_ERROR_CODES) — auto-importé.
 - `utils/media.ts` (MEDIA_KINDS, MEDIA_VISIBILITIES, ACCEPTED_MEDIA_TYPES, ENABLED_MEDIA_KINDS, mediaKindForMime, extensionForMime, SIGNED_URL_DURATIONS, SIGNED_URL_MAX_TTL, MEDIA_ERROR_CODES) — auto-importé.
-- `schemas/{auth,users,media,projects,credentials}.ts` (zod ; credentials : `createPersonalTokenSchema`, `createProjectKeySchema`, `rotateKeySchema`,
+- `utils/api.ts` (`API_ERRORS` catalogue code → statut + titre, `API_CREDENTIAL_TYPES`, `API_MEDIA_SORTS`, limites, `API_LINK_TTL` 3600 /
+  `API_LINK_BUCKET` 900, `API_SIGNED_URL_TARGETS`), `utils/search.ts` (`normalizeSearchText`, `mediaSearchColumns`) ; `utils/media.ts` a
+  `MEDIA_PRESETS` (['preview'], ex-`MEDIA_VARIANTS` du serveur) ; `utils/permissions.ts` a `CredentialContext` + `credentialScopes` (pur, testé).
+- `schemas/api.ts` (requêtes v1 strictes : `apiMediaListQuerySchema`, `apiProjectListQuerySchema`, `apiSignedUrlBodySchema` ; réponses :
+  `apiMediaSchema`, `apiMediaListSchema`, `apiProjectSchema`, `apiProjectListSchema`, `apiMeSchema`, `apiSignedUrlSchema`, `apiProblemSchema`).
+- `schemas/{auth,users,media,projects,credentials}.ts` (zod ; projects : `updateProjectSchema` accepte `publicListing` ; credentials : `createPersonalTokenSchema`, `createProjectKeySchema`, `rotateKeySchema`,
   `addOriginSchema` (normalise), `confirmPasswordSchema`, `auditQuerySchema`, `AUDIT_PAGE_SIZE` = 50) — import explicite `#shared/schemas/…` (media : + `spaceQuerySchema`, `mediaTargetSchema`, param `project`).
 - `types/auth.d.ts` (augmentation `#auth-utils` : User, UserSession, SecureSessionData).
 
@@ -174,14 +184,15 @@ Identifiants : `String @id @default(cuid())` partout. Horodatages `createdAt @de
 | **User** | `email @unique` (stocké en minuscules), `name?`, `passwordHash?` (null = invitation non acceptée), `role Role @default(EDITOR)`, `locale @default("fr")` (**non utilisé par l'UI**), `isActive @default(true)`, `lastLoginAt?` | sessions, projectMemberships, createdProjects (`ProjectCreatedBy`), uploadedMedia (`MediaUploadedBy`), accessTokens (`AccessTokenCreatedBy`), passwordTokens (`PasswordTokenUser`), issuedPasswordTokens (`PasswordTokenCreatedBy`) |
 | **Session** | `userId`, `tokenHash @unique` (SHA-256 hex du jeton), `ipAddress?`, `userAgent?` (≤191), `expiresAt`, `lastSeenAt`, `passwordVerifiedAt` (B2 : dernière saisie du mot de passe, mode sudo) | user (Cascade) ; index userId, expiresAt |
 | **PasswordToken** | `userId`, `purpose PasswordTokenPurpose`, `tokenHash @unique`, `expiresAt`, `usedAt?`, `createdById?` | user (Cascade), createdBy (SetNull) ; index userId |
-| **Project** | `name`, `slug @unique`, `description?`, `archivedAt?` (lecture seule), `createdById?` | createdBy (SetNull), members, media, folders, accessTokens (clés), tokenGrants (`AccessTokenProject`), allowedOrigins |
+| **Project** | `name`, `slug @unique`, `description?`, `archivedAt?` (lecture seule), `publicListing` (B3, défaut false), `createdById?` | createdBy (SetNull), members, media, folders, accessTokens (clés), tokenGrants (`AccessTokenProject`), allowedOrigins |
 | **ProjectMember** | `projectId`, `userId`, `role ProjectRole`, `createdAt`, `updatedAt` | `@@id([projectId, userId])`, project et user (Cascade) ; index userId |
 | **AccessToken** (B2) | `type TokenType`, `name`, `projectId?` (clés), `environment?` (clés), `userId?` (PAT), `allProjects`, `includeLibrary`, `prefix`, `tokenHash @unique` (SHA-256 hex), `publicValue?` (clé publique seulement), `scopes` (espaces, ordre canonique), `expiresAt?`, `lastUsedAt?`, `lastUsedIp?` (B3), `revokedAt?`, `replacedById?` (rotation), `createdById?` | project (Cascade), user (`AccessTokenOwner`, Cascade), createdBy (`AccessTokenCreatedBy`, SetNull), replacedBy/replaces (`AccessTokenRotation`, SetNull), projects ; index projectId, userId, replacedById |
 | **AccessTokenProject** (B2) | `tokenId`, `projectId` | `@@id([tokenId, projectId])`, Cascade des deux côtés ; index projectId |
 | **AllowedOrigin** | `projectId`, `origin` (normalisée, joker `https://*.x.y` possible) | project (Cascade) ; `@@unique([projectId, origin])` |
+| **CacheRevision** (B3) | `scope @id` (`project:<id>` \| `library`), `revision Int`, `updatedAt` | aucune relation |
 | **AuditEvent** (B2) | `at`, `actorUserId?`, `tokenId?` (B3), `projectId?`, `action`, `targetType?`, `targetId?`, `ipAddress?`, `data Json?` (`label` lisible + détails) | **aucune clé étrangère** (survit aux suppressions) ; index (projectId, at), (actorUserId, at), at |
 | **Folder** | `projectId?` (null = bibliothèque), `parentId?`, `name` | projet (Cascade), arbre (`FolderTree`, Cascade), media ; index (projectId, parentId) — **non utilisé par l'UI (B5)** |
-| **Media** | `projectId?` (**null = bibliothèque** ; un seul espace), `folderId?`, `kind MediaKind`, `visibility Visibility @default(PUBLIC)`, `storageKey @unique` (clé opaque), `version Int @default(1)`, `originalName`, `mimeType`, `size Int` (octets, ≤ 2 Gio sous PG/MySQL), `checksum` (SHA-256 hex), `width?`, `height?`, `duration?`, `title?`, `altText?`, `metadata Json?`, `uploadedById?`, `duplicatedFromId?` (provenance d'une copie), `deletedAt?` (corbeille) | project (**Restrict** : un projet n'emporte jamais ses médias), folder (SetNull), uploadedBy (SetNull), duplicatedFrom/duplicates (`MediaDuplicates`, SetNull), variants ; index (projectId, deletedAt, createdAt), (projectId, checksum), folderId, deletedAt, duplicatedFromId |
+| **Media** | `projectId?` (**null = bibliothèque** ; un seul espace), `folderId?`, `kind MediaKind`, `visibility Visibility @default(PUBLIC)`, `storageKey @unique` (clé opaque), `version Int @default(1)`, `originalName`, `mimeType`, `size Int` (octets, ≤ 2 Gio sous PG/MySQL), `checksum` (SHA-256 hex), `width?`, `height?`, `duration?`, `title?`, `altText?`, `searchTitle?`, `searchName` (défaut `''` = à indexer), `searchAlt?` (B3, normalisées), `metadata Json?`, `uploadedById?`, `duplicatedFromId?` (provenance d'une copie), `deletedAt?` (corbeille) | project (**Restrict** : un projet n'emporte jamais ses médias), folder (SetNull), uploadedBy (SetNull), duplicatedFrom/duplicates (`MediaDuplicates`, SetNull), variants ; index (projectId, deletedAt, createdAt), (projectId, checksum), folderId, deletedAt, duplicatedFromId |
 | **MediaVariant** | `mediaId`, `transformation` (ex. `v3/preview`), `storageKey @unique`, `format` (webp…), `size`, `width`, `height` | media (Cascade) ; `@@unique([mediaId, transformation])` |
 
 Enums : `Role { ADMIN EDITOR DEVELOPER }`, `ProjectRole { OWNER DEVELOPER EDITOR }`, `TokenType { PERSONAL SECRET PUBLISHABLE }`, `PasswordTokenPurpose { INVITATION RESET }`,
@@ -191,7 +202,7 @@ Enums : `Role { ADMIN EDITOR DEVELOPER }`, `ProjectRole { OWNER DEVELOPER EDITOR
 `20260926142611_init`, `20260926151906_update_roles` (VIEWER → EDITOR avec reprise de données ajoutée
 à la main), `20260926163647_password_tokens`, `20260926203012_media_version`,
 `20260928222702_projects_spaces` (B1 ; reprise à la main : médias et dossiers du projet `default` → bibliothèque,
-projet `default` supprimé ; vérifiée sur SQLite, SQL PG/MySQL non exécuté), `20260929103323_b2_credentials` (B2 ; reprises à la
+projet `default` supprimé ; vérifiée sur SQLite, SQL PG/MySQL non exécuté), `20260929112748_b3_api_read` (B3 ; colonnes remplies au démarrage, rien à la main), `20260929103323_b2_credentials` (B2 ; reprises à la
 main : `DELETE FROM AccessToken` en tête — ancien format jamais utilisable — et `UPDATE Session SET passwordVerifiedAt = createdAt` en fin ;
 vérifiée sur SQLite ; la reprise de fin a été ajoutée après application locale : somme de contrôle mise à jour à la main dans
 `_prisma_migrations` de la base de dev).
@@ -227,6 +238,7 @@ Ne jamais modifier une migration publiée.
 | `NUXT_MEDIA_STORAGE_ROOT` | `./data/media` | racine du pilote local (relative au dossier de lancement ou absolue) |
 | `NUXT_MEDIA_STORAGE_PREFIX` | vide | préfixe de toutes les clés |
 | `NUXT_MEDIA_STORAGE_S3_BUCKET/REGION/ENDPOINT/ACCESS_KEY_ID/SECRET_ACCESS_KEY/FORCE_PATH_STYLE` | vides / false | pilote S3 (endpoint vide = AWS) |
+| `NUXT_API_RATE_LIMIT_PUBLISHABLE/SECRET/PERSONAL/AUTH_FAILURES` | 300 / 1200 / 1200 / 30 | requêtes par minute de l'API v1 (`runtimeConfig.api.rateLimit`) |
 | `SURGE_MEDIA_LANG` | locale système, sinon fr | langue de la CLI |
 
 `NUXT_STORAGE_BASE` (étape 1) **n'existe plus** (remplacée par `NUXT_MEDIA_STORAGE_ROOT`).
@@ -238,7 +250,7 @@ En production, `.env` n'est lu que par le script `start` (`node --env-file-if-ex
 
 - `modules`: `@nuxtjs/i18n`, `@nuxtjs/color-mode`, `nuxt-auth-utils`. `css`: `~/assets/css/main.css`. `vite.plugins`: tailwindcss().
 - `optimization.keyedComposables: [{ name: 'useApiFetch', argumentLength: 3 }]`.
-- `runtimeConfig`: `siteUrl`, `session { name: 'surge-media-session', password: '', maxAge: 43200, cookie { sameSite: 'lax', secure: true } }`,
+- `runtimeConfig`: `siteUrl`, `api { rateLimit { publishable, secret, personal, authFailures } }`, `session { name: 'surge-media-session', password: '', maxAge: 43200, cookie { sameSite: 'lax', secure: true } }`,
   `bootstrapAdmin { email, password }`, `media { maxUploadSize, signingSecret, previousSigningSecret, publicUrl, storage { driver, root, prefix, s3 {…} } }`.
 - `routeRules` : `'/**'` → `X-Content-Type-Options: nosniff`, `X-Frame-Options: DENY`, `Referrer-Policy: strict-origin-when-cross-origin` ;
   `'/admin/**'`, `'/login'`, `'/password/**'` → `Cache-Control: no-store`, `X-Robots-Tag: noindex, nofollow`.
@@ -431,7 +443,8 @@ clé `originals/…` ; nouvelle ligne (version 1, mêmes kind/visibility/origina
 | Paramètres signés présents | valide (et, si corbeille, `scope=admin`) → OK ; corbeille sinon → 404 ; expirée → 403 `SIGNATURE_EXPIRED` ; invalide → 403 `SIGNATURE_INVALID` | `private, max-age=min(échéance, 3600)` |
 | Corbeille sans signature | 404 | — |
 | PUBLIC | libre | `public, max-age=31536000, immutable` |
-| PRIVATE sinon | 403 `MEDIA_FORBIDDEN` (B3 : jeton Bearer `media:read` dans l'espace du média) | — |
+| PRIVATE + `Authorization: Bearer` (B3) | clé secrète / PAT avec `media:read` dans l'espace (jamais clé publique, projet archivé, navigateur) ; 401 si invalide | `private, no-cache` + `Vary: Authorization` |
+| PRIVATE sinon | 403 `MEDIA_FORBIDDEN` | — |
 
 - L'administration reçoit des chemins **signés `scope=admin`** pour les médias privés ou en corbeille (`adminMediaPaths`, ~1 h,
   échéance alignée sur 15 min) ; chemins publics inchangés sinon.
@@ -530,6 +543,54 @@ clé `originals/…` ; nouvelle ligne (version 1, mêmes kind/visibility/origina
   → saisie libre, le focus d'erreur suit le champ affiché via un objet `fieldIds` réactif), portées et durée si secrète ; jeton
   personnel : durée, accès (tous / choisis + cases), bibliothèque (interrupteur), portées ; erreur « aucun espace » reliée au fieldset.
 
+### 9.12 API publique v1 en lecture (B3)
+
+- **Entrée** : `server/middleware/api-v1.ts` pour tout `/api/v1/**` : `X-Request-Id` (aussi `requestId` des erreurs), CORS
+  (sous `/api/v1/projects/<id>` : `isOriginAllowed(origin, getProjectState(id).origins)` → `Access-Control-Allow-Origin: <origine>`
+  + `Vary: Origin` + `Expose-Headers` ; ailleurs toute origine ; `openapi.json`/`errors` en `*`), preflight `OPTIONS` → 204 sans
+  authentification, puis `authenticateApiRequest` (sauf documents publics) → `event.context.apiPrincipal`. Erreurs du middleware
+  renvoyées par `sendProblem`.
+- **Authentification** (`server/lib/api/context.ts`) : `?access_token` → 400 ; pas d'en-tête → 401 `TOKEN_MISSING` ; limiteur d'échecs
+  par IP (fenêtre fixe 60 s, `authFailures`, vérifié **avant** la résolution : au-delà, toute requête v1 de l'IP → 429) ;
+  `resolveCredential` (`server/lib/access/credentials.ts` : format+CRC, SHA-256, LRU 60 s y compris les inconnus, révoqué, expiré,
+  propriétaire inactif → `TOKEN_REVOKED`) ; `SECRET_IN_BROWSER` si clé secrète/PAT et (`Origin` ou `Sec-Fetch-Site`) ;
+  `ORIGIN_NOT_ALLOWED` si clé publique avec `Origin` non autorisée ; seau à jetons (`pk:<id>:<ip>`, `sk:<id>`, `pat:<id>`, limites
+  `runtimeConfig.api.rateLimit`) + en-têtes `RateLimit*` ; `touchCredential` (≤ 5 min, `updateMany` conditionnel, sans attendre).
+- **Routes** (`server/api/v1/**`, écrites avec `defineApiHandler(async (event, principal) => …)` qui pose `Cache-Control: private,
+  no-cache` et convertit toute erreur en problème) : `me.get`, `projects/index.get`, `projects/[projectId]/index.get`,
+  `projects/[projectId]/media/index.get`, `…/media/[mediaId]/index.get`, `…/media/[mediaId]/signed-url.post`, `openapi.json.get`,
+  `errors.get`, `[...]` (404). `requireApiProject(event, principal, scope)` : projet via `getProjectState` (cache 60 s), portées via
+  `credentialProjectScopes` (PAT : ligne `ProjectMember` relue à chaque requête, ADMIN = OWNER), 404 `PROJECT_NOT_FOUND` si vide, puis
+  403 `PROJECT_ARCHIVED`, puis 403 `INSUFFICIENT_SCOPE`. `parseApiQuery` / `readApiBody` : validation zod stricte → 400 avec `errors`.
+- **Requêtes** (`server/lib/api/queries.ts`) : `listApiMedia(projectId, query, publicOnly)` — base `projectId + deletedAt null`
+  (+ `PUBLIC` pour clé publique), filtres ajoutés en `AND`, `ids` (ordre conservé, sans curseur), keyset sur (champ, id) dans le même
+  sens (`newest` createdAt desc, `oldest` asc, `name` originalName asc, `size` desc), `take limit+1`, `count` si `withTotal` ;
+  `findApiMedia` ; `listApiProjects` (clé : son projet s'il est actif ; PAT : `archivedAt null` + sélection ou tous, + membre sauf
+  `projects:all`, tri nom/id, curseur `name`).
+- **Contrats** (`shared/schemas/api.ts`, `server/lib/api/serializers.ts`) : `toApiMedia(media, mediaBaseUrl(event), apiLinkExpiry())`
+  (URL absolues, signées pour un privé avec `alignedExpiry(now, 3600, 900)`), `toApiProject(project, scopes)` ; ETag :
+  `weakEtag(['media-list', projet, révision, query, audience, échéance])`, `mediaEtag` (+ échéance si privé), `etagMatches`.
+- **Erreurs** (`server/lib/api/problem.ts`) : `ApiProblem(code, { detail, errors, headers })`, `toProblem` (h3 400/404/405/413/415 →
+  codes, autre → 500 journalisé), `sendProblem` (`application/problem+json`, `no-store`, `WWW-Authenticate` sur 401), `apiBaseUrl(event)`
+  = `NUXT_SITE_URL` ou origine + `/api/v1`. Catalogue : `API_ERRORS` (`shared/utils/api.ts`).
+- **OpenAPI** (`server/lib/api/openapi.ts`) : registre zod local (`Media`, `MediaList`, `Project`, `ProjectList`, `Me`, `SignedUrl`,
+  `Problem`) → `z.toJSONSchema(registry, { uri })`, paramètres de requête dérivés des schémas (`io: 'input'`), `$schema`/`$id` retirés ;
+  document mis en cache par base d'URL.
+- **Caches** (`server/lib/cache/lru.ts` `createLruCache({ max, ttlMs, now })`, `deleteWhere`) : identités (`access/credentials.ts`,
+  `invalidateCredential(hash)` sur révocation/rotation/suppression, `invalidateUserCredentials(userId)` sur PATCH/DELETE d'un compte),
+  état des projets (`projects/state.ts`, `invalidateProjectState` sur réglages/archivage/suppression/origines), métadonnées de diffusion
+  et dérivés (`media/cache.ts` : `findDeliveryMedia`, `variantCache`, `mediaChanged(ids, ...espaces)` appelé par **toutes** les écritures
+  du service médias), révisions (`cache/revisions.ts` : `getRevision` 2 s, `bumpRevision` upsert, ne lève jamais).
+- **Recherche** : `normalizeSearchText` / `mediaSearchColumns` (`shared/utils/search.ts`, NFKD + suppression des marques + minuscules
+  + espaces, ≤ 191) ; écrites par `createMedia`, `replaceMediaFile` (nom), `updateMediaMetadata` (titre/alt), `duplicateMedia` ;
+  `search-backfill.ts` remplit `searchName = ''` au démarrage par lots de 200 puis incrémente les révisions touchées.
+- **Diffusion** : `authorizeDelivery` est **asynchrone** (Bearer : `credentialProjectScopes`/`credentialLibraryScopes`, jamais une clé
+  publique ni un projet archivé, `SECRET_IN_BROWSER` → 403, identifiant invalide → 401 `WWW-Authenticate`), mode `credential` →
+  `private, no-cache` + `Vary: Authorization` ; `resolveRange` (`media/range.ts`, pur) ; `MediaStorage.getStream(key, { start, end })`
+  (local : `createReadStream` borné ; S3 : `GetObjectCommand` avec `Range`, client S3 créé par nous et passé à `S3Driver({ client })`).
+- **Interface** : `PATCH /api/admin/projects/:id` accepte `publicListing` (réglages de l'aperçu, journalisé dans `changes`) ;
+  `GET /api/admin/projects/:id/keys` renvoie aussi `apiBaseUrl` (encart « Accès à l'API »).
+
 ## 10. Référence des API
 
 Format d'erreur (h3) : `{ statusCode, statusMessage, message, data? }` ; **codes métier dans `data.code`** (lus côté client par
@@ -574,7 +635,7 @@ Format d'erreur (h3) : `{ statusCode, statusMessage, message, data? }` ; **codes
 | POST `/api/admin/projects/:id/members` | `project:members` | `{ userId, role }` | 201 `{ member }` · 404 `USER_NOT_FOUND` · 409 `ALREADY_MEMBER` · 422 `ROLE_NOT_ASSIGNABLE` |
 | PATCH `/api/admin/projects/:id/members/:userId` | `project:members` | `{ role }` | `{ member }` · 409 `LAST_OWNER` · 422 |
 | DELETE `/api/admin/projects/:id/members/:userId` | `project:members` (soi-même : `project:read`) | — | 204 · 409 `LAST_OWNER` |
-| GET `/api/admin/projects/:id/keys` | `project:credentials` | — | `{ keys: KeySummary[] }` · 403 `PROJECT_ARCHIVED` |
+| GET `/api/admin/projects/:id/keys` | `project:credentials` | — | `{ keys: KeySummary[], apiBaseUrl }` · 403 `PROJECT_ARCHIVED` |
 | POST `/api/admin/projects/:id/keys` | `project:credentials` (+ sudo si SECRET) | `{ type, name, environment, scopes?, lifetime? }` | 201 `{ key, value }` · 403 `REAUTH_REQUIRED` |
 | POST `/api/admin/projects/:id/keys/:keyId/rotate` | idem | `{ overlap }` | 201 `{ key, value }` · 409 `TOKEN_NOT_ACTIVE` / `TOKEN_REPLACED` |
 | POST `/api/admin/projects/:id/keys/:keyId/revoke` | `project:credentials` | — | 204 · 409 `TOKEN_NOT_ACTIVE` |
@@ -585,7 +646,14 @@ Format d'erreur (h3) : `{ statusCode, statusMessage, message, data? }` ; **codes
 | POST `/api/admin/tokens` | `tokens:personal` + sudo | `{ name, lifetime, scopes?, allProjects?, projectIds?, includeLibrary? }` | 201 `{ token, value }` · 422 `PROJECT_UNAVAILABLE` |
 | POST `/api/admin/tokens/:id/revoke` · DELETE `/api/admin/tokens/:id` | `tokens:personal` | — | 204 · 404 · 409 |
 | GET `/api/admin/audit` | `audit:read` | `?category&project&page` | `{ items, total, page, pageSize: 50, filterProject }` |
-| GET\|HEAD `/m/...` | selon § 9.6 (sans cookie) | — | fichier en flux · 302/304/403/404/405 |
+| GET\|HEAD `/m/...` | selon § 9.6 (sans cookie ; Bearer depuis B3) | `Range` | fichier en flux · 206/302/304/401/403/404/405/416 ; OPTIONS 204 |
+| GET `/api/v1/me` | tout identifiant valable | — | `Me` (credential, user, project, access) |
+| GET `/api/v1/projects` | `project:read` | `?limit&cursor` | `{ items: Project[], nextCursor }` |
+| GET `/api/v1/projects/:projectId` | `project:read` | — | `Project` · 404 `PROJECT_NOT_FOUND` · 403 `PROJECT_ARCHIVED` |
+| GET `/api/v1/projects/:projectId/media` | `media:read` | `?q&kind&visibility&ids&sort&limit&cursor&withTotal` | `{ items: Media[], nextCursor, total? }` · 304 · 400 `INVALID_REQUEST`/`INVALID_CURSOR` · 403 `LISTING_DISABLED` |
+| GET `/api/v1/projects/:projectId/media/:mediaId` | `media:read` | — | `Media` · 304 · 404 `MEDIA_NOT_FOUND` |
+| POST `/api/v1/projects/:projectId/media/:mediaId/signed-url` | `media:read`, pas une clé publique | `{ target?, preset?, expiresIn? }` | `{ url, query, expiresAt }` · 403 `CREDENTIAL_NOT_ALLOWED` |
+| GET `/api/v1/openapi.json` · `/api/v1/errors` | public | — | spécification OpenAPI 3.1 · catalogue des codes |
 
 Contrats de données :
 - `SessionUser` : `{ id, email, name, role, locale }` ; session client : `{ user, loggedInAt }`.
@@ -624,6 +692,8 @@ Contrats de données :
    saisie du slug) → `DELETE` (transaction) → liste des projets avec message ; purge des fichiers en tâche de fond.
 9. **Clé secrète** (B2) : `/keys/new` → `useReauth().run(() => createRequest(input))` → 403 `REAUTH_REQUIRED` ? dialogue →
    `confirm-password` → rejeu → 201 `{ key, value }` → `useFlash` (payload) → `/keys` affiche la valeur une fois (`AdminSecretPanel`, focus).
+10. **Lecture par l'API v1** (B3) : middleware (requestId, CORS, Bearer → cache d'identité, garde-fous, débit) → route → `requireApiProject`
+   (état du projet en cache, portées) → révision de l'espace (2 s) → ETag égal ? 304 : requête keyset → `toApiMedia` (URL signées alignées).
 
 ## 12. Frontend : conventions et patrons
 
@@ -655,7 +725,7 @@ Contrats de données :
 
 - `@nuxtjs/i18n`, stratégie `no_prefix`, cookie `surge-media-locale`, détection navigateur, repli `fr`. `useAppHead` synchronise
   `<html lang dir>`. Sélecteur `AppLocaleSwitcher` (bouton de divulgation, noms des langues dans leur langue, attribut `lang`).
-- Fichiers `i18n/locales/fr.json` (référence) et `en.json` — 718 clés (B2). Espaces de noms : `app, a11y, nav, footer, theme, locale, form,
+- Fichiers `i18n/locales/fr.json` (référence) et `en.json` — 727 clés (B3). Espaces de noms : `app, a11y, nav, footer, theme, locale, form,
   validation, auth, common, landing, login, admin, roles, permissions, errors, pagination, users, password, media, projectRoles, space,
   projects, reauth, scopes, credentials, apiKeys, origins, tokens, audit`. Clés de portées : `scopes.<a>.<b>.{label,short,description}`
   (`scope.replace(':', '.')`) ; statuts accordés : `credentials.status.{key,token}.*` ; actions d'audit : `audit.actions.<catégorie>.<verbe>`.
@@ -723,6 +793,10 @@ Contrats de données :
 | Identifiants opaques `sm_<type>_` + CRC32 + SHA-256 (B2) | architecture § 4.3 : révocation instantanée, rejet sans base, détection de secrets ; pas d'argon2 (256 bits) |
 | Mode sudo en base (`Session.passwordVerifiedAt`), 10 min, rejeu côté client (B2) | architecture § 4.4 ; étendu à la rotation d'une clé secrète ; 422 et non 401 en cas d'échec (sinon `$api` déconnecte) |
 | Suppression d'un identifiant seulement inactif ; rotation aussi pour la clé publique (B2) | liste propre sans perdre la trace (journal) ; recouvrement utile aux frontends aussi |
+| API v1 (B3) : identité par Bearer résolue dans un middleware, routes `defineApiHandler`, RFC 9457, curseurs keyset, ETag de liste par révision | architecture § 6 et § 9 ; aucune requête pour une liste inchangée ; contrat public indépendant de l'administration |
+| Caches L1 seulement (B3), L2 Redis reporté | une instance aujourd'hui ; révisions en base déjà partagées ; limiteurs à partager plus tard |
+| Colonnes de recherche normalisées + indexation au démarrage (B3) | recherche insensible aux accents portable (SQLite, PG, MySQL) sans extension |
+| SQLite WAL activé au démarrage (B3) | lectures (diffusion, API) non bloquées pendant les envois |
 | Journal d'audit sans clés étrangères + écran ADMIN (`audit:read`) (B2) | les entrées survivent aux suppressions ; pas d'écran de journal par projet pour les propriétaires (piste) |
 | SVG exclu, originaux servis tels quels | SVG peut porter du script ; retrait EXIF prévu via les dérivés (phase C) |
 | Recherche : `textSearch` (terme + minuscules) et `mode: 'insensitive'` seulement sous PostgreSQL | portabilité ; SQLite ne gère la casse que pour l'ASCII |
@@ -744,6 +818,9 @@ Contrats de données :
 - Identifiants (B2) : valeur complète renvoyée **une seule fois** (création, rotation) sauf clé publique ; jamais d'empreinte dans une
   réponse ni de secret dans le journal ; portées immuables ; jeton personnel toujours à échéance (30/90/365 j) ; clé secrète 30/90/365 j
   ou sans échéance ; clé publique sans échéance ; environnement obligatoire ; 100 origines max par projet.
+- API v1 (B3) : jamais de cookie ; identifiant seulement en `Authorization: Bearer` ; projet hors périmètre = 404 ; projet archivé = 403 pour
+  tous les identifiants ; clé publique = médias publics, liste seulement si `publicListing` (sinon `ids`) ; URL des médias privés signées ~1 h
+  (tranche de 15 min) ; aucune e-mail, clé de stockage ni empreinte dans les réponses.
 - Actions sensibles (sudo) : clé secrète (création, rotation), jeton personnel (création), membres (ajout, rôle, retrait d'autrui) ;
   jamais pour une action qui retire des droits (révoquer, quitter).
 
@@ -783,6 +860,15 @@ Contrats de données :
   un clic dessus change le thème en cours de test.
 - Région défilante d'un tableau : la nommer par la légende (`caption` avec id), pas par le titre de la section, sinon axe
   `landmark-unique`.
+- **`Sec-Fetch-Mode` n'est pas un signal de navigateur** : le fetch de Node (undici) l'envoie toujours (`cors`) ; seuls `Origin` et
+  `Sec-Fetch-Site` servent au garde-fou `SECRET_IN_BROWSER`.
+- **Auto-import Nitro non injecté** dans un fichier où l'identifiant suit un prédicat de type (`(scope): scope is TokenScope =>
+  (TOKEN_SCOPES as …)`) : typecheck vert mais `ReferenceError` en production (Rollup renomme la vraie constante `X$1`). Dans `server/lib`,
+  importer explicitement depuis `#shared/utils/*` ; contrôle : `grep -rhoE '(const|function) [A-Za-z_]+[$][0-9]+' .output/server/chunks`.
+- **SSR et URL absolues** : les appels internes (`$api` côté serveur) n'ont pas l'hôte d'origine sauf s'il est transmis (fait depuis B3) ;
+  avec `NUXT_SITE_URL` défini, la question ne se pose pas.
+- Tests de l'API v1 : le limiteur d'échecs d'authentification bloque l'IP locale 60 s après 30 refus → placer ce scénario **en dernier** ;
+  le script B3 fabrique des jetons « bien formés inconnus » (base62 + `zlib.crc32`).
 - Tests d'identifiants : vieillir la confirmation du mot de passe avec `node:sqlite` (`UPDATE "Session" SET "passwordVerifiedAt" = <ISO -11 min>
   WHERE "userId" = ?`) ; le module `better-sqlite3` n'est pas résolvable depuis `packages/core` (dépendance de l'adaptateur).
 - Tests d'API : script Node en `scratchpad` (`b1-api-test.mjs` : comptes jetables DEVELOPER/EDITOR créés par invitation puis supprimés,
@@ -817,6 +903,11 @@ Contrats de données :
   `if (isReauthCancelled(error)) return` dans le `catch` (aucun message).
 - Toute action sensible réussie appelle `recordAudit` (action déclarée dans `shared/utils/audit.ts`, libellé `data.label`, jamais de secret),
   avec sa traduction `audit.actions.*` et, si utile, un cas dans `details()` de `pages/admin/audit.vue`.
+- Route de l'API v1 : `defineApiHandler` + `requireApiProject(event, principal, scope)` + `parseApiQuery`/`readApiBody` ; erreurs par
+  `apiProblem(code, detail)` (code ajouté au catalogue `API_ERRORS` et documenté) ; réponse typée par un schéma de `shared/schemas/api.ts`
+  (et ajoutée au registre OpenAPI si nouvelle).
+- Toute écriture de médias passe par le service médias (qui appelle `mediaChanged`) — jamais de `prisma.media.update` direct depuis une
+  route, sinon caches de diffusion et ETag de liste deviennent faux.
 - Valeur secrète à afficher une fois : `useFlash().set({ …, payload })` puis `AdminSecretPanel` sur la page suivante (disparaît au rechargement).
 - Après chaque étape : `pnpm typecheck`, `pnpm test`, `pnpm i18n:check`, `pnpm a11y:contrast` (si couleurs), `db:migration --check`, build de prod,
   audit axe fr/en × clair/sombre, **mise à jour de `setup.md`** (sections + Journal des étapes : ajouté, vérifié, limites, « après git pull »)
@@ -831,9 +922,11 @@ Contrats de données :
 - Tests d'API faits jusqu'ici avec des scripts Node temporaires (fetch + FormData + cookie), rejoués en dev **et** en prod ;
   S3 testé contre `s3rver` (faux S3 local, `pnpm dlx s3rver@3.7.1 --port 4568 --configure-bucket surge-media`).
 - Interface : navigateur intégré (pilotage par JS quand le panneau ne s'affiche pas), audits axe injectés depuis jsDelivr.
-- Automatisé dans le dépôt depuis B1 : tests unitaires Vitest des modules purs (67 tests depuis B2). Le reste (API, interface, axe) reste manuel
+- Automatisé dans le dépôt depuis B1 : tests unitaires Vitest des modules purs (89 tests depuis B3). Le reste (API, interface, axe) reste manuel
   (piste : tests d'intégration API + Playwright + @axe-core/playwright).
 - Viewport du navigateur intégré : 1024 px (DPR 1,25) ; les mises en page à 5 colonnes doivent attendre `xl`.
+- B3 : `b3-api-test.mjs` (97 contrôles sur la build de production, jetons inconnus bien formés, désactivation/réactivation d'un compte,
+  nettoyage de l'audit et des `CacheRevision` de test) ; B1 et B2 rejoués.
 - B2 : scripts `b2-api-test.mjs` (91 contrôles, comptes jetables, nettoyage des entrées d'audit de test par identifiants) et
   `b1-api-test.mjs` rejoués sur la build de production lancée par `core-start-3100` (un `nuxt dev` de l'utilisateur occupait le port 3000 ;
   ne pas l'arrêter). Tests d'interface avec un compte ADMIN temporaire (mot de passe généré, supprimé ensuite).
@@ -844,7 +937,8 @@ Contrats de données :
 amorçage ; gestion des utilisateurs avec liens d'invitation/réinitialisation ; médias phase A (stockage local/S3, envoi, diffusion
 publique/privée/signée, aperçus, remplacement versionné, corbeille, écrans) ; **B1** (espaces bibliothèque/projets, rôles de projet
 et portées, projets et membres, duplication/déplacement, diffusion sans cookie + liens v2, `NUXT_SITE_URL`/`NUXT_MEDIA_PUBLIC_URL`, Vitest) ;
-**B2** (clés publiques/secrètes par environnement avec rotation, jetons personnels, origines CORS, mode sudo, journal d'audit + écran).
+**B2** (clés publiques/secrètes par environnement avec rotation, jetons personnels, origines CORS, mode sudo, journal d'audit + écran) ;
+**B3** (API publique v1 en lecture, caches et révisions, recherche normalisée, Bearer et Range sur `/m/`, OpenAPI, SQLite WAL).
 
 **Section vide** : aucune (la section « à venir » des jetons a été remplacée en B2).
 
@@ -853,17 +947,18 @@ et portées, projets et membres, duplication/déplacement, diffusion sans cookie
 
 **Feuille de route** :
 - **B2 (faite)** : voir § 9.11 et `setup.md` étape 6.
-- **B3 (prochaine)** : résolution de l'identité `Bearer` (`parseAccessToken` → empreinte → cache L1 60 s ; PAT : portées ∩ droits actuels du
-  propriétaire, sélection de projets/bibliothèque ; clés : projet non archivé ; `SECRET_IN_BROWSER` ; mise à jour `lastUsedAt/Ip` ≤ 5 min ;
-  `recordAudit` avec `tokenId`), CORS par projet (`isOriginAllowed`), puis :
-- **B3** : API v1 en lecture (`/api/v1`, Bearer, `/me`, projets, médias liste/détail/`ids`, signed-url, RFC 9457, CORS par projet,
-  limitation de débit, caches L1 + révisions `CacheRevision`, ETag/304, Bearer sur `/m/`, `Range`, OpenAPI, recherche normalisée).
+- **B3 (faite)** : voir § 9.12 et `setup.md` étape 7.
+- **B4 (prochaine)** : écritures v1 (`POST …/media` multipart, PATCH, PUT `/file`, DELETE, duplication vers `{ projectId } | { library: true }`
+  pour un PAT), `recordAudit` avec `tokenId` (acteur = identifiant), `Media.uploadedByTokenId`/`uploadSubject` ; jetons délégués `sm_dt_`
+  (HMAC, charge base64url, contraintes d'envoi, `DelegatedTokenUsage`, émis par clé secrète/PAT), puis :
 - **B4** : API v1 en écriture + jetons délégués `sm_dt_` (envoi, PATCH/PUT/DELETE, duplication, contraintes, `DelegatedTokenUsage`),
   pré-génération des aperçus, concurrence sharp bornée.
 - **B5** : dossiers (arbre par espace dans l'admin, filtre `folder`/`recursive` dans l'API).
 - **Phase C** : transformations à la demande (grammaire réservée : préréglages vs `clé_valeur`, format par l'extension, ordre fixe,
   forme canonique + 301, politique par projet `open|signed|presets`, quotas) — architecture § 10.
 - Puis `@surge-media/client` + composants (Vue d'abord) ; **Phase D** : vidéos et documents (gestionnaires, signatures, Range).
+- Pistes B3 : cache L2 Redis et limiteurs partagés, `X-Forwarded-For` de confiance, cache serveur des résultats de liste, option « liste
+  publique cachable » (CDN), limitation de débit sur `/m/`, interface de documentation (Swagger UI / Scalar) sur l'OpenAPI.
 - Pistes B2 : révocation des jetons d'autrui par un ADMIN (fiche utilisateur), journal par projet pour les propriétaires, purge du journal,
   sudo pour les actions sensibles sur les comptes (liens de mot de passe, rôles), limiteur de confirmation partagé (Redis).
 - Autres pistes notées : commande CLI de secours admin, page « Mon compte », SMTP, copie entre stockages, nettoyage des orphelins,
@@ -877,9 +972,9 @@ et portées, projets et membres, duplication/déplacement, diffusion sans cookie
   nécessaire) ; `npx surge-media init` ne fonctionne tel quel qu'une fois le package installé (ou via `npx @surge-media/core init`) —
   paquet non scopé `surge-media` ? image Docker ? build chez le client ?
 - Portées et format des jetons : **implémentés en B2** selon l'architecture validée ; écarts listés en tête de `architecture-phase-b.md`.
-- **MySQL/MariaDB** : SQL de migration généré mais **jamais exécuté** sur une vraie base (y compris `projects_spaces` et `b2_credentials`) ; PostgreSQL
+- **MySQL/MariaDB** : SQL de migration généré mais **jamais exécuté** sur une vraie base (y compris `projects_spaces`, `b2_credentials` et `b3_api_read`) ; PostgreSQL
   testé seulement via `prisma dev` (PGlite) jusqu'à l'étape 1, et `db reset` jamais exécuté dessus.
-- **S3 réel** (AWS, R2, MinIO) jamais testé (seulement `s3rver`) ; `MediaStorage.copy` (CopyObject) testé seulement en local.
+- **S3 réel** (AWS, R2, MinIO) jamais testé (seulement `s3rver`) ; `MediaStorage.copy` (CopyObject) et la lecture par plage (`Range`) testés seulement en local.
 - Lecteurs d'écran réels jamais testés.
 - **Override `oxc-transform` 0.141.0** hors de la plage de Nuxt 3.21 : fonctionne (typecheck, dev, build), mais à surveiller et retirer.
 - Environnement local actuel (non versionné, indicatif) : compte `admin@surge-media.test` (ADMIN, créé par amorçage ; mot de passe dans

@@ -1,13 +1,10 @@
 import type { H3Event } from 'h3'
-import { extensionForMime } from '#shared/utils/media'
+import { extensionForMime, MEDIA_PRESETS, type MediaPreset } from '#shared/utils/media'
 import { alignedExpiry, signMediaAccess } from './signing'
 
-/**
- * Dérivés nommés servis par /m/ ; les transformations libres (phase C) auront leur propre
- * segment (`w_800,h_600…`), distinct des noms de préréglages (jamais de « _ »).
- */
-export const MEDIA_VARIANTS = ['preview'] as const
-export type MediaVariantName = (typeof MEDIA_VARIANTS)[number]
+/** Dérivés nommés servis par /m/ (shared/utils/media.ts). */
+export const MEDIA_VARIANTS = MEDIA_PRESETS
+export type MediaVariantName = MediaPreset
 
 /** Aperçus de l'administration : liens valables 1 h, échéance alignée sur le quart d'heure. */
 const ADMIN_LINK_TTL = 3600

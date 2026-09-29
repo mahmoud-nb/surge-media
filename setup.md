@@ -65,7 +65,7 @@ surge-media/
       ├─ i18n/locales/     traductions de l'interface (fr.json = référence, en.json)
       ├─ server/
       │  ├─ api/           auth/*, admin/users/*, admin/media/*, admin/projects/* (membres, clés, origines),
-      │  │                 admin/tokens/*, admin/audit, admin/config/*, health
+      │  │                 admin/tokens/*, admin/audit, admin/config/*, health, v1/* (API publique)
       │  ├─ routes/m/      diffusion des médias : /m/<id>/v<version>/…
       │  ├─ lib/storage/   interface MediaStorage + adaptateur Flydrive (local, S3)
       │  ├─ lib/media/     métier des médias : service, gestionnaires par genre, envoi, signature, diffusion
@@ -73,8 +73,10 @@ surge-media/
       │  ├─ lib/access/    format des identifiants d'API (jetons opaques, CRC)
       │  ├─ lib/credentials/  clés de projet et jetons personnels (création, rotation, révocation)
       │  ├─ lib/audit/     lecture du journal d'audit
-      │  ├─ middleware/    csrf.ts
-      │  ├─ plugins/       base, sessions, rappels d'amorçage
+      │  ├─ lib/api/       API v1 : contexte (Bearer, débit), erreurs RFC 9457, requêtes, contrats, OpenAPI
+      │  ├─ lib/cache/     cache mémoire (LRU) et compteurs de révision
+      │  ├─ middleware/    api-v1.ts (CORS, identité, débit), csrf.ts
+      │  ├─ plugins/       base, sessions, rappels d'amorçage, indexation de la recherche
       │  ├─ utils/         usePrisma(), requireAuth(), requireSpaceAccess(), requireRecentPassword(),
       │  │                 recordAudit(), utilisateurs, liens de mot de passe… (auto-importés)
       │  └─ generated/     client Prisma généré (non versionné)
@@ -139,7 +141,7 @@ Depuis la racine :
 | `pnpm dev` | serveur de développement du core |
 | `pnpm build` | build de tous les packages |
 | `pnpm typecheck` | vérification TypeScript (vue-tsc) |
-| `pnpm test` | tests unitaires Vitest (`packages/core/tests/` : rôles et portées, liens signés, projets, identifiants et origines) |
+| `pnpm test` | tests unitaires Vitest (`packages/core/tests/` : rôles et portées, liens signés, projets, identifiants et origines, API v1) |
 | `pnpm i18n:check` | cohérence des traductions et des clés utilisées dans le code |
 | `pnpm a11y:contrast` | contrastes WCAG AA des jetons de couleur (clair et sombre) |
 | `pnpm db:init` | configure la base (fournisseur + URL), applique les migrations, génère le secret de session |
@@ -226,6 +228,7 @@ Le fichier `packages/core/.env` est créé par `pnpm db:init` à partir de `.env
 | `NUXT_MEDIA_STORAGE_ROOT` | `./data/media` | dossier du pilote `local` (relatif à `packages/core` ou absolu) |
 | `NUXT_MEDIA_STORAGE_PREFIX` | — | préfixe de toutes les clés (partage d'un bucket) |
 | `NUXT_MEDIA_STORAGE_S3_*` | — | `BUCKET`, `REGION`, `ENDPOINT` (services compatibles), `ACCESS_KEY_ID`, `SECRET_ACCESS_KEY`, `FORCE_PATH_STYLE` |
+| `NUXT_API_RATE_LIMIT_*` | 300 / 1200 / 1200 / 30 | requêtes par minute de l'API v1 : `PUBLISHABLE` (par clé et IP), `SECRET`, `PERSONAL`, `AUTH_FAILURES` (par IP) |
 
 ### 6.4 Modèle de données (`prisma/schema.prisma`)
 
@@ -234,14 +237,15 @@ Le fichier `packages/core/.env` est créé par `pnpm db:init` à partir de `.env
 | `User` | comptes de l'administration (rôle `ADMIN`/`EDITOR`/`DEVELOPER`, langue préférée, actif ou non) |
 | `Session` | sessions d'administration (seule l'empreinte SHA-256 du jeton est stockée) ; dernière saisie du mot de passe (`passwordVerifiedAt`, « mode sudo ») |
 | `PasswordToken` | lien à usage unique d'invitation ou de réinitialisation du mot de passe (empreinte, échéance, date d'utilisation) |
-| `Project` | application cliente et ses environnements : médias, dossiers, membres, jetons et origines CORS ; archivage (`archivedAt`) |
+| `Project` | application cliente et ses environnements : médias, dossiers, membres, jetons et origines CORS ; archivage (`archivedAt`) ; liste publique pour la clé publique (`publicListing`) |
 | `ProjectMember` | membre d'un projet et son rôle (`OWNER`, `DEVELOPER`, `EDITOR`) |
 | `AccessToken` | identifiant d'API (`type` : jeton personnel `PERSONAL`, clé `SECRET` ou `PUBLISHABLE` d'un projet) : empreinte SHA-256 + préfixe lisible, valeur en clair pour la seule clé publique, environnement (clés), portées immuables, échéance, révocation, clé remplaçante (`replacedById`), dernière utilisation (B3) |
 | `AccessTokenProject` | sélection de projets d'un jeton personnel (s'il ne couvre pas « tous mes projets ») |
 | `AllowedOrigin` | origines autorisées (CORS) pour les appels navigateur d'un projet (tous environnements) |
 | `AuditEvent` | journal d'audit des actions sensibles (sans clés étrangères : survit aux suppressions ; libellé lisible dans `data.label`) |
+| `CacheRevision` | compteur de révision par espace (`project:<id>`, `library`), incrémenté par toute écriture de médias : ETag des listes de l'API |
 | `Folder` | arborescence de dossiers d'un espace (projet, ou bibliothèque si `projectId` est vide) — étape B5 |
-| `Media` | fichier original, dans **un seul espace** (`projectId` vide = bibliothèque) : genre, visibilité publique/privée, clé de stockage opaque, version (incrémentée à chaque remplacement), dimensions, empreinte, alt, corbeille, média d'origine s'il est une copie |
+| `Media` | fichier original, dans **un seul espace** (`projectId` vide = bibliothèque) : genre, visibilité publique/privée, clé de stockage opaque, version (incrémentée à chaque remplacement), dimensions, empreinte, alt, corbeille, média d'origine s'il est une copie ; colonnes de recherche normalisées (`searchTitle`, `searchName`, `searchAlt`) |
 | `MediaVariant` | dérivé généré à la demande puis conservé (v1 : aperçu ; bientôt crop, resize, format, qualité) |
 
 **Règles de portabilité** (le schéma doit fonctionner sur SQLite, PostgreSQL et MySQL) :
@@ -350,7 +354,7 @@ ce qui la rend cachable par un CDN et indépendante des projets.
 | Public | aucune | `public, max-age=1 an, immutable` (l'URL change à chaque remplacement) |
 | Privé, lien de partage | `?exp&kid&sig` pour un fichier précis (original ou aperçu), 7 jours max | `private`, jusqu'à l'échéance (1 h max) |
 | Privé ou corbeille, aperçu d'administration | `?exp&kid&scope=admin&sig` : tout fichier de la version, ~1 h, échéance alignée sur le quart d'heure (même URL pendant 15 min → cache navigateur) | `private`, jusqu'à l'échéance |
-| Privé, jeton d'accès | étape B3 (`Authorization: Bearer`, portée `media:read` dans l'espace du média) | — |
+| Privé, identifiant d'API | `Authorization: Bearer` : clé secrète ou jeton personnel ayant `media:read` dans l'espace du média (jamais une clé publique, jamais depuis un navigateur) | `private, no-cache` + `Vary: Authorization` |
 | Corbeille, autre accès | 404 (existence non révélée, pas de redirection de version) | — |
 
 Liens signés (v2, `server/lib/media/signing.ts`) : HMAC-SHA256 de `v2:<id>:<version>:<droit>:<échéance>`,
@@ -373,6 +377,11 @@ d'accès), `X-Robots-Tag: noindex` hors public.
 | Cache ou CDN devant l'application (Cloudflare, Nginx `proxy_cache`, Varnish) | même domaine ; mettre en cache `/m/*` en respectant `Cache-Control` (les réponses `/m/` ne posent jamais de cookie) |
 | Sous-domaine dédié vers la même application | `NUXT_MEDIA_PUBLIC_URL=https://media.example.com` (aucun cookie d'administration envoyé avec les images) |
 | CDN à domaine propre dont l'origine est l'application | `NUXT_MEDIA_PUBLIC_URL=https://cdn.example.com` |
+
+**Requêtes partielles** : `Range: bytes=…` (une plage) → 206 + `Content-Range`, plage hors du fichier → 416,
+`If-Range` respecté, `Accept-Ranges: bytes` ; sous S3, seule la plage est lue dans le bucket. `OPTIONS`
+répond au preflight (lecture par script avec `Authorization` ou `Range`). Les métadonnées de diffusion
+sont gardées 60 s en mémoire (invalidées à chaque écriture locale ; autres instances : ≤ 60 s).
 
 Les chemins renvoyés à l'interface d'administration restent relatifs ; les adresses à copier
 (adresse publique, lien de partage) sont absolues, construites sur cette base.
@@ -621,9 +630,9 @@ créés et gérés dans l'administration. **Aucun identifiant ne gère les accè
 - **Origines autorisées** (onglet « Origines autorisées », `project:credentials`) : origines exactes
   `schéma://hôte[:port]` normalisées (minuscules, port par défaut et « / » final retirés) ou joker de
   sous-domaine `https://*.example.com` (couvre `a.example.com`, jamais `example.com`) ; 100 au plus
-  par projet ; valables pour tous les environnements. Elles serviront au CORS de l'API v1 (B3).
+  par projet ; valables pour tous les environnements. Elles servent au CORS de l'API v1 (§ 9.9).
   Fonctions pures et testées : `shared/utils/origins.ts` (`normalizeOrigin`, `isOriginAllowed`).
-- **Dernière utilisation** (date, IP) : colonnes prêtes, renseignées par l'API v1 (B3).
+- **Dernière utilisation** (date, IP) : enregistrée par l'API v1 et la diffusion, au plus toutes les 5 minutes.
 
 | Endpoint | Accès | Rôle |
 | --- | --- | --- |
@@ -665,6 +674,71 @@ révocation, suppression), jetons personnels, origines, médias (changement de v
 suppression définitive), comptes (création, modification du rôle ou du statut, suppression, lien de
 mot de passe, fermeture des sessions). L'écran filtre par catégorie et par projet (lien « Voir les
 actions sur ce projet » de l'aperçu d'un projet). Pas encore de purge automatique des anciennes entrées.
+
+### 9.9 API publique v1 (`/api/v1`, lecture)
+
+API REST pour les applications du client (sites, applications mobiles, serveurs, scripts), distincte
+de l'administration. Spécification **OpenAPI 3.1** : `GET /api/v1/openapi.json` (publique, générée
+depuis les schémas zod de `shared/schemas/api.ts`) ; catalogue des erreurs : `GET /api/v1/errors`.
+L'onglet « Clés d'API » d'un projet affiche son adresse et le lien vers la spécification.
+
+- **Authentification** : `Authorization: Bearer <identifiant>` (§ 9.6), **jamais de cookie** (la
+  session d'administration est ignorée) ni de jeton dans l'URL (`?access_token=` → 400).
+  Identifiant absent, invalide, expiré, révoqué (ou compte propriétaire désactivé) → 401 `TOKEN_*`
+  avec `WWW-Authenticate: Bearer`. Clé secrète ou jeton personnel envoyé par un navigateur (en-tête
+  `Origin` ou `Sec-Fetch-Site`) → 403 `SECRET_IN_BROWSER`. Clé publique avec une `Origin` non
+  autorisée pour son projet → 403 `ORIGIN_NOT_ALLOWED` (sans `Origin` : serveur, application mobile).
+- **Périmètre** : le projet est explicite dans l'URL. Projet inexistant ou hors du périmètre de
+  l'identifiant → 404 (existence non révélée) ; projet archivé → 403 `PROJECT_ARCHIVED` (tous les
+  identifiants, `/me` restant lisible). Droits effectifs : clé secrète = ses portées dans son projet ;
+  clé publique = lecture des médias **publics** ; jeton personnel = ses portées ∩ droits actuels de
+  son propriétaire, dans sa sélection (moteur pur `credentialScopes`, testé).
+- **Erreurs RFC 9457** (`application/problem+json`) : `{ type, title, status, code, detail?,
+  instance, requestId, errors? }` ; `code` est stable (catalogue `shared/utils/api.ts`), `requestId`
+  = en-tête `X-Request-Id`, `errors` détaille les paramètres invalides (400 `INVALID_REQUEST`).
+- **CORS** : sous `/api/v1/projects/<id>/…`, seules les origines autorisées du projet reçoivent les
+  en-têtes (preflight `OPTIONS` sans authentification, `Max-Age` 2 h) ; `/me` et `/projects` : toute
+  origine (aucun cookie). Jamais `Access-Control-Allow-Credentials`.
+- **Limitation de débit** (seau à jetons, par minute, `NUXT_API_RATE_LIMIT_*`) : clé publique 300 par
+  (clé, IP), clé secrète et jeton personnel 1 200, échecs d'authentification 30 par IP (au-delà,
+  toutes les requêtes de l'IP reçoivent 429 pendant la fenêtre). En-têtes `RateLimit-Policy` /
+  `RateLimit` (brouillon IETF) et `Retry-After`.
+- **Représentations** : valeurs en minuscules, dates ISO, URL **absolues** ; un média privé reçoit
+  des URL signées (~1 h, échéance alignée sur le quart d'heure, `urlExpiresAt`) ; ni e-mail, ni clé
+  de stockage, ni empreinte.
+- **Cache HTTP** : `Cache-Control: private, no-cache` + `ETag` faible → `If-None-Match` → 304. L'ETag
+  d'une liste combine la **révision de l'espace** (table `CacheRevision`, incrémentée par toute
+  écriture de médias), la requête, l'audience (clé publique ou non) et la tranche des URL signées :
+  une liste inchangée répond 304 **sans exécuter la requête**.
+
+| Endpoint | Portée | Rôle |
+| --- | --- | --- |
+| `GET /api/v1/me` | — | identifiant utilisé : type, nom, préfixe, environnement, portées, échéance ; propriétaire, projet ou sélection |
+| `GET /api/v1/projects?limit&cursor` | `project:read` | projets actifs accessibles, avec les portées effectives |
+| `GET /api/v1/projects/:projectId` | `project:read` | projet (dont `publicListing`) |
+| `GET /api/v1/projects/:projectId/media` | `media:read` | `?q&kind&visibility&ids&sort&limit&cursor&withTotal` → `{ items, nextCursor, total? }` |
+| `GET /api/v1/projects/:projectId/media/:mediaId` | `media:read` | un média actif (clé publique : public seulement) |
+| `POST /api/v1/projects/:projectId/media/:mediaId/signed-url` | `media:read` (clé secrète, jeton personnel) | `{ target: 'file' \| 'preset' \| 'derived', preset?, expiresIn? }` → `{ url, query, expiresAt }` |
+
+**Listes** : pagination par **curseur** (opaque, lié au tri ; `sort` = `newest`, `oldest`, `name`,
+`size`), `limit` 1–100 (24 par défaut), `total` seulement avec `withTotal=true`. `ids=a,b,c`
+(100 au plus) renvoie ces médias dans cet ordre (réhydratation d'une sélection). La **recherche** `q`
+porte sur le titre, le nom de fichier et le texte alternatif, **insensible à la casse et aux accents**
+sur les trois bases (colonnes normalisées `Media.search*`, remplies à l'écriture et, pour les médias
+existants, au démarrage par `server/plugins/search-backfill.ts` ; l'administration en profite aussi).
+Avec une **clé publique**, la liste et la recherche ne sont permises que si le projet a activé la
+**liste publique** (réglage du projet) ; sinon seul `ids` est accepté (403 `LISTING_DISABLED`).
+
+**Diffusion `/m/` avec un identifiant** (§ 7.4) : un média privé est aussi servi à une clé secrète ou un
+jeton personnel ayant `media:read` dans son espace (jamais à une clé publique), réponse
+`private, no-cache` + `Vary: Authorization`.
+
+Exemple :
+
+```bash
+curl -H "Authorization: Bearer $SURGE_MEDIA_SECRET_KEY" \
+  "https://media.example.com/api/v1/projects/<projectId>/media?q=affiche&limit=10"
+```
 
 ## 10. Interface d'administration
 
@@ -777,6 +851,11 @@ pnpm start                          # node --env-file-if-exists=.env .output/ser
 - Stockage local : sauvegarder `NUXT_MEDIA_STORAGE_ROOT` avec la base (volume persistant en conteneur).
 - Le journal d'audit (`AuditEvent`) n'a pas encore de purge automatique : prévoir un nettoyage des
   entrées anciennes selon votre politique de conservation.
+- **SQLite** passe en mode **WAL** au démarrage (lectures non bloquées pendant une écriture) : sauvegarder
+  `surge-media.db` avec ses fichiers `-wal` et `-shm`, ou utiliser `sqlite3 surge-media.db ".backup copie.db"`.
+- API v1 : définir `NUXT_SITE_URL` (adresses absolues de l'API et de la spécification) ; limitation de
+  débit et caches en mémoire du processus (plusieurs instances : prévoir Redis, pas encore branché) ;
+  derrière un proxy, l'IP vue par les limiteurs est celle du proxy (voir plus haut).
 - Placer un CDN ou un cache devant `/m/` est possible : les URL publiques sont immuables et la
   diffusion n'utilise pas de cookie. Limite : passer un média public en privé ou le mettre à la
   corbeille n'efface pas les copies déjà en cache (navigateurs, CDN).
@@ -806,6 +885,10 @@ pnpm start                          # node --env-file-if-exists=.env .output/ser
 | Identifiants opaques `sm_<type>_…` + CRC32, empreinte SHA-256 (pas de JWT durable, pas d'argon2) | révocation instantanée, rejet des jetons mal formés sans base, repérage par les outils de détection de secrets ; 256 bits d'entropie rendent un hachage lent inutile |
 | « Mode sudo » stocké dans la session en base (`passwordVerifiedAt`) | vérifié côté serveur à chaque action sensible, révocable avec la session ; l'interface rejoue l'action après confirmation |
 | Journal d'audit sans clés étrangères | les entrées survivent aux suppressions (comptes, projets, clés) ; libellé lisible conservé dans `data.label` |
+| API v1 : projet dans l'URL, Bearer sans cookie, RFC 9457, curseurs | architecture § 6 : isolation lisible, preflight CORS sans authentification, contrat indépendant de l'administration |
+| Caches L1 en mémoire + compteurs de révision en base | ETag de liste → 304 sans requête, invalidation « générationnelle » sans purge ; le cache partagé (Redis) viendra avec le multi-instances |
+| Colonnes de recherche normalisées | recherche insensible aux accents identique sur SQLite, PostgreSQL et MySQL, sans extension |
+| SQLite en WAL | la diffusion et l'API lisent pendant les envois |
 | **Vitest** 5 (tests des modules purs) | autorisation et signatures : la partie la plus sensible, testée sans serveur ni base |
 | `oxc-transform` forcé en **0.141.0** (`pnpm-workspace.yaml` › `overrides`) | contournement local : le « Contrôle intelligent des applications » de Windows bloque le binaire de la 0.143.0 exigée par Nuxt 3.21 ; hors de la plage déclarée par Nuxt (`^0.143.0`), vérifié par typecheck, dev et build — à retirer dès que possible |
 
@@ -839,6 +922,12 @@ pnpm start                          # node --env-file-if-exists=.env .output/ser
 | Clé secrète ou jeton personnel perdu | la valeur complète n'est jamais conservée : renouveler la clé (rotation avec recouvrement) ou créer un nouveau jeton, puis révoquer l'ancien |
 | Onglets « Clés d'API » et « Origines autorisées » absents | il faut la portée `project:credentials` (rôle de projet OWNER ou DEVELOPER, jamais un EDITOR de plateforme) et un projet non archivé |
 | `TS2321: Excessive stack depth` sur un appel `$api(…)` passé à une fonction générique (ex. `useReauth().run`) | isoler l'appel dans une fonction nommée (`function createRequest(body) { return $api(…) }`) : son type de retour n'est alors calculé qu'une fois |
+| API v1 : 403 `SECRET_IN_BROWSER` | clé secrète ou jeton personnel appelé depuis un navigateur (`Origin`, `Sec-Fetch-Site`) : passer par votre serveur, ou utiliser une clé publique |
+| API v1 : 403 `LISTING_DISABLED` avec une clé publique | activer « Liste publique » dans les réglages du projet, ou demander les médias par `ids` |
+| API v1 : 403 `ORIGIN_NOT_ALLOWED` / pas d'en-tête CORS | ajouter l'origine exacte du site (schéma, hôte, port) dans « Origines autorisées » |
+| API v1 : 429 pour toutes les requêtes d'une machine | plus de 30 identifiants refusés en une minute depuis cette IP : corriger l'identifiant, attendre la fin de la fenêtre |
+| Adresse en `http://localhost/…` (sans port) dans une page de l'administration | rendu serveur sans `NUXT_SITE_URL` : définir la variable (le plugin `$api` transmet aussi l'hôte d'origine depuis cette étape) |
+| `ReferenceError: X is not defined` au runtime alors que le typecheck passe | auto-import de Nitro non injecté (ex. après un prédicat de type `(x): x is T => (X as …)`) : importer explicitement depuis `#shared/utils/…` |
 | Image privée cassée dans une page externe après un changement de secret | lien signé avec l'ancien secret : déclarer celui-ci dans `NUXT_MEDIA_PREVIOUS_SIGNING_SECRET` pendant 7 jours |
 
 ---
@@ -1091,3 +1180,60 @@ Non vérifié : lecteurs d'écran réels ; la migration sur PostgreSQL et MySQL/
 pnpm install
 pnpm db:migrate     # identifiants d'API, journal d'audit, mode sudo + client Prisma
 ```
+
+### Étape 7 — 2026-09-29 — Phase B3 : API publique v1 en lecture
+
+**Cadre** : architecture validée de la phase B (§ 5, § 6, § 9 ; décisions D5–D9, D15).
+
+**Ajouté**
+- Migration `b3_api_read` (3 fournisseurs) : `Project.publicListing`, `CacheRevision`, colonnes de
+  recherche normalisées `Media.searchTitle|searchName|searchAlt` (remplies à l'écriture ; médias
+  existants indexés au démarrage par `server/plugins/search-backfill.ts`).
+- API `/api/v1` (§ 9.9) : `/me`, projets, liste et détail des médias (recherche insensible aux accents,
+  filtres, `ids`, tri, pagination par curseur, `total` sur demande), liens signés (`file`, `preset`,
+  `derived`), catalogue des erreurs et spécification OpenAPI 3.1 générée depuis les schémas zod.
+- Socle : middleware `api-v1` (identifiant de requête, CORS par projet et preflight, authentification
+  Bearer, limitation de débit par seau à jetons), erreurs RFC 9457, garde-fous `SECRET_IN_BROWSER` et
+  `ORIGIN_NOT_ALLOWED`, projet archivé refusé, dernière utilisation des identifiants (≤ 5 min).
+- Caches : identités des jetons (60 s, invalidées à la révocation, la rotation, la suppression et à la
+  modification du compte), état des projets (60 s), métadonnées de diffusion et dérivés, révisions par
+  espace → ETag et 304 (listes sans requête) ; SQLite en mode WAL.
+- Diffusion `/m/` : identifiant d'API pour les médias privés, requêtes partielles (`Range` → 206/416,
+  aussi sous S3), preflight `OPTIONS`.
+- Interface : réglage « Liste publique » d'un projet (journalisé), encart « Accès à l'API » (adresse du
+  projet, lien vers la spécification) sur l'onglet des clés ; recherche de l'administration insensible
+  aux accents.
+- Correctif : pendant le rendu serveur, le plugin `$api` transmet aussi l'hôte et le protocole
+  d'origine (sans `NUXT_SITE_URL`, les adresses absolues valaient `http://localhost`).
+- Tests Vitest : portées des identifiants, curseurs, plages, recherche, limiteur, LRU, ETag, contrat
+  Media v1 (URL signées vérifiées), paramètres, problèmes, OpenAPI (89 tests au total).
+
+**Vérifié** : typecheck, 89 tests Vitest, i18n (727 clés), contrastes, migrations (`--check`), build de
+production. 97 scénarios d'API sur la build de production : authentification (absent, mal formé,
+inconnu, révoqué, expiré, jeton dans l'URL, secret depuis un navigateur, origine de la clé publique,
+cookie ignoré), `/me`, projets (périmètre des clés et des jetons, pagination, 404 hors périmètre),
+médias (ordre, contrat, URL signées alignées, recherche sans accents, filtres, total, curseurs et
+erreurs de curseur, `ids`, paramètres invalides), ETag/304 et invalidation par écriture, clé publique
+et liste publique, CORS et preflight, liens signés (fichier, `derived` jamais l'original, préréglage,
+média public, refus de la clé publique), `/m/` avec Bearer (secret, public, navigateur, invalide, autre
+compte, bibliothèque), dernière utilisation, `Range` (206, suffixe, 416, `If-Range`), OpenAPI, 404,
+archivage, désactivation et révocation immédiates, 429 (quota et échecs d'authentification). B1
+(58) et B2 (91) rejoués sans régression. Interface : réglage « Liste publique » enregistré et
+journalisé, adresse de l'API correcte dès le rendu serveur ; axe-core : 0 violation WCAG 2.2 AA sur
+les pages modifiées en fr/en × clair/sombre.
+Non vérifié : un vrai bucket S3 pour les plages ; PostgreSQL et MySQL/MariaDB réels pour la migration.
+
+**Limites connues**
+- Caches et limiteurs en mémoire du processus : pas encore de second niveau partagé (Redis) pour le
+  multi-instances ; `X-Forwarded-For` non pris en compte derrière un proxy.
+- Pas de cache serveur des résultats de liste (l'ETag évite déjà la requête quand rien n'a changé) ni
+  d'option « liste publique cachable » par un CDN.
+- `/m/` : pas de limitation de débit, ni de décompte des identifiants refusés.
+- Écritures (envoi, modification, suppression, duplication) et jetons délégués : étape B4 ; dossiers : B5.
+
+**Après `git pull`**
+```bash
+pnpm install
+pnpm db:migrate     # liste publique, révisions, colonnes de recherche + client Prisma
+```
+Au premier démarrage, les médias existants sont indexés pour la recherche (message dans le journal du serveur).

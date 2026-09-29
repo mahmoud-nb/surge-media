@@ -2,9 +2,11 @@ import { createReadStream } from 'node:fs'
 import type { MediaListQuery, MediaMetadataInput } from '#shared/schemas/media'
 import { MEDIA_PAGE_SIZE } from '#shared/schemas/media'
 import { ACCEPTED_MEDIA_TYPES, extensionForMime, mediaKindForMime, type MediaKind } from '#shared/utils/media'
+import { mediaSearchColumns, normalizeSearchText } from '#shared/utils/search'
 import type { Media, Prisma, User } from '../../generated/prisma/client'
 import type { Space } from '../../utils/access'
 import { useMediaStorage } from '../storage'
+import { mediaChanged } from './cache'
 import { mediaError } from './errors'
 import { handlerFor, type InspectedMedia } from './handlers'
 import { originalKey, variantPrefix } from './keys'
@@ -19,6 +21,9 @@ import { adminMediaPaths } from './urls'
  *
  * Chaque média appartient à un seul espace : un projet, ou la bibliothèque de l'organisation
  * (projectId null). Les contrôles d'accès sont faits par les routes (server/utils/access.ts).
+ *
+ * Toute écriture passe par `mediaChanged` (cache de diffusion invalidé, révision de l'espace
+ * incrémentée pour les ETag de l'API) et tient à jour les colonnes de recherche normalisées.
  */
 
 const UPLOADER = { select: { id: true, name: true, email: true } } as const
@@ -91,7 +96,9 @@ export async function listMedia(space: Space, query: MediaListQuery) {
     deletedAt: query.status === 'trash' ? { not: null } : null,
   }
   if (query.q) {
-    where.OR = textSearch(['originalName', 'title', 'altText'], query.q)
+    // Colonnes normalisées : insensible à la casse et aux accents sur les trois bases.
+    const term = normalizeSearchText(query.q)
+    where.OR = [{ searchTitle: { contains: term } }, { searchName: { contains: term } }, { searchAlt: { contains: term } }]
   }
   if (query.kind) where.kind = query.kind as MediaKind
   if (query.visibility) where.visibility = query.visibility
@@ -151,6 +158,7 @@ function fileData(upload: ReceivedUpload, analyzed: AnalyzedUpload, storageKey: 
     kind: analyzed.kind,
     storageKey,
     originalName: upload.filename,
+    searchName: normalizeSearchText(upload.filename),
     mimeType: analyzed.mimeType,
     size: upload.size,
     checksum: upload.checksum,
@@ -168,17 +176,22 @@ export async function createMedia(space: Space, upload: ReceivedUpload, input: M
   const key = await storeOriginal(upload, analyzed)
   try {
     const prisma = await usePrisma()
-    return await prisma.media.create({
+    const title = input.title ?? null
+    const altText = input.altText ?? null
+    const created = await prisma.media.create({
       data: {
         ...fileData(upload, analyzed, key),
+        ...mediaSearchColumns({ originalName: upload.filename, title, altText }),
         projectId: projectIdOf(space),
         visibility: input.visibility ?? 'PUBLIC',
-        title: input.title ?? null,
-        altText: input.altText ?? null,
+        title,
+        altText,
         uploadedById: actor.id,
       },
       include: { uploadedBy: UPLOADER },
     })
+    await mediaChanged([created.id], space)
+    return created
   }
   catch (error) {
     await storage.delete(key)
@@ -211,23 +224,32 @@ export async function replaceMediaFile(media: Media, upload: ReceivedUpload): Pr
   await prisma.mediaVariant.deleteMany({ where: { mediaId: media.id, transformation: { startsWith: `v${media.version}/` } } })
   await storage.delete(media.storageKey)
   await storage.deletePrefix(`${variantPrefix(media.id)}v${media.version}-`)
+  await mediaChanged([media.id], spaceOfMedia(media))
   return findMediaOrFail(media.id)
 }
 
 export async function updateMediaMetadata(media: Media, input: MediaMetadataInput): Promise<MediaWithUploader> {
+  const data: Prisma.MediaUpdateInput = { ...input }
+  if (input.title !== undefined) data.searchTitle = input.title ? normalizeSearchText(input.title) : null
+  if (input.altText !== undefined) data.searchAlt = input.altText ? normalizeSearchText(input.altText) : null
   const prisma = await usePrisma()
-  return prisma.media.update({ where: { id: media.id }, data: input, include: { uploadedBy: UPLOADER } })
+  const updated = await prisma.media.update({ where: { id: media.id }, data, include: { uploadedBy: UPLOADER } })
+  await mediaChanged([media.id], spaceOfMedia(media))
+  return updated
 }
 
 /** Corbeille : le média n'est plus diffusé mais reste restaurable. */
 export async function trashMedia(media: Media): Promise<void> {
   const prisma = await usePrisma()
   await prisma.media.update({ where: { id: media.id }, data: { deletedAt: new Date() } })
+  await mediaChanged([media.id], spaceOfMedia(media))
 }
 
 export async function restoreMedia(media: Media): Promise<MediaWithUploader> {
   const prisma = await usePrisma()
-  return prisma.media.update({ where: { id: media.id }, data: { deletedAt: null }, include: { uploadedBy: UPLOADER } })
+  const restored = await prisma.media.update({ where: { id: media.id }, data: { deletedAt: null }, include: { uploadedBy: UPLOADER } })
+  await mediaChanged([media.id], spaceOfMedia(media))
+  return restored
 }
 
 /**
@@ -238,6 +260,7 @@ export async function purgeMedia(media: Media): Promise<void> {
   if (!media.deletedAt) throw mediaError(409, 'NOT_IN_TRASH')
   const prisma = await usePrisma()
   await prisma.media.delete({ where: { id: media.id } })
+  await mediaChanged([media.id], spaceOfMedia(media))
   await deleteStoredFiles([media])
 }
 
@@ -272,7 +295,7 @@ export async function duplicateMedia(media: Media, target: Space, actor: User): 
   await storage.copy(media.storageKey, key)
   try {
     const prisma = await usePrisma()
-    return await prisma.media.create({
+    const copy = await prisma.media.create({
       data: {
         projectId: projectIdOf(target),
         kind: media.kind,
@@ -287,6 +310,7 @@ export async function duplicateMedia(media: Media, target: Space, actor: User): 
         duration: media.duration,
         title: media.title,
         altText: media.altText,
+        ...mediaSearchColumns(media),
         // Json? : null s'omet (Prisma exige sinon une valeur spéciale, importée à l'exécution).
         ...(media.metadata === null ? {} : { metadata: media.metadata as Prisma.InputJsonValue }),
         duplicatedFromId: media.id,
@@ -294,6 +318,8 @@ export async function duplicateMedia(media: Media, target: Space, actor: User): 
       },
       include: { uploadedBy: UPLOADER },
     })
+    await mediaChanged([copy.id], target)
+    return copy
   }
   catch (error) {
     await storage.delete(key)
@@ -308,9 +334,11 @@ export async function duplicateMedia(media: Media, target: Space, actor: User): 
 export async function moveMedia(media: Media, target: Space): Promise<MediaWithUploader> {
   if (media.deletedAt) throw mediaError(409, 'IN_TRASH')
   const prisma = await usePrisma()
-  return prisma.media.update({
+  const moved = await prisma.media.update({
     where: { id: media.id },
     data: { projectId: projectIdOf(target), folderId: null },
     include: { uploadedBy: UPLOADER },
   })
+  await mediaChanged([media.id], spaceOfMedia(media), target)
+  return moved
 }

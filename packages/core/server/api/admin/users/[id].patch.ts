@@ -1,4 +1,5 @@
 import { updateUserSchema } from '#shared/schemas/users'
+import { invalidateUserCredentials } from '../../../lib/access/credentials'
 
 /**
  * PATCH /api/admin/users/:id — { name?, role?, isActive? }.
@@ -19,6 +20,9 @@ export default defineEventHandler(async (event) => {
     prisma.user.update({ where: { id: target.id }, data: input }),
     ...(input.isActive === false ? [prisma.session.deleteMany({ where: { userId: target.id } })] : []),
   ])
+
+  // Rôle ou statut changé : les jetons personnels du compte sont relus à la requête suivante.
+  invalidateUserCredentials(target.id)
 
   const changes: Record<string, { from: unknown, to: unknown }> = {}
   if (input.role !== undefined && input.role !== target.role) changes.role = { from: target.role, to: input.role }

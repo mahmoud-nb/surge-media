@@ -547,7 +547,9 @@
       "slugAuto": "Facultatif. Sans saisie : « {slug} ».",
       "slugAutoEmpty": "Facultatif. Sans saisie, il est déduit du nom.",
       "description": "Description",
-      "descriptionHint": "Facultative. Par exemple l'application et les environnements concernés."
+      "descriptionHint": "Facultative. Par exemple l'application et les environnements concernés.",
+      "publicListing": "Liste publique",
+      "publicListingHint": "Autorise la clé publique à lister et chercher les médias publics du projet (galerie sur un site). Désactivée, elle ne lit un média que par son identifiant."
     },
     "create": {
       "meta": {
@@ -877,6 +879,14 @@
       "submit": "Créer la clé",
       "submitting": "Création de la clé en cours…",
       "created": "Clé « {name} » créée."
+    },
+    "endpoint": {
+      "title": "Accès à l'API",
+      "description": "Les applications appellent l'API v1 à cette adresse, avec une clé dans l'en-tête Authorization: Bearer.",
+      "label": "Adresse de l'API du projet",
+      "openapi": "Spécification OpenAPI (JSON)",
+      "listingOn": "Liste publique activée",
+      "listingOff": "Liste publique désactivée"
     }
   },
   "origins": {
@@ -1098,7 +1108,8 @@
     "fields": {
       "name": "nom",
       "slug": "identifiant",
-      "description": "description"
+      "description": "description",
+      "publicListing": "liste publique"
     }
   }
 }

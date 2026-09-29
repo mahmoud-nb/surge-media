@@ -1,10 +1,11 @@
 import { MAX_ALLOWED_ORIGINS } from '#shared/utils/credentials'
 import { isWildcardOrigin } from '#shared/utils/origins'
 import type { AllowedOrigin } from '../../generated/prisma/client'
+import { invalidateProjectState } from './state'
 
 /**
- * Origines autorisées (CORS) d'un projet, pour tous ses environnements. Elles serviront au
- * preflight et au contrôle des clés publiques et jetons délégués de l'API v1 (B3–B4) ; la saisie
+ * Origines autorisées (CORS) d'un projet, pour tous ses environnements. Elles servent au
+ * preflight et au contrôle des clés publiques de l'API v1 (jetons délégués : B4) ; la saisie
  * est normalisée par le schéma partagé (addOriginSchema).
  */
 
@@ -25,7 +26,9 @@ export async function addOrigin(projectId: string, origin: string) {
     throw credentialError(409, 'ORIGIN_LIMIT_REACHED')
   }
   try {
-    return toOriginSummary(await prisma.allowedOrigin.create({ data: { projectId, origin } }))
+    const created = await prisma.allowedOrigin.create({ data: { projectId, origin } })
+    invalidateProjectState(projectId)
+    return toOriginSummary(created)
   }
   catch (error) {
     if (isUniqueViolation(error)) throw credentialError(409, 'ORIGIN_EXISTS')
@@ -38,5 +41,6 @@ export async function removeOrigin(projectId: string, originId: string): Promise
   const origin = await prisma.allowedOrigin.findFirst({ where: { id: originId, projectId } })
   if (!origin) throw createError({ statusCode: 404, statusMessage: 'Origin not found' })
   await prisma.allowedOrigin.delete({ where: { id: origin.id } })
+  invalidateProjectState(projectId)
   return origin
 }

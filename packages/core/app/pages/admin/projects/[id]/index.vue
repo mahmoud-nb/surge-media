@@ -37,9 +37,9 @@ function errorMessage(error: unknown): string {
 // ─── Réglages ────────────────────────────────────────────────────────────────
 
 const FIELD_IDS = { name: 'project-name', slug: 'project-slug', description: 'project-description' } as const
-const form = reactive({ name: '', slug: '', description: '' })
+const form = reactive({ name: '', slug: '', description: '', publicListing: false })
 watch(project, (value) => {
-  if (value) Object.assign(form, { name: value.name, slug: value.slug, description: value.description ?? '' })
+  if (value) Object.assign(form, { name: value.name, slug: value.slug, description: value.description ?? '', publicListing: value.publicListing })
 }, { immediate: true })
 
 const { validate, message, clear, setError } = useFormValidation(updateProjectSchema, FIELD_IDS)
@@ -250,6 +250,7 @@ async function remove() {
               <UiFormField v-slot="field" :id="FIELD_IDS.description" :label="t('projects.fields.description')" :hint="t('projects.fields.descriptionHint')" :error="message('description')">
                 <UiInput v-bind="field" v-model="form.description" name="description" autocomplete="off" :maxlength="PROJECT_DESCRIPTION_MAX_LENGTH" @input="clear('description')" />
               </UiFormField>
+              <UiSwitch v-model="form.publicListing" :label="t('projects.fields.publicListing')" :description="t('projects.fields.publicListingHint')" />
               <div class="flex justify-end">
                 <UiButton type="submit" :loading="saving">
                   {{ t('common.save') }}

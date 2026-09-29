@@ -1,8 +1,30 @@
 # Phase B — Projets, médias, jetons d'accès et cache
 
 > **Statut : VALIDÉE — révision 2 (2026-09-29), toutes les décisions D1–D15 confirmées par l'utilisateur.**
-> Référence d'implémentation de la phase B. Avancement : **B1 et B2 réalisées** (voir `setup.md`, Journal,
-> étapes 5 et 6, et `.claude/project-context.md`) ; prochaine sous-étape : **B3** (API v1 en lecture).
+> Référence d'implémentation de la phase B. Avancement : **B1, B2 et B3 réalisées** (voir `setup.md`,
+> Journal, étapes 5 à 7, et `.claude/project-context.md`) ; prochaine sous-étape : **B4** (API v1 en
+> écriture + jetons délégués).
+>
+> Écarts et précisions de B3 (API v1 en lecture) :
+> - **Caches : L1 mémoire seulement** (LRU : identités 60 s, état des projets 60 s, métadonnées de
+>   diffusion 60 s, dérivés 10 min, révisions 2 s) + compteurs `CacheRevision` en base ; le L2 Redis
+>   (D9, facultatif) et le cache serveur des résultats de liste ne sont pas faits (l'ETag de liste répond
+>   déjà 304 sans requête). Limiteurs en mémoire.
+> - Garde-fou navigateur : `Origin` ou `Sec-Fetch-Site` seulement (**pas `Sec-Fetch-Mode`**, envoyé par le
+>   fetch de Node). Au-delà de 30 identifiants refusés par minute, **toutes** les requêtes v1 de l'IP
+>   reçoivent 429 pendant la fenêtre. `/m/` avec Bearer : ni limitation de débit ni décompte d'échecs.
+> - Projet archivé : **tous** les identifiants reçoivent 403 `PROJECT_ARCHIVED` sur ses routes (y compris
+>   un PAT), il disparaît de `GET /projects` ; `/me` reste lisible.
+> - CORS : hors `/projects/<id>/…` (`/me`, `/projects`), toute origine ; documents publics `openapi.json` et
+>   `errors` en `*`. `type` des problèmes = `<base>/api/v1/errors#CODE` (catalogue servi par `GET /api/v1/errors`).
+> - ETag du détail d'un média **privé** : inclut la tranche des URL signées (pas de 304 qui prolongerait
+>   des URL expirées). Réponse `signed-url` : `{ url, query, expiresAt }` (`query` = signature seule,
+>   utile pour `derived`) ; échéance exacte (pas alignée) pour ces liens demandés explicitement.
+> - Clé publique sans liste publique : `?ids=` autorisé, liste/recherche → 403 `LISTING_DISABLED`.
+>   Codes ajoutés : `INVALID_CURSOR`, `CREDENTIAL_NOT_ALLOWED` (lien signé demandé par une clé publique),
+>   `LISTING_DISABLED`, `NOT_FOUND`, `METHOD_NOT_ALLOWED` (réservé), `INTERNAL_ERROR`.
+> - `MEDIA_PRESETS` déplacé dans `shared/utils/media.ts` ; `MediaStorage.getStream(key, range?)` ; SQLite WAL
+>   activé au démarrage ; colonnes de recherche remplies au démarrage pour l'existant.
 >
 > Écarts et précisions de B2 (identifiants, mode sudo, audit) :
 > - `AccessToken` a en plus `replacedById` (rotation : clé remplaçante, relation `AccessTokenRotation`) ;
@@ -29,9 +51,8 @@
 >   bibliothèque) ; le PAT (`includeLibrary`) s'appuiera dessus ;
 > - la duplication s'appelle aussi dans l'administration (`POST /api/admin/media/:id/duplicate` et `/move`) ; la route
 >   équivalente de l'API v1 reste prévue en B4 ;
-> - les colonnes `searchTitle/searchName/searchAlt`, `uploadedByTokenId`, `uploadSubject` et les tables de B3–B4
->   (`DelegatedTokenUsage`, `CacheRevision`) ne sont **pas** encore créées ; `Project.publicListing` non plus (B3).
->   (`AccessTokenProject` et `AuditEvent` ont été créées en B2.)
+> - `uploadedByTokenId`, `uploadSubject` et `DelegatedTokenUsage` (B4) ne sont **pas** encore créés.
+>   (`AccessTokenProject` et `AuditEvent` : B2 ; colonnes `search*`, `CacheRevision`, `Project.publicListing` : B3.)
 
 ## 0. Révision 2 — ce qui a changé après les remarques de l'utilisateur
 

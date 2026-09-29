@@ -131,3 +131,32 @@ export type TokenOptionalScope = (typeof TOKEN_OPTIONAL_SCOPES)[number]
 export function tokenScopes(optional: readonly string[]): TokenScope[] {
   return TOKEN_SCOPES.filter(scope => (TOKEN_BASE_SCOPES as readonly string[]).includes(scope) || optional.includes(scope))
 }
+
+/**
+ * Ce qu'il faut savoir d'un identifiant pour calculer ses portées dans un espace (projet actif,
+ * ou bibliothèque pour un jeton personnel) — sans accès à la base :
+ *   - jeton personnel : l'espace fait-il partie de sa sélection, et quelles portées son
+ *     propriétaire y a-t-il aujourd'hui (spaceScopes) ;
+ *   - clé secrète ou publique : l'espace est-il son projet.
+ */
+export type CredentialContext =
+  | { type: 'PERSONAL', scopes: readonly string[], inSelection: boolean, ownerScopes: readonly Scope[] }
+  | { type: 'SECRET', scopes: readonly string[], ownProject: boolean }
+  | { type: 'PUBLISHABLE', ownProject: boolean }
+
+/**
+ * Portées effectives d'un identifiant dans un espace ; liste vide = espace invisible (404).
+ * Un jeton personnel ne dépasse jamais les droits actuels de son propriétaire ; une clé publique ne
+ * lit que les médias publics (restriction appliquée par l'appelant sur les requêtes).
+ */
+export function credentialScopes(credential: CredentialContext): TokenScope[] {
+  switch (credential.type) {
+    case 'PERSONAL':
+      if (!credential.inSelection) return []
+      return TOKEN_SCOPES.filter(scope => credential.scopes.includes(scope) && credential.ownerScopes.includes(scope))
+    case 'SECRET':
+      return credential.ownProject ? TOKEN_SCOPES.filter(scope => credential.scopes.includes(scope)) : []
+    case 'PUBLISHABLE':
+      return credential.ownProject ? [...TOKEN_BASE_SCOPES] : []
+  }
+}
