@@ -25,10 +25,11 @@ datasource db {
 
 // ─── Utilisateurs & sessions (interface d'administration) ────────────────────
 
+/// Rôle de plateforme ; il plafonne aussi le rôle dans chaque projet (shared/utils/permissions.ts)
 enum Role {
-  ADMIN // tous les privilèges, y compris la gestion des utilisateurs
-  EDITOR // gestion des médias uniquement
-  DEVELOPER // gestion des médias, des jetons d'accès et des API (projets, CORS)
+  ADMIN // tous les privilèges : utilisateurs, tous les projets, bibliothèque
+  EDITOR // bibliothèque ; médias des projets dont il est membre
+  DEVELOPER // bibliothèque ; création de projets ; projets dont il est membre (clés d'API, CORS)
 }
 
 model User {
@@ -47,6 +48,8 @@ model User {
   updatedAt    DateTime  @updatedAt
 
   sessions             Session[]
+  projectMemberships   ProjectMember[]
+  createdProjects      Project[]       @relation("ProjectCreatedBy")
   uploadedMedia        Media[]         @relation("MediaUploadedBy")
   accessTokens         AccessToken[]   @relation("AccessTokenCreatedBy")
   passwordTokens       PasswordToken[] @relation("PasswordTokenUser")
@@ -98,20 +101,47 @@ model PasswordToken {
 
 // ─── Projets, jetons d'accès API & CORS ──────────────────────────────────────
 
-/// Regroupe les médias, dossiers, jetons et origines d'une application cliente
-model Project {
-  id          String   @id @default(cuid())
-  name        String
-  /// Identifiant lisible utilisé dans les URLs et les SDK frontend
-  slug        String   @unique
-  description String?
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+/// Rôle d'un membre dans un projet, plafonné par son rôle de plateforme (shared/utils/permissions.ts)
+enum ProjectRole {
+  OWNER // tout le projet : réglages, membres, clés d'API, origines, médias
+  DEVELOPER // clés d'API, origines CORS et médias
+  EDITOR // médias
+}
 
+/// Application cliente (et ses environnements) : ses médias, dossiers, membres, jetons et origines
+model Project {
+  id          String    @id @default(cuid())
+  name        String
+  /// Identifiant lisible (minuscules, chiffres, tirets), unique dans l'installation
+  slug        String    @unique
+  description String?
+  /// Projet archivé : lecture seule, clés d'API refusées ; étape préalable à la suppression
+  archivedAt  DateTime?
+  createdById String?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  createdBy      User?           @relation("ProjectCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
+  members        ProjectMember[]
   media          Media[]
   folders        Folder[]
   accessTokens   AccessToken[]
   allowedOrigins AllowedOrigin[]
+}
+
+/// Membre d'un projet (les ADMIN accèdent à tous les projets sans en être membres)
+model ProjectMember {
+  projectId String
+  userId    String
+  role      ProjectRole
+  createdAt DateTime    @default(now())
+  updatedAt DateTime    @updatedAt
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([projectId, userId])
+  @@index([userId])
 }
 
 /// Jeton d'accès API d'une application tierce, rattaché à un seul projet
@@ -165,16 +195,17 @@ enum Visibility {
   PRIVATE // requiert un jeton d'accès ou une URL signée
 }
 
-/// Arborescence de dossiers d'un projet (unicité des noms par parent vérifiée par l'API)
+/// Arborescence de dossiers d'un espace (unicité des noms par parent vérifiée par l'API)
 model Folder {
   id        String   @id @default(cuid())
-  projectId String
+  /// Espace du dossier : un projet, ou null = bibliothèque de l'organisation
+  projectId String?
   parentId  String?
   name      String
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  project  Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  project  Project? @relation(fields: [projectId], references: [id], onDelete: Cascade)
   parent   Folder?  @relation("FolderTree", fields: [parentId], references: [id], onDelete: Cascade)
   children Folder[] @relation("FolderTree")
   media    Media[]
@@ -182,47 +213,54 @@ model Folder {
   @@index([projectId, parentId])
 }
 
-/// Fichier original téléversé
+/// Fichier original téléversé. Il appartient à un seul espace : un projet, ou la bibliothèque
+/// de l'organisation (projectId null). Réutilisation ailleurs = duplication (copie indépendante).
 model Media {
-  id           String     @id @default(cuid())
-  projectId    String
-  folderId     String?
-  kind         MediaKind
-  visibility   Visibility @default(PUBLIC)
+  id               String     @id @default(cuid())
+  projectId        String?
+  folderId         String?
+  kind             MediaKind
+  visibility       Visibility @default(PUBLIC)
   /// Clé opaque du fichier original dans le stockage (générée par le serveur, jamais exposée)
-  storageKey   String     @unique
+  storageKey       String     @unique
   /// Incrémentée à chaque remplacement du fichier : fait partie des URL de diffusion (cache immuable)
-  version      Int        @default(1)
-  originalName String
-  mimeType     String
+  version          Int        @default(1)
+  originalName     String
+  mimeType         String
   /// Taille en octets (entier 32 bits sous PostgreSQL/MySQL : 2 Gio maximum)
-  size         Int
+  size             Int
   /// Empreinte SHA-256 du contenu (détection des doublons)
-  checksum     String
-  width        Int?
-  height       Int?
+  checksum         String
+  width            Int?
+  height           Int?
   /// Durée en secondes (vidéo, audio)
-  duration     Float?
-  title        String?
+  duration         Float?
+  title            String?
   /// Texte alternatif par défaut (accessibilité)
-  altText      String?
+  altText          String?
   /// Métadonnées techniques extraites à l'import (EXIF, profil colorimétrique…)
-  metadata     Json?
-  uploadedById String?
-  createdAt    DateTime   @default(now())
-  updatedAt    DateTime   @updatedAt
+  metadata         Json?
+  uploadedById     String?
+  /// Média d'origine d'une copie créée par duplication
+  duplicatedFromId String?
+  createdAt        DateTime   @default(now())
+  updatedAt        DateTime   @updatedAt
   /// Suppression logique (corbeille) ; null = média actif
-  deletedAt    DateTime?
+  deletedAt        DateTime?
 
-  project    Project        @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  folder     Folder?        @relation(fields: [folderId], references: [id], onDelete: SetNull)
-  uploadedBy User?          @relation("MediaUploadedBy", fields: [uploadedById], references: [id], onDelete: SetNull)
-  variants   MediaVariant[]
+  /// Restrict : supprimer un projet exige de traiter ses médias avant (aucun fichier orphelin)
+  project        Project?       @relation(fields: [projectId], references: [id], onDelete: Restrict)
+  folder         Folder?        @relation(fields: [folderId], references: [id], onDelete: SetNull)
+  uploadedBy     User?          @relation("MediaUploadedBy", fields: [uploadedById], references: [id], onDelete: SetNull)
+  duplicatedFrom Media?         @relation("MediaDuplicates", fields: [duplicatedFromId], references: [id], onDelete: SetNull)
+  duplicates     Media[]        @relation("MediaDuplicates")
+  variants       MediaVariant[]
 
-  @@index([projectId, createdAt])
+  @@index([projectId, deletedAt, createdAt])
   @@index([projectId, checksum])
   @@index([folderId])
   @@index([deletedAt])
+  @@index([duplicatedFromId])
 }
 
 /// Dérivé d'un média (crop, resize, optimisation…) généré à la demande puis mis en cache

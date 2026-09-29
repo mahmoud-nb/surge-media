@@ -13,6 +13,7 @@
     "dev": "pnpm --filter @surge-media/core dev",
     "build": "pnpm -r build",
     "typecheck": "pnpm -r typecheck",
+    "test": "pnpm --filter @surge-media/core test",
     "cli": "pnpm --filter @surge-media/core cli",
     "db:init": "pnpm --filter @surge-media/core db:init",
     "db:migrate": "pnpm --filter @surge-media/core db:migrate",

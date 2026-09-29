@@ -26,6 +26,9 @@ export default defineNuxtConfig({
   },
 
   runtimeConfig: {
+    // URL publique de l'installation (ex. https://media.example.com), demandée par
+    // `surge-media init` ; à défaut, déduite de chaque requête — NUXT_SITE_URL
+    siteUrl: '',
     // nuxt-auth-utils : cookie scellé HTTP-only (secret : NUXT_SESSION_PASSWORD).
     session: {
       name: 'surge-media-session',
@@ -46,6 +49,9 @@ export default defineNuxtConfig({
     media: {
       maxUploadSize: 25 * 1024 * 1024, // octets — NUXT_MEDIA_MAX_UPLOAD_SIZE
       signingSecret: '', // liens signés des médias privés — NUXT_MEDIA_SIGNING_SECRET
+      previousSigningSecret: '', // ancien secret, accepté pendant une rotation — NUXT_MEDIA_PREVIOUS_SIGNING_SECRET
+      // Base des URL de diffusion (CDN, domaine dédié) ; vide = NUXT_SITE_URL — NUXT_MEDIA_PUBLIC_URL
+      publicUrl: '',
       storage: {
         driver: 'local', // local | s3 — NUXT_MEDIA_STORAGE_DRIVER
         root: './data/media', // pilote local — NUXT_MEDIA_STORAGE_ROOT

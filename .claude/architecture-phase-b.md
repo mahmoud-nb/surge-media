@@ -1,144 +1,166 @@
-# Phase B — Projets, médias partagés, jetons d'accès et cache
+# Phase B — Projets, médias, jetons d'accès et cache
 
-> **Statut : PROPOSITION en attente de validation.** Aucun code n'a été modifié.
-> Rédigée le 2026-09-28 à partir de l'état décrit dans `.claude/project-context.md` (commit `c505758`).
-> Une fois validée et amendée, elle devient la référence d'implémentation ; les décisions retenues seront
-> reportées dans `project-context.md` et `setup.md`. Les points à trancher sont récapitulés en § 13.
+> **Statut : VALIDÉE — révision 2 (2026-09-29), toutes les décisions D1–D15 confirmées par l'utilisateur.**
+> Référence d'implémentation de la phase B. Avancement : **B1 réalisée** (voir `setup.md`, Journal, étape 5, et
+> `.claude/project-context.md`) ; prochaine sous-étape : **B2**.
+>
+> Écarts de B1 par rapport à ce document (à connaître pour la suite) :
+> - les **liens signés v2** (§ 4.6 : `kid`, droit élargi, échéance alignée) et `Access-Control-Allow-Origin: *` sur `/m/`
+>   ont été faits dès B1 (nécessaires aux aperçus d'administration sans cookie) ; les liens v1 **ne sont plus reconnus**
+>   (aucun n'était publié) ;
+> - la permission de plateforme de la bibliothèque s'appelle `library:manage` (elle donne les portées `media:*` sur la
+>   bibliothèque) ; le PAT (`includeLibrary`) s'appuiera dessus ;
+> - la duplication s'appelle aussi dans l'administration (`POST /api/admin/media/:id/duplicate` et `/move`) ; la route
+>   équivalente de l'API v1 reste prévue en B4 ;
+> - les colonnes `searchTitle/searchName/searchAlt`, `uploadedByTokenId`, `uploadSubject` et les tables de B2–B4
+>   (`AccessTokenProject`, `DelegatedTokenUsage`, `CacheRevision`, `AuditEvent`) ne sont **pas** encore créées ;
+>   `Project.publicListing` non plus (B3).
+
+## 0. Révision 2 — ce qui a changé après les remarques de l'utilisateur
+
+- **Plus de médias partagés** : chaque média appartient à **un seul espace** (la bibliothèque de l'organisation *ou*
+  un projet). La réutilisation passe par la **duplication** (copie indépendante). Les règles de partage (R3 « tous les
+  rattachements », `MEDIA_SHARED`, table `ProjectMedia`, option d'accès à la bibliothèque) sont supprimées.
+- **Domaine de diffusion** : par défaut celui de l'application Nuxt installée ; configurable selon l'infrastructure
+  (CDN, domaine dédié) — § 8.
+- **Environnements** (test, staging, production…) : traités dans un projet par des clés étiquetées — § 2.4.
+- **Dossiers** : conservés car utiles au regroupement, au filtrage et à la navigation — § 11 (sous-étape B5).
+- **Transformations à la demande** (crop, taille, qualité, rotation…) : la phase B prépare dès maintenant la grammaire
+  d'URL, les signatures, la politique par projet et les garde-fous — § 10.
 
 ---
 
-## 0. Résumé en 12 points
+## 1. Résumé en 12 points
 
-1. **Une installation = une organisation cliente** (auto-hébergement) : pas de couche multi-locataire.
-2. Un média existe **une seule fois** et possède des **rattachements** : la **bibliothèque de l'organisation**
-   (drapeau) et/ou **0..n projets** (table de liaison). Bibliothèque sans projet = « bibliothèque globale ».
-   Plus aucun rattachement = corbeille.
-3. **Règle unique de modification** : modifier, remplacer ou supprimer un média exige le droit correspondant sur
-   **tous** ses rattachements. Retirer un média d'un projet n'exige que les droits sur ce projet.
-4. **Un rôle = un ensemble de portées.** Même vocabulaire pour les humains et les jetons ; un jeton ne dépasse
-   jamais les droits de ce qui l'a émis.
-5. Rôles de plateforme conservés (ADMIN, DEVELOPER, EDITOR) + **rôles de projet** (OWNER, DEVELOPER, EDITOR) ;
-   le rôle de plateforme sert de **plafond**.
-6. **Cinq identifiants + deux accès sans jeton** : session d'administration, jeton personnel `sm_pat_`, clé secrète
-   de projet `sm_sk_`, clé publique de projet `sm_pk_`, jeton délégué éphémère `sm_dt_`, lien signé, accès public.
-7. **Aucun secret durable dans un navigateur** : le navigateur utilise une clé publique (lecture de médias publics)
-   ou un jeton délégué de quelques minutes émis par le backend du client.
-8. **Le projet est explicite dans chaque URL d'API** (`/api/v1/projects/{id}/…`) : cloisonnement, CORS par projet
-   dès le preflight, clés de cache naturelles.
-9. **Toutes les requêtes sont cloisonnées côté serveur** à partir de l'identité, jamais à partir des filtres
-   envoyés ; un média hors périmètre répond **404** (son existence n'est pas révélée).
-10. **La diffusion (`/m/…`) reste indépendante des projets et sans cookie** : public, lien signé ou Bearer —
-    compatible CDN.
-11. **Cache par générations** (compteurs de révision) : pas de purge fragile ; liens signés **alignés sur des tranches
-    de temps** pour rester cachables.
-12. Livraison en **4 sous-étapes (B1 → B4)** validées séparément, avec des **tests automatisés** du moteur
-    d'autorisation (la partie la plus critique).
-
-## 1. Analyse de l'idée initiale
-
-**Repris tel quel** : plusieurs projets par client ; un média utilisable par 0, 1 ou n projets ; une application
-travaillant avec le projet A ne voit que les médias autorisés pour A ; sécurité appliquée côté serveur ; API
-consommable par tous les frameworks ; composants `<MediaPicker>`, `<MediaLibrary>`, `<MediaUpload>` ; jetons fins ;
-cache sur toutes les couches.
-
-**Amélioré / adapté** :
-
-| Idée initiale | Proposition | Pourquoi |
-| --- | --- | --- |
-| « Aucun projet = bibliothèque globale » | La bibliothèque est un **rattachement explicite** (drapeau), cumulable avec des projets | Sinon, rattacher un logo à un projet le retirerait de la bibliothèque pour tous les autres, et retirer un média de son dernier projet le rendrait « global » par accident |
-| « Un média peut appartenir à plusieurs projets » | Oui, mais **un média partagé ne peut être modifié que par qui a les droits sur tous ses rattachements** | Le projet A ne doit pas pouvoir casser le projet B (passer une image en privé, la remplacer, la supprimer) |
-| 9 cas d'usage de jetons | **5 types d'identifiants** couvrent les 9 cas ; « administrateur » et « propriétaire » sont des **rôles**, pas des types de jetons | Moins de types = moins de chemins de code sensibles, un seul moteur d'autorisation |
-| Jeton pour l'application frontend et le composant Upload | **Clé publique** (non secrète, lecture publique) + **jeton délégué** éphémère émis par le backend du client | Tout ce qui est livré à un navigateur est public : aucun secret durable ne doit y figurer |
-| Filtrer les médias par projet | Le projet fait partie du **chemin** de l'API et du **périmètre de la requête SQL** | Isolation garantie par construction, pas par un paramètre facultatif |
-| Cache des listes, URL, métadonnées… | **Invalidation par versions** (URL versionnées, compteurs de révision, tranches de signature) | Aucune purge à orchestrer, cohérent en multi-instance |
-
-**Inchangé** (étape 4) : stockage (`MediaStorage` / Flydrive), pipeline d'envoi (busboy, détection de type,
-sharp), URL de diffusion versionnées et immuables, dérivés persistés, liens signés HMAC, corbeille.
+1. **Une installation = une organisation cliente**, qui y sert tous ses projets et environnements (validé).
+2. Chaque média appartient à **un seul espace** : la **bibliothèque** de l'organisation ou **un projet**. Réutiliser un
+   média ailleurs = le **dupliquer** (copie indépendante, provenance conservée).
+3. **Un rôle = un ensemble de portées.** Même vocabulaire pour les humains et les jetons ; un jeton ne dépasse jamais
+   les droits de ce qui l'a émis.
+4. Rôles de plateforme (ADMIN, DEVELOPER, EDITOR) + **rôles de projet** (OWNER, DEVELOPER, EDITOR) ; le rôle de
+   plateforme sert de **plafond** (validé).
+5. **Cinq identifiants + deux accès sans jeton** : session d'administration, jeton personnel `sm_pat_`, clé secrète
+   `sm_sk_`, clé publique `sm_pk_`, jeton délégué éphémère `sm_dt_`, lien signé, accès public (validé). Les clés
+   portent une **étiquette d'environnement**.
+6. **Aucun secret durable dans un navigateur** : clé publique (lecture de médias publics) ou jeton délégué de quelques
+   minutes émis par le backend du client.
+7. **Le projet est explicite dans chaque URL d'API** (`/api/v1/projects/{id}/…`).
+8. **Toutes les requêtes sont cloisonnées côté serveur** à partir de l'identité ; un média hors périmètre → **404**.
+9. **Diffusion `/m/…` sans cookie et indépendante de l'API**, par défaut sur le domaine de l'application,
+   configurable (CDN, domaine dédié).
+10. **Cache par générations** (compteurs de révision) et **liens signés alignés sur des tranches de temps**.
+11. **Transformations préparées** : grammaire d'URL réservée, signatures couvrant les transformations, politique par
+    projet, dérivés persistés, garde-fous contre les abus.
+12. Livraison en **5 sous-étapes (B1 → B5)**, avec **Vitest** pour le moteur d'autorisation (validé).
 
 ## 2. Modèle conceptuel
 
 ```text
-Installation (= organisation cliente)
+Installation (= organisation cliente : tous ses projets et environnements)
 ├─ Utilisateurs ─── rôle de plateforme : ADMIN | DEVELOPER | EDITOR
-├─ Bibliothèque de l'organisation ◄──────────────┐
-├─ Projets ─── membres (OWNER | DEVELOPER | EDITOR), clés d'API, origines CORS, réglages
-│     └─ rattachements (ProjectMedia) ───────────┤
-└─ Médias ─── fichier, versions, dérivés, métadonnées, visibilité (PUBLIC | PRIVATE)
-              rattachements = { bibliothèque ? } ∪ { projets 0..n }
+├─ Bibliothèque de l'organisation ─── dossiers ─── médias
+└─ Projets ─── membres (OWNER | DEVELOPER | EDITOR), clés d'API (étiquetées par environnement),
+      │        origines CORS, réglages
+      └─ dossiers ─── médias
+
+Média = fichier + versions + dérivés + métadonnées + visibilité (PUBLIC | PRIVATE)
+        appartient à UN espace : Media.projectId (null = bibliothèque)
 ```
 
-Exemples :
+### 2.1 Règles
 
-| Média | Bibliothèque | Projets | Qui le voit |
-| --- | :---: | --- | --- |
-| Logo de la marque | ✓ | A, B | tous les utilisateurs ; identifiants de A et de B |
-| Photo de campagne | – | A | membres de A ; identifiants de A |
-| Visuel commun | – | A, B | membres de A ou de B ; identifiants de A et de B |
-| Archive | ✓ | – | tous les utilisateurs ; aucun identifiant de projet (sauf option « accès à la bibliothèque ») |
-| — | – | – | **corbeille** (état interdit pour un média actif) |
+- **R1 — Appartenance unique.** Un média appartient à exactement un espace : un projet ou la bibliothèque.
+- **R2 — Lecture.** Un principal lit M s'il a `media:read` dans l'espace de M. Via l'API d'un projet, seuls les
+  médias **de ce projet** sont accessibles.
+- **R3 — Modification et suppression.** Métadonnées, visibilité, remplacement, déplacement de dossier : `media:write`
+  dans l'espace de M ; corbeille, restauration, suppression définitive : `media:delete`. L'ADMIN passe toujours.
+- **R4 — Duplication.** Lire M dans son espace + `media:upload` dans l'espace cible → **copie indépendante** (§ 2.2).
+- **R5 — Visibilité.** Public/privé est une propriété du média.
+- **R6 — Diffusion.** Un média public est servi sans condition ; un média privé exige une preuve : lien signé, ou
+  jeton habilité dans son espace.
+- **R7 — Envoi.** Un média envoyé dans le contexte d'un projet appartient à ce projet ; depuis la bibliothèque, à la
+  bibliothèque. Provenance conservée (utilisateur ou identifiant, sujet final éventuel).
+- **R8 — Corbeille.** Supprimer = mettre à la corbeille (le média reste dans son espace) ; suppression définitive
+  uniquement depuis la corbeille (existant).
 
-L'ADMIN voit tout.
+### 2.2 Duplication (et déplacement, à confirmer)
 
-### Règles
+- **Dupliquer** (bibliothèque → projet, projet → projet, projet → bibliothèque) crée un **nouveau média** :
+  - nouvel identifiant, version 1, nouvelles URL ;
+  - **fichier copié** dans le stockage (`MediaStorage.copy` : copie côté serveur sous S3, `CopyObject`, sans transit par
+    surgeMedia ; copie de fichier en local) ;
+  - métadonnées copiées (titre, texte alternatif, visibilité, dimensions, métadonnées techniques, nom d'origine,
+    empreinte) ; dossier cible au choix (racine par défaut) ;
+  - `duplicatedFromId` renseigné (provenance) ; dérivés non copiés, régénérés à la demande (aperçu pré-généré).
+  - Les deux médias évoluent ensuite **séparément** (modifier l'un ne touche pas l'autre).
+- Coût assumé : le fichier occupe deux fois l'espace de stockage (une déduplication physique par contenu reste
+  possible plus tard sans changer le modèle).
+- **Déplacer** (proposé, coût faible grâce à R1) : changer l'espace d'un média **sans changer son identifiant ni ses
+  URL** (utile après un envoi dans le mauvais projet). Droits : `media:delete` à la source + `media:upload` à la cible.
+  Les applications de l'ancien projet perdent l'accès par l'API ; l'URL publique continue de fonctionner.
 
-- **R1 — Rattachement obligatoire.** Un média actif a au moins un rattachement. Retirer le dernier le met à la
-  corbeille ; ce rattachement est conservé pour que la restauration le remette à sa place.
-- **R2 — Lecture.** Un principal lit M s'il a `media:read` sur au moins un rattachement de M **dans le contexte de
-  la requête** : via l'API d'un projet, uniquement si M est rattaché à ce projet.
-- **R3 — Modification.** Modifier les métadonnées, changer la visibilité, remplacer le fichier, mettre à la corbeille
-  ou supprimer définitivement exige le droit correspondant sur **tous** les rattachements de M. L'ADMIN passe toujours.
-  Conséquence : les identifiants d'un projet ne peuvent modifier que les médias **exclusifs** à ce projet.
-- **R4 — Rattacher / détacher.** Rattacher M à un espace X demande de pouvoir lire M (via l'un de ses rattachements)
-  et `media:write` sur X. Détacher M de X demande `media:delete` sur X seulement (R1 s'applique ensuite).
-- **R5 — Visibilité.** Public/privé est une propriété du média (une URL sert tous les projets). Pas de visibilité par projet.
-- **R6 — Diffusion.** Un média public est servi sans condition de projet ; un média privé exige une preuve : lien
-  signé, ou jeton habilité sur l'un de ses rattachements.
-- **R7 — Envoi.** Un média envoyé dans le contexte d'un projet y est rattaché ; envoyé dans la bibliothèque, il y
-  est rattaché. Provenance conservée (utilisateur ou identifiant, sujet final éventuel).
-- **R8 — Confidentialité entre projets.** Aucune réponse ne révèle les autres rattachements d'un média (seul un
-  indicateur « modifiable ou non » est renvoyé).
+### 2.3 Cycle de vie d'un projet
+
+- **Archiver** : clés et jetons refusés, médias en lecture seule, projet masqué par défaut ; réversible.
+- **Supprimer** (projet archivé uniquement, confirmation par saisie du nom) avec un choix explicite pour ses médias :
+  **déplacer vers la bibliothèque** (URL conservées) ou **supprimer définitivement** (lignes puis fichiers, en tâche
+  de fond). Membres, clés, origines et dossiers sont supprimés avec le projet.
+- En base, `Media.projectId` est en `onDelete: Restrict` : un projet ne peut pas emporter ses médias par cascade
+  (aucun fichier orphelin par accident).
+
+### 2.4 Environnements (test, staging, production…)
+
+- **Recommandation** : un projet = une application ; ses environnements **partagent ses médias** (le contenu est le
+  même en staging et en production).
+- Chaque clé porte une **étiquette d'environnement** (`production`, `staging`, `development`, `test` ou libre) :
+  une clé par environnement, révocable séparément, affichée et filtrée par environnement dans l'interface.
+- Les origines autorisées du projet listent celles de tous ses environnements (ex. `https://www.example.com`,
+  `https://staging.example.com`, `http://localhost:3000`).
+- Un environnement qui produit des **envois jetables** (tests automatisés) utilise un **projet distinct** ; la
+  duplication y copie les médias de référence.
+- Pas d'entité « environnement » en base : la clé publique ne lit que des médias publics, donc des origines séparées par
+  environnement n'apporteraient presque rien en sécurité. L'étiquette pourra devenir une entité plus tard sans rupture.
 
 ## 3. Rôles et portées
 
 ### 3.1 Vocabulaire des portées (commun aux humains et aux jetons)
 
-| Portée | Espace | Autorise |
+| Portée | S'applique à | Autorise |
 | --- | --- | --- |
-| `media:read` | projet / bibliothèque (`library:read`) | lister, chercher, lire les métadonnées, obtenir les URL (signées si privé) |
-| `media:upload` | projet / bibliothèque (`library:upload`) | créer des médias (envoi) |
-| `media:write` | projet / bibliothèque (`library:write`) | métadonnées, visibilité, remplacement, rattacher (R3, R4) |
-| `media:delete` | projet / bibliothèque (`library:delete`) | détacher, corbeille, restauration, suppression définitive (R3) |
-| `project:read` | projet | voir le projet |
-| `project:credentials` | projet | clés publiques/secrètes, origines CORS |
-| `project:members` | projet | gérer les membres |
-| `project:settings` | projet | nom, description, options, archivage, suppression |
+| `media:read` | un espace (projet ou bibliothèque) | lister, chercher, lire les métadonnées, obtenir les URL (signées si privé), dossiers |
+| `media:upload` | un espace | créer des médias (envoi, duplication vers cet espace) |
+| `media:write` | un espace | métadonnées, visibilité, remplacement, dossiers |
+| `media:delete` | un espace | corbeille, restauration, suppression définitive, déplacement hors de l'espace |
+| `project:read` | un projet | voir le projet |
+| `project:credentials` | un projet | clés publiques/secrètes, origines CORS |
+| `project:members` | un projet | gérer les membres |
+| `project:settings` | un projet | nom, description, options, archivage, suppression |
 | `projects:create` | plateforme | créer des projets |
 | `tokens:personal` | plateforme | créer ses propres jetons personnels |
 | `users:manage` | plateforme | gérer les comptes |
 
-### 3.2 Rôles de plateforme (`User.role`, sémantique de l'étape 2 conservée)
+### 3.2 Rôles de plateforme (`User.role`)
 
 | Rôle | Bibliothèque | Projets | Jetons personnels | Utilisateurs |
 | --- | --- | --- | --- | --- |
-| ADMIN | tout | **tous**, comme OWNER implicite ; création | ✓ | ✓ |
-| DEVELOPER | tout | ceux dont il est membre ; **création** (devient OWNER) | ✓ | – |
-| EDITOR | tout | ceux dont il est membre | – | – |
+| ADMIN | `media:*` | **tous**, comme OWNER implicite ; création | ✓ | ✓ |
+| DEVELOPER | `media:*` | ceux dont il est membre ; **création** (il en devient OWNER) | ✓ | – |
+| EDITOR | `media:*` | ceux dont il est membre | – | – |
 
 ### 3.3 Rôles de projet (`ProjectMember.role`)
 
-| Rôle | Portées |
+| Rôle | Portées dans le projet |
 | --- | --- |
 | OWNER | `project:*` + `media:*` |
 | DEVELOPER | `project:read`, `project:credentials`, `media:*` |
 | EDITOR | `project:read`, `media:*` |
 
-- **Plafond** : rôle de projet effectif = min(rôle de projet, plafond du rôle de plateforme). Un EDITOR de plateforme
-  ne peut être qu'EDITOR dans un projet ; un DEVELOPER peut être OWNER. Rétrograder un utilisateur réduit donc
-  immédiatement ses droits dans tous ses projets.
-- **Invariant `LAST_OWNER`** (409) : on ne peut ni retirer ni rétrograder le dernier OWNER d'un projet (l'ADMIN reste
-  toujours capable d'administrer un projet orphelin, par exemple après la suppression d'un compte).
+- **Plafond** : rôle effectif = min(rôle de projet, plafond du rôle de plateforme) ; un EDITOR de plateforme ne peut
+  être qu'EDITOR dans un projet. Rétrograder un utilisateur réduit immédiatement ses droits partout.
+- **Invariant `LAST_OWNER`** (409) : impossible de retirer ou de rétrograder le dernier OWNER d'un projet (l'ADMIN
+  peut toujours administrer un projet orphelin, par exemple après la suppression d'un compte).
 
-### 3.4 Droits effectifs (principe du moteur)
+### 3.4 Droits effectifs
 
 ```text
 portées(principal, espace) =
@@ -150,91 +172,89 @@ portées(principal, espace) =
   jeton délégué     → portées du jeton ∩ portées actuelles de l'émetteur, si espace = son projet
 ```
 
-**Principe « les jetons ne gèrent jamais les accès »** : aucune portée de jeton ne permet de gérer des utilisateurs,
-des membres, des clés, des origines ou les réglages d'un projet (seule exception : l'émission de jetons délégués,
-strictement plus restreints et éphémères). Une fuite de jeton ne peut donc pas s'auto-entretenir.
+**Les jetons ne gèrent jamais les accès** : aucune portée de jeton ne permet de gérer des utilisateurs, des membres,
+des clés, des origines ou les réglages d'un projet (seule exception : émettre des jetons délégués, plus restreints et
+éphémères). Une fuite de jeton ne peut pas s'auto-entretenir.
 
 ## 4. Identifiants et jetons
 
 ### 4.1 Les sept mécanismes
 
-| Mécanisme | Format | Porteur / où il vit | Périmètre | Portées possibles | Durée | Stockage serveur |
+| Mécanisme | Format | Où il vit | Périmètre | Portées possibles | Durée | Stockage serveur |
 | --- | --- | --- | --- | --- | --- | --- |
 | **Session d'administration** | cookie scellé (existant) | navigateur, HttpOnly | selon rôles | selon rôles | 12 h | table `Session` |
-| **Jeton personnel (PAT)** | `sm_pat_…` | poste du développeur, CI, scripts | ses projets : sélection ou « tous mes projets » | ⊆ `media:*`, `project:read`, `library:*` | **obligatoire** : 30 / 90 / 365 j (90 par défaut) | empreinte SHA-256 |
-| **Clé secrète de projet** | `sm_sk_…` | variables d'environnement d'un serveur | **un** projet | ⊆ `media:*` (+ `library:read` si option projet) | facultative (1 an recommandé) | empreinte SHA-256 |
-| **Clé publique de projet** | `sm_pk_…` | code frontend (publique par nature) | **un** projet, origines autorisées | `media:read` sur médias PUBLIC uniquement (fixe) | illimitée, révocable | empreinte + valeur (non secrète, réaffichable) |
+| **Jeton personnel (PAT)** | `sm_pat_…` | poste du développeur, CI, scripts | projets choisis ou « tous mes projets », bibliothèque en option | ⊆ `media:*`, `project:read` | **obligatoire** : 30 / 90 / 365 j (90 par défaut) | empreinte SHA-256 |
+| **Clé secrète de projet** | `sm_sk_…` | variables d'environnement d'un serveur | **un** projet | ⊆ `media:*` | facultative (1 an recommandé) | empreinte SHA-256 |
+| **Clé publique de projet** | `sm_pk_…` | code frontend (publique par nature) | **un** projet, origines autorisées | `media:read` sur médias PUBLIC (fixe) | illimitée, révocable | empreinte + valeur (non secrète, réaffichable) |
 | **Jeton délégué** | `sm_dt_<charge>.<signature>` | mémoire du navigateur (composant) | **un** projet | ⊆ portées de l'émetteur | 1 à 60 min (15 par défaut) | aucun (signé) ; compteur d'envois éventuel |
-| **Lien signé** | `?exp&kid&sig` (existant, étendu) | URL (`<img src>`) | un média, une version, un dérivé | lecture de ce fichier | 60 s à 7 j | aucun |
+| **Lien signé** | `?exp&kid&sig` (existant, étendu) | URL (`<img src>`) | un média, une version, un fichier ou dérivé | lecture | 60 s à 7 j | aucun |
 | **Accès public** | — | — | médias PUBLIC | lecture du fichier | permanent (URL versionnée) | — |
 
-### 4.2 Cas d'usage demandés → mécanisme
+Les clés secrètes et publiques portent une **étiquette d'environnement** (§ 2.4).
 
-| Cas | Mécanisme recommandé | Détail |
+### 4.2 Cas d'usage → mécanisme
+
+| Cas | Mécanisme | Détail |
 | --- | --- | --- |
-| Administration de la plateforme | **Session** (humain) ; **PAT d'un ADMIN** pour l'automatisation | la gestion des utilisateurs et des accès reste réservée à l'interface (principe § 3.4) |
-| Développeur sur un ou plusieurs projets | **Session** + **PAT** limité aux projets choisis | ses droits suivent son compte : désactivé ou retiré d'un projet → le PAT perd l'accès immédiatement |
-| Propriétaire d'un projet | **Rôle OWNER** (session, PAT) | seul à gérer membres et réglages ; crée et révoque toutes les clés du projet |
-| Application frontend (site public) | **Clé publique** | lecture des médias PUBLIC du projet ; liste/recherche seulement si l'option « liste publique » est activée ; origines contrôlées |
-| Application frontend (espace connecté, médias privés) | **Jeton délégué** `media:read` émis par le backend du client | le backend authentifie son utilisateur, puis demande un jeton de 15 min |
-| Composant Upload | **Jeton délégué** `media:upload` + contraintes | nombre de fichiers, taille, types, visibilité imposée, origine ; aucun secret dans le navigateur |
-| MediaPicker / MediaLibrary dans un back-office client | **Jeton délégué** (`media:read` [+ `upload`, `write`, `delete`, `library:read`]) | renouvelé par le composant via un rappel `getToken()` |
-| Application cliente externe | serveur : **clé secrète dédiée** (portées minimales, révocable seule) ; mobile/desktop : **clé publique + jetons délégués** ; au nom d'utilisateurs surgeMedia : OAuth 2.1 (plus tard) | une clé par intégration pour pouvoir en couper une sans toucher aux autres |
-| API backend | **Clé secrète** | refusée si utilisée depuis un navigateur ; rotation avec période de recouvrement |
+| Administration de la plateforme | **Session** ; **PAT d'un ADMIN** pour l'automatisation | gestion des utilisateurs et des accès réservée à l'interface |
+| Développeur sur un ou plusieurs projets | **Session** + **PAT** limité aux projets choisis | droits liés au compte : désactivé ou retiré d'un projet → accès perdu immédiatement |
+| Propriétaire d'un projet | **Rôle OWNER** (session, PAT) | membres, réglages, toutes les clés du projet |
+| Application frontend (site public) | **Clé publique** de l'environnement | médias PUBLIC ; liste/recherche si l'option « liste publique » est activée |
+| Application frontend (espace connecté, médias privés) | **Jeton délégué** `media:read` émis par le backend du client | le backend authentifie son utilisateur puis demande un jeton de 15 min |
+| Composant Upload | **Jeton délégué** `media:upload` + contraintes | nombre de fichiers, taille, types, visibilité imposée, dossier, origine |
+| MediaPicker / MediaLibrary dans un back-office client | **Jeton délégué** (`media:read` [+ `upload`, `write`, `delete`]) | renouvelé par le composant via un rappel `getToken()` |
+| Application cliente externe | serveur : **clé secrète dédiée** (portées minimales) ; mobile/desktop : **clé publique + jetons délégués** ; au nom d'utilisateurs surgeMedia : OAuth 2.1 (plus tard) | une clé par intégration, révocable seule |
+| API backend | **Clé secrète** | refusée depuis un navigateur ; rotation avec recouvrement |
 | Accès public à un média | **Aucun jeton** | URL versionnée immuable, CDN |
-| Accès temporaire à un média privé | **Lien signé** | émis par l'interface, une clé secrète, un PAT (ou automatiquement dans les réponses de l'API) |
+| Accès temporaire à un média privé | **Lien signé** | émis par l'interface, une clé secrète, un PAT, ou inclus dans les réponses de l'API |
 
 ### 4.3 Format des jetons opaques (PAT, clés)
 
 - `sm_<type>_<corps>` avec `<type>` ∈ `pat`, `sk`, `pk` ; `<corps>` = 32 octets aléatoires en base62 (43 caractères)
-  suivis d'un **CRC32 en base62** (6 caractères), à la manière des jetons GitHub.
-  - Le CRC permet de rejeter **sans accès à la base** les jetons mal formés ou inventés (protection contre les
-    inondations de requêtes) et rend les fuites détectables par les outils d'analyse de secrets (préfixe + somme).
-  - Ce n'est pas une protection cryptographique : la sécurité vient des 256 bits aléatoires.
-- Stockage : **SHA-256** du jeton (index unique). Pas d'argon2 : le jeton a 256 bits d'entropie (pas d'attaque par
-  dictionnaire) et doit être vérifié à chaque requête. Préfixe lisible conservé (`sm_sk_4fQ9Zt…`) pour l'affichage.
-- Le jeton complet n'est affiché **qu'une fois** (sauf la clé publique, non secrète). Jamais accepté dans une URL
-  (`?access_token=` refusé : journaux, en-tête Referer) ; uniquement `Authorization: Bearer`.
-- **Pourquoi opaque et pas JWT pour les jetons durables** : révocables instantanément, courts, ne transportent aucune
-  donnée lisible. Les formats signés sans état sont réservés aux preuves **courtes** (jeton délégué, lien signé).
+  + **CRC32 en base62** (6 caractères), à la manière de GitHub : rejet **sans accès à la base** des jetons mal formés
+  (protection contre les inondations), détection des fuites par les outils d'analyse de secrets. La sécurité vient des
+  256 bits aléatoires, pas du CRC.
+- Stockage : **SHA-256** (index unique) ; pas d'argon2 (256 bits d'entropie, vérification à chaque requête).
+  Préfixe lisible conservé pour l'affichage (`sm_sk_4fQ9Zt…`).
+- Jeton complet affiché **une seule fois** (sauf la clé publique). Uniquement `Authorization: Bearer` : jamais dans une
+  URL (`?access_token=` refusé : journaux, en-tête Referer).
+- **Opaque plutôt que JWT pour les jetons durables** : révocables instantanément, courts, sans données lisibles. Les
+  formats signés sans état sont réservés aux preuves **courtes** (jeton délégué, lien signé).
 
 ### 4.4 Cycle de vie
 
-- **Création** : nom, projet(s), portées (préréglages « lecture seule », « lecture et envoi », « complet »), expiration.
-  Confirmation du mot de passe demandée si la dernière saisie date de plus de 10 min (« mode sudo », recommandé)
-  pour créer une clé secrète ou un PAT et pour modifier les membres.
-- **Portées immuables** après création : pour changer, on crée un nouvel identifiant (traçabilité simple).
-- **Rotation** d'une clé secrète : « Renouveler » crée la nouvelle clé ; l'ancienne reste valable pendant une période
-  de recouvrement choisie (immédiat, 1 h, 24 h, 7 j) puis expire.
-- **Révocation** immédiate (`revokedAt`) ; propagation instantanée sur l'instance, ≤ 60 s sur les autres (§ 8.6).
-  Révoquer un émetteur invalide tous ses jetons délégués.
-- **Dernière utilisation** (date, IP) enregistrée au plus toutes les 5 min (pas d'écriture à chaque requête).
-- **Désactivation d'un utilisateur** → ses PAT cessent immédiatement de fonctionner ; ses clés secrètes et publiques
-  de projet **restent actives** (elles appartiennent au projet), l'interface signale « créée par un compte désactivé ».
-- **Archivage d'un projet** → toutes ses clés et tous ses jetons délégués sont refusés ; médias en lecture seule.
-  **Suppression** → liens, clés, origines, membres supprimés ; les médias qui n'ont plus de rattachement passent en
-  corbeille (R1), ce qui reste réversible.
+- **Création** : nom, environnement (clés), projet(s) (PAT), portées (préréglages « lecture seule », « lecture et
+  envoi », « complet »), expiration. Confirmation du mot de passe si la dernière saisie date de plus de 10 min
+  (« mode sudo ») pour créer une clé secrète ou un PAT et pour modifier les membres.
+- **Portées immuables** après création (pour changer : nouvel identifiant).
+- **Rotation** d'une clé secrète : la nouvelle clé est créée, l'ancienne reste valable pendant une période de
+  recouvrement choisie (immédiat, 1 h, 24 h, 7 j).
+- **Révocation** immédiate (`revokedAt`) : instantanée sur l'instance, ≤ 60 s sur les autres (§ 9.6). Révoquer un
+  émetteur invalide ses jetons délégués.
+- **Dernière utilisation** (date, IP) enregistrée au plus toutes les 5 min.
+- **Désactivation d'un utilisateur** → ses PAT cessent de fonctionner ; les clés de projet qu'il a créées **restent
+  actives** (elles appartiennent au projet), l'interface signale « créée par un compte désactivé ».
+- **Archivage / suppression d'un projet** : § 2.3.
 
 ### 4.5 Jetons délégués (composants dans le navigateur)
-
-Émission par le backend du client (clé secrète ou PAT) :
 
 ```http
 POST /api/v1/projects/{projectId}/delegated-tokens
 Authorization: Bearer sm_sk_…
 { "scopes": ["media:upload"], "expiresIn": 600, "subject": "user-42",
   "origin": "https://app.example.com",
-  "upload": { "maxFiles": 5, "maxSize": 10485760, "types": ["image/jpeg", "image/png"], "visibility": "private" } }
-→ 201 { "token": "sm_dt_eyJ2Ijox….Q2x…", "expiresAt": "2026-09-28T14:10:00Z" }
+  "upload": { "maxFiles": 5, "maxSize": 10485760, "types": ["image/jpeg", "image/png"],
+              "visibility": "private", "folderId": "…" } }
+→ 201 { "token": "sm_dt_eyJ2Ijox….Q2x…", "expiresAt": "2026-09-29T14:10:00Z" }
 ```
 
 - Charge utile (base64url, lisible par le composant pour anticiper l'expiration) : version, `jti`, émetteur, projet,
-  portées, sujet final (identifiant opaque de l'application cliente, pour l'audit), échéance, origine, contraintes.
+  portées, sujet final (identifiant opaque côté client, pour l'audit), échéance, origine, contraintes.
 - Signature HMAC-SHA256 avec une clé **dérivée** du secret de signature (séparation des usages) et un `kid` (rotation).
-- Vérification à chaque usage : signature, échéance, émetteur toujours valide (en cache), projet actif, origine,
-  contraintes. `maxFiles` est garanti par un compteur (`DelegatedTokenUsage`, incrément conditionnel atomique).
-- Un jeton délégué ne peut ni émettre d'autres jetons ni générer de liens signés (les réponses contiennent déjà des
-  URL signées courtes). Pas de révocation individuelle : durée courte, ou révocation de l'émetteur.
+- Vérification : signature, échéance, émetteur toujours valide (en cache), projet actif, origine, contraintes ;
+  `maxFiles` garanti par un compteur (`DelegatedTokenUsage`, incrément conditionnel atomique).
+- Ne peut ni émettre d'autres jetons ni générer de liens signés longs. Pas de révocation individuelle : durée courte ou
+  révocation de l'émetteur.
 
 ```text
 Navigateur <MediaUpload>          Backend du client (sm_sk_…)               surgeMedia
@@ -244,26 +264,26 @@ Navigateur <MediaUpload>          Backend du client (sm_sk_…)               su
    │◄──────────── sm_dt_… ──────────│                                         │
    │ 3. POST /api/v1/projects/P/media (multipart, Bearer sm_dt_…) ───────────►│ preflight CORS (origines de P),
    │    progression (XHR)                                                     │ signature, émetteur, origine,
-   │◄───────────────────────────────── 201 { média rattaché à P } ────────────│ contraintes, analyse du fichier
+   │◄───────────────────────────────── 201 { média du projet P } ─────────────│ contraintes, analyse du fichier
 ```
 
-### 4.6 Liens signés (évolutions de l'existant)
+### 4.6 Liens signés, version 2 (prête pour les transformations)
 
-- Signature inchangée sur (média, version, dérivé, échéance), plus un **`kid`** : le secret peut être changé en gardant
-  l'ancien pour la vérification pendant la durée maximale des liens (7 j).
-- **Échéance alignée sur des tranches** (§ 8.5) pour que les URL restent identiques et cachables.
-- Les réponses de l'API contiennent directement des URL signées (durée par défaut 1 h) pour les médias privés, quand
-  l'identifiant a le droit de les lire.
+- Chaîne signée : `v2:<mediaId>:<version>:<cible>:<exp>` où `<cible>` vaut `file` (original), `preset:<nom>`,
+  `t:<transformation canonique>` ou `derived` (tout dérivé de cette version, jamais l'original — pour construire un
+  `srcset` côté client avec une seule signature). Paramètres : `exp`, `kid`, `sig`, et `scope=derived` le cas échéant.
+- **`kid`** : le secret peut être changé en conservant l'ancien pour la vérification pendant 7 jours.
+- **Échéance alignée sur des tranches** (§ 9.5).
+- Les liens actuels (v1, sans `kid`) restent vérifiés pendant la transition.
 
 ### 4.7 Garde-fous
 
-- Clé secrète ou PAT reçu avec un en-tête `Origin` ou `Sec-Fetch-Site` (donc depuis un navigateur) → 403
-  `SECRET_IN_BROWSER` : empêche l'erreur classique d'une clé secrète dans le code frontend.
-- L'API v1 **n'accepte pas les cookies** : pas de CSRF possible, pas de confusion avec la session d'administration.
-- Clé publique : lecture de médias publics seulement ; l'origine est vérifiée **côté serveur** en plus du CORS (anti-abus,
-  pas une frontière de sécurité, puisque tout client hors navigateur peut forger `Origin`).
+- Clé secrète ou PAT reçu avec `Origin` ou `Sec-Fetch-Site` (donc depuis un navigateur) → 403 `SECRET_IN_BROWSER`.
+- L'API v1 **n'accepte pas les cookies** (pas de CSRF, pas de confusion avec la session d'administration).
+- Clé publique : médias publics seulement ; origine vérifiée **côté serveur** en plus du CORS (anti-abus, pas une
+  frontière de sécurité : un client hors navigateur peut forger `Origin`).
 - Limitation de débit par identifiant et par IP (§ 6.7) ; échecs d'authentification comptés par IP.
-- En-tête `Authorization` masqué dans les journaux ; journal d'audit des actions sensibles (§ 9).
+- En-tête `Authorization` masqué dans les journaux ; journal d'audit des actions sensibles.
 
 ## 5. Application côté serveur
 
@@ -275,72 +295,80 @@ type Principal =
   | { kind: 'project-key', keyType: 'publishable' | 'secret', projectId: string, scopes: Scope[], token: TokenRef }
   | { kind: 'delegated', projectId: string, scopes: Scope[], issuer: TokenRef, subject?: string, constraints: DelegatedConstraints }
   | { kind: 'anonymous' }
+
+type Space = { type: 'library' } | { type: 'project', id: string }
 ```
 
-Résolution selon la route : cookie pour `/api/admin/**` (existant) ; `Authorization: Bearer` pour `/api/v1/**` et
-`/m/**`. Résultat mis en cache dans `event.context.principal`.
+Résolution : cookie pour `/api/admin/**` (existant) ; `Authorization: Bearer` pour `/api/v1/**` et `/m/**`.
+Résultat gardé dans `event.context.principal`.
 
 ### 5.2 Moteur d'autorisation
 
-- Module **pur** (sans accès réseau) : `scopesIn(principal, espace)`, `canRead(principal, media, contexte)`,
-  `canModify(principal, media + rattachements, action)`. Testé de façon exhaustive (matrice rôles × espaces × actions).
-- Les routes appellent `requireAccess(event, action, ressource)` → 401 / 403 / 404. `requireAuth(event, permission)`
-  reste pour les permissions de plateforme (`users:manage`…).
+- Module **pur** : `scopesIn(principal, space)`, `can(principal, scope, space)`, `canReadMedia(principal, media, contexte)`.
+  Testé de façon exhaustive avec Vitest (rôles de plateforme × rôles de projet × identifiants × espaces × actions).
+- Les routes appellent `requireAccess(event, scope, space)` → 401 / 403 / 404. `requireAuth(event, permission)` reste
+  pour les permissions de plateforme.
 
 ### 5.3 Requêtes cloisonnées
 
-Les listes et lectures ne partent **jamais** d'un filtre client : `scopedMediaQuery(principal, projectId)` produit la
-condition de base (lien `ProjectMedia` avec ce projet, `deletedAt: null`, `visibility: PUBLIC` pour une clé publique,
-restrictions du jeton délégué) à laquelle les filtres de la requête sont **ajoutés** (ET). Une lecture par identifiant
-passe par le même chemin : média inexistant ou hors périmètre → même **404**.
+Les listes et lectures partent de `scopedMediaWhere(principal, space)` : `projectId = <projet de l'URL>` (ou `null`
+pour la bibliothèque), `deletedAt: null`, `visibility: PUBLIC` pour une clé publique, restrictions du jeton délégué.
+Les filtres de la requête sont **ajoutés** (ET), jamais substitués. Média inexistant ou hors périmètre → même **404**.
 
 ### 5.4 Codes d'erreur ajoutés
 
-401 `TOKEN_MISSING`, `TOKEN_INVALID`, `TOKEN_EXPIRED`, `TOKEN_REVOKED` · 403 `INSUFFICIENT_SCOPE`, `MEDIA_SHARED`
-(R3), `ORIGIN_NOT_ALLOWED`, `SECRET_IN_BROWSER`, `PROJECT_ARCHIVED`, `UPLOAD_LIMIT_REACHED` · 404 `PROJECT_NOT_FOUND`,
-`MEDIA_NOT_FOUND` · 409 `LAST_OWNER`, `SLUG_TAKEN` · 429 `RATE_LIMITED`.
+401 `TOKEN_MISSING`, `TOKEN_INVALID`, `TOKEN_EXPIRED`, `TOKEN_REVOKED` · 403 `INSUFFICIENT_SCOPE`,
+`ORIGIN_NOT_ALLOWED`, `SECRET_IN_BROWSER`, `PROJECT_ARCHIVED`, `UPLOAD_LIMIT_REACHED` · 404 `PROJECT_NOT_FOUND`,
+`MEDIA_NOT_FOUND`, `FOLDER_NOT_FOUND` · 409 `LAST_OWNER`, `SLUG_TAKEN`, `PROJECT_NOT_ARCHIVED`, `FOLDER_NOT_EMPTY` ·
+429 `RATE_LIMITED`. Transformations (phase C) : 400 `INVALID_TRANSFORM`, 403 `TRANSFORM_NOT_ALLOWED`,
+429 `TRANSFORM_QUOTA`.
 
-### 5.5 Organisation du code (prévue)
+### 5.5 Organisation du code
 
-- `shared/utils/scopes.ts` : vocabulaire des portées, rôles → portées, plafonds (auto-importé, utilisé aussi par l'UI).
-- `server/lib/access/` : `principal.ts` (résolution), `policy.ts` (moteur pur), `tokens.ts` (format, CRC, empreinte,
-  vérification), `delegated.ts` (émission, vérification).
-- `server/lib/projects/` : projets, membres, rattachements, révisions.
+- `shared/utils/scopes.ts` : portées, rôles → portées, plafonds (auto-importé, utilisé aussi par l'UI).
+- `server/lib/access/` : `principal.ts`, `policy.ts` (pur), `tokens.ts` (format, CRC, empreinte, vérification),
+  `delegated.ts`.
+- `server/lib/projects/` : projets, membres, cycle de vie.
 - `server/lib/cache/` : cache à deux niveaux, compteurs de révision.
-- `server/api/v1/**` (routes publiques), `server/middleware/api-v1.ts` (CORS, identité, limitation de débit).
-- `server/lib/media/*` : les services reçoivent un principal et un contexte (projet ou bibliothèque) ; plus de
-  `defaultProjectId()`.
+- `server/lib/media/` : services paramétrés par (principal, espace) ; `duplicate`, `move` ; `transform/` (phase C :
+  analyse, canonisation, politique, exécution) ; plus de `defaultProjectId()`.
+- `server/lib/storage/` : ajout de `copy(from, to)` à `MediaStorage`.
+- `server/api/v1/**`, `server/middleware/api-v1.ts` (CORS, identité, limitation de débit).
 
 ## 6. API v1 (applications tierces)
 
 ### 6.1 Principes
 
-- REST + JSON, préfixe **`/api/v1`**, évolutions uniquement additives (rupture = `/api/v2`).
-- **Projet explicite dans le chemin** : isolation lisible, preflight CORS résolu sans en-tête `Authorization` (les
-  navigateurs ne l'envoient pas au preflight), clés de cache et journaux par projet, PAT multi-projets possible.
-  Une clé utilisée sur un autre projet que le sien reçoit 404.
-- Contrat public **indépendant de l'administration** : valeurs en minuscules (`"image"`, `"public"`), URL
-  **absolues** (base `NUXT_MEDIA_PUBLIC_URL`, jamais déduite de l'en-tête `Host`), ni e-mails ni chemins physiques.
+- REST + JSON, préfixe **`/api/v1`**, évolutions additives uniquement (rupture = `/api/v2`).
+- **Projet explicite dans le chemin** : isolation lisible, preflight CORS résolu sans `Authorization` (les navigateurs
+  ne l'envoient pas au preflight), clés de cache et journaux par projet, PAT multi-projets. Une clé utilisée sur un
+  autre projet que le sien reçoit 404.
+- Contrat public **indépendant de l'administration** : valeurs en minuscules (`"image"`, `"public"`), URL **absolues**
+  (§ 8), ni e-mails ni chemins physiques.
+- **Les API construisent et signent les URL ; les octets sont toujours servis par `/m/`** (un seul chemin à mettre en
+  cache, y compris pour les transformations).
 - Spécification **OpenAPI 3.1** générée depuis les schémas zod partagés (`z.toJSONSchema`) : `/api/v1/openapi.json`.
 
 ### 6.2 Points d'accès
 
 | Méthode et chemin | Portée | Identifiants |
 | --- | --- | --- |
-| `GET /api/v1/me` | — | tous : type d'identifiant, projet(s), portées, expiration (les composants s'adaptent) |
+| `GET /api/v1/me` | — | tous : type, projet(s), environnement, portées, expiration |
 | `GET /api/v1/projects` | `project:read` | PAT (ses projets), clés et jetons délégués (leur projet) |
 | `GET /api/v1/projects/{p}` | `project:read` | idem |
 | `GET /api/v1/projects/{p}/media` | `media:read` | tous ; clé publique : si « liste publique » activée, médias PUBLIC |
 | `GET /api/v1/projects/{p}/media/{id}` | `media:read` | tous (clé publique : PUBLIC seulement) |
-| `POST /api/v1/projects/{p}/media` | `media:upload` | clé secrète, PAT, jeton délégué — multipart, rattaché à `p` |
-| `PATCH /api/v1/projects/{p}/media/{id}` | `media:write` + R3 | clé secrète, PAT, jeton délégué |
-| `PUT /api/v1/projects/{p}/media/{id}/file` | `media:write` + R3 | idem |
-| `DELETE /api/v1/projects/{p}/media/{id}` | `media:delete` | idem — **détache** de `p` (corbeille si dernier rattachement, R1) |
-| `POST /api/v1/projects/{p}/media/{id}/signed-url` | `media:read` | clé secrète, PAT — `{ expiresIn, variant }` |
-| `GET /api/v1/projects/{p}/library` | `library:read` | si option « accès à la bibliothèque » du projet (ou PAT) |
-| `POST /api/v1/projects/{p}/media/attach` | `media:write` + `library:read` | rattacher des médias de la bibliothèque (`{ mediaIds }`) |
-| `POST /api/v1/projects/{p}/delegated-tokens` | portées demandées ⊆ émetteur | clé secrète, PAT |
+| `POST /api/v1/projects/{p}/media` | `media:upload` | clé secrète, PAT, jeton délégué — multipart |
+| `PATCH /api/v1/projects/{p}/media/{id}` | `media:write` | clé secrète, PAT, jeton délégué |
+| `PUT /api/v1/projects/{p}/media/{id}/file` | `media:write` | idem |
+| `DELETE /api/v1/projects/{p}/media/{id}` | `media:delete` | idem — corbeille |
+| `POST /api/v1/projects/{p}/media/{id}/duplicate` | `media:read` ici + `media:upload` dans la cible | PAT (seul identifiant multi-espaces) — `{ target: { projectId } \| { library: true }, folderId? }` |
+| `POST /api/v1/projects/{p}/media/{id}/signed-url` | `media:read` | clé secrète, PAT — `{ expiresIn, target: file \| preset \| transform \| derived }` |
+| `POST /api/v1/projects/{p}/delegated-tokens` | portées ⊆ émetteur | clé secrète, PAT |
+| `GET /api/v1/projects/{p}/folders` (B5) | `media:read` | tous sauf clé publique |
 | `GET\|HEAD /m/…` | — | public, lien signé, ou Bearer habilité (R6) |
+
+La bibliothèque reste gérée depuis l'interface (et par PAT via les mêmes services si besoin plus tard).
 
 ### 6.3 Contrat « Media » (v1)
 
@@ -359,46 +387,44 @@ passe par le même chemin : média inexistant ou hors périmètre → même **40
   "height": 1080,
   "duration": null,
   "version": 3,
+  "folderId": null,
   "url": "https://media.example.com/m/cm1q…/v3/affiche-ete.jpg?exp=1790000000&kid=1&sig=…",
   "previewUrl": "https://media.example.com/m/cm1q…/v3/preview/affiche-ete.webp?exp=…&kid=1&sig=…",
-  "urlExpiresAt": "2026-09-28T15:00:00Z",
-  "editable": false,
-  "addedAt": "2026-09-20T09:12:00Z",
+  "urlExpiresAt": "2026-09-29T15:00:00Z",
   "createdAt": "2026-09-18T16:40:00Z",
   "updatedAt": "2026-09-27T11:02:00Z"
 }
 ```
 
-`urlExpiresAt` vaut `null` pour un média public ; `editable` reflète R3 pour l'identifiant courant (sans révéler
-les autres rattachements) ; `addedAt` = date de rattachement au projet.
+`urlExpiresAt` vaut `null` pour un média public. Phase C (ajout sans rupture) : `urlTemplate` pour construire les URL
+transformées côté client (§ 10.6).
 
 ### 6.4 Listes, recherche, pagination
 
-- Paramètres : `q`, `kind`, `visibility`, `ids` (≤ 100 : réhydratation des sélections d'un MediaPicker), `sort`
-  (`newest` | `oldest` | `name` | `size`), `limit` (1–100, 24 par défaut), `cursor`, `withTotal`.
-- **Pagination par curseur** (keyset, curseur opaque) : coût constant quelle que soit la profondeur, stable pendant les
-  ajouts ; `total` seulement sur demande (un COUNT est coûteux sur de gros volumes). L'administration garde ses numéros
-  de page.
+- Paramètres : `q`, `kind`, `visibility`, `ids` (≤ 100 : réhydratation des sélections d'un MediaPicker), `folder` et
+  `recursive` (B5), `sort` (`newest` | `oldest` | `name` | `size`), `limit` (1–100, 24 par défaut), `cursor`,
+  `withTotal`.
+- **Pagination par curseur** (keyset, curseur opaque) : coût constant, stable pendant les ajouts ; `total` seulement
+  sur demande. L'administration garde ses numéros de page.
 - Réponse : `{ "items": Media[], "nextCursor": string | null, "total"?: number }`.
 
 ### 6.5 Erreurs (RFC 9457 « Problem Details »)
 
 ```json
-{ "type": "…/errors#MEDIA_SHARED", "title": "Media is shared", "status": 403, "code": "MEDIA_SHARED",
-  "detail": "This media is attached to other spaces and cannot be modified with this credential.",
-  "instance": "/api/v1/projects/…/media/…", "requestId": "…" }
+{ "type": "…/errors#INSUFFICIENT_SCOPE", "title": "Insufficient scope", "status": 403, "code": "INSUFFICIENT_SCOPE",
+  "detail": "This credential lacks the media:write scope.", "instance": "/api/v1/projects/…/media/…", "requestId": "…" }
 ```
 
-`code` est stable et sert aux composants pour **traduire** le message (fr/en) ; `title`/`detail` sont destinés aux
+`code` est stable et permet aux composants de **traduire** le message (fr/en) ; `title`/`detail` s'adressent aux
 développeurs. L'administration garde son format actuel (`data.code`).
 
 ### 6.6 CORS (par projet)
 
-- Origines autorisées du projet (`AllowedOrigin`) : correspondance exacte `schéma://hôte[:port]`, plus sous-domaines
-  génériques `https://*.example.com` (déploiements de prévisualisation).
+- Origines autorisées du projet (tous environnements) : correspondance exacte `schéma://hôte[:port]`, plus
+  sous-domaines génériques `https://*.example.com` (déploiements de prévisualisation).
 - Preflight `OPTIONS /api/v1/projects/{p}/…` : origine autorisée → `Access-Control-Allow-Origin: <origine>`,
   `-Allow-Methods`, `-Allow-Headers: Authorization, Content-Type, If-None-Match`, `-Max-Age: 7200`, `Vary: Origin` ;
-  sinon aucun en-tête CORS (le navigateur bloque). Jamais `Allow-Credentials` (pas de cookies).
+  sinon aucun en-tête CORS. Jamais `Allow-Credentials`.
 - Réponses : mêmes en-têtes + `Access-Control-Expose-Headers: ETag, RateLimit, RateLimit-Policy, Retry-After`.
 - Contrôle serveur : clé publique ou jeton délégué avec une origine non autorisée → 403 `ORIGIN_NOT_ALLOWED` ; sans
   `Origin` (serveur, application mobile) : accepté pour la clé publique.
@@ -408,146 +434,259 @@ développeurs. L'administration garde son format actuel (`data.code`).
 
 Seau à jetons par identifiant (et par IP pour la clé publique), en-têtes `RateLimit` / `RateLimit-Policy` (brouillon
 IETF) et `Retry-After`. Valeurs initiales proposées, configurables : clé publique 300 req/min par (clé, IP) ; clé
-secrète et PAT 1 200 req/min ; envois 60/min par identifiant ; échecs d'authentification 30/min par IP. Stockage en
-mémoire par défaut, partagé (Redis) en multi-instance (§ 8.9).
+secrète et PAT 1 200 req/min ; envois 60/min par identifiant ; échecs d'authentification 30/min par IP. Mémoire par
+défaut, stockage partagé (Redis) en multi-instance.
 
 ## 7. Consommation par les frontends et composants
 
-- **`@surge-media/client`** (TypeScript, sans framework, basé sur `fetch`, navigateur / Node / edge) : client typé de
-  l'API v1, gestion de l'identifiant (clé publique ou rappel `getToken()` renouvelant les jetons délégués avant
-  expiration), itérateurs de pagination, envoi avec progression, traduction des codes d'erreur, aides d'URL
-  (`srcset` en phase C).
-- **Logique des composants sans interface** dans ce paquet (état du sélecteur, file d'envoi, sélection), puis liaisons
-  fines **`@surge-media/vue` / `react` / `svelte`** : la logique n'est écrite qu'une fois. Composants accessibles
-  (WCAG 2.2 AA) et traduits (fr/en), comme l'administration.
+- **`@surge-media/client`** (TypeScript, sans framework, `fetch`, navigateur / Node / edge) : client typé de l'API v1,
+  gestion de l'identifiant (clé publique ou rappel `getToken()` qui renouvelle les jetons délégués), itérateurs de
+  pagination, envoi avec progression, traduction des codes d'erreur, construction d'URL et de `srcset` (phase C).
+- **Logique des composants sans interface** dans ce paquet (sélection, file d'envoi, navigation dans les dossiers),
+  puis liaisons fines **`@surge-media/vue` / `react` / `svelte`** : la logique n'est écrite qu'une fois. Composants
+  accessibles (WCAG 2.2 AA) et traduits (fr/en).
 
 | Composant | Contexte | Identifiant |
 | --- | --- | --- |
-| `<MediaImage>` | tout site | aucun (URL publique) ou URL signée fournie par le backend |
+| `<MediaImage>` | tout site | aucun (URL publique, `srcset` en phase C) ou URL signée fournie par le backend |
 | `<MediaLibrary>` en lecture sur un site public | galerie | clé publique (option « liste publique ») |
 | `<MediaPicker>` / `<MediaLibrary>` dans un back-office | choix, gestion | jeton délégué via `getToken()` |
 | `<MediaUpload>` | formulaires, back-office | jeton délégué `media:upload` + contraintes |
 
-Le choix est stocké par l'application cliente sous forme d'**identifiant de média** (stable, indépendant des versions),
-puis réhydraté par `GET …/media?ids=…`.
+L'application cliente stocke un **identifiant de média** (stable, indépendant des versions), réhydraté par
+`GET …/media?ids=…`.
 
-## 8. Performance et cache
+## 8. Diffusion : domaine et configuration selon l'infrastructure
 
-**Principe** : le chemin le plus sollicité est la **diffusion des fichiers**, puis la **lecture des listes** par les
-frontends ; les écritures sont rares. On rend donc la diffusion cachable par un CDN et le plus souvent sans base, les
-lectures d'API revalidables à moindre coût (304), et l'on invalide **par versions** plutôt que par purge.
+- **Par défaut : le domaine de l'application Nuxt installée.** Nouvelle variable **`NUXT_SITE_URL`** (URL publique de
+  l'installation, demandée par `surge-media init` ; à défaut déduite de la requête, avec un avertissement au démarrage
+  en production). Les URL absolues de l'API en dérivent.
+- **`NUXT_MEDIA_PUBLIC_URL`** (vide par défaut = `NUXT_SITE_URL`) : base des URL de diffusion, à définir selon
+  l'infrastructure du client.
 
-### 8.1 Fichiers statiques (originaux et dérivés)
+| Infrastructure du client | Configuration |
+| --- | --- |
+| Serveur seul (défaut) | rien à faire : `https://media-app.example.com/m/…` |
+| CDN / cache devant l'application (Cloudflare, Nginx `proxy_cache`, Varnish) | même domaine ; mettre en cache `/m/*` en respectant `Cache-Control` |
+| Sous-domaine dédié vers la même application | `NUXT_MEDIA_PUBLIC_URL=https://media.example.com` (sans cookie d'administration) |
+| CDN à domaine propre (CloudFront, Bunny…) avec l'application pour origine | `NUXT_MEDIA_PUBLIC_URL=https://cdn.example.com` |
+| Plus tard : redirection vers le bucket S3 / son CDN | option « redirection » (302 vers une URL pré-signée courte ; décharge la bande passante mais perd nos en-têtes) |
+
+- **`/m/` sans cookie** : la diffusion ignore les cookies ; l'administration affiche les aperçus privés et la corbeille
+  par **liens signés courts**. La diffusion devient entièrement sans état. Les réponses `/m/` ne posent jamais de
+  cookie (condition pour qu'un CDN les garde).
+- La documentation (`setup.md`, puis le site de documentation) donnera les recettes par infrastructure.
+
+## 9. Performance et cache
+
+**Principe** : le chemin le plus sollicité est la **diffusion des fichiers**, puis la **lecture des listes** ; les
+écritures sont rares. On rend la diffusion cachable par un CDN et le plus souvent sans base, les lectures d'API
+revalidables à moindre coût (304), et l'on invalide **par versions** plutôt que par purge.
+
+### 9.1 Fichiers statiques (originaux et dérivés)
 
 - URL versionnées immuables (existant) : `public, max-age=31536000, immutable` ; remplacement = nouvelle URL.
-- **CDN devant `/m/`** et `NUXT_MEDIA_PUBLIC_URL` (domaine de diffusion utilisé pour les URL absolues de l'API).
-- **Domaine de diffusion séparé et sans cookie recommandé** (ex. `media.example.com`) : aucun cookie envoyé avec chaque
-  image, contenu envoyé par des tiers isolé de l'origine de l'administration.
-- **`/m/` sans cookie** : l'administration affiche les aperçus privés et la corbeille par liens signés courts au lieu
-  de la session ; la diffusion devient entièrement sans état.
-- Requêtes partielles **`Range` (206)** + `Accept-Ranges` (nécessaires aussi pour la vidéo, phase D), `Last-Modified`,
-  304 (existant), flux sans mise en mémoire (existant).
-- Plus tard, option S3 « redirection » : 302 vers une URL pré-signée courte du bucket (décharge la bande passante, mais
-  perd nos en-têtes de sécurité).
+- Requêtes partielles **`Range` (206)** + `Accept-Ranges` (utile aussi pour la vidéo, phase D), `Last-Modified`, 304
+  (existant), flux sans mise en mémoire (existant).
 - **Limite assumée** : passer un média public en privé ou le mettre à la corbeille n'efface pas les copies déjà en
   cache (navigateurs, CDN). Adaptateur facultatif de **purge CDN** (`CdnPurger` : aucun, webhook, fournisseur) ;
   l'interface l'indique lors du changement.
 
-### 8.2 Miniatures et dérivés
+### 9.2 Miniatures et dérivés
 
 - Générés une fois, persistés (`MediaVariant`), immuables (existant) ; déduplication des générations simultanées
   (existant, contrainte d'unicité en multi-instance).
-- **Pré-génération de l'aperçu** en tâche de fond juste après l'envoi : pas de latence au premier affichage.
-- **Concurrence de sharp bornée** (sémaphore ≈ nombre de cœurs, file d'attente) ; file saturée → 503 + `Retry-After`
-  plutôt qu'un serveur à genoux.
+- **Pré-génération de l'aperçu** en tâche de fond après l'envoi ou la duplication.
+- **Concurrence de sharp bornée** (sémaphore ≈ nombre de cœurs, file d'attente) ; file saturée → 503 + `Retry-After`.
 - Cache mémoire « (média, version, dérivé) → clé de stockage » : pas de requête `MediaVariant` à chaque affichage.
-- Phase C : **liste blanche de transformations** (préréglages nommés ou paramètres bornés) contre l'explosion du nombre
-  de dérivés (déni de service par tailles arbitraires).
+- Garde-fous des transformations libres : § 10.4.
 
-### 8.3 Métadonnées des médias
+### 9.3 Métadonnées des médias
 
-- Chemin chaud de `/m/` (version, visibilité, corbeille, clé, type, taille, empreinte) : **cache L1 LRU borné**
-  (~10 000 entrées), durée 60 s, invalidé localement à chaque écriture.
+- Chemin chaud de `/m/` (version, visibilité, corbeille, projet, clé, type, taille, empreinte) : **cache L1 LRU borné**
+  (~10 000 entrées), 60 s, invalidé localement à chaque écriture. Le projet y figure pour appliquer sa politique de
+  transformations (phase C) sans requête supplémentaire.
 - Détail API : ETag faible `W/"<id>-<version>-<updatedAt>"` → 304.
-- Multi-instance : écart maximal = durée du L1 (voir § 8.9).
 
-### 8.4 Listes et résultats de recherche/filtrage
+### 9.4 Listes et résultats de recherche/filtrage
 
-- **Compteur de révision par espace** (chaque projet, la bibliothèque), incrémenté par toute écriture qui modifie le
-  contenu d'une liste (§ 8.8).
+- **Compteur de révision par espace** (chaque projet, la bibliothèque), incrémenté par toute écriture dans l'espace.
 - **ETag de liste** = empreinte (espace, révision, requête normalisée, audience, tranche de signature) : un
-  `If-None-Match` identique → **304 sans exécuter la requête** (seule la révision est lue, elle-même gardée quelques
-  secondes en L1).
-- **Cache serveur des résultats** (identifiants + curseur suivant) dont la clé contient la révision : une écriture
-  rend les anciennes entrées inaccessibles d'elles-mêmes (cache « générationnel », aucune purge). Les objets médias
-  sont reconstitués depuis le cache de métadonnées.
-- `total` mis en cache par révision.
-- Index : `ProjectMedia(projectId, addedAt, mediaId)`, `ProjectMedia(mediaId)`, `Media(inLibrary, createdAt)`,
-  `Media(checksum)`, `Media(deletedAt)`.
+  `If-None-Match` identique → **304 sans exécuter la requête** (seule la révision est lue, gardée quelques secondes en L1).
+- **Cache serveur des résultats** (identifiants + curseur suivant) dont la clé contient la révision : une écriture rend
+  les anciennes entrées inaccessibles d'elles-mêmes (cache « générationnel », aucune purge). Les objets sont
+  reconstitués depuis le cache de métadonnées ; `total` mis en cache par révision.
+- Index : `Media(projectId, deletedAt, createdAt)`, `Media(projectId, folderId)`, `Media(projectId, checksum)`.
 - **Recherche normalisée** : colonnes de recherche en minuscules et sans accents (une par champ, ≤ 191 caractères pour
-  MySQL), la saisie étant normalisée de la même façon → insensible à la casse **et aux accents** sur les trois bases
-  (corrige la limite SQLite connue). Interface `MediaSearch` : implémentation `LIKE` par défaut, implémentations
-  natives possibles pour les gros volumes (PostgreSQL `pg_trgm`, MySQL FULLTEXT, SQLite FTS5).
-- En-têtes : `Cache-Control: private, no-cache` + ETag par défaut (revalidation → 304). Option de projet « liste publique
-  cachable » pour les réponses à clé publique (données publiques) : `public, s-maxage=60, stale-while-revalidate=300`.
+  MySQL), saisie normalisée de la même façon → insensible à la casse **et aux accents** sur les trois bases (corrige la
+  limite SQLite connue). Interface `MediaSearch` : `LIKE` par défaut, implémentations natives possibles pour les gros
+  volumes (PostgreSQL `pg_trgm`, MySQL FULLTEXT, SQLite FTS5).
+- En-têtes : `Cache-Control: private, no-cache` + ETag par défaut. Option de projet « liste publique cachable » pour les
+  réponses à clé publique (données publiques) : `public, s-maxage=60, stale-while-revalidate=300`.
 
-### 8.5 URL et liens signés
+### 9.5 URL et liens signés
 
-- URL publiques : calcul pur (aucune base).
+- URL publiques : calcul pur, sans base.
 - Liens signés HMAC : vérification sans base (existant).
 - **Échéance alignée sur des tranches** : pour une durée D, l'échéance est arrondie à la tranche suivante (ex. D = 1 h,
-  tranche = 15 min) ; tous les appels d'une même tranche produisent **la même URL** → cache navigateur/CDN efficace et
-  ETag de liste stables. Validité réelle entre D et D + tranche.
-- Réponse signée : `private, max-age=<reste>` (existant) ; option « partageable » (`public`) pour laisser un CDN la
-  garder jusqu'à l'échéance, sans risque puisque l'URL elle-même est la preuve d'accès.
+  tranche = 15 min) → **même URL** pour tous les appels d'une tranche : cache navigateur/CDN efficace, ETag de liste
+  stables. Validité réelle entre D et D + tranche.
+- Réponse signée : `private, max-age=<reste>` (existant) ; option « partageable » (`public`) pour qu'un CDN la garde
+  jusqu'à l'échéance, sans risque puisque l'URL elle-même est la preuve d'accès.
 
-### 8.6 Identifiants, jetons et configuration des projets
+### 9.6 Identifiants et configuration des projets
 
 - Jeton opaque : format + CRC (sans base) → **cache L1 « empreinte → identité »** (60 s, invalidé localement à la
-  révocation) → base.
-- Jeton délégué : signature vérifiée sans base ; état de l'émetteur lu dans le même cache.
-- Origines autorisées et réglages de projet : L1 60 s ; preflights gardés par le navigateur (`Access-Control-Max-Age`).
+  révocation) → base. Jeton délégué : signature sans base ; état de l'émetteur dans le même cache.
+- Origines, réglages et politique de transformation d'un projet : L1 60 s ; preflights gardés par le navigateur.
 - `lastUsedAt` écrit au plus toutes les 5 min.
 
-### 8.7 Récapitulatif
+### 9.7 Récapitulatif
 
 | Donnée | Où | Clé | Durée | Invalidation |
 | --- | --- | --- | --- | --- |
-| Fichier public (original, dérivé) | navigateur, CDN | URL versionnée | 1 an, immuable | nouvelle version ; purge CDN facultative |
+| Fichier public (original, dérivé, transformation) | navigateur, CDN | URL versionnée | 1 an, immuable | nouvelle version ; purge CDN facultative |
 | Fichier privé signé | navigateur (CDN en option) | URL signée (tranche) | jusqu'à l'échéance | échéance ; nouvelle version |
-| Aperçu / dérivé généré | stockage + `MediaVariant` | (média, version, transformation) | permanent | nouvelle version (suppression des anciens) |
+| Dérivé généré | stockage + `MediaVariant` | (média, version, transformation canonique) | permanent | nouvelle version (anciens supprimés) |
 | Métadonnées de diffusion | L1 (+ L2) | `media:<id>` | 60 s | écriture sur le média |
 | Clé de dérivé | L1 | `variant:<id>:<v>:<t>` | 10 min | nouvelle version |
 | Liste / recherche | L1 (+ L2) + ETag client | espace + révision + requête + audience | 5 min | révision de l'espace (automatique) |
 | Détail média (API) | ETag client | id + version + updatedAt | revalidation | modification |
 | Identité d'un jeton | L1 (+ L2) | empreinte | 60 s | révocation |
-| Réglages et origines d'un projet | L1 | `project:<id>` | 60 s | modification |
+| Réglages, origines, politique d'un projet | L1 | `project:<id>` | 60 s | modification |
 | Preflight CORS | navigateur | origine + URL | 2 h | — |
 
-### 8.8 Invalidation : événement → action
+### 9.8 Invalidation : événement → action
 
 | Événement | Actions |
 | --- | --- |
 | Envoi dans un espace | révision de l'espace + 1 ; pré-génération de l'aperçu |
-| Métadonnées, visibilité, remplacement, corbeille, restauration de M | révision de **tous** les espaces de M + 1 ; L1 `media:<id>` ; purge CDN si public → privé ou corbeille |
-| Rattachement / détachement de M | révision de **tous** les espaces de M (anciens et nouveaux) + 1 (l'indicateur `editable` change) |
-| Révocation / expiration forcée d'un identifiant | L1 de l'identité |
-| Origines, réglages, archivage d'un projet | L1 `project:<id>` |
+| Métadonnées, visibilité, remplacement, corbeille, restauration, changement de dossier | révision de l'espace + 1 ; L1 `media:<id>` ; purge CDN si public → privé ou corbeille |
+| Duplication | révision de l'espace cible + 1 |
+| Déplacement entre espaces | révision des deux espaces + 1 ; L1 `media:<id>` |
+| Dossiers (création, renommage, déplacement, suppression) | révision de l'espace + 1 |
+| Révocation d'un identifiant | L1 de l'identité |
+| Origines, réglages, politique, archivage d'un projet | L1 `project:<id>` |
 | Changement de rôle, désactivation, retrait d'un membre | aucune (droits recalculés à chaque requête ; PAT : L1 60 s) |
 
-### 8.9 Infrastructure
+### 9.9 Infrastructure
 
 - **Cache à deux niveaux** : L1 en mémoire (LRU borné, par processus) ; L2 facultatif via le **stockage Nitro**
-  (unstorage, déjà embarqué par Nitro : aucune nouvelle dépendance), pilote Redis/Valkey activé par variables
-  d'environnement. Le même stockage partagé sert à la limitation de débit en multi-instance.
-- Compteurs de révision **en base** (source de vérité partagée entre instances), relus au plus toutes les quelques
-  secondes.
+  (unstorage, déjà embarqué : aucune nouvelle dépendance), pilote Redis/Valkey activé par variables d'environnement ;
+  le même stockage sert à la limitation de débit en multi-instance.
+- Compteurs de révision **en base** (vérité partagée entre instances), relus au plus toutes les quelques secondes.
 - **SQLite** : activer le mode **WAL** (lectures concurrentes pendant les écritures ; non activé aujourd'hui).
-  PostgreSQL recommandé dès plusieurs instances ou un volume important.
-- **Tâches de fond** (tâches Nitro) : pré-génération des aperçus, purge des compteurs de jetons délégués expirés,
-  remplissage des colonnes de recherche, nettoyage des orphelins.
+  PostgreSQL recommandé dès plusieurs instances ou un gros volume.
+- **Tâches de fond** (tâches Nitro) : pré-génération des aperçus, purge des fichiers après suppression définitive ou
+  suppression de projet, purge des compteurs de jetons délégués expirés, remplissage des colonnes de recherche.
 
-## 9. Modèle de données proposé (Prisma)
+## 10. Préparation des transformations à la demande (phase C)
+
+Objectif : `crop`, taille, qualité, rotation, format… accessibles **par URL GET** (et construits/signés par l'API et
+le SDK), sans rework de la phase B.
+
+### 10.1 Grammaire d'URL (réservée dès la phase B)
+
+```text
+/m/<id>/v<n>/<nom>.<ext>              original (extension d'origine)
+/m/<id>/v<n>/<préréglage>/<nom>.<ext>  préréglage nommé : preview, thumb, hero…  → ^[a-z][a-z0-9-]{0,31}$
+/m/<id>/v<n>/<paramètres>/<nom>.<ext>  transformation libre : w_800,h_600,fit_cover,q_75  → clé_valeur séparés par « , »
+```
+
+- **Le format de sortie est donné par l'extension** (`jpg`, `png`, `webp`, `avif`) : un seul moyen de le choisir, donc
+  une seule URL par résultat. Pas de négociation automatique par défaut (`Vary: Accept` fragmente les caches CDN) ; les
+  composants produisent un `<picture>` avec des sources AVIF/WebP/JPEG.
+- Un nom de préréglage ne contient jamais `_` : pas d'ambiguïté avec les paramètres. `preview` (existant) devient un
+  préréglage intégré ; son URL actuelle ne change pas.
+- La chaîne de requête ne sert qu'aux signatures (`exp`, `kid`, `sig`, `scope`).
+
+### 10.2 Paramètres proposés
+
+| Paramètre | Valeurs | Effet |
+| --- | --- | --- |
+| `crop_x-y-l-h` | pixels dans l'image orientée | extraction d'une zone |
+| `r_` | 90, 180, 270 (angles libres plus tard) | rotation |
+| `flip_` | `h`, `v`, `hv` | miroir |
+| `w_`, `h_` | 1 à 4096 (configurable) | dimensions cibles |
+| `dpr_` | 1 à 3 | densité d'affichage (multiplie `w` et `h`, dans la limite) |
+| `fit_` | `cover`, `contain`, `fill`, `inside`, `outside` | mode de redimensionnement (sharp) ; `cover` si `w` et `h`, proportionnel sinon |
+| `g_` | `center`, `north`… `northwest`, `attention`, `entropy`, `focal` | ancrage du recadrage ; `focal` = point d'intérêt enregistré sur le média |
+| `q_` | 1 à 100 | qualité (défaut par format) |
+| `bg_` | couleur `rrggbb` | fond (`contain`, transparence vers JPEG) |
+
+- **Ordre d'exécution fixe** (indépendant de l'ordre dans l'URL) : orientation EXIF → rotation/miroir → zone → taille
+  → fond → encodage (métadonnées **retirées**, profil sRGB). Les coordonnées de zone s'entendent après rotation.
+- **Forme canonique** : clés dans un ordre fixe, valeurs par défaut omises, nombres normalisés. Une URL non canonique
+  reçoit une **redirection 301** vers la forme canonique : un résultat = une URL = un fichier en cache.
+- Pas d'agrandissement au-delà de l'original par défaut ; zone hors de l'image → 400 `INVALID_TRANSFORM`.
+- Images animées : première image en v1 de la phase C.
+
+### 10.3 Politique par projet
+
+Chaque média appartenant à un seul espace, la politique de son projet (ou la politique globale pour la bibliothèque)
+s'applique sans ambiguïté :
+
+| Mode | Transformations libres | Usage |
+| --- | --- | --- |
+| `open` (défaut proposé) | autorisées dans les limites + quotas (§ 10.4) | sites publics construisant leur `srcset` côté client |
+| `signed` | exigent une signature (`?sig`, sans échéance pour un média public : URL permanente et cachable) | installations exposées à fort trafic |
+| `presets` | interdites, seuls les préréglages | contrôle maximal |
+
+Médias privés : toujours une signature (cible précise, préréglage, ou `derived`, § 4.6). Préréglages : globaux et par
+projet (modèle `TransformPreset`), gérés dans l'interface (`project:settings`).
+
+### 10.4 Garde-fous contre les abus
+
+- Bornes : dimensions de sortie (4096 × 4096 par défaut), densité, qualité, formats autorisés ; limite de pixels en
+  entrée (existante, 100 Mpx).
+- **Quota de dérivés distincts par version de média** (ex. 50) et **débit de nouvelles générations** par IP ;
+  au-delà : 429 `TRANSFORM_QUOTA` ou 403 `TRANSFORM_NOT_ALLOWED`, tandis que les dérivés existants et les préréglages
+  restent servis.
+- Concurrence de sharp bornée et générations dédoublonnées (§ 9.2) ; l'encodage AVIF (coûteux en calcul) utilise un
+  effort réduit.
+- Canonisation (§ 10.2) : impossible de multiplier les copies d'un même résultat en permutant les paramètres.
+
+### 10.5 Stockage et cache des transformations
+
+Identique aux dérivés actuels : `MediaVariant (mediaId, transformation canonique)`, clé de stockage
+`variants/<id>/v<n>-<empreinte>.<ext>`, cache immuable ; suppression des dérivés à chaque nouvelle version (existant).
+Plus tard : purge des dérivés jamais redemandés.
+
+### 10.6 API et SDK
+
+- `POST …/signed-url` accepte une cible `transform` ou `preset` (ou `derived`).
+- Contrat média (ajout sans rupture) : `urlTemplate` = `https://…/m/<id>/v3/{transform}/affiche-ete.{format}`
+  (+ paramètres de signature `derived` pour un média privé) ; le SDK expose `mediaUrl(media, options)` et
+  `srcset(media, largeurs)`.
+- Point d'intérêt (`Media.focalX`, `focalY`, 0–1) réglable dans l'interface pour `g_focal`.
+- Plus tard : « appliquer et remplacer » (une transformation devient une nouvelle version de l'original).
+
+### 10.7 Ce que la phase B fait dès maintenant pour la phase C
+
+- Grammaire de `/m/` réservée (préréglages / paramètres) et redirection de version conservée.
+- Liens signés v2 (§ 4.6) : cible et `kid` inclus → aucun changement de format en phase C.
+- Métadonnées de diffusion en cache avec le projet → politique applicable sans requête.
+- Concurrence de sharp bornée, pré-génération, déduplication (B4).
+- Réglages de projet extensibles (la politique et les préréglages s'y ajoutent sans migration de fond).
+- `MediaVariant` inchangé (déjà conçu pour des transformations canoniques).
+
+## 11. Dossiers (sous-étape B5)
+
+**Conservés** : ils servent au regroupement (sections d'un site, campagnes), au **filtrage** dans l'API
+(`folder`, `recursive`), à la **navigation** dans `<MediaPicker>` et l'administration, et aux actions groupées. Des
+**étiquettes** (plusieurs par média) pourront compléter plus tard pour le classement transversal.
+
+- Un dossier appartient à un espace (`Folder.projectId`, null = bibliothèque) ; arborescence (profondeur ≤ 8),
+  nom ≤ 100 caractères, unique parmi ses frères (contrôlé par l'API).
+- Un média est dans 0 ou 1 dossier de son espace (`Media.folderId`).
+- Filtre récursif : descendants calculés depuis l'arbre de l'espace (petit, mis en cache par révision) →
+  `folderId IN (…)`. Portable, sans colonne de chemin (la limite de 191 caractères de MySQL l'aurait bridée).
+- Suppression d'un dossier : refusée s'il n'est pas vide (409 `FOLDER_NOT_EMPTY`), l'interface proposant de déplacer
+  son contenu vers le parent.
+- Droits : `media:read` pour lire l'arbre, `media:write` pour créer, renommer, déplacer, supprimer.
+- Duplication et déplacement entre espaces : dossier cible au choix (racine par défaut).
+
+## 12. Modèle de données proposé (Prisma)
 
 ```prisma
 enum ProjectRole { OWNER DEVELOPER EDITOR }
@@ -558,15 +697,14 @@ model Project {
   name          String
   slug          String    @unique
   description   String?
-  /// Les identifiants du projet peuvent parcourir la bibliothèque et y puiser (lecture seule)
-  libraryAccess Boolean   @default(false)
   /// La clé publique peut lister/chercher (sinon : lecture par identifiants seulement)
   publicListing Boolean   @default(false)
   archivedAt    DateTime?
   createdById   String?                                   // User, SetNull
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
-  members ProjectMember[]  media ProjectMedia[]  tokens AccessToken[]  tokenGrants AccessTokenProject[]  allowedOrigins AllowedOrigin[]
+  // phase C : transformPolicy, préréglages
+  members ProjectMember[]  media Media[]  folders Folder[]  tokens AccessToken[]  tokenGrants AccessTokenProject[]  allowedOrigins AllowedOrigin[]
 }
 
 model ProjectMember {
@@ -578,56 +716,64 @@ model ProjectMember {
   @@index([userId])
 }
 
-/// Rattachement d'un média à un projet (la bibliothèque est le drapeau Media.inLibrary)
-model ProjectMedia {
-  projectId String
-  mediaId   String                                        // Cascade des deux côtés
-  addedAt   DateTime @default(now())
-  addedById String?                                       // User, SetNull
-  @@id([projectId, mediaId])
-  @@index([projectId, addedAt, mediaId])
-  @@index([mediaId])
+model Folder {
+  id        String   @id @default(cuid())
+  /// null = bibliothèque de l'organisation
+  projectId String?                                       // Cascade
+  parentId  String?                                       // Cascade (arbre)
+  name      String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  @@index([projectId, parentId])
 }
 
 model Media {
-  // supprimés : projectId, folderId (et le modèle Folder, inutilisé)
-  inLibrary          Boolean @default(false)
+  /// null = bibliothèque de l'organisation ; Restrict : un projet n'emporte jamais ses médias par cascade
+  projectId         String?                               // Project, Restrict
+  folderId          String?                               // Folder, SetNull (existant)
+  /// Média d'origine d'une duplication
+  duplicatedFromId  String?                               // Media, SetNull
   /// Colonnes de recherche normalisées (minuscules, sans accents), remplies par l'application
-  searchTitle        String?
-  searchName         String  @default("")
-  searchAlt          String?
-  uploadedById       String?                              // User, SetNull (existant)
-  uploadedByTokenId  String?                              // AccessToken, SetNull
+  searchTitle       String?
+  searchName        String  @default("")
+  searchAlt         String?
+  uploadedById      String?                               // User, SetNull (existant)
+  uploadedByTokenId String?                               // AccessToken, SetNull
   /// Sujet final déclaré par l'application cliente (jeton délégué), pour l'audit
-  uploadSubject      String?
+  uploadSubject     String?
   // … champs existants inchangés (kind, visibility, storageKey, version, checksum, deletedAt…)
-  @@index([inLibrary, createdAt])
-  @@index([checksum])
-  @@index([deletedAt])
+  // phase C : focalX, focalY
+  @@index([projectId, deletedAt, createdAt])
+  @@index([projectId, folderId])
+  @@index([projectId, checksum])
 }
 
 /// Identifiant d'API : jeton personnel, clé secrète ou clé publique de projet
 model AccessToken {
-  id          String    @id @default(cuid())
-  type        TokenType
-  name        String
+  id             String    @id @default(cuid())
+  type           TokenType
+  name           String
   /// Clés de projet (SECRET, PUBLISHABLE) ; null pour un jeton personnel
-  projectId   String?                                     // Cascade
+  projectId      String?                                  // Cascade
+  /// Étiquette d'environnement des clés de projet (production, staging, development, test…)
+  environment    String?
   /// Propriétaire d'un jeton personnel
-  userId      String?                                     // Cascade
+  userId         String?                                  // Cascade
   /// Jeton personnel : tous les projets de son propriétaire (sinon : AccessTokenProject)
-  allProjects Boolean   @default(false)
-  prefix      String
-  tokenHash   String    @unique
+  allProjects    Boolean   @default(false)
+  /// Jeton personnel : accès à la bibliothèque
+  includeLibrary Boolean   @default(false)
+  prefix         String
+  tokenHash      String    @unique
   /// Valeur en clair, uniquement pour une clé publique (non secrète)
-  publicValue String?
-  scopes      String                                      // séparées par des espaces, immuables
-  expiresAt   DateTime?
-  lastUsedAt  DateTime?
-  lastUsedIp  String?
-  revokedAt   DateTime?
-  createdById String?                                     // SetNull
-  createdAt   DateTime  @default(now())
+  publicValue    String?
+  scopes         String                                   // séparées par des espaces, immuables
+  expiresAt      DateTime?
+  lastUsedAt     DateTime?
+  lastUsedIp     String?
+  revokedAt      DateTime?
+  createdById    String?                                  // SetNull
+  createdAt      DateTime  @default(now())
   @@index([projectId])
   @@index([userId])
 }
@@ -655,14 +801,14 @@ model CacheRevision {
   updatedAt DateTime @updatedAt
 }
 
-/// Journal d'audit des actions sensibles (jetons, membres, suppressions, visibilité)
+/// Journal d'audit des actions sensibles (identifiants, membres, suppressions, visibilité, projets)
 model AuditEvent {
   id          String   @id @default(cuid())
   at          DateTime @default(now())
   actorUserId String?
   tokenId     String?
   projectId   String?
-  action      String                                      // ex. "token.created", "member.removed"
+  action      String                                      // ex. "token.created", "project.deleted"
   targetType  String?
   targetId    String?
   ipAddress   String?
@@ -672,71 +818,79 @@ model AuditEvent {
 }
 ```
 
-Toutes ces structures respectent les règles de portabilité (pas de `@db.*`, pas de listes scalaires, chaînes ≤ 191).
+Règles de portabilité respectées (pas de `@db.*`, pas de listes scalaires, chaînes ≤ 191). L'unicité des noms de
+dossiers et des préréglages (clés nulles) est contrôlée par l'API, les bases traitant différemment `NULL` dans les
+index uniques.
 
-## 10. Migration de l'existant
+## 13. Migration de l'existant
 
-1. **Schéma** (migration pour les 3 fournisseurs, avec reprise de données écrite à la main) :
-   - tous les médias existants → `inLibrary = true` (ils étaient visibles de tous les rôles : sémantique conservée) ;
-   - suppression de `Media.projectId`, `Media.folderId` et du modèle `Folder` (jamais utilisé ; les dossiers
-     reviendront plus tard, **par projet**, portés par `ProjectMedia`) ;
-   - suppression du projet technique `default` (aucune clé ni origine n'a pu y être créée) ;
-   - `AccessToken` restructuré (table vide aujourd'hui) ;
+1. **Schéma** (migration pour les 3 fournisseurs, reprise de données écrite à la main) :
+   - `Media.projectId` devient facultatif ; les médias du projet technique `default` → **bibliothèque** (`null`) ;
+   - suppression du projet `default` (aucune clé ni origine n'a pu y être créée) ;
+   - `Folder.projectId` devient facultatif ; `Media.folderId` conservé ;
+   - `AccessToken` restructuré (table vide aujourd'hui) ; nouvelles tables ;
    - colonnes de recherche remplies par une tâche au démarrage (la suppression des accents n'est pas portable en SQL).
 2. **Code** : suppression de `defaultProjectId()` ; permissions `media:manage` / `tokens:manage` / `api:manage`
-   remplacées par les portées ; services médias paramétrés par (principal, espace) ; `authorizeDelivery` sans session.
+   remplacées par les portées ; services médias paramétrés par (principal, espace) ; `authorizeDelivery` sans session ;
+   `MediaStorage.copy`.
 3. **Interface** : la page Médias devient « Bibliothèque » ; les écrans Projets et Jetons remplacent les sections
    « à venir ».
 
-## 11. Interface d'administration
+## 14. Interface d'administration
 
 - Barre latérale : Tableau de bord · Bibliothèque · Projets · Jetons personnels · Utilisateurs (filtrée par portées).
-- **Projets** : liste (mes projets ; tous pour l'ADMIN), création (nom, identifiant lisible généré, description).
-- **Fiche projet** (routes sœurs `/admin/projects/[id]/…`) : Aperçu et réglages · Médias (liste, envoi, « ajouter
-  depuis la bibliothèque », retirer) · Membres · Clés d'API (publique, secrètes) · Origines autorisées · Zone sensible
-  (archiver, supprimer).
-- **Fiche média** : section « Rattachements » (bibliothèque, projets visibles, nombre de projets non visibles),
-  avertissement « utilisé par N espaces » avant toute modification, actions désactivées avec explication si R3 n'est
-  pas satisfaite.
-- **Jetons personnels** : liste, création (nom, expiration, projets, portées), affichage unique, révocation.
-- Nouveaux composants probables : onglets de sous-navigation, groupe de cases à cocher (portées), tableau.
-  Tout en fr/en, WCAG 2.2 AA, avec les patrons existants (`UiDialog`, `UiCopyField`, `UiRadioCards`, `useFlash`…).
+- **Projets** : liste (mes projets ; tous pour l'ADMIN ; archivés masqués par défaut), création (nom, identifiant
+  lisible généré, description).
+- **Fiche projet** (routes sœurs `/admin/projects/[id]/…`) : Aperçu et réglages · Médias (même écran que la
+  bibliothèque, limité au projet) · Membres · Clés d'API (publique, secrètes, par environnement) · Origines autorisées ·
+  Zone sensible (archiver, supprimer avec choix pour les médias).
+- **Fiche média** : espace d'appartenance, actions « Dupliquer vers… » et « Déplacer vers… » (espaces où l'utilisateur
+  peut envoyer), le reste inchangé.
+- **Jetons personnels** : liste, création (nom, expiration, projets, bibliothèque, portées), affichage unique, révocation.
+- Nouveaux composants probables : onglets de sous-navigation, groupe de cases à cocher (portées), tableau, arbre de
+  dossiers (B5). Tout en fr/en, WCAG 2.2 AA, avec les patrons existants (`UiDialog`, `UiCopyField`, `UiRadioCards`,
+  `useFlash`…).
 
-## 12. Découpage et vérification
+## 15. Découpage et vérification
 
 | Sous-étape | Contenu |
 | --- | --- |
-| **B1 — Modèle, autorisations, projets** | migrations ; moteur de portées + **tests Vitest** ; projets (création, réglages, archivage) ; membres et rôles ; rattachements dans l'admin ; bibliothèque ; `/m/` sans cookie (aperçus signés) |
-| **B2 — Identifiants** | clés publiques et secrètes, PAT, origines CORS (écrans) ; création avec affichage unique, révocation, rotation, dernière utilisation ; confirmation du mot de passe ; journal d'audit |
-| **B3 — API v1 en lecture** | résolution de l'identité ; `/me`, projets, liste/détail/`ids`, liens signés ; CORS ; erreurs RFC 9457 ; limitation de débit ; caches (identités, métadonnées, révisions, ETag) ; Bearer sur `/m/` ; OpenAPI ; `Range` |
-| **B4 — API v1 en écriture + jetons délégués** | envoi, PATCH/PUT/DELETE (R1–R4) ; rattachement depuis la bibliothèque ; jetons délégués (lecture, envoi, contraintes) ; pré-génération des aperçus ; concurrence sharp bornée |
-| Ensuite | `@surge-media/client` + composants (Vue d'abord) ; phase C (transformations) |
+| **B1 — Modèle, autorisations, projets** | migrations ; moteur de portées + **Vitest** ; projets (création, réglages, archivage, suppression) ; membres et rôles ; bibliothèque et médias de projet dans l'admin ; duplication (+ déplacement si validé) ; `MediaStorage.copy` ; `/m/` sans cookie (aperçus signés) ; `NUXT_SITE_URL`, `NUXT_MEDIA_PUBLIC_URL` |
+| **B2 — Identifiants** | clés publiques et secrètes (environnements), PAT, origines CORS (écrans) ; affichage unique, révocation, rotation, dernière utilisation ; confirmation du mot de passe ; journal d'audit |
+| **B3 — API v1 en lecture** | résolution de l'identité ; `/me`, projets, liste/détail/`ids` ; liens signés v2 (`kid`, tranches, cibles) ; CORS ; RFC 9457 ; limitation de débit ; caches (identités, métadonnées, révisions, ETag) ; Bearer sur `/m/` ; `Range` ; OpenAPI |
+| **B4 — API v1 en écriture + jetons délégués** | envoi, PATCH/PUT/DELETE, duplication ; jetons délégués (lecture, envoi, contraintes) ; pré-génération des aperçus ; concurrence sharp bornée |
+| **B5 — Dossiers** | arbre par espace dans l'admin, filtre `folder`/`recursive` dans l'API, contraintes d'envoi par dossier |
+| Ensuite | **phase C** (transformations, § 10), puis `@surge-media/client` + composants (Vue d'abord), qui profiteront directement des transformations (`srcset`) |
 
 À chaque sous-étape : `typecheck`, `i18n:check`, `a11y:contrast`, `db:migration --check`, tests Vitest, build de
-production, scénarios d'API rejoués en dev et en prod (y compris les cas de refus : autre projet, portée absente, média
-partagé, origine interdite, jeton expiré/révoqué), audit axe fr/en × clair/sombre, `setup.md` et `project-context.md`.
+production, scénarios d'API rejoués en dev et en prod (y compris les refus : autre projet, portée absente, origine
+interdite, jeton expiré/révoqué), audit axe fr/en × clair/sombre, `setup.md` et `project-context.md` mis à jour.
 
-## 13. Décisions à valider
+## 16. Décisions
 
-| # | Décision proposée |
-| --- | --- |
-| D1 | Une installation = une organisation cliente (pas de multi-locataire). |
-| D2 | Rattachements : bibliothèque (drapeau) + projets (liaison) ; médias existants → bibliothèque. |
-| D3 | Règle unique R3 (droits sur tous les rattachements) ; « supprimer » depuis un projet = détacher, corbeille si dernier rattachement. |
-| D4 | Rôles de projet OWNER / DEVELOPER / EDITOR ; rôle de plateforme = plafond ; DEVELOPER de plateforme peut créer des projets ; tous les rôles gèrent la bibliothèque. |
-| D5 | Identifiants : PAT, clé secrète **mono-projet**, clé publique, jeton délégué, lien signé ; portées immuables ; aucun jeton ne gère les accès. |
-| D6 | Clé publique : médias publics seulement ; liste/recherche publique **désactivée par défaut** (option de projet). |
-| D7 | API v1 : projet dans le chemin, cookies refusés, clés secrètes refusées depuis un navigateur, RFC 9457, valeurs en minuscules, pagination par curseur. |
-| D8 | `/m/` sans cookie (aperçus d'administration par liens signés) ; `NUXT_MEDIA_PUBLIC_URL` ; domaine de diffusion séparé recommandé. |
-| D9 | Cache L1 mémoire + L2 Redis facultatif (stockage Nitro) ; révisions en base ; SQLite en WAL. |
-| D10 | Introduction de **Vitest** (dépendance de développement) pour le moteur d'autorisation et les jetons. |
-| D11 | Suppression du modèle `Folder` inutilisé (dossiers plus tard, par projet). |
-| D12 | Livraison B1 → B4, avec validation et commit entre chaque sous-étape. |
+| # | Décision | Statut |
+| --- | --- | --- |
+| D1 | Une installation = une organisation cliente (tous ses projets et environnements) | **validé** |
+| D2 | Médias existants → bibliothèque ; projet `default` supprimé | **validé** |
+| D3 | Un média = **un seul espace** (bibliothèque ou projet) ; réutilisation par **duplication** | **validé (modifié par l'utilisateur)** |
+| D4 | Rôles de projet OWNER / DEVELOPER / EDITOR ; plafond ; DEVELOPER crée des projets ; tous les rôles gèrent la bibliothèque | **validé** |
+| D5 | PAT, clé secrète mono-projet, clé publique, jeton délégué, lien signé ; portées immuables ; aucun jeton ne gère les accès | **validé** |
+| D6 | Clé publique : médias publics ; liste publique désactivée par défaut | **validé** |
+| D7 | API v1 : projet dans le chemin, sans cookies, clés secrètes refusées depuis un navigateur, RFC 9457, minuscules, curseurs | **validé** |
+| D8 | `/m/` sans cookie ; diffusion par défaut sur le domaine de l'application (`NUXT_SITE_URL`), configurable (`NUXT_MEDIA_PUBLIC_URL`, § 8) | **validé (modifié par l'utilisateur)** |
+| D9 | Cache L1 mémoire + L2 Redis facultatif (stockage Nitro) ; révisions en base ; SQLite en WAL | **validé** |
+| D10 | Vitest | **validé** |
+| D11 | Dossiers **conservés** (regroupement, filtre, navigation), implémentés en B5 ; étiquettes plus tard | **validé** |
+| D12 | Livraison par sous-étapes validées et commitées une à une (désormais B1 → B5) | **validé** |
+| D13 | Environnements = étiquette sur les clés d'un même projet ; environnement jetable = projet séparé | **validé** |
+| D14 | « Déplacer » en plus de « Dupliquer » ; suppression de projet : archivage préalable puis choix « vers la bibliothèque » ou « suppression définitive » | **validé** |
+| D15 | Transformations : grammaire et paramètres § 10, format par l'extension, ordre fixe, forme canonique, politique par projet (`open` borné par défaut), liens signés v2 dès B3 | **validé** |
 
-## 14. Hors périmètre (évolutions possibles, schéma compatible)
+## 17. Hors périmètre (évolutions possibles, schéma compatible)
 
 Webhooks par projet (invalidation des caches côté client) · comptes de service multi-projets · OAuth 2.1 (applications
-agissant au nom d'utilisateurs surgeMedia) · restriction IP des clés secrètes · quotas par projet (stockage, envois) ·
-dossiers / collections par projet · textes alternatifs propres à un projet · détection des doublons à l'envoi
-(proposer de rattacher le média existant) · purge CDN par fournisseur · envoi depuis une URL (avec protection SSRF) ·
-authentification unique (SSO) pour l'administration.
+agissant au nom d'utilisateurs surgeMedia) · accès en lecture à la bibliothèque pour les identifiants d'un projet ·
+restriction IP des clés secrètes · quotas par projet (stockage, envois) · étiquettes · textes alternatifs par contexte ·
+déduplication physique des fichiers dupliqués · détection des doublons à l'envoi · purge CDN par fournisseur · envoi
+depuis une URL (avec protection SSRF) · négociation de format (`auto`) · authentification unique (SSO) pour
+l'administration.

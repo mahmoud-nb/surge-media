@@ -6,7 +6,7 @@ import { useMediaStorage } from '../../lib/storage'
  * GET|HEAD /m/<id>/v<version>/[<dérivé>/]<nom> — diffusion d'un média.
  *
  * Public : mis en cache sans limite (l'URL change à chaque remplacement). Privé : lien signé
- * (?exp=&sig=) ou session d'administration. Le chemin physique n'est jamais exposé ; le type
+ * (?exp=&kid=&sig=), jamais par cookie. Le chemin physique n'est jamais exposé ; le type
  * MIME vient de la base (jamais déduit du contenu par le navigateur : nosniff).
  */
 export default defineEventHandler(async (event) => {
@@ -23,12 +23,14 @@ export default defineEventHandler(async (event) => {
   if (!media) throw createError({ statusCode: 404, statusMessage: 'Not Found' })
 
   // Ancienne version (fichier remplacé) : redirection vers l'URL courante, sans mise en cache.
+  // Un média dans la corbeille n'est jamais redirigé (son existence n'est pas révélée).
   if (target.version !== media.version) {
+    if (media.deletedAt) throw createError({ statusCode: 404, statusMessage: 'Not Found' })
     setResponseHeader(event, 'Cache-Control', 'no-cache')
     return sendRedirect(event, mediaPath(media, target.variant === 'original' ? undefined : target.variant), 302)
   }
 
-  const access = await authorizeDelivery(event, media, target)
+  const access = authorizeDelivery(event, media, target)
   const object = await resolveDeliverable(media, target.variant)
   const etag = `"${object.etag}"`
 
@@ -39,6 +41,8 @@ export default defineEventHandler(async (event) => {
     'X-Content-Type-Options': 'nosniff',
     'Content-Security-Policy': 'default-src \'none\'; sandbox',
     'Cross-Origin-Resource-Policy': 'cross-origin',
+    // Lecture par fetch() ou <canvas> depuis n'importe quel site : l'URL (publique ou signée) est la preuve d'accès.
+    'Access-Control-Allow-Origin': '*',
     'Content-Disposition': contentDisposition(target.variant === 'original' ? media.originalName : target.filename),
   })
   if (access.mode !== 'public') setResponseHeader(event, 'X-Robots-Tag', 'noindex')

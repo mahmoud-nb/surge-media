@@ -1,8 +1,7 @@
-import { findMediaOr404, restoreMedia, toMediaDetail } from '../../../../lib/media/service'
+import { findMedia, restoreMedia, toMediaDetail } from '../../../../lib/media/service'
 
-/** POST /api/admin/media/:id/restore — sortie de la corbeille. */
+/** POST /api/admin/media/:id/restore — sortie de la corbeille (portée media:delete). */
 export default defineEventHandler(async (event) => {
-  await requireAuth(event, 'media:manage')
-  const media = await findMediaOr404(getRouterParam(event, 'id') ?? '')
+  const { media } = await requireMediaAccess(event, () => findMedia(getRouterParam(event, 'id') ?? ''), 'media:delete')
   return { media: toMediaDetail(await restoreMedia(media)) }
 })

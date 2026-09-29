@@ -1,18 +1,20 @@
 import { signedUrlSchema } from '#shared/schemas/media'
-import { findMediaOr404 } from '../../../../lib/media/service'
-import { mediaPath, signedMediaPath } from '../../../../lib/media/urls'
+import { mediaError } from '../../../../lib/media/errors'
+import { findMedia } from '../../../../lib/media/service'
+import { mediaBaseUrl, mediaPath, signedMediaPath } from '../../../../lib/media/urls'
 
 /**
  * POST /api/admin/media/:id/signed-url — { expiresIn: secondes (60 à 7 jours) } → lien
- * temporaire vers un média privé, utilisable directement (balise <img>, partage).
- * Pour un média public, renvoie son URL permanente (expiresAt: null).
+ * temporaire absolu vers un média privé, utilisable directement (balise <img>, partage).
+ * Pour un média public, renvoie son URL permanente (expiresAt: null). 409 IN_TRASH.
  */
 export default defineEventHandler(async (event) => {
-  await requireAuth(event, 'media:manage')
-  const media = await findMediaOr404(getRouterParam(event, 'id') ?? '')
+  const { media } = await requireMediaAccess(event, () => findMedia(getRouterParam(event, 'id') ?? ''), 'media:read')
   const { expiresIn } = await readValidatedBody(event, body => signedUrlSchema.parse(body))
-  if (media.deletedAt) throw createError({ statusCode: 409, statusMessage: 'Media is in the trash' })
+  if (media.deletedAt) throw mediaError(409, 'IN_TRASH')
 
-  if (media.visibility === 'PUBLIC') return { path: mediaPath(media), expiresAt: null }
-  return signedMediaPath(media, expiresIn)
+  const base = mediaBaseUrl(event)
+  if (media.visibility === 'PUBLIC') return { url: `${base}${mediaPath(media)}`, expiresAt: null }
+  const { path, expiresAt } = signedMediaPath(media, expiresIn)
+  return { url: `${base}${path}`, expiresAt }
 })

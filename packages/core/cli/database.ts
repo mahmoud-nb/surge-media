@@ -45,22 +45,26 @@ const GENERATED_SECRETS = ['NUXT_SESSION_PASSWORD', 'NUXT_MEDIA_SIGNING_SECRET']
 
 // ─── Commandes ───────────────────────────────────────────────────────────────
 
-/** `surge-media init` : choisit le fournisseur et l'URL, puis applique les migrations. */
-export async function runInit(ctx: CliContext, args: TargetArgs & { skipMigrate?: boolean }): Promise<void> {
+/**
+ * `surge-media init` : choisit le fournisseur et l'URL de la base, l'URL publique de
+ * l'installation (NUXT_SITE_URL), puis applique les migrations.
+ */
+export async function runInit(ctx: CliContext, args: TargetArgs & { skipMigrate?: boolean, siteUrl?: string }): Promise<void> {
   const { t } = ctx
   intro(t('intro.init'))
 
   const current = readCurrentTarget(ctx)
   const target = await resolveTarget(ctx, args, current)
+  const siteUrl = await resolveSiteUrl(ctx, args)
   warnProviderChange(ctx, current, target)
-  showSummary(ctx, target)
+  showSummary(ctx, target, siteUrl)
 
   if (!args.yes) {
     const apply = unwrap(ctx, await confirm({ message: t('confirm.apply'), initialValue: true }))
     if (!apply) return abort(ctx)
   }
 
-  await applyTarget(ctx, target, args.skipMigrate ? 'skip' : 'deploy')
+  await applyTarget(ctx, target, args.skipMigrate ? 'skip' : 'deploy', { NUXT_SITE_URL: siteUrl })
   if (current.provider && current.provider !== target.provider) note(t('note.rebuild'))
   outro(t('outro.init'))
 }
@@ -188,18 +192,57 @@ function validateUrl(ctx: CliContext, provider: DatabaseProvider, value: string 
   return undefined
 }
 
+const DEFAULT_SITE_URL = 'http://localhost:3000'
+
+/**
+ * URL publique de l'installation (base des liens vers les médias) : argument, sinon question
+ * (valeur actuelle du .env proposée), sinon valeur actuelle ou http://localhost:3000 (--yes).
+ */
+async function resolveSiteUrl(ctx: CliContext, args: { siteUrl?: string, yes?: boolean }): Promise<string> {
+  const current = readEnvFile(join(ctx.root, ENV_FILE)).NUXT_SITE_URL || DEFAULT_SITE_URL
+  let value: string
+  if (args.siteUrl) value = args.siteUrl.trim()
+  else if (args.yes) value = current
+  else {
+    value = unwrap(ctx, await text({
+      message: ctx.t('prompt.siteUrl'),
+      placeholder: 'https://media.example.com',
+      initialValue: current,
+      validate: input => validateSiteUrl(ctx, input),
+    })).trim()
+  }
+  const error = validateSiteUrl(ctx, value)
+  if (error) fail(error)
+  return value.replace(/\/+$/, '')
+}
+
+/** http(s), sans identifiants, paramètres ni ancre ; un chemin est permis (installation sous un préfixe). */
+function validateSiteUrl(ctx: CliContext, value: string | undefined): string | undefined {
+  try {
+    const url = new URL(value?.trim() ?? '')
+    if ((url.protocol === 'http:' || url.protocol === 'https:') && !url.username && !url.password && !url.search && !url.hash) {
+      return undefined
+    }
+  }
+  catch {
+    // URL invalide : message ci-dessous.
+  }
+  return ctx.t('error.siteUrl')
+}
+
 function warnProviderChange(ctx: CliContext, current: Partial<DatabaseTarget>, target: DatabaseTarget): void {
   if (current.provider && current.provider !== target.provider) {
     log.warn(ctx.t('warn.providerChange', { from: current.provider, to: target.provider }))
   }
 }
 
-function showSummary(ctx: CliContext, target: DatabaseTarget): void {
+function showSummary(ctx: CliContext, target: DatabaseTarget, siteUrl?: string): void {
   const { t } = ctx
   note(
     [
       `${t('summary.provider')} : ${t(`provider.${target.provider}.label`)}`,
       `${t('summary.url')} : ${maskUrl(target.url)}`,
+      ...(siteUrl ? [`${t('summary.siteUrl')} : ${siteUrl}`] : []),
       `${t('summary.root')} : ${ctx.root}`,
     ].join('\n'),
     t('summary.title'),
@@ -207,11 +250,11 @@ function showSummary(ctx: CliContext, target: DatabaseTarget): void {
 }
 
 /** Écrit la configuration (.env + schéma), génère le client Prisma puis migre la base. */
-async function applyTarget(ctx: CliContext, target: DatabaseTarget, mode: MigrationMode): Promise<void> {
+async function applyTarget(ctx: CliContext, target: DatabaseTarget, mode: MigrationMode, extra: Record<string, string> = {}): Promise<void> {
   const { t, root } = ctx
 
   const envPath = join(root, ENV_FILE)
-  const values: Record<string, string> = { DATABASE_PROVIDER: target.provider, DATABASE_URL: target.url }
+  const values: Record<string, string> = { ...extra, DATABASE_PROVIDER: target.provider, DATABASE_URL: target.url }
   // Secrets générés une seule fois (jamais remplacés : cela déconnecterait tout le monde ou
   // invaliderait les liens signés déjà partagés).
   const existing = readEnvFile(envPath)

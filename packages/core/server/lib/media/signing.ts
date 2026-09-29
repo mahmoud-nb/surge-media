@@ -1,23 +1,108 @@
-import { createHmac, timingSafeEqual } from 'node:crypto'
+import { createHash, createHmac, timingSafeEqual } from 'node:crypto'
 
 /**
- * URL signées des médias privés : `?exp=<horodatage unix>&sig=<HMAC-SHA256>`.
- * La signature couvre l'identifiant, la version du fichier, le dérivé et l'échéance :
- * un lien ne donne accès qu'à ce fichier-là, jusqu'à cette date. Vérification sans
- * accès à la base. Invalidation : remplacement du fichier (nouvelle version) ou
- * changement du secret NUXT_MEDIA_SIGNING_SECRET (tous les liens).
+ * Liens signés des médias (v2) : `?exp=<unix>&kid=<secret>[&scope=derived|admin]&sig=<HMAC-SHA256>`.
+ *
+ * La signature couvre `v2:<média>:<version>:<droit>:<échéance>`, où le droit est :
+ *   - la cible exacte (sans `scope`) : `file` pour l'original, `preset:<nom>` pour un dérivé nommé
+ *     (phase C : `t:<transformation canonique>`) ;
+ *   - ou un droit élargi (`scope`) : `derived` = tout dérivé de cette version, jamais l'original
+ *     (un seul lien pour construire un srcset) ; `admin` = tout fichier de cette version, même dans
+ *     la corbeille (aperçus de l'administration, qui n'utilise plus de cookie sur /m/).
+ *
+ * Vérification sans accès à la base. `kid` (empreinte courte du secret) désigne le secret utilisé :
+ * pendant une rotation, NUXT_MEDIA_PREVIOUS_SIGNING_SECRET reste accepté. Invalidation : nouvelle
+ * version du fichier, échéance, ou retrait du secret.
+ *
+ * Les fonctions pures (sans configuration) sont testées dans tests/signing.test.ts.
  */
 
-export interface SignedTarget {
+export const SIGNATURE_SCOPES = ['derived', 'admin'] as const
+export type SignatureScope = (typeof SIGNATURE_SCOPES)[number]
+
+/** Fichier demandé à /m/ : l'original ou un dérivé nommé. */
+export interface SignatureTarget {
   mediaId: string
   version: number
-  /** Dérivé demandé (`original`, `preview`…). */
   variant: string
 }
 
+/** Droit accordé par un lien : un fichier précis (`variant`) ou un droit élargi (`scope`). */
+export type SignedAccess = { variant: string } | { scope: SignatureScope }
+
+export interface SignatureQuery {
+  exp?: unknown
+  kid?: unknown
+  scope?: unknown
+  sig?: unknown
+}
+
+export type SignatureCheck =
+  | { status: 'valid', expires: number, scope: SignatureScope | null }
+  | { status: 'invalid' | 'expired' }
+
+// ─── Fonctions pures ─────────────────────────────────────────────────────────
+
+/** Identifiant court d'un secret, publié dans les liens (ne révèle rien du secret). */
+export function keyId(secret: string): string {
+  return createHash('sha256').update(`surge-media:kid:${secret}`).digest('base64url').slice(0, 8)
+}
+
+/** Droit exigé pour un fichier : `file` (original) ou `preset:<nom>` (dérivé nommé). */
+export function targetGrant(variant: string): string {
+  return variant === 'original' ? 'file' : `preset:${variant}`
+}
+
+export function computeSignature(secret: string, mediaId: string, version: number, grant: string, expires: number): string {
+  return createHmac('sha256', secret).update(`v2:${mediaId}:${version}:${grant}:${expires}`).digest('base64url')
+}
+
+/**
+ * Échéance alignée sur la tranche suivante : toutes les demandes d'une même tranche produisent
+ * la même URL (caches navigateur et CDN efficaces). Validité réelle entre `ttl` et `ttl + bucket`.
+ */
+export function alignedExpiry(nowSeconds: number, ttlSeconds: number, bucketSeconds: number): number {
+  return Math.ceil((nowSeconds + ttlSeconds) / bucketSeconds) * bucketSeconds
+}
+
+/** Paramètres d'un lien signé (sans « ? »), dans un ordre stable. */
+export function buildSignatureQuery(secret: string, media: { id: string, version: number }, access: SignedAccess, expires: number): string {
+  const scope = 'scope' in access ? access.scope : null
+  const grant = scope ?? targetGrant((access as { variant: string }).variant)
+  const sig = computeSignature(secret, media.id, media.version, grant, expires)
+  return `exp=${expires}&kid=${keyId(secret)}${scope ? `&scope=${scope}` : ''}&sig=${sig}`
+}
+
+/** Vérifie les paramètres signés d'une demande avec les secrets acceptés (le courant en premier). */
+export function checkSignature(secrets: readonly string[], target: SignatureTarget, query: SignatureQuery, nowSeconds: number): SignatureCheck {
+  const expires = Number(query.exp)
+  const { kid, sig } = query
+  if (typeof sig !== 'string' || typeof kid !== 'string' || !Number.isSafeInteger(expires)) return { status: 'invalid' }
+
+  let scope: SignatureScope | null = null
+  if (query.scope !== undefined) {
+    if (!SIGNATURE_SCOPES.includes(query.scope as SignatureScope)) return { status: 'invalid' }
+    scope = query.scope as SignatureScope
+    // Le droit « derived » ne couvre jamais l'original.
+    if (scope === 'derived' && target.variant === 'original') return { status: 'invalid' }
+  }
+
+  const secret = secrets.find(candidate => keyId(candidate) === kid)
+  if (!secret) return { status: 'invalid' }
+
+  const expected = Buffer.from(computeSignature(secret, target.mediaId, target.version, scope ?? targetGrant(target.variant), expires))
+  const received = Buffer.from(sig)
+  if (expected.length !== received.length || !timingSafeEqual(expected, received)) return { status: 'invalid' }
+  if (expires <= nowSeconds) return { status: 'expired' }
+  return { status: 'valid', expires, scope }
+}
+
+// ─── Secrets (configuration) ─────────────────────────────────────────────────
+
 let derivedSecret: string | undefined
 
-function signingSecret(): string {
+/** Secret courant : NUXT_MEDIA_SIGNING_SECRET, sinon dérivé du secret des sessions. */
+function currentSecret(): string {
   const { media, session } = useRuntimeConfig()
   if (media.signingSecret) return media.signingSecret
   // Repli : secret dérivé de celui des sessions (le changer invaliderait aussi les liens).
@@ -28,26 +113,17 @@ function signingSecret(): string {
   return derivedSecret
 }
 
-function signature(target: SignedTarget, expires: number): string {
-  return createHmac('sha256', signingSecret())
-    .update(`${target.mediaId}:${target.version}:${target.variant}:${expires}`)
-    .digest('base64url')
+/** Secrets acceptés à la vérification : le courant, puis l'ancien pendant une rotation. */
+function acceptedSecrets(): string[] {
+  const previous = useRuntimeConfig().media.previousSigningSecret
+  return previous ? [currentSecret(), previous] : [currentSecret()]
 }
 
-/** Paramètres de requête d'un lien valable `ttlSeconds` secondes. */
-export function signMediaTarget(target: SignedTarget, ttlSeconds: number): { exp: number, sig: string } {
-  const exp = Math.floor(Date.now() / 1000) + ttlSeconds
-  return { exp, sig: signature(target, exp) }
+/** Paramètres signés (sans « ? ») donnant `access` au média jusqu'à `expires` (secondes Unix). */
+export function signMediaAccess(media: { id: string, version: number }, access: SignedAccess, expires: number): string {
+  return buildSignatureQuery(currentSecret(), media, access, expires)
 }
 
-export type SignatureCheck = { status: 'valid', expires: number } | { status: 'invalid' | 'expired' }
-
-export function verifyMediaSignature(target: SignedTarget, exp: unknown, sig: unknown): SignatureCheck {
-  const expires = Number(exp)
-  if (typeof sig !== 'string' || !Number.isInteger(expires)) return { status: 'invalid' }
-  const expected = Buffer.from(signature(target, expires))
-  const received = Buffer.from(sig)
-  if (expected.length !== received.length || !timingSafeEqual(expected, received)) return { status: 'invalid' }
-  if (expires <= Math.floor(Date.now() / 1000)) return { status: 'expired' }
-  return { status: 'valid', expires }
+export function verifyMediaSignature(target: SignatureTarget, query: SignatureQuery): SignatureCheck {
+  return checkSignature(acceptedSecrets(), target, query, Math.floor(Date.now() / 1000))
 }

@@ -3,7 +3,7 @@
  * navigateur, textes d'aide). Le serveur reste seul juge (contrôles de POST /api/admin/media).
  */
 export default defineEventHandler(async (event) => {
-  await requireAuth(event, 'media:manage')
+  await requireAuth(event)
   return {
     maxUploadSize: Number(useRuntimeConfig(event).media.maxUploadSize),
     acceptedTypes: ACCEPTED_MEDIA_TYPES,

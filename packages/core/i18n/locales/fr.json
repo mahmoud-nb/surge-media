@@ -32,7 +32,9 @@
     "tooLong": "Ce champ ne doit pas dépasser {max} caractères.",
     "tooShort": "Ce champ doit contenir au moins {min} caractères.",
     "emailTaken": "Cette adresse e-mail est déjà utilisée par un autre compte.",
-    "passwordMismatch": "Les deux mots de passe ne sont pas identiques."
+    "passwordMismatch": "Les deux mots de passe ne sont pas identiques.",
+    "slug": "Utilisez uniquement des lettres minuscules non accentuées, des chiffres et des tirets (ex. site-vitrine).",
+    "slugTaken": "Cet identifiant est déjà utilisé par un autre projet."
   },
   "auth": {
     "logout": "Se déconnecter"
@@ -105,10 +107,10 @@
       "menu": "Menu",
       "homeSuffix": ", tableau de bord",
       "dashboard": "Tableau de bord",
-      "media": "Médias",
-      "projects": "Projets et API",
-      "tokens": "Jetons d'accès",
-      "users": "Utilisateurs"
+      "projects": "Projets",
+      "tokens": "Jetons personnels",
+      "users": "Utilisateurs",
+      "library": "Bibliothèque"
     },
     "dashboard": {
       "meta": {
@@ -138,41 +140,38 @@
       "title": "Section en préparation",
       "description": "Cette section sera disponible dans une prochaine version. Votre rôle vous y donne déjà accès."
     },
-    "projects": {
-      "title": "Projets et API",
-      "description": "Gérez les projets, leurs origines autorisées (CORS) et l'intégration de l'API."
-    },
     "tokens": {
-      "title": "Jetons d'accès",
-      "description": "Créez et révoquez les jetons utilisés par vos applications pour appeler l'API."
+      "title": "Jetons personnels",
+      "description": "Créez des jetons pour vos scripts, outils et intégrations : ils agissent avec vos droits, sur les projets choisis."
     }
   },
   "roles": {
     "ADMIN": {
       "label": "Administrateur",
-      "description": "Tous les privilèges, y compris la gestion des utilisateurs."
+      "description": "Tous les privilèges : utilisateurs, tous les projets et la bibliothèque."
     },
     "EDITOR": {
       "label": "Éditeur",
-      "description": "Gestion des médias uniquement."
+      "description": "Bibliothèque de l'organisation et médias des projets dont il est membre."
     },
     "DEVELOPER": {
       "label": "Développeur",
-      "description": "Gestion des médias, des jetons d'accès et des API."
+      "description": "Bibliothèque, création de projets, clés d'API et intégrations des projets dont il est membre."
     }
   },
   "permissions": {
-    "media": {
-      "manage": "Gérer les médias"
-    },
     "tokens": {
-      "manage": "Gérer les jetons d'accès"
-    },
-    "api": {
-      "manage": "Gérer les projets et les API"
+      "personal": "Créer des jetons personnels"
     },
     "users": {
       "manage": "Gérer les utilisateurs"
+    },
+    "library": {
+      "manage": "Gérer la bibliothèque de l'organisation"
+    },
+    "projects": {
+      "create": "Créer des projets",
+      "all": "Accéder à tous les projets"
     }
   },
   "errors": {
@@ -355,10 +354,10 @@
     },
     "list": {
       "meta": {
-        "title": "Médias"
+        "title": "Bibliothèque"
       },
-      "title": "Médias",
-      "description": "Téléversez, retrouvez et gérez les images de vos projets.",
+      "title": "Bibliothèque",
+      "description": "Médias de toute l'organisation, réutilisables dans chaque projet par duplication.",
       "trashTitle": "Corbeille",
       "trashDescription": "Médias retirés de la diffusion. Restaurez-les ou supprimez-les définitivement.",
       "count": "Aucun média | {count} média | {count} médias",
@@ -382,10 +381,10 @@
         "size": "Taille"
       },
       "show": "Afficher",
-      "library": "Médiathèque",
       "trash": "Corbeille",
       "apply": "Filtrer",
-      "reset": "Réinitialiser"
+      "reset": "Réinitialiser",
+      "active": "Médias"
     },
     "upload": {
       "title": "Téléverser des images",
@@ -414,7 +413,7 @@
       "network": "La connexion a été interrompue."
     },
     "detail": {
-      "backToList": "Retour aux médias",
+      "backToList": "Retour à la bibliothèque",
       "backToTrash": "Retour à la corbeille",
       "loadError": "Impossible de charger ce média.",
       "infoTitle": "Informations",
@@ -427,7 +426,13 @@
       "createdAt": "Téléversé le",
       "checksum": "Empreinte SHA-256",
       "editTitle": "Description",
-      "saved": "Modifications enregistrées."
+      "saved": "Modifications enregistrées.",
+      "backToProject": "Retour aux médias du projet",
+      "space": "Espace",
+      "duplicatedFrom": "Origine",
+      "duplicatedFromValue": "Copie d'un autre média",
+      "readOnly": "Vous pouvez consulter ce média, mais pas le modifier.",
+      "archivedProject": "Le projet de ce média est archivé : il est en lecture seule."
     },
     "fields": {
       "title": "Titre",
@@ -469,6 +474,207 @@
       "confirmDescription": "« {name} », son fichier et ses dérivés seront supprimés du stockage. Cette action est irréversible.",
       "confirm": "Supprimer définitivement",
       "purged": "« {name} » a été supprimé définitivement."
+    },
+    "organize": {
+      "title": "Dupliquer ou déplacer",
+      "description": "Dupliquer crée une copie indépendante, avec sa propre adresse. Déplacer change l'espace du média sans changer son adresse.",
+      "target": "Espace cible",
+      "current": "{space} (actuel)",
+      "duplicate": "Dupliquer",
+      "move": "Déplacer",
+      "moveDisabled": "Choisissez un autre espace pour déplacer le média.",
+      "duplicated": "Copie créée dans : {space}.",
+      "moved": "Média déplacé vers : {space}.",
+      "noTargets": "Aucun espace ne vous permet d'y ajouter des médias."
+    }
+  },
+  "projectRoles": {
+    "OWNER": {
+      "label": "Propriétaire",
+      "description": "Tout le projet : réglages, membres, clés d'API et médias."
+    },
+    "DEVELOPER": {
+      "label": "Développeur",
+      "description": "Clés d'API, origines autorisées et médias."
+    },
+    "EDITOR": {
+      "label": "Éditeur",
+      "description": "Médias du projet."
+    }
+  },
+  "space": {
+    "library": "Bibliothèque de l'organisation",
+    "project": "Projet {name}"
+  },
+  "projects": {
+    "backToList": "Retour aux projets",
+    "status": {
+      "active": "Actif",
+      "archived": "Archivé"
+    },
+    "list": {
+      "meta": {
+        "title": "Projets"
+      },
+      "title": "Projets",
+      "description": "Un projet regroupe les médias, les membres et les accès d'une application et de ses environnements.",
+      "create": "Nouveau projet",
+      "caption": "Liste des projets",
+      "count": "Aucun projet | {count} projet | {count} projets",
+      "empty": "Aucun projet pour le moment.",
+      "emptyMember": "Vous n'êtes membre d'aucun projet. Demandez à un propriétaire de projet de vous ajouter.",
+      "emptyFiltered": "Aucun projet ne correspond à ces filtres.",
+      "loadError": "Impossible de charger les projets.",
+      "noRole": "—"
+    },
+    "filters": {
+      "label": "Filtrer les projets",
+      "search": "Nom, identifiant ou description",
+      "status": "Statut",
+      "apply": "Filtrer",
+      "reset": "Réinitialiser les filtres"
+    },
+    "columns": {
+      "project": "Projet",
+      "role": "Votre rôle",
+      "media": "Médias",
+      "members": "Membres"
+    },
+    "fields": {
+      "name": "Nom",
+      "slug": "Identifiant",
+      "slugHint": "Minuscules, chiffres et tirets. Il désigne le projet dans les outils et les SDK.",
+      "slugAuto": "Facultatif. Sans saisie : « {slug} ».",
+      "slugAutoEmpty": "Facultatif. Sans saisie, il est déduit du nom.",
+      "description": "Description",
+      "descriptionHint": "Facultative. Par exemple l'application et les environnements concernés."
+    },
+    "create": {
+      "meta": {
+        "title": "Nouveau projet"
+      },
+      "title": "Nouveau projet",
+      "description": "Vous en deviendrez propriétaire et pourrez ensuite y ajouter des membres.",
+      "submit": "Créer le projet",
+      "success": "Le projet « {name} » a été créé."
+    },
+    "nav": {
+      "label": "Sections du projet",
+      "overview": "Aperçu",
+      "media": "Médias",
+      "members": "Membres"
+    },
+    "header": {
+      "yourRole": "Votre rôle : {role}"
+    },
+    "archived": {
+      "title": "Projet archivé",
+      "description": "Le projet est en lecture seule : ses médias restent diffusés, mais aucun envoi ni aucune modification n'est possible."
+    },
+    "overview": {
+      "meta": {
+        "title": "{name} · Aperçu"
+      },
+      "summaryTitle": "En bref",
+      "slug": "Identifiant",
+      "description": "Description",
+      "noDescription": "Aucune description",
+      "mediaCount": "Médias",
+      "trashCount": "Dans la corbeille",
+      "memberCount": "Membres",
+      "createdAt": "Créé le",
+      "loadError": "Impossible de charger ce projet."
+    },
+    "settings": {
+      "title": "Réglages",
+      "saved": "Réglages enregistrés."
+    },
+    "archive": {
+      "title": "Archiver le projet",
+      "description": "Le projet passe en lecture seule : ses médias restent diffusés, mais plus aucun envoi ni aucune modification n'est possible. L'archivage est réversible et précède toute suppression.",
+      "action": "Archiver le projet",
+      "done": "Projet archivé.",
+      "restoreTitle": "Réactiver le projet",
+      "restoreDescription": "Le projet redevient modifiable.",
+      "restoreAction": "Réactiver le projet",
+      "restored": "Projet réactivé."
+    },
+    "delete": {
+      "title": "Supprimer le projet",
+      "description": "Suppression définitive du projet, de ses membres et de ses dossiers. Vous choisirez ce que deviennent ses médias.",
+      "open": "Supprimer le projet…",
+      "confirmTitle": "Supprimer « {name} » ?",
+      "confirmDescription": "Cette action est irréversible.",
+      "mediaChoice": "Médias du projet",
+      "library": {
+        "label": "Les déplacer vers la bibliothèque",
+        "description": "Ils restent diffusés à la même adresse."
+      },
+      "purge": {
+        "label": "Les supprimer définitivement",
+        "description": "Leurs fichiers et dérivés sont effacés du stockage."
+      },
+      "confirmLabel": "Pour confirmer, saisissez l'identifiant du projet : {slug}",
+      "confirmMismatch": "L'identifiant saisi ne correspond pas.",
+      "confirm": "Supprimer définitivement",
+      "success": "Le projet « {name} » a été supprimé."
+    },
+    "media": {
+      "meta": {
+        "title": "{name} · Médias"
+      }
+    },
+    "members": {
+      "meta": {
+        "title": "{name} · Membres"
+      },
+      "title": "Membres",
+      "description": "Personnes ayant accès au projet et rôle de chacune.",
+      "caption": "Membres du projet",
+      "adminNote": "Les administrateurs accèdent à tous les projets, même sans en être membres.",
+      "empty": "Aucun membre.",
+      "loadError": "Impossible de charger les membres.",
+      "you": "Vous",
+      "columns": {
+        "member": "Membre",
+        "platformRole": "Rôle sur la plateforme",
+        "role": "Rôle dans le projet",
+        "actions": "Actions"
+      },
+      "roleLabel": "Rôle de {name} dans le projet",
+      "saveRole": "Enregistrer",
+      "saveRoleLabel": "Enregistrer le rôle de {name}",
+      "capped": "Exercé comme {role} (plafond de son rôle sur la plateforme).",
+      "roleUpdated": "Rôle de {name} mis à jour.",
+      "remove": "Retirer",
+      "removeLabel": "Retirer {name} du projet",
+      "leave": "Quitter le projet",
+      "removeConfirmTitle": "Retirer {name} du projet ?",
+      "removeConfirmDescription": "Cette personne perdra l'accès au projet et à ses médias.",
+      "leaveConfirmTitle": "Quitter ce projet ?",
+      "leaveConfirmDescription": "Vous perdrez l'accès au projet et à ses médias.",
+      "removed": "{name} ne fait plus partie du projet.",
+      "left": "Vous avez quitté le projet « {name} ».",
+      "add": {
+        "title": "Ajouter un membre",
+        "search": "Rechercher un compte",
+        "searchHint": "Nom ou adresse e-mail. Seuls les comptes actifs qui ne sont pas déjà membres sont proposés.",
+        "searchAction": "Rechercher",
+        "results": "Comptes trouvés",
+        "noResults": "Aucun compte disponible ne correspond.",
+        "role": "Rôle de {name}",
+        "action": "Ajouter",
+        "actionLabel": "Ajouter {name} au projet",
+        "added": "{name} fait maintenant partie du projet."
+      }
+    },
+    "errors": {
+      "PROJECT_ARCHIVED": "Le projet est archivé : cette action est impossible.",
+      "PROJECT_NOT_ARCHIVED": "Archivez d'abord le projet.",
+      "LAST_OWNER": "Impossible : le projet doit garder au moins un propriétaire.",
+      "ALREADY_MEMBER": "Ce compte est déjà membre du projet.",
+      "ROLE_NOT_ASSIGNABLE": "Ce rôle dépasse ce que permet son rôle sur la plateforme.",
+      "USER_NOT_FOUND": "Ce compte n'existe plus ou a été désactivé."
     }
   }
 }

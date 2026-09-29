@@ -5,9 +5,12 @@
 > français, avec le « Journal des étapes »). En cas de divergence, **le code fait foi**, puis
 > `setup.md`, puis ce fichier.
 >
-> **État décrit** : commit `c505758` (branche `main`, arbre propre), 2026-09-28.
-> Étapes terminées : 1 (monorepo, core, base), 2 (UI, auth, rôles), 3 (utilisateurs), 4 (médias,
-> phase A). **Prochaine étape prévue** : phase B — projets, jetons d'accès, API v1, CORS.
+> **État décrit** : commit `c505758` + sous-étape **B1** (2026-09-29, non commitée au moment de la
+> rédaction : vérifier `git log`). Étapes terminées : 1 (monorepo, core, base), 2 (UI, auth, rôles),
+> 3 (utilisateurs), 4 (médias, phase A), 5 = **B1** (projets, espaces, autorisations).
+> **Prochaine étape** : **B2** — identifiants (clés publiques/secrètes par environnement, jetons
+> personnels, origines CORS, audit). Architecture validée de la phase B : `.claude/architecture-phase-b.md`
+> (**à lire** avant B2–B5 : contrats, jetons, cache, transformations).
 >
 > Les éléments marqués **[À CONFIRMER]** sont des hypothèses ou des points non validés par
 > l'utilisateur (récapitulés en § 22).
@@ -55,6 +58,8 @@
 | @node-rs/argon2 | 2.2 | argon2id, binaires napi |
 | zod | 4.6 | schémas partagés app/serveur |
 | citty 0.2, @clack/prompts 1.8, tsdown 0.23, tsx 4 | | CLI |
+| Vitest | 5.0 | tests des modules purs (`packages/core/tests/`, `vitest.config.ts`, alias `#shared`) |
+| oxc-transform | **0.141.0 forcé** (`pnpm-workspace.yaml` › `overrides`) | Windows Smart App Control bloque le binaire 0.143.0 exigé par Nuxt 3.21 (`^0.143.0`) ; typecheck/dev/build vérifiés ; à retirer dès que possible (l'utilisateur a choisi cette option) |
 
 Plateforme de dev de l'utilisateur : **Windows 11** (PowerShell + Git Bash). Chemin : `C:\__develop\surge-media`.
 
@@ -76,6 +81,7 @@ surge-media/                         monorepo pnpm (workspaces packages/*), dép
    ├─ prisma.config.ts               config Prisma 7 (URL, dossier de migrations selon DATABASE_PROVIDER)
    ├─ cli/                           CLI surge-media (init, db migrate, db reset), i18n fr/en
    ├─ scripts/                       db-migration.ts, i18n-check.ts, check-contrast.ts
+   ├─ tests/                         Vitest : permissions, signing, projects (modules purs)
    ├─ i18n/locales/                  fr.json (référence), en.json
    ├─ tsdown.config.ts               build de la CLI → dist/cli/index.mjs
    └─ data/                          (non versionné) base SQLite + médias du pilote local
@@ -104,29 +110,42 @@ Couches serveur :
   `layouts/admin.vue` (`<header>` = landmark banner contenant barre mobile + barre latérale, menu mobile `aria-expanded`, Échap).
 - `middleware/auth.global.ts` (protection `/admin*`, permission `definePageMeta`, redirection `/login`).
 - `plugins/api.ts` (`$api`), `types/page-meta.d.ts` (`PageMeta.permission`).
-- `composables/` : `useAuth`, `useApiFetch`, `useFormValidation`, `useFlash`, `useMediaUpload`, `useAppHead`.
+- `composables/` : `useAuth`, `useApiFetch`, `useFormValidation`, `useFlash`, `useMediaUpload`, `useAppHead`,
+  `useAdminSection` (section de la barre latérale imposée par une page, ex. fiche d'un média de projet → Projets).
 - `utils/` (auto-importés) : `cn` (clsx + tailwind-merge), `redirect.ts` (`safeAdminRedirect`), `validation.ts` (`fieldErrors`), `api-error.ts` (`apiError`), `format.ts` (`formatBytes`, `formatPercent`).
 - `components/ui/` (`<Ui…>`) : Button, Input, FormField, Alert, Badge, Select, Switch, PasswordInput, Dialog, Pagination, RadioCards, CopyField.
 - `components/app/` (`<App…>`) : Logo, SkipLink, ThemeSwitcher, LocaleSwitcher.
-- `components/admin/` (`<Admin…>`) : Sidebar, PageHeader, UpcomingSection, RoleField, UserStatusBadge, PasswordLinkPanel, MediaUploader, MediaCard.
-- `pages/` : `index` (accueil), `login`, `password/[token]`, `admin/index` (tableau de bord), `admin/users/{index,new,[id]}`, `admin/media/{index,[id]}`, `admin/projects` et `admin/tokens` (**sections « à venir »**, `AdminUpcomingSection`).
+- `components/admin/` (`<Admin…>`) : Sidebar, PageHeader, UpcomingSection, RoleField, UserStatusBadge, PasswordLinkPanel, MediaUploader, MediaCard,
+  **MediaBrowser** (médias d'un espace : envoi si portée, filtres URL, grille, corbeille ; prop `projectId?`), **ProjectHeader** (retour, h1, badges, onglets Aperçu/Médias/Membres, alerte archivé).
+- `pages/` : `index` (accueil), `login`, `password/[token]`, `admin/index` (tableau de bord), `admin/users/{index,new,[id]}`,
+  `admin/media/{index (bibliothèque),[id]}`, `admin/projects/{index,new}`, `admin/projects/[id]/{index (aperçu, réglages, archivage, suppression),media,members}`,
+  `admin/tokens` (**section « à venir »** B2, `AdminUpcomingSection`, permission `tokens:personal`).
 - `assets/css/main.css` : Tailwind v4, jetons de couleur `:root` / `.dark`, `@theme inline`, focus `outline`, `@utility bg-checker`, reduced-motion.
 
 **server/**
 - `api/health.get.ts`, `api/auth/{login.post,logout.post}.ts`, `api/auth/password/[token].{get,post}.ts`,
-  `api/admin/status.get.ts`, `api/admin/users/**`, `api/admin/media/**`, `api/admin/config/media.get.ts`.
-- `routes/m/[...path].ts` (diffusion des médias).
+  `api/admin/status.get.ts`, `api/admin/users/**`, `api/admin/media/**` (dont `[id]/duplicate.post.ts`, `[id]/move.post.ts`),
+  `api/admin/config/media.get.ts`, `api/admin/spaces.get.ts`, `api/admin/projects/**` (`index.{get,post}`, `[id].{get,patch,delete}`,
+  `[id]/members/{index.get,index.post,[userId].patch,[userId].delete}`, `[id]/candidates.get`).
+- `routes/m/[...path].ts` (diffusion des médias, sans cookie).
 - `middleware/csrf.ts`.
-- `plugins/` : `auth-session.ts` (hooks nuxt-auth-utils), `bootstrap-admin.ts` (avertissements au démarrage), `database.ts` (déconnexion Prisma à l'arrêt).
-- `utils/` (auto-importés par Nitro) : `prisma.ts` (`usePrisma`, `textContains`, `textSearch`, `isUniqueViolation`, `disconnectPrisma`), `auth.ts`, `password.ts`, `rate-limit.ts`, `users.ts`, `password-tokens.ts`.
-- `lib/` (**imports explicites**, pas d'auto-import) : `storage/{types,flydrive,index}.ts`, `media/{service,delivery,upload,sniff,keys,urls,signing,errors}.ts`, `media/handlers/{types,image,index}.ts`.
+- `plugins/` : `auth-session.ts` (hooks nuxt-auth-utils), `bootstrap-admin.ts` (avertissements au démarrage), `database.ts` (déconnexion Prisma à l'arrêt),
+  `site-url.ts` (avertit en production si `NUXT_SITE_URL` est vide).
+- `utils/` (auto-importés par Nitro) : `prisma.ts` (`usePrisma`, `textContains`, `textSearch`, `isUniqueViolation`, `disconnectPrisma`), `auth.ts`, `password.ts`, `rate-limit.ts`, `users.ts`, `password-tokens.ts`,
+  **`access.ts`** (`Space`, `LIBRARY`, `spaceFor`, `spaceOfMedia`, `sameSpace`, `describeAccess`, `resolveSpaceAccess`, `assertScope`, `requireSpaceAccess`, `requireMediaAccess` ; vérif. de type enum `ProjectRole`),
+  **`projects.ts`** (`projectError`).
+- `lib/` (**imports explicites**, pas d'auto-import) : `storage/{types,flydrive,index}.ts`, `media/{service,delivery,upload,sniff,keys,urls,signing,errors}.ts`,
+  `media/handlers/{types,image,index}.ts`, **`projects/service.ts`** (liste, création, réglages, archivage, suppression, membres, candidats, `listSpaces`).
+  Les **types** exportés de `server/utils` (ex. `Space`) s'importent explicitement (`import type { Space } from '../../utils/access'`).
 
 **shared/**
 - `database.ts` (fournisseurs, URL par défaut, `readDatabaseEnv`, `sqliteFilePath`) — importé explicitement (`#shared/database`).
-- `utils/permissions.ts` (ROLES, PERMISSIONS, ROLE_PERMISSIONS, hasPermission) — auto-importé.
+- `utils/permissions.ts` (ROLES, PERMISSIONS, ROLE_PERMISSIONS, hasPermission, MEDIA_SCOPES, PROJECT_SCOPES, PROJECT_ROLES,
+  PROJECT_ROLE_SCOPES, PROJECT_ROLE_CEILING, ARCHIVED_PROJECT_SCOPES, assignableProjectRoles, effectiveProjectRole, spaceScopes, hasScope) — auto-importé, **pur** (testé).
+- `utils/projects.ts` (longueurs, `PROJECT_SLUG_PATTERN`, `PROJECT_STATUSES`, `PROJECT_MEDIA_ON_DELETE`, `slugify`, `PROJECT_ERROR_CODES`) — auto-importé.
 - `utils/users.ts` (USER_STATUSES, userStatus, USER_ERROR_CODES) — auto-importé.
 - `utils/media.ts` (MEDIA_KINDS, MEDIA_VISIBILITIES, ACCEPTED_MEDIA_TYPES, ENABLED_MEDIA_KINDS, mediaKindForMime, extensionForMime, SIGNED_URL_DURATIONS, SIGNED_URL_MAX_TTL, MEDIA_ERROR_CODES) — auto-importé.
-- `schemas/{auth,users,media}.ts` (zod) — import explicite `#shared/schemas/…`.
+- `schemas/{auth,users,media,projects}.ts` (zod) — import explicite `#shared/schemas/…` (media : + `spaceQuerySchema`, `mediaTargetSchema`, param `project`).
 - `types/auth.d.ts` (augmentation `#auth-utils` : User, UserSession, SecureSessionData).
 
 ## 5. Modèle de données (prisma/schema.prisma)
@@ -135,22 +154,25 @@ Identifiants : `String @id @default(cuid())` partout. Horodatages `createdAt @de
 
 | Modèle | Champs clés | Relations / index |
 | --- | --- | --- |
-| **User** | `email @unique` (stocké en minuscules), `name?`, `passwordHash?` (null = invitation non acceptée), `role Role @default(EDITOR)`, `locale @default("fr")` (**non utilisé par l'UI**), `isActive @default(true)`, `lastLoginAt?` | sessions, uploadedMedia (`MediaUploadedBy`), accessTokens (`AccessTokenCreatedBy`), passwordTokens (`PasswordTokenUser`), issuedPasswordTokens (`PasswordTokenCreatedBy`) |
+| **User** | `email @unique` (stocké en minuscules), `name?`, `passwordHash?` (null = invitation non acceptée), `role Role @default(EDITOR)`, `locale @default("fr")` (**non utilisé par l'UI**), `isActive @default(true)`, `lastLoginAt?` | sessions, projectMemberships, createdProjects (`ProjectCreatedBy`), uploadedMedia (`MediaUploadedBy`), accessTokens (`AccessTokenCreatedBy`), passwordTokens (`PasswordTokenUser`), issuedPasswordTokens (`PasswordTokenCreatedBy`) |
 | **Session** | `userId`, `tokenHash @unique` (SHA-256 hex du jeton), `ipAddress?`, `userAgent?` (≤191), `expiresAt`, `lastSeenAt` | user (Cascade) ; index userId, expiresAt |
 | **PasswordToken** | `userId`, `purpose PasswordTokenPurpose`, `tokenHash @unique`, `expiresAt`, `usedAt?`, `createdById?` | user (Cascade), createdBy (SetNull) ; index userId |
-| **Project** | `name`, `slug @unique`, `description?` | media, folders, accessTokens, allowedOrigins |
-| **AccessToken** | `projectId`, `name`, `prefix`, `tokenHash @unique`, `scopes` (chaîne séparée par espaces, style OAuth), `expiresAt?`, `lastUsedAt?`, `revokedAt?`, `createdById?` | project (Cascade), createdBy (SetNull) — **modèle présent, rien d'implémenté** |
-| **AllowedOrigin** | `projectId`, `origin` | project (Cascade) ; `@@unique([projectId, origin])` — **non implémenté** |
-| **Folder** | `projectId`, `parentId?`, `name` | arbre (`FolderTree`, Cascade), media ; index (projectId, parentId) — **non utilisé par l'UI** |
-| **Media** | `projectId`, `folderId?`, `kind MediaKind`, `visibility Visibility @default(PUBLIC)`, `storageKey @unique` (clé opaque), `version Int @default(1)`, `originalName`, `mimeType`, `size Int` (octets, ≤ 2 Gio sous PG/MySQL), `checksum` (SHA-256 hex), `width?`, `height?`, `duration?`, `title?`, `altText?`, `metadata Json?`, `uploadedById?`, `deletedAt?` (corbeille) | project (Cascade), folder (SetNull), uploadedBy (SetNull), variants ; index (projectId, createdAt), (projectId, checksum), folderId, deletedAt |
+| **Project** | `name`, `slug @unique`, `description?`, `archivedAt?` (lecture seule), `createdById?` | createdBy (SetNull), members, media, folders, accessTokens, allowedOrigins |
+| **ProjectMember** | `projectId`, `userId`, `role ProjectRole`, `createdAt`, `updatedAt` | `@@id([projectId, userId])`, project et user (Cascade) ; index userId |
+| **AccessToken** | `projectId`, `name`, `prefix`, `tokenHash @unique`, `scopes` (chaîne séparée par espaces, style OAuth), `expiresAt?`, `lastUsedAt?`, `revokedAt?`, `createdById?` | project (Cascade), createdBy (SetNull) — **inchangé ; sera restructuré en B2** (type, userId, environment, publicValue… voir architecture § 12) |
+| **AllowedOrigin** | `projectId`, `origin` | project (Cascade) ; `@@unique([projectId, origin])` — **non implémenté (B2)** |
+| **Folder** | `projectId?` (null = bibliothèque), `parentId?`, `name` | projet (Cascade), arbre (`FolderTree`, Cascade), media ; index (projectId, parentId) — **non utilisé par l'UI (B5)** |
+| **Media** | `projectId?` (**null = bibliothèque** ; un seul espace), `folderId?`, `kind MediaKind`, `visibility Visibility @default(PUBLIC)`, `storageKey @unique` (clé opaque), `version Int @default(1)`, `originalName`, `mimeType`, `size Int` (octets, ≤ 2 Gio sous PG/MySQL), `checksum` (SHA-256 hex), `width?`, `height?`, `duration?`, `title?`, `altText?`, `metadata Json?`, `uploadedById?`, `duplicatedFromId?` (provenance d'une copie), `deletedAt?` (corbeille) | project (**Restrict** : un projet n'emporte jamais ses médias), folder (SetNull), uploadedBy (SetNull), duplicatedFrom/duplicates (`MediaDuplicates`, SetNull), variants ; index (projectId, deletedAt, createdAt), (projectId, checksum), folderId, deletedAt, duplicatedFromId |
 | **MediaVariant** | `mediaId`, `transformation` (ex. `v3/preview`), `storageKey @unique`, `format` (webp…), `size`, `width`, `height` | media (Cascade) ; `@@unique([mediaId, transformation])` |
 
-Enums : `Role { ADMIN EDITOR DEVELOPER }`, `PasswordTokenPurpose { INVITATION RESET }`,
+Enums : `Role { ADMIN EDITOR DEVELOPER }`, `ProjectRole { OWNER DEVELOPER EDITOR }`, `PasswordTokenPurpose { INVITATION RESET }`,
 `MediaKind { IMAGE VIDEO AUDIO DOCUMENT OTHER }`, `Visibility { PUBLIC PRIVATE }`.
 
 **Migrations** (une par fournisseur : `prisma/migrations/{sqlite,postgresql,mysql}/`) :
 `20260926142611_init`, `20260926151906_update_roles` (VIEWER → EDITOR avec reprise de données ajoutée
-à la main), `20260926163647_password_tokens`, `20260926203012_media_version`.
+à la main), `20260926163647_password_tokens`, `20260926203012_media_version`,
+`20260928222702_projects_spaces` (B1 ; reprise à la main : médias et dossiers du projet `default` → bibliothèque,
+projet `default` supprimé ; vérifiée sur SQLite, SQL PG/MySQL non exécuté).
 
 **Règles de portabilité** (schéma commun SQLite / PostgreSQL / MySQL) : pas d'attribut `@db.*`, pas de
 `String[]`, chaînes ≤ 191 caractères sous MySQL (validées par zod/API), enums et Json acceptés
@@ -174,8 +196,11 @@ Ne jamais modifier une migration publiée.
 | `NUXT_SESSION_MAX_AGE` | 43200 (12 h) | durée de session (cookie + base) |
 | `NUXT_SESSION_COOKIE_SECURE` | true | `false` seulement pour tester en HTTP hors localhost |
 | `NUXT_BOOTSTRAP_ADMIN_EMAIL` / `_PASSWORD` | — | compte d'amorçage (§ 7.5) |
+| `NUXT_SITE_URL` | demandée par `db:init` (`--site-url`) | URL publique de l'installation ; vide = origine de la requête (avertissement en prod) |
+| `NUXT_MEDIA_PUBLIC_URL` | vide (= `NUXT_SITE_URL`) | base des URL de diffusion (CDN, sous-domaine) ; `mediaBaseUrl(event)` |
 | `NUXT_MEDIA_MAX_UPLOAD_SIZE` | 26214400 (25 Mio) | taille max d'un envoi |
 | `NUXT_MEDIA_SIGNING_SECRET` | généré par `db:init` | HMAC des liens signés ; repli : dérivé du secret de session |
+| `NUXT_MEDIA_PREVIOUS_SIGNING_SECRET` | vide | ancien secret accepté pendant une rotation (sélection par `kid`) |
 | `NUXT_MEDIA_STORAGE_DRIVER` | `local` | `local` \| `s3` |
 | `NUXT_MEDIA_STORAGE_ROOT` | `./data/media` | racine du pilote local (relative au dossier de lancement ou absolue) |
 | `NUXT_MEDIA_STORAGE_PREFIX` | vide | préfixe de toutes les clés |
@@ -191,8 +216,8 @@ En production, `.env` n'est lu que par le script `start` (`node --env-file-if-ex
 
 - `modules`: `@nuxtjs/i18n`, `@nuxtjs/color-mode`, `nuxt-auth-utils`. `css`: `~/assets/css/main.css`. `vite.plugins`: tailwindcss().
 - `optimization.keyedComposables: [{ name: 'useApiFetch', argumentLength: 3 }]`.
-- `runtimeConfig`: `session { name: 'surge-media-session', password: '', maxAge: 43200, cookie { sameSite: 'lax', secure: true } }`,
-  `bootstrapAdmin { email, password }`, `media { maxUploadSize, signingSecret, storage { driver, root, prefix, s3 {…} } }`.
+- `runtimeConfig`: `siteUrl`, `session { name: 'surge-media-session', password: '', maxAge: 43200, cookie { sameSite: 'lax', secure: true } }`,
+  `bootstrapAdmin { email, password }`, `media { maxUploadSize, signingSecret, previousSigningSecret, publicUrl, storage { driver, root, prefix, s3 {…} } }`.
 - `routeRules` : `'/**'` → `X-Content-Type-Options: nosniff`, `X-Frame-Options: DENY`, `Referrer-Policy: strict-origin-when-cross-origin` ;
   `'/admin/**'`, `'/login'`, `'/password/**'` → `Cache-Control: no-store`, `X-Robots-Tag: noindex, nofollow`.
 - `colorMode { classSuffix: '', storage: 'cookie', storageKey: 'surge-media-color-mode' }`.
@@ -201,24 +226,38 @@ En production, `.env` n'est lu que par le script `start` (`node --env-file-if-ex
 
 ### 6.3 Scripts
 
-Racine : `dev`, `build`, `typecheck`, `cli`, `db:init`, `db:migrate`, `db:reset`, `db:studio`, `i18n:check`, `a11y:contrast` (tous délégués au core).
+Racine : `dev`, `build`, `typecheck`, `test`, `cli`, `db:init`, `db:migrate`, `db:reset`, `db:studio`, `i18n:check`, `a11y:contrast` (tous délégués au core).
+Core : `test` = `vitest run`.
 Core : `dev` / `build` / `typecheck` lancent d'abord `prisma generate` ; `build` = `prisma generate && nuxt build && tsdown` ;
 `start` = serveur de prod ; `postinstall` = `nuxt prepare && prisma generate` (**cet ordre est obligatoire**) ;
 `cli`, `db:init|migrate|reset` (via tsx), `db:generate`, `db:studio`, `db:migration`, `i18n:check`, `a11y:contrast`.
 
 ## 7. Authentification, sessions, rôles
 
-### 7.1 Rôles et permissions (source : `shared/utils/permissions.ts`)
+### 7.1 Rôles, permissions et portées (source : `shared/utils/permissions.ts`, testée)
 
-| Rôle | `media:manage` | `tokens:manage` | `api:manage` (projets, CORS) | `users:manage` |
-| --- | :---: | :---: | :---: | :---: |
-| ADMIN | ✓ | ✓ | ✓ | ✓ |
-| EDITOR (défaut, moindre privilège) | ✓ | | | |
-| DEVELOPER | ✓ | ✓ | ✓ | |
+Permissions de **plateforme** (`User.role`) :
 
-- Une vérification de type (`server/utils/auth.ts`) échoue à la compilation si `ROLES` et l'enum Prisma divergent.
-- Côté serveur : `requireAuth(event, permission?)` → 401 / 403. Côté UI : `useAuth().can()` et `definePageMeta({ permission })` (ergonomie uniquement).
-- Navigation de la barre latérale filtrée par permission : Tableau de bord (tous), Médias (`media:manage`), Projets et API (`api:manage`), Jetons d'accès (`tokens:manage`), Utilisateurs (`users:manage`).
+| Rôle | `library:manage` | `projects:create` | `projects:all` | `tokens:personal` | `users:manage` |
+| --- | :---: | :---: | :---: | :---: | :---: |
+| ADMIN | ✓ | ✓ | ✓ (OWNER implicite partout) | ✓ | ✓ |
+| DEVELOPER | ✓ | ✓ | | ✓ | |
+| EDITOR (défaut, moindre privilège) | ✓ | | | | |
+
+Portées d'**espace** : `media:read|upload|write|delete` (bibliothèque ou projet) et `project:read|credentials|members|settings`.
+- Bibliothèque : `library:manage` → toutes les portées `media:*`.
+- Projet : rôle de membre `OWNER` (`project:*` + `media:*`), `DEVELOPER` (`project:read`, `project:credentials`, `media:*`),
+  `EDITOR` (`project:read`, `media:*`) ; **plafond** `PROJECT_ROLE_CEILING` : ADMIN/DEVELOPER → OWNER, EDITOR → EDITOR ;
+  rôle exercé = `effectiveProjectRole(platformRole, memberRole)` (ADMIN → OWNER même non membre ; non membre → null = projet invisible).
+- Projet archivé : `ARCHIVED_PROJECT_SCOPES` = `project:read`, `project:settings`, `media:read`.
+- `spaceScopes(role, { type: 'library' } | { type: 'project', memberRole, archived })` est la seule source des droits.
+- Vérifications de type : `ROLES` ↔ enum `Role` (`server/utils/auth.ts`), `PROJECT_ROLES` ↔ enum `ProjectRole` (`server/utils/access.ts`).
+- Côté serveur : `requireAuth(event, permission?)` (plateforme) ; `requireSpaceAccess(event, space, scope?)` et
+  `requireMediaAccess(event, () => findMedia(id), scope)` → **404** si l'espace/le média est invisible, **403** si la portée manque
+  (`PROJECT_ARCHIVED` si c'est l'archivage). Côté UI : `useAuth().can()`, `definePageMeta({ permission })` et les `scopes`
+  renvoyés par l'API (ergonomie uniquement).
+- Barre latérale : Tableau de bord (tous), Bibliothèque (`library:manage`), Projets (tous), Jetons personnels (`tokens:personal`),
+  Utilisateurs (`users:manage`).
 
 ### 7.2 Sessions hybrides (cookie scellé + base)
 
@@ -284,8 +323,10 @@ Core : `dev` / `build` / `typecheck` lancent d'abord `prisma generate` ; `build`
 
 ### 9.1 Décisions validées par l'utilisateur
 
-Flydrive derrière notre interface `MediaStorage` · phase A d'abord (admin, diffusion, liens signés), jetons / API v1 ensuite ·
-médias privés accessibles par **liens signés + jetons** · **projet par défaut automatique**.
+Étape 4 : Flydrive derrière notre interface `MediaStorage` · phase A d'abord (admin, diffusion, liens signés), jetons / API v1 ensuite ·
+médias privés accessibles par **liens signés + jetons** · projet par défaut automatique (**remplacé en B1**).
+Phase B (D1–D15, architecture § 16) : **un média = un seul espace** (bibliothèque ou projet), réutilisation par **duplication**
+(+ déplacement) ; diffusion **sans cookie**, domaine = celui de l'application par défaut, configurable.
 
 Analyse comparative faite (résumé) : `@nuxtjs/universal-storage` = module Nuxt 2 (2021) de synchronisation cookies/localStorage,
 hors sujet ; `unstorage` = KV sans flux (fichiers entiers en mémoire, pas de Range, pas d'URL signées) → gardé pour cache/KV seulement,
@@ -294,8 +335,8 @@ URL signées, visibilité, normalisation des clés anti-traversée.
 
 ### 9.2 Stockage physique (`server/lib/storage/`)
 
-- Interface `MediaStorage` : `driver`, `put(key, Readable, { contentType, size })`, `getStream(key)`, `stat(key) → { size } | null`,
-  `delete(key)` (sans erreur si absent), `deletePrefix(prefix)`, `healthcheck()`. **Pas encore de lecture partielle (Range).**
+- Interface `MediaStorage` : `driver`, `put(key, Readable, { contentType, size })`, `getStream(key)`, `copy(fromKey, toKey)` (B1 ; S3 : CopyObject côté service),
+  `stat(key) → { size } | null`, `delete(key)` (sans erreur si absent), `deletePrefix(prefix)`, `healthcheck()`. **Pas encore de lecture partielle (Range).**
 - `createFlydriveStorage(driver, disk, prefix)` : ajoute le préfixe, traduit « introuvable » (ENOENT, NoSuchKey, NotFound) en null / no-op.
 - `useMediaStorage()` : singleton créé depuis `runtimeConfig.media.storage` ; pilotes importés à la demande :
   - `local` → `FSDriver({ location: resolve(root), visibility: 'private' })`, dossier créé au besoin ;
@@ -323,7 +364,7 @@ URL signées, visibilité, normalisation des clés anti-traversée.
 
 ### 9.4 Envoi (`server/lib/media/upload.ts` + `service.ts`)
 
-1. `requireAuth(event, 'media:manage')`.
+1. `requireSpaceAccess(event, spaceFor(?project), 'media:upload')` (avant de lire le corps).
 2. `receiveUpload(event, maxSize)` : exige `multipart/form-data` (sinon 400 `MULTIPART_REQUIRED`) ; refus immédiat si `Content-Length` >
    max + 64 Kio (413) ; busboy (`defParamCharset: utf8`, limites : 1 fichier champ `file`, 10 champs, 4096 o/champ, 12 parties) ;
    écriture dans un dossier temporaire `surge-media-upload-*` avec SHA-256 et taille au fil de l'eau ; dépassement → 413 `FILE_TOO_LARGE`
@@ -331,7 +372,13 @@ URL signées, visibilité, normalisation des clés anti-traversée.
 3. `sanitizeFilename` : basename, NFC, sans caractères de contrôle, ≤ 191 (extension préservée), défaut `media`.
 4. Champs texte (`title`, `altText`, `visibility`) validés par `mediaMetadataSchema` (400 avec issues zod si invalide).
 5. `analyze` : `sniffMimeType` → genre → gestionnaire, sinon 415 `UNSUPPORTED_TYPE` (`data.accepted`) ; `inspect`.
-6. `storage.put` puis `prisma.media.create` (projet par défaut, visibilité PUBLIC par défaut) ; échec base → suppression du fichier.
+6. `storage.put` puis `prisma.media.create` (espace de la requête, visibilité PUBLIC par défaut) ; échec base → suppression du fichier.
+
+**Duplication** (`duplicateMedia(media, target, actor)`) : refus si corbeille (409 `IN_TRASH`) ; `storage.copy` vers une nouvelle
+clé `originals/…` ; nouvelle ligne (version 1, mêmes kind/visibility/originalName/mimeType/size/checksum/dimensions/title/altText/metadata,
+`duplicatedFromId`, `uploadedById` = acteur) ; échec base → fichier copié supprimé ; dérivés non copiés. Même espace permis.
+**Déplacement** (`moveMedia`) : `projectId` changé, `folderId` remis à null, id/URL/fichiers inchangés ; même espace = aucun changement.
+**Purge en lot** : `deleteStoredFiles(items)` (original + `variants/<id>/`), ne lève jamais (utilisée par la purge et la suppression de projet).
 
 ### 9.5 Remplacement, métadonnées, corbeille
 
@@ -348,46 +395,82 @@ URL signées, visibilité, normalisation des clés anti-traversée.
 - URL : `/m/<id>/v<version>/<nom>.<ext>` (original) · `/m/<id>/v<version>/preview/<nom>.webp` (aperçu). `<nom>` = slug ASCII de
   `title || originalName` (≤ 80), **purement indicatif**. Grammaire : 3–4 segments, id `^[a-z0-9]{8,64}$`, version `v\d{1,9}`,
   dérivés connus `['preview']` ; sinon 404. Méthodes GET/HEAD (autres → 405 + `Allow`). HEAD : 200 avec en-têtes seuls.
-- Version différente de la courante → **302** vers l'URL courante (`Cache-Control: no-cache`).
-- Accès (`authorizeDelivery`) :
+- Version différente de la courante → **302** vers l'URL courante (`Cache-Control: no-cache`) ; **404** si le média est en corbeille.
+- Accès (`authorizeDelivery`, **synchrone, sans cookie ni session** depuis B1) :
 
 | Situation | Règle | Cache-Control |
 | --- | --- | --- |
-| Média en corbeille | session admin (`media:manage`) seulement, sinon 404 | `private, no-cache` |
+| Paramètres signés présents | valide (et, si corbeille, `scope=admin`) → OK ; corbeille sinon → 404 ; expirée → 403 `SIGNATURE_EXPIRED` ; invalide → 403 `SIGNATURE_INVALID` | `private, max-age=min(échéance, 3600)` |
+| Corbeille sans signature | 404 | — |
 | PUBLIC | libre | `public, max-age=31536000, immutable` |
-| PRIVATE + `?exp&sig` | signature valide → OK ; expirée → 403 `SIGNATURE_EXPIRED` ; invalide → 403 `SIGNATURE_INVALID` | `private, max-age=min(échéance, 3600)` |
-| PRIVATE + session admin | OK | `private, no-cache` |
-| PRIVATE sinon | 403 `MEDIA_FORBIDDEN` (phase B : jeton Bearer `media:read`) | — |
+| PRIVATE sinon | 403 `MEDIA_FORBIDDEN` (B3 : jeton Bearer `media:read` dans l'espace du média) | — |
+
+- L'administration reçoit des chemins **signés `scope=admin`** pour les médias privés ou en corbeille (`adminMediaPaths`, ~1 h,
+  échéance alignée sur 15 min) ; chemins publics inchangés sinon.
 
 - En-têtes : `Content-Type` (base), `ETag` (original : 32 premiers hex du SHA-256 ; dérivé : 24 hex + `-preview`), 304 sur `If-None-Match`,
   `Content-Length`, `X-Content-Type-Options: nosniff`, `Content-Security-Policy: default-src 'none'; sandbox`,
-  `Cross-Origin-Resource-Policy: cross-origin`, `Content-Disposition: inline; filename="ascii"; filename*=UTF-8''…` (nom d'origine pour
+  `Cross-Origin-Resource-Policy: cross-origin`, `Access-Control-Allow-Origin: *` (B1), `Content-Disposition: inline; filename="ascii"; filename*=UTF-8''…` (nom d'origine pour
   l'original), `X-Robots-Tag: noindex` hors public ; plus les en-têtes globaux (`X-Frame-Options: DENY`…).
 - Dérivés : `resolveDeliverable` → ligne `MediaVariant (mediaId, "v<version>/<variant>")` sinon génération par le gestionnaire
   (dédoublonnée par processus via une Map de promesses), `put` puis `create` (violation d'unicité ignorée).
 
-### 9.7 Liens signés (`server/lib/media/signing.ts`, `urls.ts`)
+### 9.7 Liens signés v2 (`server/lib/media/signing.ts`, `urls.ts`) — depuis B1
 
-- `sig = base64url(HMAC-SHA256(secret, "<mediaId>:<version>:<variant>:<exp>"))`, `exp` = secondes Unix. Variante `original` par défaut
-  (un lien signé de l'original ne donne pas l'aperçu).
-- Secret : `NUXT_MEDIA_SIGNING_SECRET`, sinon dérivé `HMAC(sessionSecret, 'surge-media:media-signing')`.
-- Durée : 60 s à 7 jours (`signedUrlSchema`) ; l'UI propose 1 h / 24 h / 7 jours (`SIGNED_URL_DURATIONS` → clés i18n `hour/day/week`).
-- Invalidation : remplacer le fichier (version) ou changer le secret (tous les liens).
+- Paramètres `?exp=<unix>&kid=<8 car.>[&scope=derived|admin]&sig=<base64url>` ; `sig = HMAC-SHA256(secret, "v2:<id>:<version>:<droit>:<exp>")`.
+  Droit = cible exacte `file` (original) / `preset:<nom>` (ex. `preset:preview`), ou élargi `derived` (tout dérivé, jamais l'original)
+  ou `admin` (tout fichier de la version, même en corbeille). Phase C : `t:<transformation canonique>`.
+- `kid = sha256("surge-media:kid:" + secret)[0..8]` : secrets acceptés = courant + `NUXT_MEDIA_PREVIOUS_SIGNING_SECRET`.
+  Secret courant : `NUXT_MEDIA_SIGNING_SECRET`, sinon dérivé `HMAC(sessionSecret, 'surge-media:media-signing')`.
+- Fonctions pures testées : `keyId`, `targetGrant`, `computeSignature`, `alignedExpiry`, `buildSignatureQuery`, `checkSignature` ;
+  runtime : `signMediaAccess(media, access, exp)`, `verifyMediaSignature(target, query)`.
+- Liens de partage (`signedMediaPath`) : échéance exacte, 60 s à 7 jours (`signedUrlSchema`) ; l'UI propose 1 h / 24 h / 7 jours.
+  Aperçus admin (`adminMediaPaths`) : `scope=admin`, TTL 3600, tranche 900 s.
+- **Les liens v1 (sans `kid`) ne sont plus reconnus** (non publiés, choix assumé).
+- Invalidation : remplacer le fichier (version), échéance, ou retirer l'ancien secret.
 
-### 9.8 Projet par défaut
+### 9.8 Espaces (remplace le projet par défaut depuis B1)
 
-`defaultProjectId()` : `upsert` du projet `slug: 'default'`, `name: 'Default project'` (mis en cache par processus). Tous les médias et
-listes sont restreints à ce projet tant que l'écran Projets n'existe pas.
+- `Media.projectId` null = **bibliothèque de l'organisation** ; sinon le projet. `defaultProjectId()` a été supprimé ; la migration
+  `projects_spaces` a mis les médias du projet `default` dans la bibliothèque et supprimé ce projet.
+- `server/utils/access.ts` : `Space = { type: 'library' } | { type: 'project', id }` ; `listMedia(space, query)` impose `projectId` du
+  serveur (les filtres s'ajoutent) ; `createMedia(space, …)`.
+- Cibles de duplication/déplacement : `listSpaces(user, scope)` (bibliothèque si portée + projets actifs visibles avec la portée).
 
 ### 9.9 Interface médias
 
-- `/admin/media` : section d'envoi (`AdminMediaUploader` : champ fichier natif + glisser-déposer, visibilité des envois, file de 20 entrées,
-  envois séquentiels via XMLHttpRequest avec `<progress>`, pré-contrôle taille/type côté navigateur, annonces `role=status`), filtres
-  (recherche, visibilité, tri, Médiathèque/Corbeille) dans l'URL (`sort=newest` omis), `h2` masqué « Résultats », grille de
-  `AdminMediaCard` (lien étiré, aperçu décoratif `alt=""`, damier), pagination 24.
-- `/admin/media/[id]` : aperçu (original, `alt` = texte alternatif), informations, formulaire (titre, texte alternatif avec aide,
-  visibilité en `UiRadioCards`), adresse publique (`UiCopyField`) ou lien temporaire (durée + génération), remplacement (uploader PUT),
-  mise à la corbeille (sans confirmation, réversible) ; en corbeille : bandeau + Restaurer + Supprimer définitivement (`UiDialog`).
+- `AdminMediaBrowser` (prop `projectId?`) utilisé par `/admin/media` (**Bibliothèque**) et `/admin/projects/[id]/media` : section d'envoi
+  seulement si `scopes` contient `media:upload` (`AdminMediaUploader`, endpoint `/api/admin/media?project=<id>` : champ fichier natif +
+  glisser-déposer, visibilité des envois, file de 20 entrées, XHR + `<progress>`, pré-contrôle, annonces `role=status`), filtres
+  (recherche, visibilité, tri, Médias/Corbeille) dans l'URL (`sort=newest` omis), 5 colonnes seulement à partir de `xl`, `h2` masqué
+  « Résultats », grille de `AdminMediaCard`, pagination 24.
+- `/admin/media/[id]` (pas de permission de page : l'API décide, 404 sinon) : retour vers la bibliothèque ou les médias du projet,
+  alerte lecture seule si pas `media:write` (ou projet archivé), aperçu, informations (**Espace** avec lien projet, **Origine** si copie),
+  formulaire (titre, alt, visibilité) ou valeurs en lecture seule, adresse publique absolue (`publicUrl` de l'API) ou lien temporaire,
+  remplacement (si `media:write`), **Dupliquer ou déplacer** (sélecteur d'espace `GET /api/admin/spaces?scope=media:upload`, duplication →
+  redirection vers la copie + message ; déplacement si `media:delete` et autre espace), corbeille (si `media:delete`) ; grille 2 colonnes à
+  partir de `xl` ; `useAdminSection` → section Projets pour un média de projet.
+
+### 9.10 Projets et membres (B1, `server/lib/projects/service.ts`)
+
+- Visibilité : ADMIN (`projects:all`) → tous ; sinon projets dont l'utilisateur est membre. `toProjectSummary` : id, name, slug,
+  description, archivedAt, dates, `role` (exercé), `memberRole`, `mediaCount` (hors corbeille), `memberCount`.
+- Création (`projects:create`) : slug fourni → 409 `SLUG_TAKEN` s'il est pris ; sinon `slugify(name) || 'project'` suffixé `-2…-20`
+  en cas de collision ; le créateur devient `OWNER` (membre).
+- Réglages / archivage : `PATCH { name?, slug?, description?, archived? }` (`project:settings`, permis aussi archivé).
+- Suppression : projet **archivé** seulement (409 `PROJECT_NOT_ARCHIVED`), `{ media: 'library' | 'purge' }` :
+  `library` = transaction `updateMany(projectId → null, folderId → null)` + delete ; `purge` = transaction `deleteMany` + delete, puis
+  `deleteStoredFiles` **sans attendre**. Membres, dossiers, jetons, origines partent en cascade.
+- Membres : ajout (comptes actifs, 404 `USER_NOT_FOUND`, 409 `ALREADY_MEMBER`, 422 `ROLE_NOT_ASSIGNABLE` au-delà du plafond),
+  changement de rôle et retrait (409 `LAST_OWNER` : le dernier `OWNER` enregistré ne peut être ni rétrogradé ni retiré ; la
+  suppression d'un compte ou la baisse de son rôle de plateforme ne sont pas bloquées — un ADMIN reste capable d'administrer),
+  départ volontaire (`project:read` suffit pour se retirer soi-même). `toMemberSummary` : user (id, name, email, role, isActive,
+  status), role, `effectiveRole`, `assignableRoles`, createdAt.
+- Environnements (décision D13) : étiquette sur les clés d'un même projet (B2) ; environnement jetable = projet séparé.
+- Écrans : `/admin/projects` (recherche, statut actif/archivé), `/admin/projects/new` (slug déduit affiché dans l'aide),
+  `/admin/projects/[id]` (résumé, réglages, archivage, suppression : dialogue avec `UiRadioCards` bibliothèque/purge + saisie du slug),
+  `/admin/projects/[id]/media` (`AdminMediaBrowser`), `/admin/projects/[id]/members` (tableau, rôle + bouton Enregistrer par ligne,
+  retrait/départ confirmé, recherche de comptes et ajout ; focus remis sur le titre de section / des résultats quand la ligne disparaît).
 
 ## 10. Référence des API
 
@@ -410,29 +493,46 @@ Format d'erreur (h3) : `{ statusCode, statusMessage, message, data? }` ; **codes
 | DELETE `/api/admin/users/:id` | `users:manage` | — | 204 · 403 · 409 |
 | POST `/api/admin/users/:id/password-link` | `users:manage` | — | `{ path, purpose, expiresAt }` · 409 si inactif (sans code) |
 | DELETE `/api/admin/users/:id/sessions` | `users:manage` | — | `{ revoked }` |
-| GET `/api/admin/config/media` | `media:manage` | — | `{ maxUploadSize, acceptedTypes, signedUrlDurations }` |
-| GET `/api/admin/media` | `media:manage` | `?q&kind&visibility&status=active\|trash&sort=newest\|oldest\|name\|size&page` | `{ items: MediaSummary[], total, page, pageSize: 24 }` |
-| POST `/api/admin/media` | `media:manage` | multipart `file` + `title?`, `altText?`, `visibility?` | 201 `{ media: MediaDetail }` · 400/413/415/422 |
-| GET `/api/admin/media/:id` | `media:manage` | — | `{ media: MediaDetail }` (corbeille comprise) · 404 |
-| PATCH `/api/admin/media/:id` | `media:manage` | `{ title?, altText?, visibility? }` | `{ media }` |
-| PUT `/api/admin/media/:id/file` | `media:manage` | multipart `file` | `{ media }` · 409 `VERSION_CONFLICT` · 415/422 |
-| DELETE `/api/admin/media/:id[?permanent=true]` | `media:manage` | — | 204 · 409 `NOT_IN_TRASH` |
-| POST `/api/admin/media/:id/restore` | `media:manage` | — | `{ media }` |
-| POST `/api/admin/media/:id/signed-url` | `media:manage` | `{ expiresIn }` (60–604800) | `{ path, expiresAt }` (public : URL permanente, `expiresAt: null`) · 409 si en corbeille |
-| GET\|HEAD `/m/...` | selon § 9.6 | — | fichier en flux · 302/304/403/404/405 |
+| GET `/api/admin/config/media` | session | — | `{ maxUploadSize, acceptedTypes, signedUrlDurations }` |
+| GET `/api/admin/spaces` | session | `?scope=` (défaut `media:upload`) | `{ spaces: ({ type: 'library' } \| { type: 'project', id, name })[] }` |
+| GET `/api/admin/media` | `media:read` (espace) | `?project&q&kind&visibility&status=active\|trash&sort=newest\|oldest\|name\|size&page` | `{ items: MediaSummary[], total, page, pageSize: 24, space, projectRole, scopes }` · 404 |
+| POST `/api/admin/media` | `media:upload` (espace) | `?project` + multipart `file` + `title?`, `altText?`, `visibility?` | 201 `{ media: MediaDetail }` · 400/403/404/413/415/422 |
+| GET `/api/admin/media/:id` | `media:read` | — | `{ media: MediaDetail, publicUrl (absolue \| null), space, projectRole, scopes }` (corbeille comprise) · 404 |
+| PATCH `/api/admin/media/:id` | `media:write` | `{ title?, altText?, visibility? }` | `{ media }` |
+| PUT `/api/admin/media/:id/file` | `media:write` | multipart `file` | `{ media }` · 409 `VERSION_CONFLICT` · 415/422 |
+| DELETE `/api/admin/media/:id[?permanent=true]` | `media:delete` | — | 204 · 409 `NOT_IN_TRASH` |
+| POST `/api/admin/media/:id/restore` | `media:delete` | — | `{ media }` |
+| POST `/api/admin/media/:id/signed-url` | `media:read` | `{ expiresIn }` (60–604800) | `{ url (absolue), expiresAt }` (public : URL permanente, `expiresAt: null`) · 409 `IN_TRASH` |
+| POST `/api/admin/media/:id/duplicate` | `media:read` + `media:upload` (cible) | `{ projectId: string \| null }` | 201 `{ media }` · 404 · 403 · 409 `IN_TRASH` |
+| POST `/api/admin/media/:id/move` | `media:delete` + `media:upload` (cible) | `{ projectId: string \| null }` | `{ media }` (même espace : inchangé) · 404 · 403 · 409 `IN_TRASH` |
+| GET `/api/admin/projects` | session | `?q&status=active\|archived&page` | `{ items: ProjectSummary[], total, page, pageSize: 20 }` |
+| POST `/api/admin/projects` | `projects:create` | `{ name, slug?, description? }` | 201 `{ project }` · 409 `SLUG_TAKEN` |
+| GET `/api/admin/projects/:id` | `project:read` | — | `{ project, trashCount, scopes }` · 404 |
+| PATCH `/api/admin/projects/:id` | `project:settings` | `{ name?, slug?, description?, archived? }` | `{ project, trashCount, scopes }` · 409 `SLUG_TAKEN` |
+| DELETE `/api/admin/projects/:id` | `project:settings` | `{ media: 'library' \| 'purge' }` | `{ media: n }` · 409 `PROJECT_NOT_ARCHIVED` |
+| GET `/api/admin/projects/:id/members` | `project:read` | — | `{ members: MemberSummary[], space, projectRole, scopes }` |
+| GET `/api/admin/projects/:id/candidates` | `project:members` | `?q` | `{ candidates: { id, name, email, role, assignableRoles }[] }` (≤ 20) |
+| POST `/api/admin/projects/:id/members` | `project:members` | `{ userId, role }` | 201 `{ member }` · 404 `USER_NOT_FOUND` · 409 `ALREADY_MEMBER` · 422 `ROLE_NOT_ASSIGNABLE` |
+| PATCH `/api/admin/projects/:id/members/:userId` | `project:members` | `{ role }` | `{ member }` · 409 `LAST_OWNER` · 422 |
+| DELETE `/api/admin/projects/:id/members/:userId` | `project:members` (soi-même : `project:read`) | — | 204 · 409 `LAST_OWNER` |
+| GET\|HEAD `/m/...` | selon § 9.6 (sans cookie) | — | fichier en flux · 302/304/403/404/405 |
 
 Contrats de données :
 - `SessionUser` : `{ id, email, name, role, locale }` ; session client : `{ user, loggedInAt }`.
 - `UserSummary` (`toUserSummary`) : `{ id, email, name, role, locale, isActive, status, lastLoginAt, createdAt }` (jamais d'empreinte).
-- `MediaSummary` (`toMediaSummary`) : `{ id, kind, visibility, originalName, title, altText, mimeType, extension, size, width, height,
-  duration, version, url, previewUrl, uploadedBy { id, name, email } | null, createdAt, updatedAt, deletedAt }` ;
-  `MediaDetail` = + `checksum`, `metadata`. Les chemins (`url`, `path`) sont **relatifs** : le client les préfixe par
-  `useRequestURL().origin`.
+- `MediaSummary` (`toMediaSummary`) : `{ id, projectId, kind, visibility, originalName, title, altText, mimeType, extension, size, width,
+  height, duration, version, url, previewUrl, uploadedBy { id, name, email } | null, createdAt, updatedAt, deletedAt }` ;
+  `MediaDetail` = + `checksum`, `metadata`, `duplicatedFromId`. `url`/`previewUrl` sont des chemins **relatifs**, signés `scope=admin`
+  si privé ou en corbeille ; les adresses à copier (`publicUrl`, `signed-url`) sont **absolues** (`mediaBaseUrl`).
+- `describeAccess(access)` → `{ space: { type: 'library', project: null } | { type: 'project', project: { id, name, slug, archivedAt } },
+  projectRole, scopes }` (joint aux réponses média/membres).
 - Codes métier : utilisateurs `EMAIL_TAKEN, SELF_ACTION, LAST_ADMIN, TOKEN_INVALID` ; médias `NO_FILE, MULTIPART_REQUIRED,
-  FILE_TOO_LARGE, UNSUPPORTED_TYPE, UNREADABLE_FILE, DIMENSIONS_TOO_LARGE, KIND_MISMATCH, VERSION_CONFLICT, NOT_IN_TRASH,
-  MEDIA_FORBIDDEN, SIGNATURE_INVALID, SIGNATURE_EXPIRED`.
+  FILE_TOO_LARGE, UNSUPPORTED_TYPE, UNREADABLE_FILE, DIMENSIONS_TOO_LARGE, KIND_MISMATCH, VERSION_CONFLICT, NOT_IN_TRASH, IN_TRASH,
+  MEDIA_FORBIDDEN, SIGNATURE_INVALID, SIGNATURE_EXPIRED` ; projets `SLUG_TAKEN, PROJECT_ARCHIVED, PROJECT_NOT_ARCHIVED, LAST_OWNER,
+  ALREADY_MEMBER, ROLE_NOT_ASSIGNABLE, USER_NOT_FOUND` (`projectError`, traduits `projects.errors.*`).
 - Typage : les réponses sont inférées des routes Nitro (`useApiFetch('/api/...')`, `$api(...)`). **Éviter une route statique sœur d'une
-  route dynamique** (ex. `/api/admin/media/config` à côté de `/:id`) : cela casse l'inférence des méthodes → d'où `/api/admin/config/media`.
+  route dynamique** (ex. `/api/admin/media/config` à côté de `/:id`) : cela casse l'inférence des méthodes → d'où `/api/admin/config/media`,
+  `/api/admin/spaces` et `/api/admin/projects/:id/candidates` (et non `…/members/candidates`).
 
 ## 11. Flux importants (résumés)
 
@@ -441,11 +541,15 @@ Contrats de données :
 2. **Rendu SSR d'une page admin** : plugin nuxt-auth-utils `fetch` → `/api/_auth/session` (hook : revalidation en base) → middleware
    `auth.global` (connexion, permission) → page → `useApiFetch` (`$api` transmet le cookie en SSR via `useRequestHeaders(['cookie'])`).
 3. **Invitation** : POST users → lien → `/password/<jeton>` → POST mot de passe → `/login?passwordSet=1`.
-4. **Envoi d'un média** : XHR multipart → requireAuth → busboy → temp + SHA-256 → sniff → sharp inspect → storage.put → DB → 201 →
+4. **Envoi d'un média** : XHR multipart (`?project=`) → requireSpaceAccess(media:upload) → busboy → temp + SHA-256 → sniff → sharp inspect → storage.put → DB → 201 →
    la médiathèque se rafraîchit (`@done`).
 5. **Affichage** : `<img src="/m/...">` → route → accès → original ou aperçu (généré à la 1re demande) → flux depuis le stockage.
 6. **Changement de fournisseur de base** : `pnpm db:init` / `db:reset` → `.env` + `provider` réécrit + `prisma generate` + migrations
    (données non transférées ; rebuild nécessaire car le client Prisma dépend du fournisseur).
+7. **Duplication** (fiche média) : `GET /api/admin/spaces?scope=media:upload` → choix → `POST …/duplicate` (read ici + upload cible) →
+   `storage.copy` + ligne → redirection vers la copie avec message flash.
+8. **Fin de vie d'un projet** : archiver (`PATCH archived: true`, lecture seule) → Supprimer… (dialogue : bibliothèque ou purge +
+   saisie du slug) → `DELETE` (transaction) → liste des projets avec message ; purge des fichiers en tâche de fond.
 
 ## 12. Frontend : conventions et patrons
 
@@ -533,7 +637,13 @@ Contrats de données :
 | Médias diffusés via surgeMedia (objets S3 privés) | contrôle d'accès, en-têtes de sécurité, chemin physique jamais exposé |
 | Liens signés HMAC sans état | utilisables dans `<img>`, vérifiables sans base, expirent seuls |
 | URL versionnées + cache immuable | performances / CDN ; remplacement = nouvelle URL, anciennes redirigées |
-| Projet par défaut automatique | `Media.projectId` obligatoire, cloisonnement conservé pour la phase B |
+| ~~Projet par défaut automatique~~ | remplacé en B1 par les espaces (bibliothèque = `projectId` null) |
+| Un média = un seul espace, duplication (+ déplacement) | demandé par l'utilisateur en révision 2 : pas de partage, donc pas de règle de modification croisée |
+| Rôles = ensembles de portées, plafond par rôle de plateforme, moteur pur `spaceScopes` | un seul vocabulaire pour sessions et futurs jetons ; testable exhaustivement (Vitest) |
+| Espace invisible → 404, portée manquante → 403 | ne pas révéler l'existence des projets/médias d'autrui |
+| `/m/` sans cookie, liens v2 (`kid`, `scope`, échéance alignée) | CDN et domaine dédié possibles, rotation du secret, cache navigateur des aperçus admin ; prépare la phase C |
+| `Media.projectId` en `Restrict` + suppression de projet réservée aux projets archivés | aucune perte de fichiers par cascade ; choix explicite bibliothèque / purge |
+| `oxc-transform` 0.141.0 forcé | Smart App Control bloque la 0.143.0 ; option choisie par l'utilisateur |
 | SVG exclu, originaux servis tels quels | SVG peut porter du script ; retrait EXIF prévu via les dérivés (phase C) |
 | Recherche : `textSearch` (terme + minuscules) et `mode: 'insensitive'` seulement sous PostgreSQL | portabilité ; SQLite ne gère la casse que pour l'ASCII |
 | `/api/admin/config/media` (et non `/api/admin/media/config`) | inférence des types Nitro |
@@ -547,6 +657,10 @@ Contrats de données :
 - Un média en corbeille n'est plus diffusé (sauf aperçu admin) et ne peut pas recevoir de lien signé ; purge seulement depuis la corbeille.
 - Lien signé lié à (média, version, dérivé, échéance) ; 7 jours maximum.
 - Longueurs de texte ≤ 191 (MySQL) ; tout texte d'API validé par zod partagé.
+- Un média appartient à un seul espace ; les listes partent toujours de l'espace imposé par le serveur.
+- Projet : nom 1–100, slug `^[a-z0-9]+(?:-[a-z0-9]+)*$` ≤ 60 unique, description ≤ 191 ; toujours au moins un OWNER enregistré
+  (sauf suppression de compte) ; archivé = lecture seule ; suppression seulement archivé.
+- Un EDITOR de plateforme n'exerce jamais plus que `EDITOR` dans un projet ; un ADMIN est OWNER partout.
 
 ## 18. Pièges, edge cases et problèmes connus
 
@@ -565,10 +679,19 @@ Contrats de données :
 - Recherche SQLite : casse ignorée seulement pour l'ASCII (atténué par la recherche en minuscules), accents non ignorés.
 - Deux ADMIN se rétrogradant simultanément pourraient laisser 0 admin (pas de verrou) ; **aucune commande de secours** si le seul
   admin perd son mot de passe (l'amorçage ne marche qu'avec 0 utilisateur).
-- `User.locale` stocké mais non utilisé ; `Folder`, `AccessToken`, `AllowedOrigin` non implémentés.
+- `User.locale` stocké mais non utilisé ; `Folder` (B5), `AccessToken`, `AllowedOrigin` (B2) non implémentés.
+- **Windows Smart App Control** peut bloquer un module natif non signé (`An Application Control policy has blocked this file`) :
+  diagnostic `process.dlopen` + journal `Microsoft-Windows-CodeIntegrity/Operational` ; ne jamais modifier les réglages de sécurité,
+  proposer une version voisine (cas oxc-transform) ou laisser l'utilisateur débloquer.
+- Les scripts Bash avec plusieurs heredocs contenant des apostrophes/backticks ont échoué : préférer l'outil Write/Edit.
+- Tests d'API : script Node en `scratchpad` (`b1-api-test.mjs` : comptes jetables DEVELOPER/EDITOR créés par invitation puis supprimés,
+  identifiants admin lus dans `.env` sans les afficher) ; pour l'interface, cookie de session obtenu par un script puis posé dans le
+  navigateur, et **déconnexion** à la fin.
+- Médias de l'utilisateur à préserver : une photo (« granola », envoyée le 26/09) désormais dans la bibliothèque, et un compte EDITOR
+  existant : ne jamais les supprimer dans les nettoyages de tests.
 - Pas de Range (vidéo), pas d'outil de copie entre stockages, pas de nettoyage des fichiers orphelins ni des liens de mot de passe utilisés.
 - Originaux diffusés avec leurs EXIF (GPS possible).
-- Pas de suite de tests automatisés (unitaires / e2e) dans le dépôt : les vérifications ont été faites par scripts ad hoc et audits
+- Tests automatisés limités aux modules purs (Vitest, depuis B1) : API et interface vérifiées par scripts ad hoc et audits
   manuels (voir § 20).
 
 ## 19. Conventions de code à respecter
@@ -577,48 +700,62 @@ Contrats de données :
 - Serveur : utilitaires transverses dans `server/utils` (auto-import) ; logique métier volumineuse dans `server/lib/**` (imports explicites).
   **Uniquement des imports de types** depuis `server/generated/prisma/client` (sinon problème `import.meta.url`) ; détecter P2002 via
   `isUniqueViolation`.
-- Erreurs métier : helper par domaine (`userError`, `mediaError`) → `createError({ statusCode, statusMessage: CODE, data: { code, … } })`,
+- Erreurs métier : helper par domaine (`userError`, `mediaError`, `projectError`) → `createError({ statusCode, statusMessage: CODE, data: { code, … } })`,
   codes déclarés dans `shared/utils/*.ts`, traduits côté client.
 - Validation : schémas zod dans `shared/schemas/` (messages = clés i18n), `readValidatedBody` / `getValidatedQuery` côté serveur ;
   filtres de liste tolérants (`.catch()`).
 - Documenter chaque endpoint en tête de fichier (méthode, chemin, entrée, statuts).
 - UI : aucun texte en dur ; jetons de couleur ; composants `Ui*`/`App*`/`Admin*` ; accessibilité vérifiée à chaque page.
-- Après chaque étape : `pnpm typecheck`, `pnpm i18n:check`, `pnpm a11y:contrast` (si couleurs), `db:migration --check`, build de prod,
-  audit axe fr/en × clair/sombre, **mise à jour de `setup.md`** (sections + Journal des étapes : ajouté, vérifié, limites, « après git pull »).
+- Contrôle d'accès : toute route d'espace/média passe par `requireSpaceAccess` / `requireMediaAccess` ; toute règle de droits va dans
+  le moteur pur `shared/utils/permissions.ts` **avec son test** (matrice de `tests/permissions.test.ts`).
+- Quand une action fait disparaître l'élément qui avait le focus (ligne retirée, candidat ajouté), replacer le focus sur un titre
+  (`tabindex="-1"`) et annoncer le résultat (`role=status`). Libellés `aria-label` de boutons : commencer par le texte visible (WCAG 2.5.3).
+- Messages français : éviter les accords genrés sur les personnes (« {name} fait maintenant partie du projet »).
+- Après chaque étape : `pnpm typecheck`, `pnpm test`, `pnpm i18n:check`, `pnpm a11y:contrast` (si couleurs), `db:migration --check`, build de prod,
+  audit axe fr/en × clair/sombre, **mise à jour de `setup.md`** (sections + Journal des étapes : ajouté, vérifié, limites, « après git pull »)
+  et de ce fichier.
 - Ne pas commiter sans demande (l'utilisateur commite lui-même entre les étapes) ; messages de commit avec
   `Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>` si demandé.
 
 ## 20. Vérification (outils et méthode)
 
-- Commandes : `pnpm typecheck`, `pnpm i18n:check`, `pnpm a11y:contrast`, `pnpm --filter @surge-media/core db:migration --check`,
-  `pnpm build` puis `pnpm start` (config `core-start` de `.claude/launch.json`).
+- Commandes : `pnpm typecheck`, `pnpm test` (Vitest), `pnpm i18n:check`, `pnpm a11y:contrast`,
+  `pnpm --filter @surge-media/core db:migration --check`, `pnpm build` puis `pnpm start` (config `core-start` de `.claude/launch.json`).
 - Tests d'API faits jusqu'ici avec des scripts Node temporaires (fetch + FormData + cookie), rejoués en dev **et** en prod ;
   S3 testé contre `s3rver` (faux S3 local, `pnpm dlx s3rver@3.7.1 --port 4568 --configure-bucket surge-media`).
 - Interface : navigateur intégré (pilotage par JS quand le panneau ne s'affiche pas), audits axe injectés depuis jsDelivr.
-- Rien de tout cela n'est encore automatisé dans le dépôt (piste : Vitest + Playwright + @axe-core/playwright).
+- Automatisé dans le dépôt depuis B1 : tests unitaires Vitest des modules purs (50 tests). Le reste (API, interface, axe) reste manuel
+  (piste : tests d'intégration API + Playwright + @axe-core/playwright).
+- Viewport du navigateur intégré : 1024 px (DPR 1,25) ; les mises en page à 5 colonnes doivent attendre `xl`.
 
 ## 21. État d'avancement et suite
 
 **Fait** : monorepo, CLI de base de données, schéma et migrations 3 fournisseurs, health ; UI (thèmes, i18n, a11y), auth hybride, rôles,
 amorçage ; gestion des utilisateurs avec liens d'invitation/réinitialisation ; médias phase A (stockage local/S3, envoi, diffusion
-publique/privée/signée, aperçus, remplacement versionné, corbeille, écrans).
+publique/privée/signée, aperçus, remplacement versionné, corbeille, écrans) ; **B1** (espaces bibliothèque/projets, rôles de projet
+et portées, projets et membres, duplication/déplacement, diffusion sans cookie + liens v2, `NUXT_SITE_URL`/`NUXT_MEDIA_PUBLIC_URL`, Vitest).
 
-**Sections vides** : `/admin/projects` (`api:manage`), `/admin/tokens` (`tokens:manage`) → `AdminUpcomingSection`.
+**Section vide** : `/admin/tokens` (`tokens:personal`) → `AdminUpcomingSection` jusqu'à B2.
 
-**Proposition d'architecture de la phase B** : `.claude/architecture-phase-b.md` (**en attente de validation** ;
-décisions D1–D12 en § 13 de ce document). Tant qu'elle n'est pas validée, la description ci-dessous reste l'intention
-initiale.
+**Architecture de la phase B validée** (toutes les décisions D1–D15 confirmées le 2026-09-29) : `.claude/architecture-phase-b.md`
+— contrats détaillés des sous-étapes suivantes (types de jetons et formats, API v1, CORS, cache, transformations).
 
 **Feuille de route** :
-- **Phase B (prochaine)** : écran Projets (remplacer l'usage implicite du projet `default`), jetons d'accès (`AccessToken` : préfixe
-  lisible, empreinte, portées `media:read` / `media:write` / `media:delete` envisagées, expiration, révocation, affichage unique du
-  jeton), API v1 pour applications tierces (`Authorization: Bearer`), accès aux médias privés par jeton dans `authorizeDelivery`,
-  CORS par projet (`AllowedOrigin`).
-- **Phase C** : transformations à la demande (crop, resize, format, qualité) via `MediaVariant` et la grammaire `/m/<id>/v<n>/<transform>/<nom>`
-  (déjà prévue par `parseDeliveryPath`, `MEDIA_VARIANTS`), retrait des EXIF.
-- **Phase D** : vidéos et documents (gestionnaires, signatures, Range).
+- **B2 (prochaine)** : identifiants — restructurer `AccessToken` (type PERSONAL/SECRET/PUBLISHABLE, environnement, `publicValue`,
+  `userId`, `allProjects`, `includeLibrary`, `lastUsedIp`) + `AccessTokenProject`, format `sm_<type>_<43 base62><CRC32 6 base62>`,
+  empreinte SHA-256, affichage unique, révocation, rotation avec recouvrement, confirmation du mot de passe (« sudo »), écrans Clés
+  d'API (onglet projet) et Jetons personnels, origines CORS (onglet projet), journal d'audit (`AuditEvent`).
+- **B3** : API v1 en lecture (`/api/v1`, Bearer, `/me`, projets, médias liste/détail/`ids`, signed-url, RFC 9457, CORS par projet,
+  limitation de débit, caches L1 + révisions `CacheRevision`, ETag/304, Bearer sur `/m/`, `Range`, OpenAPI, recherche normalisée).
+- **B4** : API v1 en écriture + jetons délégués `sm_dt_` (envoi, PATCH/PUT/DELETE, duplication, contraintes, `DelegatedTokenUsage`),
+  pré-génération des aperçus, concurrence sharp bornée.
+- **B5** : dossiers (arbre par espace dans l'admin, filtre `folder`/`recursive` dans l'API).
+- **Phase C** : transformations à la demande (grammaire réservée : préréglages vs `clé_valeur`, format par l'extension, ordre fixe,
+  forme canonique + 301, politique par projet `open|signed|presets`, quotas) — architecture § 10.
+- Puis `@surge-media/client` + composants (Vue d'abord) ; **Phase D** : vidéos et documents (gestionnaires, signatures, Range).
 - Autres pistes notées : commande CLI de secours admin, page « Mon compte », SMTP, copie entre stockages, nettoyage des orphelins,
-  dossiers (`Folder`), tests automatisés, limiteur partagé (Redis), X-Forwarded-For de confiance, modèle de distribution/publication npm.
+  tests d'intégration automatisés, limiteur partagé (Redis), X-Forwarded-For de confiance, modèle de distribution/publication npm,
+  retrait de l'override oxc-transform.
 
 ## 22. Points incertains ou à confirmer
 
@@ -626,12 +763,13 @@ initiale.
 - **Modèle de distribution** non décidé : `@surge-media/core` est `private: true` ; le client Prisma dépend du fournisseur (rebuild
   nécessaire) ; `npx surge-media init` ne fonctionne tel quel qu'une fois le package installé (ou via `npx @surge-media/core init`) —
   paquet non scopé `surge-media` ? image Docker ? build chez le client ?
-- **Portées exactes des jetons** et format du jeton (préfixe `sm_…` évoqué, rien de figé).
-- **MySQL/MariaDB** : SQL de migration généré mais **jamais exécuté** sur une vraie base ; PostgreSQL testé seulement via `prisma dev`
-  (PGlite) et `db reset` jamais exécuté dessus.
-- **S3 réel** (AWS, R2, MinIO) jamais testé (seulement `s3rver`).
+- Portées et format des jetons : **fixés** par l'architecture validée (§ 4 et § 12 de `architecture-phase-b.md`), à implémenter en B2.
+- **MySQL/MariaDB** : SQL de migration généré mais **jamais exécuté** sur une vraie base (y compris `projects_spaces`) ; PostgreSQL
+  testé seulement via `prisma dev` (PGlite) jusqu'à l'étape 1, et `db reset` jamais exécuté dessus.
+- **S3 réel** (AWS, R2, MinIO) jamais testé (seulement `s3rver`) ; `MediaStorage.copy` (CopyObject) testé seulement en local.
 - Lecteurs d'écran réels jamais testés.
-- Le nom du projet par défaut en base est en anglais (`Default project`) : donnée, pas texte d'interface — à revoir avec l'écran Projets.
+- **Override `oxc-transform` 0.141.0** hors de la plage de Nuxt 3.21 : fonctionne (typecheck, dev, build), mais à surveiller et retirer.
 - Environnement local actuel (non versionné, indicatif) : compte `admin@surge-media.test` (ADMIN, créé par amorçage ; mot de passe dans
-  `packages/core/.env`, variables d'amorçage encore présentes → avertissement au tableau de bord) ; médiathèque vide ; base SQLite
-  `packages/core/data/surge-media.db`.
+  `packages/core/.env`, variables d'amorçage encore présentes → avertissement au tableau de bord), un compte EDITOR créé par
+  l'utilisateur le 26/09, une photo dans la bibliothèque, aucun projet ; `.env` sans `NUXT_SITE_URL` (origine de la requête en dev) ;
+  base SQLite `packages/core/data/surge-media.db`.
