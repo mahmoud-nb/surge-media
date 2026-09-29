@@ -25,7 +25,7 @@ const flash = useFlash().consume()
     </UiAlert>
 
     <template v-else-if="project">
-      <AdminProjectHeader :project="project" />
+      <AdminProjectHeader :project="project" :scopes="data?.scopes ?? []" />
 
       <UiAlert v-if="flash" :variant="flash.variant" live="polite" class="mb-6">
         {{ flash.message }}

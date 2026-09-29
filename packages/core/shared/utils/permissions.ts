@@ -23,6 +23,7 @@ export const PERMISSIONS = [
   'projects:all', // accès à tous les projets comme propriétaire, sans en être membre
   'tokens:personal', // jetons d'accès personnels
   'users:manage', // comptes et rôles de plateforme
+  'audit:read', // journal d'audit de toute l'installation
 ] as const
 export type Permission = (typeof PERMISSIONS)[number]
 
@@ -108,4 +109,25 @@ export function spaceScopes(platformRole: Role, space: SpaceContext): Scope[] {
 
 export function hasScope(scopes: readonly string[], scope: Scope): boolean {
   return scopes.includes(scope)
+}
+
+// ─── Identifiants d'API ──────────────────────────────────────────────────────
+
+/**
+ * Portées qu'un identifiant d'API (jeton personnel, clé) peut porter : jamais de gestion des accès
+ * (membres, clés, origines, réglages). `project:read` et `media:read` sont toujours inclus.
+ */
+export const TOKEN_SCOPES = ['project:read', ...MEDIA_SCOPES] as const satisfies readonly Scope[]
+export type TokenScope = (typeof TOKEN_SCOPES)[number]
+
+/** Portées incluses d'office dans tout identifiant. */
+export const TOKEN_BASE_SCOPES = ['project:read', 'media:read'] as const satisfies readonly TokenScope[]
+
+/** Portées que l'on peut ajouter à un jeton personnel ou à une clé secrète. */
+export const TOKEN_OPTIONAL_SCOPES = ['media:upload', 'media:write', 'media:delete'] as const satisfies readonly TokenScope[]
+export type TokenOptionalScope = (typeof TOKEN_OPTIONAL_SCOPES)[number]
+
+/** Portées complètes d'un identifiant : portées de base + portées choisies, dans l'ordre canonique. */
+export function tokenScopes(optional: readonly string[]): TokenScope[] {
+  return TOKEN_SCOPES.filter(scope => (TOKEN_BASE_SCOPES as readonly string[]).includes(scope) || optional.includes(scope))
 }

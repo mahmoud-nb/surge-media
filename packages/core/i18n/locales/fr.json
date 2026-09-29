@@ -34,7 +34,10 @@
     "emailTaken": "Cette adresse e-mail est déjà utilisée par un autre compte.",
     "passwordMismatch": "Les deux mots de passe ne sont pas identiques.",
     "slug": "Utilisez uniquement des lettres minuscules non accentuées, des chiffres et des tirets (ex. site-vitrine).",
-    "slugTaken": "Cet identifiant est déjà utilisé par un autre projet."
+    "slugTaken": "Cet identifiant est déjà utilisé par un autre projet.",
+    "tokenSpaceRequired": "Choisissez au moins un projet ou la bibliothèque.",
+    "environment": "Utilisez uniquement des lettres minuscules non accentuées, des chiffres et des tirets (ex. preview-eu).",
+    "origin": "Saisissez une origine valide : schéma et hôte, sans chemin (ex. https://app.example.com ou https://*.example.com)."
   },
   "auth": {
     "logout": "Se déconnecter"
@@ -110,7 +113,8 @@
       "projects": "Projets",
       "tokens": "Jetons personnels",
       "users": "Utilisateurs",
-      "library": "Bibliothèque"
+      "library": "Bibliothèque",
+      "audit": "Journal d'audit"
     },
     "dashboard": {
       "meta": {
@@ -135,14 +139,6 @@
         "granted": "Autorisé",
         "notGranted": "Non inclus"
       }
-    },
-    "upcoming": {
-      "title": "Section en préparation",
-      "description": "Cette section sera disponible dans une prochaine version. Votre rôle vous y donne déjà accès."
-    },
-    "tokens": {
-      "title": "Jetons personnels",
-      "description": "Créez des jetons pour vos scripts, outils et intégrations : ils agissent avec vos droits, sur les projets choisis."
     }
   },
   "roles": {
@@ -172,6 +168,9 @@
     "projects": {
       "create": "Créer des projets",
       "all": "Accéder à tous les projets"
+    },
+    "audit": {
+      "read": "Consulter le journal d'audit"
     }
   },
   "errors": {
@@ -202,7 +201,8 @@
     "saving": "Enregistrement en cours…",
     "unexpectedError": "L'opération a échoué. Réessayez dans un instant.",
     "copy": "Copier",
-    "copied": "Copié dans le presse-papiers."
+    "copied": "Copié dans le presse-papiers.",
+    "copyFailed": "La copie a échoué : sélectionnez la valeur pour la copier."
   },
   "pagination": {
     "label": "Pagination",
@@ -562,7 +562,9 @@
       "label": "Sections du projet",
       "overview": "Aperçu",
       "media": "Médias",
-      "members": "Membres"
+      "members": "Membres",
+      "keys": "Clés d'API",
+      "origins": "Origines autorisées"
     },
     "header": {
       "yourRole": "Votre rôle : {role}"
@@ -583,7 +585,9 @@
       "trashCount": "Dans la corbeille",
       "memberCount": "Membres",
       "createdAt": "Créé le",
-      "loadError": "Impossible de charger ce projet."
+      "loadError": "Impossible de charger ce projet.",
+      "audit": "Journal d'audit",
+      "auditLink": "Voir les actions sur ce projet"
     },
     "settings": {
       "title": "Réglages",
@@ -675,6 +679,426 @@
       "ALREADY_MEMBER": "Ce compte est déjà membre du projet.",
       "ROLE_NOT_ASSIGNABLE": "Ce rôle dépasse ce que permet son rôle sur la plateforme.",
       "USER_NOT_FOUND": "Ce compte n'existe plus ou a été désactivé."
+    }
+  },
+  "reauth": {
+    "title": "Confirmez votre mot de passe",
+    "description": "Cette action est sensible. Saisissez votre mot de passe pour continuer ; il ne vous sera plus demandé pendant 10 minutes.",
+    "password": "Mot de passe",
+    "confirm": "Confirmer",
+    "incorrect": "Mot de passe incorrect.",
+    "tooManyAttempts": "Trop d'essais. Réessayez dans {minutes} min."
+  },
+  "scopes": {
+    "project": {
+      "read": {
+        "label": "Lire le projet",
+        "short": "Projet",
+        "description": "Nom, identifiant et description du projet."
+      }
+    },
+    "media": {
+      "read": {
+        "label": "Lire les médias",
+        "short": "Lecture",
+        "description": "Lister, rechercher, lire les métadonnées et obtenir des liens, y compris vers les médias privés."
+      },
+      "upload": {
+        "label": "Envoyer des médias",
+        "short": "Envoi",
+        "description": "Ajouter de nouveaux médias (envoi, duplication vers l'espace)."
+      },
+      "write": {
+        "label": "Modifier les médias",
+        "short": "Modification",
+        "description": "Titre, texte alternatif, visibilité et remplacement du fichier."
+      },
+      "delete": {
+        "label": "Supprimer les médias",
+        "short": "Suppression",
+        "description": "Mise à la corbeille, restauration et suppression définitive."
+      }
+    }
+  },
+  "credentials": {
+    "secretOnce": "Copiez-la maintenant et conservez-la en lieu sûr : elle ne sera plus affichée. En cas de perte, créez-en une nouvelle.",
+    "status": {
+      "key": {
+        "active": "Active",
+        "expired": "Expirée",
+        "revoked": "Révoquée"
+      },
+      "token": {
+        "active": "Actif",
+        "expired": "Expiré",
+        "revoked": "Révoqué"
+      }
+    },
+    "never": "Sans échéance",
+    "neverUsed": "Aucune utilisation",
+    "revokedOn": "Révocation : {date}",
+    "expiredOn": "Expiration : {date}",
+    "scopes": {
+      "legend": "Portées supplémentaires",
+      "hint": "La lecture du projet et de ses médias est toujours incluse.",
+      "listLabel": "Portées"
+    },
+    "environments": {
+      "production": "Production",
+      "staging": "Préproduction",
+      "development": "Développement",
+      "test": "Test"
+    },
+    "errors": {
+      "TOKEN_NOT_ACTIVE": "Cet identifiant est déjà révoqué ou expiré.",
+      "TOKEN_ACTIVE": "Cet identifiant est encore actif : révoquez-le avant de le supprimer.",
+      "TOKEN_REPLACED": "Cette clé a déjà été renouvelée.",
+      "PROJECT_UNAVAILABLE": "Un des projets choisis n'est plus accessible ou a été archivé. Rechargez la page.",
+      "ORIGIN_EXISTS": "Cette origine est déjà autorisée.",
+      "ORIGIN_LIMIT_REACHED": "Le nombre maximal d'origines est atteint : retirez-en une avant d'en ajouter."
+    }
+  },
+  "apiKeys": {
+    "meta": {
+      "title": "Clés d'API · {name}"
+    },
+    "title": "Clés d'API",
+    "description": "Les applications du projet s'identifient avec ces clés. Créez une clé par application et par environnement pour pouvoir la révoquer seule.",
+    "create": "Nouvelle clé",
+    "archived": "Le projet est archivé : ses clés sont refusées et ne peuvent pas être gérées tant qu'il n'est pas réactivé.",
+    "loadError": "Impossible de charger les clés d'API.",
+    "empty": "Aucune clé active. Créez une clé publique pour un site ou une application frontend, et une clé secrète pour un serveur.",
+    "types": {
+      "PUBLISHABLE": {
+        "label": "Clé publique",
+        "short": "Publique",
+        "description": "Pour un frontend (site, application mobile) : lit uniquement les médias publics. Elle n'est pas secrète et reste affichée."
+      },
+      "SECRET": {
+        "label": "Clé secrète",
+        "short": "Secrète",
+        "description": "Pour un serveur : portées au choix. Jamais dans un navigateur ni dans une application publiée. Affichée une seule fois."
+      }
+    },
+    "environmentTitle": "Environnement : {environment}",
+    "caption": "Clés actives de l'environnement {environment}",
+    "columns": {
+      "name": "Nom",
+      "key": "Clé",
+      "scopes": "Portées",
+      "expires": "Échéance",
+      "lastUsed": "Dernière utilisation",
+      "actions": "Actions"
+    },
+    "createdBy": "Créée le {date} par {name}",
+    "createdOn": "Créée le {date}",
+    "creatorInactive": "compte désactivé",
+    "copyPublic": "Copier la clé publique {name}",
+    "replaced": "Remplacée",
+    "replacedBy": "Remplaçante : {name}",
+    "rotate": {
+      "action": "Renouveler",
+      "actionLabel": "Renouveler la clé {name}",
+      "title": "Renouveler la clé « {name} »",
+      "description": "Une nouvelle clé est créée avec le même nom, le même environnement, les mêmes portées et la même durée de validité. Déployez-la avant la fin de validité de l'ancienne.",
+      "overlapLegend": "Validité de l'ancienne clé",
+      "confirm": "Renouveler la clé",
+      "overlaps": {
+        "now": {
+          "label": "Révoquer immédiatement",
+          "description": "L'ancienne clé est refusée dès maintenant."
+        },
+        "1h": {
+          "label": "Pendant 1 heure",
+          "description": "Le temps d'un déploiement rapide."
+        },
+        "24h": {
+          "label": "Pendant 24 heures",
+          "description": "Recommandé pour la plupart des déploiements."
+        },
+        "7d": {
+          "label": "Pendant 7 jours",
+          "description": "Pour les applications longues à mettre à jour (mobile, clients multiples)."
+        }
+      }
+    },
+    "revoke": {
+      "action": "Révoquer",
+      "actionLabel": "Révoquer la clé {name}",
+      "title": "Révoquer la clé « {name} » ?",
+      "description": "Les applications qui l'utilisent perdent l'accès immédiatement. Cette action est définitive.",
+      "done": "La clé « {name} » est révoquée."
+    },
+    "delete": {
+      "action": "Supprimer",
+      "actionLabel": "Supprimer la clé {name}",
+      "title": "Supprimer la clé « {name} » ?",
+      "description": "Elle disparaît de cette liste ; le journal d'audit en garde la trace.",
+      "done": "La clé « {name} » est supprimée."
+    },
+    "inactive": {
+      "summary": "Aucune clé révoquée ou expirée | Une clé révoquée ou expirée | {count} clés révoquées ou expirées"
+    },
+    "revealed": {
+      "PUBLISHABLE": {
+        "title": "Clé publique « {name} » créée",
+        "description": "Utilisez-la dans le code de votre frontend. Elle reste visible dans la liste des clés.",
+        "label": "Clé publique"
+      },
+      "SECRET": {
+        "title": "Clé secrète « {name} » créée",
+        "description": "Placez-la dans les variables d'environnement de votre serveur (ex. SURGE_MEDIA_SECRET_KEY) et envoyez-la dans l'en-tête Authorization: Bearer.",
+        "label": "Clé secrète"
+      }
+    },
+    "new": {
+      "meta": {
+        "title": "Nouvelle clé · {name}"
+      },
+      "title": "Nouvelle clé d'API",
+      "description": "Choisissez le type de clé selon l'endroit où elle sera utilisée.",
+      "type": "Type de clé",
+      "name": "Nom",
+      "nameHint": "Pour la reconnaître : l'application ou le service qui l'utilise (ex. Site vitrine).",
+      "environment": "Environnement",
+      "environmentHint": "Une clé par environnement : elles se révoquent séparément.",
+      "environmentOther": "Autre…",
+      "environmentCustom": "Nom de l'environnement",
+      "environmentCustomHint": "Lettres minuscules, chiffres et tirets (ex. preview-eu).",
+      "lifetime": "Durée de validité",
+      "lifetimeHint": "Une clé qui expire limite l'impact d'une fuite ; renouvelez-la avant son échéance.",
+      "lifetimes": {
+        "30": "30 jours",
+        "90": "90 jours",
+        "365": "1 an (recommandé)",
+        "never": "Sans échéance"
+      },
+      "secretNotice": "La clé secrète ne sera affichée qu'une fois. Votre mot de passe peut vous être demandé.",
+      "submit": "Créer la clé",
+      "submitting": "Création de la clé en cours…",
+      "created": "Clé « {name} » créée."
+    }
+  },
+  "origins": {
+    "meta": {
+      "title": "Origines autorisées · {name}"
+    },
+    "title": "Origines autorisées (CORS)",
+    "description": "Sites autorisés à appeler l'API du projet depuis un navigateur, pour tous ses environnements (production, préproduction, développement local). Les appels depuis un serveur ne sont pas concernés.",
+    "archived": "Le projet est archivé : ses origines ne peuvent pas être modifiées tant qu'il n'est pas réactivé.",
+    "loadError": "Impossible de charger les origines autorisées.",
+    "listTitle": "Aucune origine | Une origine | {count} origines",
+    "empty": "Aucune origine autorisée : aucun navigateur ne peut encore appeler l'API de ce projet.",
+    "wildcard": "Sous-domaines",
+    "addedOn": "Ajoutée le {date}",
+    "remove": "Retirer",
+    "removeLabel": "Retirer l'origine {origin}",
+    "removeTitle": "Retirer l'origine {origin} ?",
+    "removeDescription": "Les pages de ce site ne pourront plus appeler l'API du projet depuis un navigateur.",
+    "added": "Origine {origin} ajoutée.",
+    "removed": "Origine {origin} retirée.",
+    "add": {
+      "title": "Ajouter une origine",
+      "label": "Origine",
+      "hint": "Schéma et hôte, avec le port si besoin, sans chemin.",
+      "submit": "Ajouter",
+      "examples": "Exemples : https://www.example.com · http://localhost:3000 · https://*.example.com (tous les sous-domaines, pour les déploiements de prévisualisation)."
+    }
+  },
+  "tokens": {
+    "meta": {
+      "title": "Jetons personnels"
+    },
+    "title": "Jetons personnels",
+    "description": "Pour vos scripts, outils et intégrations : un jeton agit avec vos droits, sur les projets choisis.",
+    "create": "Nouveau jeton",
+    "notice": "Un jeton ne dépasse jamais vos droits : si vous quittez un projet, si votre rôle change ou si votre compte est désactivé, il perd les accès correspondants. Il ne permet pas de gérer les membres, les clés ni les réglages.",
+    "listTitle": "Jetons actifs",
+    "loadError": "Impossible de charger vos jetons personnels.",
+    "empty": "Aucun jeton actif.",
+    "caption": "Jetons personnels actifs",
+    "columns": {
+      "name": "Nom",
+      "access": "Accès",
+      "scopes": "Portées",
+      "expires": "Échéance",
+      "lastUsed": "Dernière utilisation",
+      "actions": "Actions"
+    },
+    "access": {
+      "allProjects": "Tous mes projets",
+      "library": "Bibliothèque de l'organisation"
+    },
+    "revoke": {
+      "action": "Révoquer",
+      "actionLabel": "Révoquer le jeton {name}",
+      "title": "Révoquer le jeton « {name} » ?",
+      "description": "Les scripts et outils qui l'utilisent perdent l'accès immédiatement. Cette action est définitive.",
+      "done": "Le jeton « {name} » est révoqué."
+    },
+    "delete": {
+      "action": "Supprimer",
+      "actionLabel": "Supprimer le jeton {name}",
+      "title": "Supprimer le jeton « {name} » ?",
+      "description": "Il disparaît de cette liste ; le journal d'audit en garde la trace.",
+      "done": "Le jeton « {name} » est supprimé."
+    },
+    "inactive": {
+      "summary": "Aucun jeton révoqué ou expiré | Un jeton révoqué ou expiré | {count} jetons révoqués ou expirés"
+    },
+    "revealed": {
+      "title": "Jeton « {name} » créé",
+      "description": "Envoyez-le dans l'en-tête Authorization: Bearer de vos requêtes, depuis un terminal, une CI ou un script — jamais depuis une page web.",
+      "label": "Jeton personnel"
+    },
+    "new": {
+      "meta": {
+        "title": "Nouveau jeton personnel"
+      },
+      "back": "Retour aux jetons personnels",
+      "title": "Nouveau jeton personnel",
+      "description": "Donnez-lui uniquement les accès nécessaires ; vous pourrez le révoquer à tout moment.",
+      "spacesError": "Impossible de charger vos projets.",
+      "name": "Nom",
+      "nameHint": "Pour le reconnaître : l'usage prévu (ex. Script d'import, CI).",
+      "lifetime": "Durée de validité",
+      "lifetimeHint": "Un jeton personnel expire toujours ; créez-en un nouveau à l'échéance.",
+      "lifetimes": {
+        "30": {
+          "label": "30 jours",
+          "description": "Pour un besoin ponctuel."
+        },
+        "90": {
+          "label": "90 jours",
+          "description": "Recommandé."
+        },
+        "365": {
+          "label": "1 an",
+          "description": "Pour une intégration durable."
+        }
+      },
+      "access": {
+        "legend": "Accès",
+        "projects": "Projets",
+        "all": {
+          "label": "Tous mes projets",
+          "description": "Tous les projets auxquels vous avez accès, y compris ceux que vous rejoindrez plus tard."
+        },
+        "selected": {
+          "label": "Projets choisis",
+          "description": "Uniquement les projets cochés ci-dessous."
+        },
+        "choose": "Projets inclus",
+        "noProjects": "Vous n'avez accès à aucun projet actif.",
+        "library": "Inclure la bibliothèque de l'organisation",
+        "libraryHint": "Le jeton pourra aussi agir sur les médias de la bibliothèque."
+      },
+      "notice": "Le jeton ne sera affiché qu'une fois. Votre mot de passe peut vous être demandé.",
+      "submit": "Créer le jeton",
+      "submitting": "Création du jeton en cours…",
+      "created": "Jeton « {name} » créé."
+    }
+  },
+  "audit": {
+    "meta": {
+      "title": "Journal d'audit"
+    },
+    "title": "Journal d'audit",
+    "description": "Actions sensibles sur les projets, les membres, les identifiants d'API, les médias et les comptes, des plus récentes aux plus anciennes.",
+    "filters": {
+      "label": "Filtrer le journal",
+      "category": "Catégorie",
+      "allCategories": "Toutes les catégories",
+      "apply": "Filtrer",
+      "project": "Projet : {name}",
+      "clearProject": "Retirer ce filtre",
+      "clearProjectLabel": "Retirer ce filtre sur le projet {name}"
+    },
+    "categories": {
+      "project": "Projets",
+      "member": "Membres",
+      "key": "Clés d'API",
+      "token": "Jetons personnels",
+      "origin": "Origines autorisées",
+      "media": "Médias",
+      "user": "Comptes"
+    },
+    "loadError": "Impossible de charger le journal d'audit.",
+    "results": "Entrées du journal",
+    "count": "Aucune entrée | Une entrée | {count} entrées",
+    "empty": "Aucune action enregistrée pour ces critères.",
+    "caption": "Entrées du journal d'audit",
+    "columns": {
+      "date": "Date",
+      "action": "Action",
+      "target": "Cible",
+      "project": "Projet",
+      "actor": "Auteur"
+    },
+    "system": "Système",
+    "deletedUser": "Compte supprimé",
+    "deletedProject": "Projet supprimé",
+    "actions": {
+      "project": {
+        "created": "Projet créé",
+        "updated": "Projet modifié",
+        "archived": "Projet archivé",
+        "restored": "Projet réactivé",
+        "deleted": "Projet supprimé"
+      },
+      "member": {
+        "added": "Membre ajouté",
+        "role_changed": "Rôle d'un membre modifié",
+        "removed": "Membre retiré"
+      },
+      "key": {
+        "created": "Clé d'API créée",
+        "rotated": "Clé d'API renouvelée",
+        "revoked": "Clé d'API révoquée",
+        "deleted": "Clé d'API supprimée"
+      },
+      "token": {
+        "created": "Jeton personnel créé",
+        "revoked": "Jeton personnel révoqué",
+        "deleted": "Jeton personnel supprimé"
+      },
+      "origin": {
+        "added": "Origine autorisée",
+        "removed": "Origine retirée"
+      },
+      "media": {
+        "visibility_changed": "Visibilité d'un média modifiée",
+        "moved": "Média déplacé",
+        "deleted": "Média supprimé définitivement"
+      },
+      "user": {
+        "created": "Compte créé",
+        "updated": "Compte modifié",
+        "deleted": "Compte supprimé",
+        "password_link": "Lien de mot de passe émis",
+        "sessions_revoked": "Sessions fermées"
+      }
+    },
+    "details": {
+      "role": "Rôle : {role}",
+      "change": "{from} → {to}",
+      "fields": "Champs : {fields}",
+      "projectMedia": {
+        "library": "Médias déplacés vers la bibliothèque : {count}",
+        "purge": "Médias supprimés définitivement : {count}"
+      },
+      "activated": "Compte réactivé",
+      "deactivated": "Compte désactivé",
+      "passwordLink": {
+        "invitation": "Invitation",
+        "reset": "Réinitialisation"
+      },
+      "sessions": "Aucune session fermée | Une session fermée | {count} sessions fermées"
+    },
+    "fields": {
+      "name": "nom",
+      "slug": "identifiant",
+      "description": "description"
     }
   }
 }

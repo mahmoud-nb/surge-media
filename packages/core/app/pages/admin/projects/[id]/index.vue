@@ -13,6 +13,7 @@ const { t, locale } = useI18n()
 const route = useRoute()
 const { $api } = useNuxtApp()
 const flash = useFlash()
+const { can } = useAuth()
 
 const projectId = computed(() => String(route.params.id))
 const { data, error, refresh } = await useApiFetch(() => `/api/admin/projects/${projectId.value}`)
@@ -143,7 +144,7 @@ async function remove() {
     </UiAlert>
 
     <template v-else-if="project">
-      <AdminProjectHeader :project="project" />
+      <AdminProjectHeader :project="project" :scopes="data?.scopes ?? []" />
 
       <UiAlert v-if="pageFlash" :variant="pageFlash.variant" live="polite" class="mb-6">
         {{ pageFlash.message }}
@@ -197,6 +198,16 @@ async function remove() {
               </dt>
               <dd class="font-medium text-foreground">
                 <NuxtTime :datetime="project.createdAt" :locale="locale" date-style="medium" />
+              </dd>
+            </div>
+            <div v-if="can('audit:read')" class="grid gap-0.5 sm:col-span-2">
+              <dt class="text-muted-foreground">
+                {{ t('projects.overview.audit') }}
+              </dt>
+              <dd>
+                <NuxtLink :to="{ path: '/admin/audit', query: { project: project.id } }" class="font-medium text-primary underline-offset-4 hover:underline">
+                  {{ t('projects.overview.auditLink') }}
+                </NuxtLink>
               </dd>
             </div>
             <div v-if="!canManage" class="grid gap-0.5 sm:col-span-2">

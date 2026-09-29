@@ -10,5 +10,14 @@ import { deleteProject } from '../../../lib/projects/service'
 export default defineEventHandler(async (event) => {
   const access = await requireSpaceAccess(event, spaceFor(getRouterParam(event, 'id')), 'project:settings')
   const { media } = await readValidatedBody(event, body => deleteProjectSchema.parse(body))
-  return deleteProject(access, media)
+  const result = await deleteProject(access, media)
+  const project = access.project!
+  await recordAudit(event, {
+    action: 'project.deleted',
+    projectId: project.id,
+    targetType: 'project',
+    targetId: project.id,
+    data: { label: project.name, slug: project.slug, media, count: result.media },
+  })
+  return result
 })

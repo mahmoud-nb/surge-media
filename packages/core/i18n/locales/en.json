@@ -34,7 +34,10 @@
     "emailTaken": "This email address is already used by another account.",
     "passwordMismatch": "The two passwords do not match.",
     "slug": "Use only unaccented lowercase letters, digits and hyphens (e.g. marketing-site).",
-    "slugTaken": "This identifier is already used by another project."
+    "slugTaken": "This identifier is already used by another project.",
+    "tokenSpaceRequired": "Choose at least one project or the library.",
+    "environment": "Use only lowercase unaccented letters, digits and hyphens (e.g. preview-eu).",
+    "origin": "Enter a valid origin: scheme and host, without a path (e.g. https://app.example.com or https://*.example.com)."
   },
   "auth": {
     "logout": "Sign out"
@@ -110,7 +113,8 @@
       "projects": "Projects",
       "tokens": "Personal tokens",
       "users": "Users",
-      "library": "Library"
+      "library": "Library",
+      "audit": "Audit log"
     },
     "dashboard": {
       "meta": {
@@ -135,14 +139,6 @@
         "granted": "Allowed",
         "notGranted": "Not included"
       }
-    },
-    "upcoming": {
-      "title": "Section in progress",
-      "description": "This section will be available in an upcoming release. Your role already grants you access to it."
-    },
-    "tokens": {
-      "title": "Personal tokens",
-      "description": "Create tokens for your scripts, tools and integrations: they act with your permissions, on the projects you choose."
     }
   },
   "roles": {
@@ -172,6 +168,9 @@
     "projects": {
       "create": "Create projects",
       "all": "Access every project"
+    },
+    "audit": {
+      "read": "View the audit log"
     }
   },
   "errors": {
@@ -202,7 +201,8 @@
     "saving": "Saving…",
     "unexpectedError": "The operation failed. Please try again in a moment.",
     "copy": "Copy",
-    "copied": "Copied to the clipboard."
+    "copied": "Copied to the clipboard.",
+    "copyFailed": "Copy failed: select the value to copy it."
   },
   "pagination": {
     "label": "Pagination",
@@ -562,7 +562,9 @@
       "label": "Project sections",
       "overview": "Overview",
       "media": "Media",
-      "members": "Members"
+      "members": "Members",
+      "keys": "API keys",
+      "origins": "Allowed origins"
     },
     "header": {
       "yourRole": "Your role: {role}"
@@ -583,7 +585,9 @@
       "trashCount": "In the trash",
       "memberCount": "Members",
       "createdAt": "Created on",
-      "loadError": "Unable to load this project."
+      "loadError": "Unable to load this project.",
+      "audit": "Audit log",
+      "auditLink": "View actions on this project"
     },
     "settings": {
       "title": "Settings",
@@ -675,6 +679,426 @@
       "ALREADY_MEMBER": "This account is already a member of the project.",
       "ROLE_NOT_ASSIGNABLE": "This role exceeds what their platform role allows.",
       "USER_NOT_FOUND": "This account no longer exists or has been deactivated."
+    }
+  },
+  "reauth": {
+    "title": "Confirm your password",
+    "description": "This action is sensitive. Enter your password to continue; you will not be asked again for 10 minutes.",
+    "password": "Password",
+    "confirm": "Confirm",
+    "incorrect": "Incorrect password.",
+    "tooManyAttempts": "Too many attempts. Try again in {minutes} min."
+  },
+  "scopes": {
+    "project": {
+      "read": {
+        "label": "Read the project",
+        "short": "Project",
+        "description": "Project name, identifier and description."
+      }
+    },
+    "media": {
+      "read": {
+        "label": "Read media",
+        "short": "Read",
+        "description": "List, search, read metadata and get links, including to private media."
+      },
+      "upload": {
+        "label": "Upload media",
+        "short": "Upload",
+        "description": "Add new media (upload, duplication into the space)."
+      },
+      "write": {
+        "label": "Edit media",
+        "short": "Edit",
+        "description": "Title, alternative text, visibility and file replacement."
+      },
+      "delete": {
+        "label": "Delete media",
+        "short": "Delete",
+        "description": "Move to trash, restore and permanent deletion."
+      }
+    }
+  },
+  "credentials": {
+    "secretOnce": "Copy it now and keep it somewhere safe: it will not be shown again. If you lose it, create a new one.",
+    "status": {
+      "key": {
+        "active": "Active",
+        "expired": "Expired",
+        "revoked": "Revoked"
+      },
+      "token": {
+        "active": "Active",
+        "expired": "Expired",
+        "revoked": "Revoked"
+      }
+    },
+    "never": "No expiry",
+    "neverUsed": "Never used",
+    "revokedOn": "Revoked: {date}",
+    "expiredOn": "Expired: {date}",
+    "scopes": {
+      "legend": "Additional scopes",
+      "hint": "Reading the project and its media is always included.",
+      "listLabel": "Scopes"
+    },
+    "environments": {
+      "production": "Production",
+      "staging": "Staging",
+      "development": "Development",
+      "test": "Test"
+    },
+    "errors": {
+      "TOKEN_NOT_ACTIVE": "This credential is already revoked or expired.",
+      "TOKEN_ACTIVE": "This credential is still active: revoke it before deleting it.",
+      "TOKEN_REPLACED": "This key has already been rotated.",
+      "PROJECT_UNAVAILABLE": "One of the selected projects is no longer accessible or has been archived. Reload the page.",
+      "ORIGIN_EXISTS": "This origin is already allowed.",
+      "ORIGIN_LIMIT_REACHED": "The maximum number of origins has been reached: remove one before adding another."
+    }
+  },
+  "apiKeys": {
+    "meta": {
+      "title": "API keys · {name}"
+    },
+    "title": "API keys",
+    "description": "The project's applications identify themselves with these keys. Create one key per application and environment so each can be revoked on its own.",
+    "create": "New key",
+    "archived": "The project is archived: its keys are refused and cannot be managed until it is restored.",
+    "loadError": "Unable to load the API keys.",
+    "empty": "No active key. Create a publishable key for a website or frontend app, and a secret key for a server.",
+    "types": {
+      "PUBLISHABLE": {
+        "label": "Publishable key",
+        "short": "Publishable",
+        "description": "For a frontend (website, mobile app): reads public media only. It is not secret and remains visible."
+      },
+      "SECRET": {
+        "label": "Secret key",
+        "short": "Secret",
+        "description": "For a server: scopes of your choice. Never in a browser or a published app. Shown only once."
+      }
+    },
+    "environmentTitle": "Environment: {environment}",
+    "caption": "Active keys for the {environment} environment",
+    "columns": {
+      "name": "Name",
+      "key": "Key",
+      "scopes": "Scopes",
+      "expires": "Expiry",
+      "lastUsed": "Last used",
+      "actions": "Actions"
+    },
+    "createdBy": "Created {date} by {name}",
+    "createdOn": "Created {date}",
+    "creatorInactive": "account deactivated",
+    "copyPublic": "Copy the {name} publishable key",
+    "replaced": "Replaced",
+    "replacedBy": "Replacement: {name}",
+    "rotate": {
+      "action": "Rotate",
+      "actionLabel": "Rotate the {name} key",
+      "title": "Rotate the “{name}” key",
+      "description": "A new key is created with the same name, environment, scopes and lifetime. Deploy it before the old one stops working.",
+      "overlapLegend": "Old key validity",
+      "confirm": "Rotate key",
+      "overlaps": {
+        "now": {
+          "label": "Revoke immediately",
+          "description": "The old key is refused right away."
+        },
+        "1h": {
+          "label": "For 1 hour",
+          "description": "Enough for a quick deployment."
+        },
+        "24h": {
+          "label": "For 24 hours",
+          "description": "Recommended for most deployments."
+        },
+        "7d": {
+          "label": "For 7 days",
+          "description": "For apps that take longer to update (mobile, many clients)."
+        }
+      }
+    },
+    "revoke": {
+      "action": "Revoke",
+      "actionLabel": "Revoke the {name} key",
+      "title": "Revoke the “{name}” key?",
+      "description": "Applications using it lose access immediately. This cannot be undone.",
+      "done": "The “{name}” key has been revoked."
+    },
+    "delete": {
+      "action": "Delete",
+      "actionLabel": "Delete the {name} key",
+      "title": "Delete the “{name}” key?",
+      "description": "It disappears from this list; the audit log keeps a record of it.",
+      "done": "The “{name}” key has been deleted."
+    },
+    "inactive": {
+      "summary": "No revoked or expired key | One revoked or expired key | {count} revoked or expired keys"
+    },
+    "revealed": {
+      "PUBLISHABLE": {
+        "title": "Publishable key “{name}” created",
+        "description": "Use it in your frontend code. It remains visible in the key list.",
+        "label": "Publishable key"
+      },
+      "SECRET": {
+        "title": "Secret key “{name}” created",
+        "description": "Store it in your server's environment variables (e.g. SURGE_MEDIA_SECRET_KEY) and send it in the Authorization: Bearer header.",
+        "label": "Secret key"
+      }
+    },
+    "new": {
+      "meta": {
+        "title": "New key · {name}"
+      },
+      "title": "New API key",
+      "description": "Choose the key type according to where it will be used.",
+      "type": "Key type",
+      "name": "Name",
+      "nameHint": "To recognise it: the application or service using it (e.g. Marketing site).",
+      "environment": "Environment",
+      "environmentHint": "One key per environment: they can be revoked separately.",
+      "environmentOther": "Other…",
+      "environmentCustom": "Environment name",
+      "environmentCustomHint": "Lowercase letters, digits and hyphens (e.g. preview-eu).",
+      "lifetime": "Lifetime",
+      "lifetimeHint": "An expiring key limits the impact of a leak; rotate it before it expires.",
+      "lifetimes": {
+        "30": "30 days",
+        "90": "90 days",
+        "365": "1 year (recommended)",
+        "never": "No expiry"
+      },
+      "secretNotice": "The secret key will be shown only once. You may be asked for your password.",
+      "submit": "Create key",
+      "submitting": "Creating the key…",
+      "created": "Key “{name}” created."
+    }
+  },
+  "origins": {
+    "meta": {
+      "title": "Allowed origins · {name}"
+    },
+    "title": "Allowed origins (CORS)",
+    "description": "Websites allowed to call the project's API from a browser, for all its environments (production, staging, local development). Server-to-server calls are not affected.",
+    "archived": "The project is archived: its origins cannot be changed until it is restored.",
+    "loadError": "Unable to load the allowed origins.",
+    "listTitle": "No origin | One origin | {count} origins",
+    "empty": "No allowed origin: no browser can call this project's API yet.",
+    "wildcard": "Subdomains",
+    "addedOn": "Added {date}",
+    "remove": "Remove",
+    "removeLabel": "Remove the origin {origin}",
+    "removeTitle": "Remove the origin {origin}?",
+    "removeDescription": "Pages on this site will no longer be able to call the project's API from a browser.",
+    "added": "Origin {origin} added.",
+    "removed": "Origin {origin} removed.",
+    "add": {
+      "title": "Add an origin",
+      "label": "Origin",
+      "hint": "Scheme and host, with the port if needed, without a path.",
+      "submit": "Add",
+      "examples": "Examples: https://www.example.com · http://localhost:3000 · https://*.example.com (all subdomains, for preview deployments)."
+    }
+  },
+  "tokens": {
+    "meta": {
+      "title": "Personal tokens"
+    },
+    "title": "Personal tokens",
+    "description": "For your scripts, tools and integrations: a token acts with your permissions, on the projects you choose.",
+    "create": "New token",
+    "notice": "A token never exceeds your permissions: if you leave a project, your role changes or your account is deactivated, it loses the matching access. It cannot manage members, keys or settings.",
+    "listTitle": "Active tokens",
+    "loadError": "Unable to load your personal tokens.",
+    "empty": "No active token.",
+    "caption": "Active personal tokens",
+    "columns": {
+      "name": "Name",
+      "access": "Access",
+      "scopes": "Scopes",
+      "expires": "Expiry",
+      "lastUsed": "Last used",
+      "actions": "Actions"
+    },
+    "access": {
+      "allProjects": "All my projects",
+      "library": "Organization library"
+    },
+    "revoke": {
+      "action": "Revoke",
+      "actionLabel": "Revoke the {name} token",
+      "title": "Revoke the “{name}” token?",
+      "description": "Scripts and tools using it lose access immediately. This cannot be undone.",
+      "done": "The “{name}” token has been revoked."
+    },
+    "delete": {
+      "action": "Delete",
+      "actionLabel": "Delete the {name} token",
+      "title": "Delete the “{name}” token?",
+      "description": "It disappears from this list; the audit log keeps a record of it.",
+      "done": "The “{name}” token has been deleted."
+    },
+    "inactive": {
+      "summary": "No revoked or expired token | One revoked or expired token | {count} revoked or expired tokens"
+    },
+    "revealed": {
+      "title": "Token “{name}” created",
+      "description": "Send it in the Authorization: Bearer header of your requests, from a terminal, CI or script — never from a web page.",
+      "label": "Personal token"
+    },
+    "new": {
+      "meta": {
+        "title": "New personal token"
+      },
+      "back": "Back to personal tokens",
+      "title": "New personal token",
+      "description": "Give it only the access it needs; you can revoke it at any time.",
+      "spacesError": "Unable to load your projects.",
+      "name": "Name",
+      "nameHint": "To recognise it: its intended use (e.g. Import script, CI).",
+      "lifetime": "Lifetime",
+      "lifetimeHint": "A personal token always expires; create a new one when it does.",
+      "lifetimes": {
+        "30": {
+          "label": "30 days",
+          "description": "For a one-off need."
+        },
+        "90": {
+          "label": "90 days",
+          "description": "Recommended."
+        },
+        "365": {
+          "label": "1 year",
+          "description": "For a long-running integration."
+        }
+      },
+      "access": {
+        "legend": "Access",
+        "projects": "Projects",
+        "all": {
+          "label": "All my projects",
+          "description": "Every project you can access, including those you join later."
+        },
+        "selected": {
+          "label": "Selected projects",
+          "description": "Only the projects checked below."
+        },
+        "choose": "Included projects",
+        "noProjects": "You do not have access to any active project.",
+        "library": "Include the organization library",
+        "libraryHint": "The token can also act on media in the library."
+      },
+      "notice": "The token will be shown only once. You may be asked for your password.",
+      "submit": "Create token",
+      "submitting": "Creating the token…",
+      "created": "Token “{name}” created."
+    }
+  },
+  "audit": {
+    "meta": {
+      "title": "Audit log"
+    },
+    "title": "Audit log",
+    "description": "Sensitive actions on projects, members, API credentials, media and accounts, most recent first.",
+    "filters": {
+      "label": "Filter the log",
+      "category": "Category",
+      "allCategories": "All categories",
+      "apply": "Filter",
+      "project": "Project: {name}",
+      "clearProject": "Remove this filter",
+      "clearProjectLabel": "Remove this filter on the {name} project"
+    },
+    "categories": {
+      "project": "Projects",
+      "member": "Members",
+      "key": "API keys",
+      "token": "Personal tokens",
+      "origin": "Allowed origins",
+      "media": "Media",
+      "user": "Accounts"
+    },
+    "loadError": "Unable to load the audit log.",
+    "results": "Log entries",
+    "count": "No entry | One entry | {count} entries",
+    "empty": "No action recorded for these criteria.",
+    "caption": "Audit log entries",
+    "columns": {
+      "date": "Date",
+      "action": "Action",
+      "target": "Target",
+      "project": "Project",
+      "actor": "By"
+    },
+    "system": "System",
+    "deletedUser": "Deleted account",
+    "deletedProject": "Deleted project",
+    "actions": {
+      "project": {
+        "created": "Project created",
+        "updated": "Project updated",
+        "archived": "Project archived",
+        "restored": "Project restored",
+        "deleted": "Project deleted"
+      },
+      "member": {
+        "added": "Member added",
+        "role_changed": "Member role changed",
+        "removed": "Member removed"
+      },
+      "key": {
+        "created": "API key created",
+        "rotated": "API key rotated",
+        "revoked": "API key revoked",
+        "deleted": "API key deleted"
+      },
+      "token": {
+        "created": "Personal token created",
+        "revoked": "Personal token revoked",
+        "deleted": "Personal token deleted"
+      },
+      "origin": {
+        "added": "Origin allowed",
+        "removed": "Origin removed"
+      },
+      "media": {
+        "visibility_changed": "Media visibility changed",
+        "moved": "Media moved",
+        "deleted": "Media permanently deleted"
+      },
+      "user": {
+        "created": "Account created",
+        "updated": "Account updated",
+        "deleted": "Account deleted",
+        "password_link": "Password link issued",
+        "sessions_revoked": "Sessions closed"
+      }
+    },
+    "details": {
+      "role": "Role: {role}",
+      "change": "{from} → {to}",
+      "fields": "Fields: {fields}",
+      "projectMedia": {
+        "library": "Media moved to the library: {count}",
+        "purge": "Media permanently deleted: {count}"
+      },
+      "activated": "Account reactivated",
+      "deactivated": "Account deactivated",
+      "passwordLink": {
+        "invitation": "Invitation",
+        "reset": "Reset"
+      },
+      "sessions": "No session closed | One session closed | {count} sessions closed"
+    },
+    "fields": {
+      "name": "name",
+      "slug": "identifier",
+      "description": "description"
     }
   }
 }

@@ -10,6 +10,7 @@ export default defineEventHandler(async (event) => {
   const user = await requireAuth(event, 'projects:create')
   const input = await readValidatedBody(event, body => createProjectSchema.parse(body))
   const project = await createProject(user, input)
+  await recordAudit(event, { action: 'project.created', projectId: project.id, targetType: 'project', targetId: project.id, data: { label: project.name, slug: project.slug } })
   setResponseStatus(event, 201)
   return { project }
 })

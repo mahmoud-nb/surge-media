@@ -51,22 +51,25 @@ model User {
   projectMemberships   ProjectMember[]
   createdProjects      Project[]       @relation("ProjectCreatedBy")
   uploadedMedia        Media[]         @relation("MediaUploadedBy")
-  accessTokens         AccessToken[]   @relation("AccessTokenCreatedBy")
+  personalTokens       AccessToken[]   @relation("AccessTokenOwner")
+  createdAccessTokens  AccessToken[]   @relation("AccessTokenCreatedBy")
   passwordTokens       PasswordToken[] @relation("PasswordTokenUser")
   issuedPasswordTokens PasswordToken[] @relation("PasswordTokenCreatedBy")
 }
 
 model Session {
-  id         String   @id @default(cuid())
-  userId     String
+  id                 String   @id @default(cuid())
+  userId             String
   /// Empreinte SHA-256 du jeton de session (le jeton en clair n'est jamais stocké)
-  tokenHash  String   @unique
-  ipAddress  String?
+  tokenHash          String   @unique
+  ipAddress          String?
   /// Tronqué à 191 caractères par l'API
-  userAgent  String?
-  expiresAt  DateTime
-  createdAt  DateTime @default(now())
-  lastSeenAt DateTime @default(now())
+  userAgent          String?
+  expiresAt          DateTime
+  createdAt          DateTime @default(now())
+  lastSeenAt         DateTime @default(now())
+  /// Dernière saisie du mot de passe (connexion ou confirmation) : actions sensibles (« mode sudo »)
+  passwordVerifiedAt DateTime @default(now())
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
@@ -121,11 +124,14 @@ model Project {
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
 
-  createdBy      User?           @relation("ProjectCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
+  createdBy      User?                @relation("ProjectCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
   members        ProjectMember[]
   media          Media[]
   folders        Folder[]
+  /// Clés d'API du projet (publiques et secrètes)
   accessTokens   AccessToken[]
+  /// Jetons personnels limités à une sélection de projets qui inclut celui-ci
+  tokenGrants    AccessTokenProject[]
   allowedOrigins AllowedOrigin[]
 }
 
@@ -144,26 +150,66 @@ model ProjectMember {
   @@index([userId])
 }
 
-/// Jeton d'accès API d'une application tierce, rattaché à un seul projet
+enum TokenType {
+  PERSONAL // jeton personnel (sm_pat_) : agit avec les droits de son propriétaire, sur les projets choisis
+  SECRET // clé secrète de projet (sm_sk_) : serveurs du client, jamais dans un navigateur
+  PUBLISHABLE // clé publique de projet (sm_pk_) : lecture des médias publics depuis un frontend
+}
+
+/// Identifiant d'API opaque : jeton personnel, clé secrète ou clé publique d'un projet.
+/// Seule l'empreinte est stockée (sauf pour la clé publique, non secrète) ; les portées sont immuables.
 model AccessToken {
-  id          String    @id @default(cuid())
-  projectId   String
-  name        String
-  /// Début lisible du jeton (ex. "sm_3f9a2c"), affiché dans l'admin pour l'identifier
-  prefix      String
+  id             String    @id @default(cuid())
+  type           TokenType
+  name           String
+  /// Projet d'une clé (SECRET, PUBLISHABLE) ; null pour un jeton personnel
+  projectId      String?
+  /// Étiquette d'environnement d'une clé (production, staging, development, test ou libre)
+  environment    String?
+  /// Propriétaire d'un jeton personnel ; null pour une clé de projet
+  userId         String?
+  /// Jeton personnel : tous les projets de son propriétaire (sinon : sélection AccessTokenProject)
+  allProjects    Boolean   @default(false)
+  /// Jeton personnel : accès à la bibliothèque de l'organisation
+  includeLibrary Boolean   @default(false)
+  /// Début lisible du jeton (ex. "sm_sk_4fQ9Zt"), affiché dans l'admin pour l'identifier
+  prefix         String
   /// Empreinte SHA-256 du jeton ; le jeton en clair n'est montré qu'une fois, à sa création
-  tokenHash   String    @unique
-  /// Portées séparées par des espaces, à la manière d'OAuth (ex. "media:read media:write")
-  scopes      String
-  expiresAt   DateTime?
-  lastUsedAt  DateTime?
-  revokedAt   DateTime?
-  createdById String?
-  createdAt   DateTime  @default(now())
+  tokenHash      String    @unique
+  /// Valeur en clair, uniquement pour une clé publique (non secrète, réaffichable)
+  publicValue    String?
+  /// Portées séparées par des espaces, à la manière d'OAuth (ex. "project:read media:read")
+  scopes         String
+  expiresAt      DateTime?
+  lastUsedAt     DateTime?
+  lastUsedIp     String?
+  revokedAt      DateTime?
+  /// Rotation : clé qui remplace celle-ci (l'ancienne reste valable jusqu'à expiresAt)
+  replacedById   String?
+  createdById    String?
+  createdAt      DateTime  @default(now())
 
-  project   Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  createdBy User?   @relation("AccessTokenCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
+  project    Project?             @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  user       User?                @relation("AccessTokenOwner", fields: [userId], references: [id], onDelete: Cascade)
+  createdBy  User?                @relation("AccessTokenCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
+  replacedBy AccessToken?         @relation("AccessTokenRotation", fields: [replacedById], references: [id], onDelete: SetNull)
+  replaces   AccessToken[]        @relation("AccessTokenRotation")
+  projects   AccessTokenProject[]
 
+  @@index([projectId])
+  @@index([userId])
+  @@index([replacedById])
+}
+
+/// Sélection de projets d'un jeton personnel (quand il ne couvre pas « tous mes projets »)
+model AccessTokenProject {
+  tokenId   String
+  projectId String
+
+  token   AccessToken @relation(fields: [tokenId], references: [id], onDelete: Cascade)
+  project Project     @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@id([tokenId, projectId])
   @@index([projectId])
 }
 
@@ -178,6 +224,29 @@ model AllowedOrigin {
   project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
 
   @@unique([projectId, origin])
+}
+
+/// Journal d'audit des actions sensibles (identifiants, membres, projets, visibilité, suppressions,
+/// comptes). Volontairement sans clés étrangères : les entrées survivent aux comptes, projets et
+/// jetons supprimés ; `data.label` garde un libellé lisible de la cible.
+model AuditEvent {
+  id          String   @id @default(cuid())
+  at          DateTime @default(now())
+  /// Utilisateur à l'origine de l'action (session d'administration)
+  actorUserId String?
+  /// Identifiant d'API à l'origine de l'action (API v1, à partir de B3)
+  tokenId     String?
+  projectId   String?
+  /// Action normalisée, ex. "key.created", "member.removed" (shared/utils/audit.ts)
+  action      String
+  targetType  String?
+  targetId    String?
+  ipAddress   String?
+  data        Json?
+
+  @@index([projectId, at])
+  @@index([actorUserId, at])
+  @@index([at])
 }
 
 // ─── Médias ──────────────────────────────────────────────────────────────────

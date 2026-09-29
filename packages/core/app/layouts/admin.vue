@@ -63,5 +63,8 @@ function closeMenu() {
     <main id="main" tabindex="-1" class="min-w-0 px-4 py-8 sm:px-8 lg:px-12 lg:py-10">
       <slot />
     </main>
+
+    <!-- Confirmation du mot de passe des actions sensibles (useReauth). -->
+    <AdminReauthDialog />
   </div>
 </template>

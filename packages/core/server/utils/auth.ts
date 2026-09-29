@@ -98,6 +98,41 @@ export async function requireAuth(event: H3Event, permission?: Permission): Prom
   return user
 }
 
+/** Erreur de confirmation du mot de passe : statut HTTP + code (`data.code`) traduit par l'interface. */
+export function authError(statusCode: 403 | 422, code: AuthErrorCode) {
+  return createError({ statusCode, statusMessage: code, data: { code } })
+}
+
+/** Enregistrement en base de la session courante (celle du cookie), ou null. */
+async function currentSessionRecord(event: H3Event) {
+  const { secure } = await getUserSession(event)
+  if (!secure?.token) return null
+  const prisma = await usePrisma()
+  return prisma.session.findUnique({ where: { tokenHash: hashToken(secure.token) }, select: { id: true, passwordVerifiedAt: true } })
+}
+
+/**
+ * Action sensible (« mode sudo ») : session valide ET mot de passe saisi il y a moins de
+ * REAUTH_WINDOW_SECONDS (connexion ou confirmation), sinon 403 REAUTH_REQUIRED.
+ * À appeler avant tout effet de bord ; l'interface rejoue l'action après confirmation.
+ */
+export async function requireRecentPassword(event: H3Event): Promise<User> {
+  const user = await requireAuth(event)
+  const session = await currentSessionRecord(event)
+  if (!session || !isRecentlyVerified(session.passwordVerifiedAt)) throw authError(403, 'REAUTH_REQUIRED')
+  return user
+}
+
+/** Note une saisie réussie du mot de passe pour la session courante ; renvoie sa date. */
+export async function markPasswordVerified(event: H3Event): Promise<Date> {
+  const session = await currentSessionRecord(event)
+  if (!session) throw createError({ statusCode: 401, statusMessage: 'Unauthorized' })
+  const prisma = await usePrisma()
+  const verifiedAt = new Date()
+  await prisma.session.update({ where: { id: session.id }, data: { passwordVerifiedAt: verifiedAt } })
+  return verifiedAt
+}
+
 /**
  * Compte d'amorçage (première connexion) : NUXT_BOOTSTRAP_ADMIN_EMAIL et
  * NUXT_BOOTSTRAP_ADMIN_PASSWORD. Il n'est utilisable que tant qu'aucun utilisateur

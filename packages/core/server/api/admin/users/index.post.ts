@@ -21,6 +21,7 @@ export default defineEventHandler(async (event) => {
   }
 
   const invitation = await issuePasswordLink(user, actor.id)
+  await recordAudit(event, { action: 'user.created', targetType: 'user', targetId: user.id, data: { label: user.email, role: user.role } })
   setResponseStatus(event, 201)
   return { user: toUserSummary(user), invitation }
 })
