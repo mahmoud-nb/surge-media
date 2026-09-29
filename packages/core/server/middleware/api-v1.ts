@@ -20,7 +20,7 @@ import { getProjectState } from '../lib/projects/state'
 const PUBLIC_PATHS = new Set(['/api/v1/openapi.json', '/api/v1/errors'])
 const ALLOW_METHODS = 'GET, HEAD, POST, PATCH, PUT, DELETE'
 const ALLOW_HEADERS = 'Authorization, Content-Type, If-None-Match'
-const EXPOSE_HEADERS = 'ETag, RateLimit, RateLimit-Policy, Retry-After, X-Request-Id'
+const EXPOSE_HEADERS = 'ETag, Location, RateLimit, RateLimit-Policy, Retry-After, X-Request-Id'
 
 export default defineEventHandler(async (event) => {
   const pathname = event.path.split('?')[0]!

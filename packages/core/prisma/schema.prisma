@@ -191,12 +191,14 @@ model AccessToken {
   createdById    String?
   createdAt      DateTime  @default(now())
 
-  project    Project?             @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  user       User?                @relation("AccessTokenOwner", fields: [userId], references: [id], onDelete: Cascade)
-  createdBy  User?                @relation("AccessTokenCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
-  replacedBy AccessToken?         @relation("AccessTokenRotation", fields: [replacedById], references: [id], onDelete: SetNull)
-  replaces   AccessToken[]        @relation("AccessTokenRotation")
-  projects   AccessTokenProject[]
+  project       Project?             @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  user          User?                @relation("AccessTokenOwner", fields: [userId], references: [id], onDelete: Cascade)
+  createdBy     User?                @relation("AccessTokenCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
+  replacedBy    AccessToken?         @relation("AccessTokenRotation", fields: [replacedById], references: [id], onDelete: SetNull)
+  replaces      AccessToken[]        @relation("AccessTokenRotation")
+  projects      AccessTokenProject[]
+  /// Médias envoyés par l'API avec cet identifiant (ou un jeton délégué qu'il a émis)
+  uploadedMedia Media[]              @relation("MediaUploadedByToken")
 
   @@index([projectId])
   @@index([userId])
@@ -251,6 +253,17 @@ model AuditEvent {
   @@index([at])
 }
 
+/// Envois consommés par un jeton délégué limité en nombre de fichiers (contrainte maxFiles) : le
+/// jeton lui-même n'est pas stocké (signé, sans état) ; la ligne est purgée après son échéance.
+model DelegatedTokenUsage {
+  /// Identifiant unique du jeton délégué (champ jti de sa charge)
+  jti       String   @id
+  uploads   Int      @default(0)
+  expiresAt DateTime
+
+  @@index([expiresAt])
+}
+
 /// Compteur de révision d'un espace (« project:<id> », « library ») : incrémenté par toute écriture
 /// de médias dans l'espace ; entre dans les ETag des listes de l'API (cache « générationnel »).
 model CacheRevision {
@@ -295,56 +308,62 @@ model Folder {
 /// Fichier original téléversé. Il appartient à un seul espace : un projet, ou la bibliothèque
 /// de l'organisation (projectId null). Réutilisation ailleurs = duplication (copie indépendante).
 model Media {
-  id               String     @id @default(cuid())
-  projectId        String?
-  folderId         String?
-  kind             MediaKind
-  visibility       Visibility @default(PUBLIC)
+  id                String     @id @default(cuid())
+  projectId         String?
+  folderId          String?
+  kind              MediaKind
+  visibility        Visibility @default(PUBLIC)
   /// Clé opaque du fichier original dans le stockage (générée par le serveur, jamais exposée)
-  storageKey       String     @unique
+  storageKey        String     @unique
   /// Incrémentée à chaque remplacement du fichier : fait partie des URL de diffusion (cache immuable)
-  version          Int        @default(1)
-  originalName     String
-  mimeType         String
+  version           Int        @default(1)
+  originalName      String
+  mimeType          String
   /// Taille en octets (entier 32 bits sous PostgreSQL/MySQL : 2 Gio maximum)
-  size             Int
+  size              Int
   /// Empreinte SHA-256 du contenu (détection des doublons)
-  checksum         String
-  width            Int?
-  height           Int?
+  checksum          String
+  width             Int?
+  height            Int?
   /// Durée en secondes (vidéo, audio)
-  duration         Float?
-  title            String?
+  duration          Float?
+  title             String?
   /// Texte alternatif par défaut (accessibilité)
-  altText          String?
+  altText           String?
   /// Colonnes de recherche : titre, nom d'origine et texte alternatif en minuscules sans accents
   /// (remplies par l'application, shared/utils/search.ts) — recherche identique sur les 3 bases
-  searchTitle      String?
-  searchName       String     @default("")
-  searchAlt        String?
+  searchTitle       String?
+  searchName        String     @default("")
+  searchAlt         String?
   /// Métadonnées techniques extraites à l'import (EXIF, profil colorimétrique…)
-  metadata         Json?
-  uploadedById     String?
+  metadata          Json?
+  uploadedById      String?
+  /// Identifiant d'API ayant envoyé le média (API v1 ; émetteur pour un jeton délégué)
+  uploadedByTokenId String?
+  /// Sujet final déclaré par l'application cliente dans un jeton délégué (audit), 128 caractères au plus
+  uploadSubject     String?
   /// Média d'origine d'une copie créée par duplication
-  duplicatedFromId String?
-  createdAt        DateTime   @default(now())
-  updatedAt        DateTime   @updatedAt
+  duplicatedFromId  String?
+  createdAt         DateTime   @default(now())
+  updatedAt         DateTime   @updatedAt
   /// Suppression logique (corbeille) ; null = média actif
-  deletedAt        DateTime?
+  deletedAt         DateTime?
 
   /// Restrict : supprimer un projet exige de traiter ses médias avant (aucun fichier orphelin)
-  project        Project?       @relation(fields: [projectId], references: [id], onDelete: Restrict)
-  folder         Folder?        @relation(fields: [folderId], references: [id], onDelete: SetNull)
-  uploadedBy     User?          @relation("MediaUploadedBy", fields: [uploadedById], references: [id], onDelete: SetNull)
-  duplicatedFrom Media?         @relation("MediaDuplicates", fields: [duplicatedFromId], references: [id], onDelete: SetNull)
-  duplicates     Media[]        @relation("MediaDuplicates")
-  variants       MediaVariant[]
+  project         Project?       @relation(fields: [projectId], references: [id], onDelete: Restrict)
+  folder          Folder?        @relation(fields: [folderId], references: [id], onDelete: SetNull)
+  uploadedBy      User?          @relation("MediaUploadedBy", fields: [uploadedById], references: [id], onDelete: SetNull)
+  uploadedByToken AccessToken?   @relation("MediaUploadedByToken", fields: [uploadedByTokenId], references: [id], onDelete: SetNull)
+  duplicatedFrom  Media?         @relation("MediaDuplicates", fields: [duplicatedFromId], references: [id], onDelete: SetNull)
+  duplicates      Media[]        @relation("MediaDuplicates")
+  variants        MediaVariant[]
 
   @@index([projectId, deletedAt, createdAt])
   @@index([projectId, checksum])
   @@index([folderId])
   @@index([deletedAt])
   @@index([duplicatedFromId])
+  @@index([uploadedByTokenId])
 }
 
 /// Dérivé d'un média (crop, resize, optimisation…) généré à la demande puis mis en cache

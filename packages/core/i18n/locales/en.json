@@ -410,7 +410,8 @@
       "KIND_MISMATCH": "The new file must be of the same type as the original.",
       "VERSION_CONFLICT": "The file has just been replaced by someone else. Reload the page and try again.",
       "NO_FILE": "No file received.",
-      "network": "The connection was interrupted."
+      "network": "The connection was interrupted.",
+      "SERVER_BUSY": "The server is already processing many files. Try again in a few seconds."
     },
     "detail": {
       "backToList": "Back to the library",
@@ -422,7 +423,7 @@
       "size": "Size",
       "version": "File version",
       "uploadedBy": "Uploaded by",
-      "unknownUploader": "Deleted account",
+      "unknownUploader": "Deleted account or credential",
       "createdAt": "Uploaded on",
       "checksum": "SHA-256 checksum",
       "editTitle": "Description",
@@ -432,7 +433,10 @@
       "duplicatedFrom": "Origin",
       "duplicatedFromValue": "Copy of another media item",
       "readOnly": "You can view this media item, but not change it.",
-      "archivedProject": "This media item's project is archived: it is read-only."
+      "archivedProject": "This media item's project is archived: it is read-only.",
+      "apiUploader": "An application (API)",
+      "credential": "API credential",
+      "subject": "Application user"
     },
     "fields": {
       "title": "Title",
@@ -758,6 +762,11 @@
       "PROJECT_UNAVAILABLE": "One of the selected projects is no longer accessible or has been archived. Reload the page.",
       "ORIGIN_EXISTS": "This origin is already allowed.",
       "ORIGIN_LIMIT_REACHED": "The maximum number of origins has been reached: remove one before adding another."
+    },
+    "named": {
+      "PERSONAL": "Personal token “{name}”",
+      "SECRET": "Secret key “{name}”",
+      "PUBLISHABLE": "Publishable key “{name}”"
     }
   },
   "apiKeys": {
@@ -1110,6 +1119,10 @@
       "slug": "identifier",
       "description": "description",
       "publicListing": "public listing"
-    }
+    },
+    "via": "Through the API — {credential}",
+    "deletedCredential": "Deleted API credential",
+    "delegated": "Delegated token",
+    "delegatedSubject": "Delegated token, user {subject}"
   }
 }

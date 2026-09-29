@@ -29,6 +29,7 @@ export function toApiMedia(media: Media, base: string, expires: number): ApiMedi
   const hasPreview = Boolean(handlerFor(media.kind)?.preview)
   return {
     id: media.id,
+    projectId: media.projectId,
     kind: media.kind.toLowerCase(),
     visibility: media.visibility.toLowerCase(),
     title: media.title,

@@ -68,15 +68,17 @@ surge-media/
       │  │                 admin/tokens/*, admin/audit, admin/config/*, health, v1/* (API publique)
       │  ├─ routes/m/      diffusion des médias : /m/<id>/v<version>/…
       │  ├─ lib/storage/   interface MediaStorage + adaptateur Flydrive (local, S3)
-      │  ├─ lib/media/     métier des médias : service, gestionnaires par genre, envoi, signature, diffusion
+      │  ├─ lib/media/     métier des médias : service, gestionnaires par genre, envoi, signature, diffusion,
+      │  │                 dérivés (pré-génération), file bornée des traitements
       │  ├─ lib/projects/  projets, membres, origines autorisées
-      │  ├─ lib/access/    format des identifiants d'API (jetons opaques, CRC)
+      │  ├─ lib/access/    identifiants d'API : format (CRC), résolution, jetons délégués, identité de l'appelant
       │  ├─ lib/credentials/  clés de projet et jetons personnels (création, rotation, révocation)
       │  ├─ lib/audit/     lecture du journal d'audit
-      │  ├─ lib/api/       API v1 : contexte (Bearer, débit), erreurs RFC 9457, requêtes, contrats, OpenAPI
+      │  ├─ lib/api/       API v1 : contexte (Bearer, débit), erreurs RFC 9457, requêtes, écritures, contrats, OpenAPI
       │  ├─ lib/cache/     cache mémoire (LRU) et compteurs de révision
       │  ├─ middleware/    api-v1.ts (CORS, identité, débit), csrf.ts
-      │  ├─ plugins/       base, sessions, rappels d'amorçage, indexation de la recherche
+      │  ├─ plugins/       base, sessions, rappels d'amorçage, indexation de la recherche, purge des compteurs
+      │  │                 des jetons délégués
       │  ├─ utils/         usePrisma(), requireAuth(), requireSpaceAccess(), requireRecentPassword(),
       │  │                 recordAudit(), utilisateurs, liens de mot de passe… (auto-importés)
       │  └─ generated/     client Prisma généré (non versionné)
@@ -127,6 +129,7 @@ pnpm --filter @surge-media/core remove unstorage   # remplacé par Flydrive pour
 # étape B1 — tests unitaires
 pnpm --filter @surge-media/core add -D vitest
 # étape B2 — aucune nouvelle dépendance (CRC32 : node:zlib ; SQLite des scripts de test : node:sqlite)
+# étapes B3 et B4 — aucune nouvelle dépendance
 
 # pnpm 12 bloque les scripts d'installation : autoriser les modules natifs nécessaires
 pnpm approve-builds better-sqlite3 esbuild @prisma/engines prisma
@@ -141,7 +144,7 @@ Depuis la racine :
 | `pnpm dev` | serveur de développement du core |
 | `pnpm build` | build de tous les packages |
 | `pnpm typecheck` | vérification TypeScript (vue-tsc) |
-| `pnpm test` | tests unitaires Vitest (`packages/core/tests/` : rôles et portées, liens signés, projets, identifiants et origines, API v1) |
+| `pnpm test` | tests unitaires Vitest (`packages/core/tests/` : rôles et portées, liens signés, projets, identifiants et origines, API v1, jetons délégués, file des traitements) |
 | `pnpm i18n:check` | cohérence des traductions et des clés utilisées dans le code |
 | `pnpm a11y:contrast` | contrastes WCAG AA des jetons de couleur (clair et sombre) |
 | `pnpm db:init` | configure la base (fournisseur + URL), applique les migrations, génère le secret de session |
@@ -228,7 +231,9 @@ Le fichier `packages/core/.env` est créé par `pnpm db:init` à partir de `.env
 | `NUXT_MEDIA_STORAGE_ROOT` | `./data/media` | dossier du pilote `local` (relatif à `packages/core` ou absolu) |
 | `NUXT_MEDIA_STORAGE_PREFIX` | — | préfixe de toutes les clés (partage d'un bucket) |
 | `NUXT_MEDIA_STORAGE_S3_*` | — | `BUCKET`, `REGION`, `ENDPOINT` (services compatibles), `ACCESS_KEY_ID`, `SECRET_ACCESS_KEY`, `FORCE_PATH_STYLE` |
-| `NUXT_API_RATE_LIMIT_*` | 300 / 1200 / 1200 / 30 | requêtes par minute de l'API v1 : `PUBLISHABLE` (par clé et IP), `SECRET`, `PERSONAL`, `AUTH_FAILURES` (par IP) |
+| `NUXT_API_RATE_LIMIT_*` | 300 / 1200 / 1200 / 300 / 60 / 30 | par minute, API v1 : requêtes `PUBLISHABLE` (par clé et IP), `SECRET`, `PERSONAL`, `DELEGATED` (par émetteur et IP) ; `UPLOADS` (fichiers envoyés par identifiant) ; `AUTH_FAILURES` (identifiants refusés par IP) |
+| `NUXT_MEDIA_PROCESSING_CONCURRENCY` | `0` (= nombre de cœurs) | traitements d'images simultanés (analyse des envois, aperçus) |
+| `NUXT_MEDIA_PROCESSING_QUEUE` | `100` | traitements en attente au-delà ; file pleine → 503 `SERVER_BUSY` + `Retry-After` |
 
 ### 6.4 Modèle de données (`prisma/schema.prisma`)
 
@@ -243,9 +248,10 @@ Le fichier `packages/core/.env` est créé par `pnpm db:init` à partir de `.env
 | `AccessTokenProject` | sélection de projets d'un jeton personnel (s'il ne couvre pas « tous mes projets ») |
 | `AllowedOrigin` | origines autorisées (CORS) pour les appels navigateur d'un projet (tous environnements) |
 | `AuditEvent` | journal d'audit des actions sensibles (sans clés étrangères : survit aux suppressions ; libellé lisible dans `data.label`) |
+| `DelegatedTokenUsage` | envois consommés par un jeton délégué limité en nombre de fichiers (`jti`, compteur, échéance) ; purgé après échéance |
 | `CacheRevision` | compteur de révision par espace (`project:<id>`, `library`), incrémenté par toute écriture de médias : ETag des listes de l'API |
 | `Folder` | arborescence de dossiers d'un espace (projet, ou bibliothèque si `projectId` est vide) — étape B5 |
-| `Media` | fichier original, dans **un seul espace** (`projectId` vide = bibliothèque) : genre, visibilité publique/privée, clé de stockage opaque, version (incrémentée à chaque remplacement), dimensions, empreinte, alt, corbeille, média d'origine s'il est une copie ; colonnes de recherche normalisées (`searchTitle`, `searchName`, `searchAlt`) |
+| `Media` | fichier original, dans **un seul espace** (`projectId` vide = bibliothèque) : genre, visibilité publique/privée, clé de stockage opaque, version (incrémentée à chaque remplacement), dimensions, empreinte, alt, corbeille, média d'origine s'il est une copie ; colonnes de recherche normalisées (`searchTitle`, `searchName`, `searchAlt`) ; provenance API (`uploadedByTokenId`, sujet final `uploadSubject`) |
 | `MediaVariant` | dérivé généré à la demande puis conservé (v1 : aperçu ; bientôt crop, resize, format, qualité) |
 
 **Règles de portabilité** (le schéma doit fonctionner sur SQLite, PostgreSQL et MySQL) :
@@ -277,7 +283,7 @@ Ne modifiez jamais une migration déjà publiée.
 ### 7.1 Architecture
 
 ```text
- Admin (cookie + portées)         API v1 (jeton, étape B3)         Diffusion /m/:id/v:version/:nom
+ Admin (cookie + portées)         API v1 (jetons, B3–B4)           Diffusion /m/:id/v:version/:nom
              └──────────────┬──────────────┘                                │
                             ▼                                                ▼
           server/lib/media/service.ts — métier : envoi, remplacement, corbeille, recherche
@@ -334,6 +340,12 @@ la diffusion passe toujours par surgeMedia. `GET /api/health` vérifie que le st
 5. Analyse par le gestionnaire (sharp) : fichier illisible → 422 `UNREADABLE_FILE` ; plus de
    100 Mpx (bombe de décompression) → 422 `DIMENSIONS_TOO_LARGE`.
 6. Écriture dans le stockage puis en base ; l'échec de l'un annule l'autre.
+7. **Aperçu pré-généré** en tâche de fond (le premier affichage n'attend pas), aussi après un
+   remplacement ou une duplication ; ignoré si des traitements attendent déjà (généré alors à la
+   première demande).
+
+L'analyse (étape 5) et la génération des dérivés passent par une **file bornée** (§ 8) : au-delà,
+503 `SERVER_BUSY` avec `Retry-After`. Les mêmes étapes servent l'administration et l'API v1 (§ 9.10).
 
 Remplacement (`PUT …/file`) : nouvelle clé, version + 1, mise à jour conditionnée à la version lue
 (409 `VERSION_CONFLICT` si un remplacement concurrent est passé), ancien fichier et anciens dérivés
@@ -343,7 +355,8 @@ corbeille uniquement (enregistrement, original et dérivés).
 ### 7.4 Diffusion, médias publics et privés
 
 `GET|HEAD /m/<id>/v<version>/<nom>.<ext>` (original) et `/m/<id>/v<version>/preview/<nom>.webp`
-(aperçu 480 px, métadonnées EXIF retirées, généré à la première demande puis conservé).
+(aperçu 480 px, métadonnées EXIF retirées, pré-généré après l'envoi — sinon généré à la première
+demande — puis conservé).
 Le nom est indicatif ; une ancienne version redirige (302) vers l'URL courante.
 
 **La diffusion n'utilise jamais de cookie** : elle ne dépend que de l'URL (publique ou signée),
@@ -354,7 +367,7 @@ ce qui la rend cachable par un CDN et indépendante des projets.
 | Public | aucune | `public, max-age=1 an, immutable` (l'URL change à chaque remplacement) |
 | Privé, lien de partage | `?exp&kid&sig` pour un fichier précis (original ou aperçu), 7 jours max | `private`, jusqu'à l'échéance (1 h max) |
 | Privé ou corbeille, aperçu d'administration | `?exp&kid&scope=admin&sig` : tout fichier de la version, ~1 h, échéance alignée sur le quart d'heure (même URL pendant 15 min → cache navigateur) | `private`, jusqu'à l'échéance |
-| Privé, identifiant d'API | `Authorization: Bearer` : clé secrète ou jeton personnel ayant `media:read` dans l'espace du média (jamais une clé publique, jamais depuis un navigateur) | `private, no-cache` + `Vary: Authorization` |
+| Privé, identifiant d'API | `Authorization: Bearer` : clé secrète ou jeton personnel ayant `media:read` dans l'espace du média (jamais une clé publique, jamais depuis un navigateur), ou jeton délégué `media:read` de son projet (depuis une origine autorisée) | `private, no-cache` + `Vary: Authorization` |
 | Corbeille, autre accès | 404 (existence non révélée, pas de redirection de version) | — |
 
 Liens signés (v2, `server/lib/media/signing.ts`) : HMAC-SHA256 de `v2:<id>:<version>:<droit>:<échéance>`,
@@ -413,14 +426,15 @@ manquante **403** (`PROJECT_ARCHIVED` si c'est l'archivage du projet qui la reti
 Codes d'erreur (`data.code`, `shared/utils/media.ts`) : `NO_FILE`, `MULTIPART_REQUIRED` (400),
 `FILE_TOO_LARGE` (413), `UNSUPPORTED_TYPE` (415), `UNREADABLE_FILE`, `DIMENSIONS_TOO_LARGE`,
 `KIND_MISMATCH` (422), `VERSION_CONFLICT`, `NOT_IN_TRASH`, `IN_TRASH` (409), `MEDIA_FORBIDDEN`,
-`SIGNATURE_INVALID`, `SIGNATURE_EXPIRED` (403).
+`SIGNATURE_INVALID`, `SIGNATURE_EXPIRED` (403), `SERVER_BUSY` (503).
 
 ### 7.6 Interface
 
 - `/admin/media` : **bibliothèque** de l'organisation ; `/admin/projects/:id/media` : médias d'un
   projet. Même composant (`AdminMediaBrowser`) : envoi par bouton ou glisser-déposer (si la portée le
   permet), progression annoncée aux lecteurs d'écran, filtres dans l'URL, grille, corbeille.
-- `/admin/media/:id` : fiche d'un média (aperçu, informations dont l'espace, titre, texte alternatif,
+- `/admin/media/:id` : fiche d'un média (aperçu, informations dont l'espace et la provenance — compte,
+  identifiant d'API, utilisateur de l'application pour un envoi par jeton délégué —, titre, texte alternatif,
   visibilité, adresse publique ou lien temporaire, remplacement, **dupliquer ou déplacer**, corbeille).
   Sans droit d'écriture (ou projet archivé), la fiche passe en lecture seule.
 
@@ -430,6 +444,12 @@ Codes d'erreur (`data.code`, `shared/utils/media.ts`) : `NO_FILE`, `MULTIPART_RE
 nécessaire sur Windows, macOS et Linux glibc. La sonde `/api/health` vérifie qu'il se charge.
 Son cache d'opérations est désactivé (`sharp.cache(false)`) : il garderait les fichiers temporaires
 ouverts, et donc verrouillés sous Windows.
+
+**Concurrence bornée** (`server/lib/media/processing.ts`) : au plus `NUXT_MEDIA_PROCESSING_CONCURRENCY`
+traitements simultanés (0 = nombre de cœurs), les suivants attendent dans une file de
+`NUXT_MEDIA_PROCESSING_QUEUE` places ; file pleine → 503 `SERVER_BUSY` + `Retry-After: 5` (envoi,
+remplacement, aperçu demandé à `/m/`) plutôt qu'un serveur saturé en mémoire. La pré-génération des
+aperçus s'efface devant les demandes en attente.
 
 ## 9. Authentification et rôles
 
@@ -599,8 +619,9 @@ Pages : `/admin/projects` (liste, filtres), `/admin/projects/new`, puis pour cha
 
 ### 9.6 Identifiants d'API : clés de projet, jetons personnels, origines
 
-Les applications tierces s'identifieront auprès de l'API v1 (étape B3) avec l'un de ces identifiants,
-créés et gérés dans l'administration. **Aucun identifiant ne gère les accès** : ses portées se limitent
+Les applications tierces s'identifient auprès de l'API v1 (§ 9.9) avec l'un de ces identifiants,
+créés et gérés dans l'administration (un composant dans un navigateur utilise en plus des **jetons
+délégués** `sm_dt_` de quelques minutes, émis par une clé secrète ou un jeton personnel : § 9.10). **Aucun identifiant ne gère les accès** : ses portées se limitent
 à `project:read` et `media:*` (jamais membres, clés, origines ni réglages).
 
 | Identifiant | Préfixe | Pour | Portées | Échéance | Affichage |
@@ -675,7 +696,7 @@ suppression définitive), comptes (création, modification du rôle ou du statut
 mot de passe, fermeture des sessions). L'écran filtre par catégorie et par projet (lien « Voir les
 actions sur ce projet » de l'aperçu d'un projet). Pas encore de purge automatique des anciennes entrées.
 
-### 9.9 API publique v1 (`/api/v1`, lecture)
+### 9.9 API publique v1 (`/api/v1`)
 
 API REST pour les applications du client (sites, applications mobiles, serveurs, scripts), distincte
 de l'administration. Spécification **OpenAPI 3.1** : `GET /api/v1/openapi.json` (publique, générée
@@ -686,13 +707,15 @@ L'onglet « Clés d'API » d'un projet affiche son adresse et le lien vers la sp
   session d'administration est ignorée) ni de jeton dans l'URL (`?access_token=` → 400).
   Identifiant absent, invalide, expiré, révoqué (ou compte propriétaire désactivé) → 401 `TOKEN_*`
   avec `WWW-Authenticate: Bearer`. Clé secrète ou jeton personnel envoyé par un navigateur (en-tête
-  `Origin` ou `Sec-Fetch-Site`) → 403 `SECRET_IN_BROWSER`. Clé publique avec une `Origin` non
-  autorisée pour son projet → 403 `ORIGIN_NOT_ALLOWED` (sans `Origin` : serveur, application mobile).
+  `Origin` ou `Sec-Fetch-Site`) → 403 `SECRET_IN_BROWSER`. Clé publique ou jeton délégué avec une
+  `Origin` non autorisée pour son projet → 403 `ORIGIN_NOT_ALLOWED` (sans `Origin` : serveur,
+  application mobile).
 - **Périmètre** : le projet est explicite dans l'URL. Projet inexistant ou hors du périmètre de
   l'identifiant → 404 (existence non révélée) ; projet archivé → 403 `PROJECT_ARCHIVED` (tous les
   identifiants, `/me` restant lisible). Droits effectifs : clé secrète = ses portées dans son projet ;
   clé publique = lecture des médias **publics** ; jeton personnel = ses portées ∩ droits actuels de
-  son propriétaire, dans sa sélection (moteur pur `credentialScopes`, testé).
+  son propriétaire, dans sa sélection ; jeton délégué = ses portées ∩ droits actuels de son émetteur,
+  dans son projet (moteur pur `credentialScopes`, testé).
 - **Erreurs RFC 9457** (`application/problem+json`) : `{ type, title, status, code, detail?,
   instance, requestId, errors? }` ; `code` est stable (catalogue `shared/utils/api.ts`), `requestId`
   = en-tête `X-Request-Id`, `errors` détaille les paramètres invalides (400 `INVALID_REQUEST`).
@@ -700,7 +723,8 @@ L'onglet « Clés d'API » d'un projet affiche son adresse et le lien vers la sp
   en-têtes (preflight `OPTIONS` sans authentification, `Max-Age` 2 h) ; `/me` et `/projects` : toute
   origine (aucun cookie). Jamais `Access-Control-Allow-Credentials`.
 - **Limitation de débit** (seau à jetons, par minute, `NUXT_API_RATE_LIMIT_*`) : clé publique 300 par
-  (clé, IP), clé secrète et jeton personnel 1 200, échecs d'authentification 30 par IP (au-delà,
+  (clé, IP), clé secrète et jeton personnel 1 200, jeton délégué 300 par (émetteur, IP), envois de
+  fichiers 60 par identifiant (§ 9.10), échecs d'authentification 30 par IP (au-delà,
   toutes les requêtes de l'IP reçoivent 429 pendant la fenêtre). En-têtes `RateLimit-Policy` /
   `RateLimit` (brouillon IETF) et `Retry-After`.
 - **Représentations** : valeurs en minuscules, dates ISO, URL **absolues** ; un média privé reçoit
@@ -718,7 +742,8 @@ L'onglet « Clés d'API » d'un projet affiche son adresse et le lien vers la sp
 | `GET /api/v1/projects/:projectId` | `project:read` | projet (dont `publicListing`) |
 | `GET /api/v1/projects/:projectId/media` | `media:read` | `?q&kind&visibility&ids&sort&limit&cursor&withTotal` → `{ items, nextCursor, total? }` |
 | `GET /api/v1/projects/:projectId/media/:mediaId` | `media:read` | un média actif (clé publique : public seulement) |
-| `POST /api/v1/projects/:projectId/media/:mediaId/signed-url` | `media:read` (clé secrète, jeton personnel) | `{ target: 'file' \| 'preset' \| 'derived', preset?, expiresIn? }` → `{ url, query, expiresAt }` |
+| `POST /api/v1/projects/:projectId/media/:mediaId/signed-url` | `media:read` (clé secrète, jeton personnel ; jeton délégué : 1 h au plus) | `{ target: 'file' \| 'preset' \| 'derived', preset?, expiresIn? }` → `{ url, query, expiresAt }` |
+| Écritures et jetons délégués | — | § 9.10 |
 
 **Listes** : pagination par **curseur** (opaque, lié au tri ; `sort` = `newest`, `oldest`, `name`,
 `size`), `limit` 1–100 (24 par défaut), `total` seulement avec `withTotal=true`. `ids=a,b,c`
@@ -729,8 +754,8 @@ existants, au démarrage par `server/plugins/search-backfill.ts` ; l'administrat
 Avec une **clé publique**, la liste et la recherche ne sont permises que si le projet a activé la
 **liste publique** (réglage du projet) ; sinon seul `ids` est accepté (403 `LISTING_DISABLED`).
 
-**Diffusion `/m/` avec un identifiant** (§ 7.4) : un média privé est aussi servi à une clé secrète ou un
-jeton personnel ayant `media:read` dans son espace (jamais à une clé publique), réponse
+**Diffusion `/m/` avec un identifiant** (§ 7.4) : un média privé est aussi servi à une clé secrète, un
+jeton personnel ou un jeton délégué ayant `media:read` dans son espace (jamais à une clé publique), réponse
 `private, no-cache` + `Vary: Authorization`.
 
 Exemple :
@@ -738,6 +763,81 @@ Exemple :
 ```bash
 curl -H "Authorization: Bearer $SURGE_MEDIA_SECRET_KEY" \
   "https://media.example.com/api/v1/projects/<projectId>/media?q=affiche&limit=10"
+```
+
+### 9.10 API v1 : écritures et jetons délégués
+
+Les écritures passent par le même service que l'administration (mêmes contrôles de fichier, mêmes
+caches invalidés, aperçu pré-généré). Toutes exigent la portée indiquée **dans le projet de l'URL**
+(404 hors périmètre, 403 `PROJECT_ARCHIVED` si le projet est archivé). Une clé publique n'écrit jamais.
+
+| Endpoint | Portée | Identifiants | Rôle |
+| --- | --- | --- | --- |
+| `POST /api/v1/projects/:projectId/media` | `media:upload` | clé secrète, jeton personnel, jeton délégué | multipart : `file` + `title?`, `altText?`, `visibility?` (`public` par défaut) → 201 `Media` + `Location` |
+| `PATCH /api/v1/projects/:projectId/media/:mediaId` | `media:write` | idem | `{ title?, altText?, visibility? }` (`null` ou texte vide efface) → `Media` |
+| `PUT /api/v1/projects/:projectId/media/:mediaId/file` | `media:write` | idem | multipart `file` : nouveau fichier, version + 1 (nouvelles URL) → `Media` |
+| `DELETE /api/v1/projects/:projectId/media/:mediaId` | `media:delete` | idem | corbeille → 204 (restauration et suppression définitive : administration) |
+| `POST /api/v1/projects/:projectId/media/:mediaId/duplicate` | `media:read` ici + `media:upload` dans la cible | clé secrète (son projet), jeton personnel | `{ target?: { projectId } \| { library: true } }` (défaut : le projet du média) → 201 `Media` (`projectId` null = bibliothèque) |
+| `POST /api/v1/projects/:projectId/delegated-tokens` | portées ⊆ celles de l'émetteur | clé secrète, jeton personnel | émet un jeton délégué → 201 `{ token, expiresAt, scopes }` |
+
+- **Champs stricts** : un champ inconnu (formulaire ou JSON) → 400 `INVALID_REQUEST` ; visibilité en
+  minuscules. Erreurs de fichier : `MULTIPART_REQUIRED`, `NO_FILE` (400), `FILE_TOO_LARGE` (413),
+  `UNSUPPORTED_TYPE` (415, types acceptés dans `detail`), `UNREADABLE_FILE`, `DIMENSIONS_TOO_LARGE`,
+  `KIND_MISMATCH` (422), `VERSION_CONFLICT` (409), `SERVER_BUSY` (503 + `Retry-After`).
+- **Débit des envois** : en plus des limites de requêtes, 60 fichiers par minute et par identifiant
+  (`NUXT_API_RATE_LIMIT_UPLOADS` ; jeton délégué : par émetteur et par IP ; une duplication compte comme
+  un envoi), politique « uploads » ajoutée aux en-têtes `RateLimit`.
+- **Provenance** : un média créé par l'API garde l'identifiant utilisé (`Media.uploadedByTokenId`, celui
+  de l'émetteur pour un jeton délégué), le compte propriétaire d'un jeton personnel et le **sujet final**
+  d'un jeton délégué (`uploadSubject`) ; la fiche du média les affiche. Le journal d'audit enregistre les
+  changements de visibilité faits par l'API avec l'identifiant (`tokenId`), le type (`via`) et le sujet.
+- Le contrat `Media` gagne `projectId` (ajout sans rupture).
+
+**Jetons délégués** (`sm_dt_…`) : pour un composant dans le navigateur (envoi depuis un formulaire,
+sélecteur ou médiathèque d'un back-office client), sans jamais y placer un secret durable.
+
+```text
+Navigateur                    Serveur du client (sm_sk_…)                 surgeMedia
+   │ « puis-je envoyer ? » ──►│ authentifie SON utilisateur                 │
+   │                          │ POST …/projects/P/delegated-tokens ────────►│ portées ⊆ émetteur
+   │◄──────── sm_dt_… ────────│◄──────────── { token, expiresAt } ─────────│
+   │ POST /api/v1/projects/P/media (Bearer sm_dt_…, depuis une origine autorisée) ──►│ contraintes, fichier
+```
+
+- Demande : `{ scopes, expiresIn? (60–3600 s, 900 par défaut), subject?, origin?, upload? }`, avec
+  `upload = { maxFiles?, maxSize?, types?, visibility? }` (exige `media:upload` ou `media:write`).
+  Chaque portée doit être détenue **aujourd'hui** par l'émetteur dans ce projet (403
+  `INSUFFICIENT_SCOPE` sinon) ; `origin` doit être une origine exacte parmi celles du projet ; l'échéance
+  ne dépasse jamais celle de l'émetteur. Émission non journalisée (fréquente) ; les écritures faites avec
+  le jeton le sont.
+- **Aucune portée d'office** : un jeton `["media:upload"]` envoie mais ne liste rien (formulaire public).
+- Format : `sm_dt_<charge base64url>.<signature>` ; la charge (JSON : `project`, `scopes`, `sub`,
+  `origin`, `upload`, `iat`, `exp`, `kid`, `jti`, `iss`) est **lisible** par le composant (échéance,
+  contraintes) ; signature HMAC-SHA256 avec une clé dérivée de `NUXT_MEDIA_SIGNING_SECRET` (même `kid`
+  et même rotation que les liens signés). Sans état : aucune ligne en base, sauf le compteur de
+  `maxFiles` (`DelegatedTokenUsage`, purgé chaque heure après échéance).
+- Utilisation : droits = portées du jeton ∩ portées actuelles de l'émetteur, dans son seul projet ;
+  **révoquer l'émetteur** (ou désactiver le propriétaire d'un jeton personnel émetteur) les invalide
+  aussitôt (401 `TOKEN_REVOKED`). Depuis un navigateur, l'`Origin` doit être une origine autorisée du
+  projet et, si le jeton en fixe une, celle-ci (403 `ORIGIN_NOT_ALLOWED`) ; sans `Origin` (application
+  mobile, serveur) : accepté. Débit : 300 requêtes par minute par émetteur et par IP
+  (`NUXT_API_RATE_LIMIT_DELEGATED`).
+- Contraintes d'envoi, vérifiées côté serveur : `maxFiles` (fichiers acceptés, envois et remplacements ;
+  un envoi refusé n'est pas décompté ; 403 `UPLOAD_LIMIT_REACHED` au-delà), `maxSize` (bornée par
+  `NUXT_MEDIA_MAX_UPLOAD_SIZE`), `types` (détectés d'après le contenu), `visibility` imposée aux
+  nouveaux médias.
+- Interdit avec un jeton délégué : émettre d'autres jetons, dupliquer (403 `CREDENTIAL_NOT_ALLOWED`),
+  lien signé de plus d'une heure (400). Permis : lecture des médias privés du projet s'il a
+  `media:read` (URL signées dans les réponses, et `/m/` avec `Authorization: Bearer`).
+- `GET /api/v1/me` avec un jeton délégué : type `delegated`, `jti`, portées, échéance, sujet, origine et
+  contraintes, sans rien révéler de l'émetteur.
+
+Exemple (serveur du client) :
+
+```bash
+curl -X POST -H "Authorization: Bearer $SURGE_MEDIA_SECRET_KEY" -H "Content-Type: application/json" \
+  -d '{"scopes":["media:upload"],"subject":"user-42","origin":"https://app.example.com","upload":{"maxFiles":5,"types":["image/jpeg","image/png"],"visibility":"private"}}' \
+  "https://media.example.com/api/v1/projects/<projectId>/delegated-tokens"
 ```
 
 ## 10. Interface d'administration
@@ -856,6 +956,12 @@ pnpm start                          # node --env-file-if-exists=.env .output/ser
 - API v1 : définir `NUXT_SITE_URL` (adresses absolues de l'API et de la spécification) ; limitation de
   débit et caches en mémoire du processus (plusieurs instances : prévoir Redis, pas encore branché) ;
   derrière un proxy, l'IP vue par les limiteurs est celle du proxy (voir plus haut).
+- Traitements d'images : ajuster `NUXT_MEDIA_PROCESSING_CONCURRENCY` (défaut : nombre de cœurs) à la
+  mémoire disponible (une image de 100 Mpx décodée occupe plusieurs centaines de Mo) ; une file pleine
+  répond 503 avec `Retry-After`.
+- Jetons délégués : signés avec une clé dérivée de `NUXT_MEDIA_SIGNING_SECRET` ; changer ce secret sans
+  garder l'ancien (`NUXT_MEDIA_PREVIOUS_SIGNING_SECRET`) invalide aussi les jetons délégués en cours
+  (au plus 1 h).
 - Placer un CDN ou un cache devant `/m/` est possible : les URL publiques sont immuables et la
   diffusion n'utilise pas de cookie. Limite : passer un média public en privé ou le mettre à la
   corbeille n'efface pas les copies déjà en cache (navigateurs, CDN).
@@ -889,6 +995,8 @@ pnpm start                          # node --env-file-if-exists=.env .output/ser
 | Caches L1 en mémoire + compteurs de révision en base | ETag de liste → 304 sans requête, invalidation « générationnelle » sans purge ; le cache partagé (Redis) viendra avec le multi-instances |
 | Colonnes de recherche normalisées | recherche insensible aux accents identique sur SQLite, PostgreSQL et MySQL, sans extension |
 | SQLite en WAL | la diffusion et l'API lisent pendant les envois |
+| Jetons délégués signés (HMAC, charge lisible), sans état | aucun secret durable dans un navigateur ; vérification sans base ; révoquer l'émetteur suffit ; seul `maxFiles` utilise un compteur en base |
+| File bornée des traitements + pré-génération des aperçus | un pic d'envois ou d'aperçus ne sature ni la mémoire ni le processeur (503 + `Retry-After`) ; premier affichage sans attente |
 | **Vitest** 5 (tests des modules purs) | autorisation et signatures : la partie la plus sensible, testée sans serveur ni base |
 | `oxc-transform` forcé en **0.141.0** (`pnpm-workspace.yaml` › `overrides`) | contournement local : le « Contrôle intelligent des applications » de Windows bloque le binaire de la 0.143.0 exigée par Nuxt 3.21 ; hors de la plage déclarée par Nuxt (`^0.143.0`), vérifié par typecheck, dev et build — à retirer dès que possible |
 
@@ -928,6 +1036,11 @@ pnpm start                          # node --env-file-if-exists=.env .output/ser
 | API v1 : 429 pour toutes les requêtes d'une machine | plus de 30 identifiants refusés en une minute depuis cette IP : corriger l'identifiant, attendre la fin de la fenêtre |
 | Adresse en `http://localhost/…` (sans port) dans une page de l'administration | rendu serveur sans `NUXT_SITE_URL` : définir la variable (le plugin `$api` transmet aussi l'hôte d'origine depuis cette étape) |
 | `ReferenceError: X is not defined` au runtime alors que le typecheck passe | auto-import de Nitro non injecté (ex. après un prédicat de type `(x): x is T => (X as …)`) : importer explicitement depuis `#shared/utils/…` |
+| API v1 : 403 `UPLOAD_LIMIT_REACHED` | le jeton délégué a atteint son nombre de fichiers (`maxFiles`) : en demander un nouveau à votre serveur |
+| API v1 : 401 `TOKEN_REVOKED` avec un jeton délégué valide | son émetteur a été révoqué, a expiré ou appartient à un compte désactivé : émettre les jetons avec un identifiant actif |
+| API v1 : 403 `INSUFFICIENT_SCOPE` en liste avec un jeton délégué | aucune portée n'est donnée d'office : demander `media:read` à l'émission (en plus de `media:upload`) |
+| API v1 : 403 `ORIGIN_NOT_ALLOWED` avec un jeton délégué | l'`Origin` de la page doit figurer dans les origines du projet et, si le jeton en fixe une, être exactement celle-ci |
+| 503 `SERVER_BUSY` à l'envoi ou sur un aperçu | file des traitements pleine : réessayer après `Retry-After` ; en production, ajuster `NUXT_MEDIA_PROCESSING_*` (§ 8) |
 | Image privée cassée dans une page externe après un changement de secret | lien signé avec l'ancien secret : déclarer celui-ci dans `NUXT_MEDIA_PREVIOUS_SIGNING_SECRET` pendant 7 jours |
 
 ---
@@ -1237,3 +1350,59 @@ pnpm install
 pnpm db:migrate     # liste publique, révisions, colonnes de recherche + client Prisma
 ```
 Au premier démarrage, les médias existants sont indexés pour la recherche (message dans le journal du serveur).
+
+### Étape 8 — 2026-09-29 — Phase B4 : API v1 en écriture et jetons délégués
+
+**Cadre** : architecture validée de la phase B (§ 2.2, § 4.5, § 6.2, § 9.2 ; décisions D5, D7, D9, D14).
+
+**Ajouté**
+- Migration `b4_api_write` (3 fournisseurs) : provenance des médias envoyés par l'API
+  (`Media.uploadedByTokenId`, `Media.uploadSubject`) et compteur `DelegatedTokenUsage` (contrainte
+  `maxFiles` des jetons délégués). Rien à reprendre à la main.
+- API v1 en écriture (§ 9.10) : envoi multipart, modification, remplacement du fichier, mise à la
+  corbeille, duplication (vers le projet, un autre projet ou la bibliothèque selon l'identifiant) ;
+  en-têtes `Location` et `ETag` ; débit des envois (60 par minute et par identifiant) ; erreurs de
+  fichier au format RFC 9457 ; `projectId` ajouté au contrat `Media`.
+- Jetons délégués `sm_dt_` : émission par une clé secrète ou un jeton personnel (portées ⊆ émetteur,
+  1 à 60 min, sujet final, origine, contraintes d'envoi), vérification sans base (HMAC, clé dérivée du
+  secret de signature), émetteur relu à chaque requête (sa révocation les invalide), origine contrôlée,
+  débit par émetteur et IP ; utilisables aussi sur `/m/` ; `/me` les décrit sans révéler l'émetteur.
+- Identité unique de l'appelant (`server/lib/access/principal.ts`) pour l'API et la diffusion ; le
+  journal d'audit enregistre l'identifiant (`tokenId`), le type et le sujet des actions faites par l'API.
+- Traitements d'images : file bornée (`NUXT_MEDIA_PROCESSING_CONCURRENCY` / `_QUEUE`, 503
+  `SERVER_BUSY` + `Retry-After`) et pré-génération de l'aperçu après envoi, remplacement ou duplication.
+- Interface : provenance d'un média (identifiant d'API, utilisateur de l'application) sur sa fiche ;
+  auteur « identifiant d'API » et jeton délégué dans le journal d'audit ; message « serveur occupé ».
+- Tests Vitest : jetons délégués (format, signature, rotation, altérations, échéance, portées,
+  demande d'émission), file des traitements, champs d'écriture, duplication, erreurs de fichier,
+  OpenAPI (105 tests au total).
+
+**Vérifié** : typecheck, 105 tests Vitest, i18n (738 clés), migrations (`--check`), build de
+production. 94 scénarios d'API sur la build de production : envoi (contrat, `Location`, URL signées,
+aperçu pré-généré, provenance, ETag de liste invalidé, visibilité par défaut, portée absente, clé
+publique, autre projet, sans fichier, SVG, PNG corrompu, champ inconnu, JSON au lieu de multipart,
+secret depuis un navigateur), modification (effacement, recherche à jour, journal avec l'identifiant
+et le propriétaire d'un jeton personnel, refus), remplacement (version, redirection de l'ancienne URL,
+type refusé), duplication (même projet, autre projet, bibliothèque, refus), corbeille, jetons délégués
+(émission et refus, échéance bornée par l'émetteur, `/me`, CORS et origine, contraintes de type, de
+taille, de nombre et de visibilité, lecture des médias privés, `/m/`, jeton d'envoi seul, altération,
+expiration, révocation de l'émetteur, désactivation du propriétaire), débit des envois (429 au-delà de
+60). File des traitements saturée (concurrence 1, sans file) : 503 `SERVER_BUSY` + `Retry-After`, puis
+succès. B1, B2 et B3 (97) rejoués sans régression. Interface : provenance et journal affichés,
+axe-core : 0 violation WCAG 2.2 AA en fr/en × clair/sombre sur la fiche média et le journal d'audit.
+Non vérifié : PostgreSQL et MySQL/MariaDB réels pour la migration ; un vrai bucket S3.
+
+**Limites connues**
+- Pas de restauration, de suppression définitive ni de déplacement par l'API (administration) ; pas
+  d'`If-Match` (concurrence optimiste des PATCH) ni de clé d'idempotence pour les envois.
+- Contrainte « dossier » des jetons délégués et paramètre `folderId` : étape B5 (dossiers).
+- Pas de révocation individuelle d'un jeton délégué (durée courte, ou révoquer l'émetteur) ; l'émission
+  n'est pas journalisée.
+- Compteurs, limiteurs et file des traitements en mémoire du processus (une instance) ; la
+  pré-génération s'efface quand des traitements attendent.
+
+**Après `git pull`**
+```bash
+pnpm install
+pnpm db:migrate     # provenance des médias, compteur des jetons délégués + client Prisma
+```

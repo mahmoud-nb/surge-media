@@ -39,9 +39,36 @@ const H3_STATUS_CODES: Partial<Record<number, ApiErrorCode>> = {
   415: 'INVALID_REQUEST',
 }
 
-/** Toute erreur (problème de l'API, erreur h3, exception inattendue) → problème normalisé. */
+/** Détail lisible d'une erreur métier des médias (données jointes par `mediaError`). */
+function mediaDetail(code: ApiErrorCode, data: Record<string, unknown>): string | undefined {
+  switch (code) {
+    case 'FILE_TOO_LARGE':
+      return typeof data.maxSize === 'number' ? `The file exceeds the maximum size of ${data.maxSize} bytes.` : undefined
+    case 'UNSUPPORTED_TYPE':
+      return Array.isArray(data.accepted) ? `Accepted types (detected from the content): ${data.accepted.join(', ')}.` : undefined
+    case 'DIMENSIONS_TOO_LARGE':
+      return typeof data.maxPixels === 'number' ? `The image exceeds ${data.maxPixels} pixels.` : undefined
+    case 'KIND_MISMATCH':
+      return 'The new file must be of the same kind as the original.'
+    case 'VERSION_CONFLICT':
+      return 'The file was replaced by another request in the meantime.'
+    default:
+      return undefined
+  }
+}
+
+/** Toute erreur (problème de l'API, erreur métier, erreur h3, exception inattendue) → problème normalisé. */
 export function toProblem(error: unknown): ApiProblem {
   if (error instanceof ApiProblem) return error
+  // Erreur métier partagée avec l'administration (`data.code`), si son code existe dans le catalogue.
+  const data = (error as { data?: unknown } | null)?.data
+  const dataCode = data && typeof data === 'object' ? (data as { code?: unknown }).code : undefined
+  if (typeof dataCode === 'string' && dataCode in API_ERRORS) {
+    const code = dataCode as ApiErrorCode
+    const details = data as Record<string, unknown>
+    const headers: Record<string, string> = typeof details.retryAfter === 'number' ? { 'Retry-After': String(details.retryAfter) } : {}
+    return new ApiProblem(code, { detail: mediaDetail(code, details), headers })
+  }
   const status = (error as { statusCode?: number } | null)?.statusCode
   const code = status ? H3_STATUS_CODES[status] : undefined
   if (code) return new ApiProblem(code, { detail: (error as { statusMessage?: string }).statusMessage })

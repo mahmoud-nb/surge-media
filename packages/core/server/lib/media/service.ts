@@ -3,7 +3,7 @@ import type { MediaListQuery, MediaMetadataInput } from '#shared/schemas/media'
 import { MEDIA_PAGE_SIZE } from '#shared/schemas/media'
 import { ACCEPTED_MEDIA_TYPES, extensionForMime, mediaKindForMime, type MediaKind } from '#shared/utils/media'
 import { mediaSearchColumns, normalizeSearchText } from '#shared/utils/search'
-import type { Media, Prisma, User } from '../../generated/prisma/client'
+import type { AccessToken, Media, Prisma } from '../../generated/prisma/client'
 import type { Space } from '../../utils/access'
 import { useMediaStorage } from '../storage'
 import { mediaChanged } from './cache'
@@ -11,8 +11,10 @@ import { mediaError } from './errors'
 import { handlerFor, type InspectedMedia } from './handlers'
 import { originalKey, variantPrefix } from './keys'
 import { sniffMimeType } from './sniff'
+import { runProcessing } from './processing'
 import type { ReceivedUpload } from './upload'
 import { adminMediaPaths } from './urls'
+import { pregenerateVariants } from './variants'
 
 /**
  * Logique métier des médias. Indépendante du stockage physique (MediaStorage) et du genre
@@ -23,11 +25,42 @@ import { adminMediaPaths } from './urls'
  * (projectId null). Les contrôles d'accès sont faits par les routes (server/utils/access.ts).
  *
  * Toute écriture passe par `mediaChanged` (cache de diffusion invalidé, révision de l'espace
- * incrémentée pour les ETag de l'API) et tient à jour les colonnes de recherche normalisées.
+ * incrémentée pour les ETag de l'API) et tient à jour les colonnes de recherche normalisées. Les
+ * analyses de fichiers passent par la file bornée des traitements ; l'aperçu d'un nouveau fichier
+ * est pré-généré en tâche de fond.
  */
 
-const UPLOADER = { select: { id: true, name: true, email: true } } as const
-type MediaWithUploader = Media & { uploadedBy: { id: string, name: string | null, email: string } | null }
+const MEDIA_INCLUDE = {
+  uploadedBy: { select: { id: true, name: true, email: true } },
+  uploadedByToken: { select: { id: true, name: true, type: true, prefix: true } },
+} as const
+type MediaWithUploader = Media & {
+  uploadedBy: { id: string, name: string | null, email: string } | null
+  uploadedByToken: { id: string, name: string, type: AccessToken['type'], prefix: string } | null
+}
+
+/**
+ * Provenance d'un nouveau média : compte (session ou propriétaire d'un jeton personnel), identifiant
+ * d'API (émetteur pour un jeton délégué) et sujet final déclaré par l'application cliente.
+ */
+export interface MediaProvenance {
+  userId: string | null
+  tokenId?: string | null
+  subject?: string | null
+}
+
+/** Options d'analyse d'un fichier reçu : types restreints (contrainte d'un jeton délégué). */
+export interface UploadOptions {
+  acceptedTypes?: readonly string[]
+}
+
+function provenanceData(provenance: MediaProvenance) {
+  return {
+    uploadedById: provenance.userId,
+    uploadedByTokenId: provenance.tokenId ?? null,
+    uploadSubject: provenance.subject ?? null,
+  }
+}
 
 // ─── Représentation API ──────────────────────────────────────────────────────
 
@@ -53,6 +86,9 @@ export function toMediaSummary(media: MediaWithUploader) {
     url: paths.url,
     previewUrl: paths.previewUrl,
     uploadedBy: media.uploadedBy,
+    /** Identifiant d'API ayant envoyé le média (null : interface, ou identifiant supprimé depuis). */
+    uploadedByToken: media.uploadedByToken,
+    uploadSubject: media.uploadSubject,
     createdAt: media.createdAt,
     updatedAt: media.updatedAt,
     deletedAt: media.deletedAt,
@@ -68,7 +104,7 @@ export function toMediaDetail(media: MediaWithUploader) {
 /** Média par identifiant (corbeille comprise), ou null. */
 export async function findMedia(id: string): Promise<MediaWithUploader | null> {
   const prisma = await usePrisma()
-  return prisma.media.findUnique({ where: { id }, include: { uploadedBy: UPLOADER } })
+  return prisma.media.findUnique({ where: { id }, include: MEDIA_INCLUDE })
 }
 
 async function findMediaOrFail(id: string): Promise<MediaWithUploader> {
@@ -108,7 +144,7 @@ export async function listMedia(space: Space, query: MediaListQuery) {
     prisma.media.count({ where }),
     prisma.media.findMany({
       where,
-      include: { uploadedBy: UPLOADER },
+      include: MEDIA_INCLUDE,
       orderBy: SORTS[query.sort],
       skip: (query.page - 1) * MEDIA_PAGE_SIZE,
       take: MEDIA_PAGE_SIZE,
@@ -128,21 +164,22 @@ interface AnalyzedUpload {
 
 /**
  * Identifie le fichier d'après son contenu (signature binaire), jamais d'après le nom ou le
- * type annoncés par le client, puis le fait analyser par le gestionnaire de son genre.
+ * type annoncés par le client, puis le fait analyser par le gestionnaire de son genre (dans la
+ * file bornée des traitements : 503 SERVER_BUSY si elle est pleine).
  */
-async function analyze(upload: ReceivedUpload): Promise<AnalyzedUpload> {
+async function analyze(upload: ReceivedUpload, options: UploadOptions = {}): Promise<AnalyzedUpload> {
   const mimeType = await sniffMimeType(upload.path)
   const kind = mimeType ? mediaKindForMime(mimeType) : undefined
   const handler = kind ? handlerFor(kind) : undefined
-  if (!mimeType || !kind || !handler) {
-    const accepted = Object.values(ACCEPTED_MEDIA_TYPES).flatMap(types => Object.keys(types ?? {}))
+  const accepted = options.acceptedTypes ?? Object.values(ACCEPTED_MEDIA_TYPES).flatMap(types => Object.keys(types ?? {}))
+  if (!mimeType || !kind || !handler || !accepted.includes(mimeType)) {
     throw mediaError(415, 'UNSUPPORTED_TYPE', { accepted })
   }
   return {
     kind,
     mimeType,
     extension: extensionForMime(mimeType)!,
-    inspected: await handler.inspect(upload.path, mimeType),
+    inspected: await runProcessing(() => handler.inspect(upload.path, mimeType)),
   }
 }
 
@@ -170,8 +207,14 @@ function fileData(upload: ReceivedUpload, analyzed: AnalyzedUpload, storageKey: 
 }
 
 /** Nouveau média dans un espace : fichier écrit dans le stockage puis enregistré en base (annulé si l'une échoue). */
-export async function createMedia(space: Space, upload: ReceivedUpload, input: MediaMetadataInput, actor: User): Promise<MediaWithUploader> {
-  const analyzed = await analyze(upload)
+export async function createMedia(
+  space: Space,
+  upload: ReceivedUpload,
+  input: MediaMetadataInput,
+  provenance: MediaProvenance,
+  options: UploadOptions = {},
+): Promise<MediaWithUploader> {
+  const analyzed = await analyze(upload, options)
   const storage = await useMediaStorage()
   const key = await storeOriginal(upload, analyzed)
   try {
@@ -186,11 +229,12 @@ export async function createMedia(space: Space, upload: ReceivedUpload, input: M
         visibility: input.visibility ?? 'PUBLIC',
         title,
         altText,
-        uploadedById: actor.id,
+        ...provenanceData(provenance),
       },
-      include: { uploadedBy: UPLOADER },
+      include: MEDIA_INCLUDE,
     })
     await mediaChanged([created.id], space)
+    pregenerateVariants(created)
     return created
   }
   catch (error) {
@@ -204,8 +248,8 @@ export async function createMedia(space: Space, upload: ReceivedUpload, input: M
  * alternatif, visibilité). Nouvelle clé + version incrémentée : les URL changent, les caches ne
  * servent jamais l'ancien fichier. Mise à jour conditionnée à la version lue (409 si concurrente).
  */
-export async function replaceMediaFile(media: Media, upload: ReceivedUpload): Promise<MediaWithUploader> {
-  const analyzed = await analyze(upload)
+export async function replaceMediaFile(media: Media, upload: ReceivedUpload, options: UploadOptions = {}): Promise<MediaWithUploader> {
+  const analyzed = await analyze(upload, options)
   if (analyzed.kind !== media.kind) throw mediaError(422, 'KIND_MISMATCH')
 
   const storage = await useMediaStorage()
@@ -225,7 +269,9 @@ export async function replaceMediaFile(media: Media, upload: ReceivedUpload): Pr
   await storage.delete(media.storageKey)
   await storage.deletePrefix(`${variantPrefix(media.id)}v${media.version}-`)
   await mediaChanged([media.id], spaceOfMedia(media))
-  return findMediaOrFail(media.id)
+  const replaced = await findMediaOrFail(media.id)
+  pregenerateVariants(replaced)
+  return replaced
 }
 
 export async function updateMediaMetadata(media: Media, input: MediaMetadataInput): Promise<MediaWithUploader> {
@@ -233,7 +279,7 @@ export async function updateMediaMetadata(media: Media, input: MediaMetadataInpu
   if (input.title !== undefined) data.searchTitle = input.title ? normalizeSearchText(input.title) : null
   if (input.altText !== undefined) data.searchAlt = input.altText ? normalizeSearchText(input.altText) : null
   const prisma = await usePrisma()
-  const updated = await prisma.media.update({ where: { id: media.id }, data, include: { uploadedBy: UPLOADER } })
+  const updated = await prisma.media.update({ where: { id: media.id }, data, include: MEDIA_INCLUDE })
   await mediaChanged([media.id], spaceOfMedia(media))
   return updated
 }
@@ -247,7 +293,7 @@ export async function trashMedia(media: Media): Promise<void> {
 
 export async function restoreMedia(media: Media): Promise<MediaWithUploader> {
   const prisma = await usePrisma()
-  const restored = await prisma.media.update({ where: { id: media.id }, data: { deletedAt: null }, include: { uploadedBy: UPLOADER } })
+  const restored = await prisma.media.update({ where: { id: media.id }, data: { deletedAt: null }, include: MEDIA_INCLUDE })
   await mediaChanged([media.id], spaceOfMedia(media))
   return restored
 }
@@ -288,7 +334,7 @@ export async function deleteStoredFiles(items: Pick<Media, 'id' | 'storageKey'>[
  * version 1, fichier copié dans le stockage, métadonnées reprises, provenance conservée. Les
  * dérivés ne sont pas copiés : ils seront régénérés à la demande.
  */
-export async function duplicateMedia(media: Media, target: Space, actor: User): Promise<MediaWithUploader> {
+export async function duplicateMedia(media: Media, target: Space, provenance: MediaProvenance): Promise<MediaWithUploader> {
   if (media.deletedAt) throw mediaError(409, 'IN_TRASH')
   const storage = await useMediaStorage()
   const key = originalKey(extensionForMime(media.mimeType) ?? 'bin')
@@ -314,11 +360,12 @@ export async function duplicateMedia(media: Media, target: Space, actor: User): 
         // Json? : null s'omet (Prisma exige sinon une valeur spéciale, importée à l'exécution).
         ...(media.metadata === null ? {} : { metadata: media.metadata as Prisma.InputJsonValue }),
         duplicatedFromId: media.id,
-        uploadedById: actor.id,
+        ...provenanceData(provenance),
       },
-      include: { uploadedBy: UPLOADER },
+      include: MEDIA_INCLUDE,
     })
     await mediaChanged([copy.id], target)
+    pregenerateVariants(copy)
     return copy
   }
   catch (error) {
@@ -337,7 +384,7 @@ export async function moveMedia(media: Media, target: Space): Promise<MediaWithU
   const moved = await prisma.media.update({
     where: { id: media.id },
     data: { projectId: projectIdOf(target), folderId: null },
-    include: { uploadedBy: UPLOADER },
+    include: MEDIA_INCLUDE,
   })
   await mediaChanged([media.id], spaceOfMedia(media), target)
   return moved

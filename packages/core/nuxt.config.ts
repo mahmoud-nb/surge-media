@@ -51,6 +51,8 @@ export default defineNuxtConfig({
         publishable: 300, // par clé publique et par IP — NUXT_API_RATE_LIMIT_PUBLISHABLE
         secret: 1200, // par clé secrète — NUXT_API_RATE_LIMIT_SECRET
         personal: 1200, // par jeton personnel — NUXT_API_RATE_LIMIT_PERSONAL
+        delegated: 300, // par émetteur de jetons délégués et par IP — NUXT_API_RATE_LIMIT_DELEGATED
+        uploads: 60, // envois de fichiers par identifiant (en plus) — NUXT_API_RATE_LIMIT_UPLOADS
         authFailures: 30, // échecs d'authentification par IP — NUXT_API_RATE_LIMIT_AUTH_FAILURES
       },
     },
@@ -61,6 +63,12 @@ export default defineNuxtConfig({
       previousSigningSecret: '', // ancien secret, accepté pendant une rotation — NUXT_MEDIA_PREVIOUS_SIGNING_SECRET
       // Base des URL de diffusion (CDN, domaine dédié) ; vide = NUXT_SITE_URL — NUXT_MEDIA_PUBLIC_URL
       publicUrl: '',
+      // Traitements d'images simultanés (sharp) : 0 = nombre de cœurs ; au-delà, file d'attente,
+      // puis 503 SERVER_BUSY — NUXT_MEDIA_PROCESSING_CONCURRENCY / NUXT_MEDIA_PROCESSING_QUEUE
+      processing: {
+        concurrency: 0,
+        queue: 100,
+      },
       storage: {
         driver: 'local', // local | s3 — NUXT_MEDIA_STORAGE_DRIVER
         root: './data/media', // pilote local — NUXT_MEDIA_STORAGE_ROOT

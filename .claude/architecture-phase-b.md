@@ -1,9 +1,38 @@
 # Phase B — Projets, médias, jetons d'accès et cache
 
 > **Statut : VALIDÉE — révision 2 (2026-09-29), toutes les décisions D1–D15 confirmées par l'utilisateur.**
-> Référence d'implémentation de la phase B. Avancement : **B1, B2 et B3 réalisées** (voir `setup.md`,
-> Journal, étapes 5 à 7, et `.claude/project-context.md`) ; prochaine sous-étape : **B4** (API v1 en
-> écriture + jetons délégués).
+> Référence d'implémentation de la phase B. Avancement : **B1, B2, B3 et B4 réalisées** (voir
+> `setup.md`, Journal, étapes 5 à 8, et `.claude/project-context.md`) ; prochaine sous-étape : **B5**
+> (dossiers).
+>
+> Écarts et précisions de B4 (API v1 en écriture, jetons délégués, traitements) :
+> - **Jeton délégué** : aucune portée d'office (un jeton `media:upload` seul ne liste rien) ; portées
+>   demandées ⊆ portées **actuelles** de l'émetteur dans le projet (403 `INSUFFICIENT_SCOPE`) ; échéance
+>   ≤ celle de l'émetteur ; `origin` facultative, exacte (pas de joker) et parmi les origines du projet ;
+>   à l'usage : `Origin` présente → origine du projet **et** du jeton ; absente → acceptée. Charge JSON
+>   `{ v, jti, iss, project, scopes, sub?, origin?, upload?, iat, exp, kid }` ; clé HMAC =
+>   `HMAC(secret de signature, 'surge-media:delegated-token:v1')`, même `kid`/rotation que les liens.
+>   Émetteur invalide (révoqué, expiré, supprimé, propriétaire désactivé) → 401 `TOKEN_REVOKED`.
+>   Autorisé sur `/m/` (Bearer, `media:read`) et pour `signed-url` (≤ 1 h, sinon 400) ; refusé pour
+>   émettre et dupliquer (403 `CREDENTIAL_NOT_ALLOWED`). Émission non journalisée. `/me` : type
+>   `delegated`, `id` = `jti`, champ `delegated` (sujet, origine, contraintes), rien sur l'émetteur.
+> - **Contraintes** `upload = { maxFiles, maxSize, types, visibility }` : `maxFiles`, `maxSize`, `types`
+>   valent aussi pour `PUT …/file` ; `maxFiles` compte les fichiers acceptés (réservation atomique,
+>   libérée en cas d'échec) ; `visibility` imposée aux seuls nouveaux médias ; `folderId` → B5.
+> - **Duplication** : aussi par une **clé secrète** dans son propre projet (cible par défaut = projet du
+>   média) ; bibliothèque = jeton personnel `includeLibrary` (404 `NOT_FOUND` sinon). DELETE = corbeille
+>   seulement ; ni restauration, ni purge, ni déplacement par l'API. Contrat `Media` + `projectId`.
+> - **Débit** : `delegated` 300/min par (émetteur, IP) ; `uploads` 60/min par identifiant (jeton délégué :
+>   émetteur + IP ; la duplication compte), politique « uploads » ajoutée aux en-têtes `RateLimit`.
+> - **Audit** des écritures API : `tokenId` = identifiant (émetteur pour un délégué), `actorUserId` =
+>   propriétaire d'un PAT, `data.via` = type, `data.subject` = sujet ; mêmes actions que l'administration
+>   (changement de visibilité ; pas d'entrée pour envoi/corbeille/duplication).
+> - **Traitements** : sémaphore en mémoire (`NUXT_MEDIA_PROCESSING_CONCURRENCY`, 0 = cœurs ;
+>   `_QUEUE` = 100) autour de l'analyse et des dérivés → 503 `SERVER_BUSY` + `Retry-After: 5` ;
+>   pré-génération de l'aperçu (envoi, remplacement, duplication), ignorée si des tâches attendent.
+>   Codes d'API ajoutés : `MULTIPART_REQUIRED`, `NO_FILE`, `UPLOAD_LIMIT_REACHED`, `VERSION_CONFLICT`,
+>   `FILE_TOO_LARGE`, `UNSUPPORTED_TYPE`, `UNREADABLE_FILE`, `DIMENSIONS_TOO_LARGE`, `KIND_MISMATCH`,
+>   `SERVER_BUSY` (erreurs métier `data.code` converties par `toProblem`).
 >
 > Écarts et précisions de B3 (API v1 en lecture) :
 > - **Caches : L1 mémoire seulement** (LRU : identités 60 s, état des projets 60 s, métadonnées de
@@ -51,7 +80,7 @@
 >   bibliothèque) ; le PAT (`includeLibrary`) s'appuiera dessus ;
 > - la duplication s'appelle aussi dans l'administration (`POST /api/admin/media/:id/duplicate` et `/move`) ; la route
 >   équivalente de l'API v1 reste prévue en B4 ;
-> - `uploadedByTokenId`, `uploadSubject` et `DelegatedTokenUsage` (B4) ne sont **pas** encore créés.
+> - `uploadedByTokenId`, `uploadSubject` et `DelegatedTokenUsage` : créés en B4.
 >   (`AccessTokenProject` et `AuditEvent` : B2 ; colonnes `search*`, `CacheRevision`, `Project.publicListing` : B3.)
 
 ## 0. Révision 2 — ce qui a changé après les remarques de l'utilisateur

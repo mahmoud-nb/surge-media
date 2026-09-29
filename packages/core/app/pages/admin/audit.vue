@@ -44,9 +44,26 @@ function actionLabel(action: string): string {
   return (AUDIT_ACTIONS as readonly string[]).includes(action) ? t(`audit.actions.${action}`) : action
 }
 
-function actorName(actor: Item['actor']): string {
-  if (!actor) return t('audit.system')
-  return 'deleted' in actor ? t('audit.deletedUser') : (actor.name || actor.email)
+function credentialName(token: NonNullable<Item['token']>): string {
+  return 'deleted' in token ? t('audit.deletedCredential') : t(`credentials.named.${token.type}`, { name: token.name })
+}
+
+/** Auteur : compte (session, ou propriétaire d'un jeton personnel), sinon identifiant d'API, sinon système. */
+function actorName(item: Item): string {
+  const { actor, token } = item
+  if (actor) return 'deleted' in actor ? t('audit.deletedUser') : (actor.name || actor.email)
+  return token ? credentialName(token) : t('audit.system')
+}
+
+/** Précisions sur une action faite par l'API v1 : identifiant utilisé (si l'auteur est un compte), jeton délégué. */
+function actorDetails(item: Item): string[] {
+  const data = item.data as Record<string, unknown>
+  const lines: string[] = []
+  if (item.token && item.actor) lines.push(t('audit.via', { credential: credentialName(item.token) }))
+  if (data.via === 'delegated') {
+    lines.push(typeof data.subject === 'string' ? t('audit.delegatedSubject', { subject: data.subject }) : t('audit.delegated'))
+  }
+  return lines
 }
 
 function projectName(project: NonNullable<Item['project']>): string {
@@ -195,7 +212,8 @@ function details(item: Item): string | null {
                 <span v-else class="text-muted-foreground">—</span>
               </td>
               <td class="px-4 py-3 align-top">
-                <span class="text-foreground">{{ actorName(item.actor) }}</span>
+                <span class="text-foreground">{{ actorName(item) }}</span>
+                <span v-for="line in actorDetails(item)" :key="line" class="block text-xs break-all text-muted-foreground">{{ line }}</span>
                 <span v-if="item.ipAddress" class="block text-xs text-muted-foreground">{{ item.ipAddress }}</span>
               </td>
             </tr>

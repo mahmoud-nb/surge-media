@@ -11,7 +11,7 @@ export default defineEventHandler(async (event) => {
   const { media } = await requireMediaAccess(event, () => findMedia(getRouterParam(event, 'id') ?? ''), 'media:read')
   const { projectId } = await readValidatedBody(event, body => mediaTargetSchema.parse(body))
   const target = await requireSpaceAccess(event, spaceFor(projectId), 'media:upload')
-  const copy = await duplicateMedia(media, target.space, target.user)
+  const copy = await duplicateMedia(media, target.space, { userId: target.user.id })
   setResponseStatus(event, 201)
   return { media: toMediaDetail(copy) }
 })

@@ -410,7 +410,8 @@
       "KIND_MISMATCH": "Le nouveau fichier doit être du même type que l'original.",
       "VERSION_CONFLICT": "Le fichier vient d'être remplacé par quelqu'un d'autre. Rechargez la page et réessayez.",
       "NO_FILE": "Aucun fichier reçu.",
-      "network": "La connexion a été interrompue."
+      "network": "La connexion a été interrompue.",
+      "SERVER_BUSY": "Le serveur traite déjà beaucoup de fichiers. Réessayez dans quelques secondes."
     },
     "detail": {
       "backToList": "Retour à la bibliothèque",
@@ -422,7 +423,7 @@
       "size": "Taille",
       "version": "Version du fichier",
       "uploadedBy": "Téléversé par",
-      "unknownUploader": "Compte supprimé",
+      "unknownUploader": "Compte ou identifiant supprimé",
       "createdAt": "Téléversé le",
       "checksum": "Empreinte SHA-256",
       "editTitle": "Description",
@@ -432,7 +433,10 @@
       "duplicatedFrom": "Origine",
       "duplicatedFromValue": "Copie d'un autre média",
       "readOnly": "Vous pouvez consulter ce média, mais pas le modifier.",
-      "archivedProject": "Le projet de ce média est archivé : il est en lecture seule."
+      "archivedProject": "Le projet de ce média est archivé : il est en lecture seule.",
+      "apiUploader": "Une application (API)",
+      "credential": "Identifiant d'API",
+      "subject": "Utilisateur de l'application"
     },
     "fields": {
       "title": "Titre",
@@ -758,6 +762,11 @@
       "PROJECT_UNAVAILABLE": "Un des projets choisis n'est plus accessible ou a été archivé. Rechargez la page.",
       "ORIGIN_EXISTS": "Cette origine est déjà autorisée.",
       "ORIGIN_LIMIT_REACHED": "Le nombre maximal d'origines est atteint : retirez-en une avant d'en ajouter."
+    },
+    "named": {
+      "PERSONAL": "Jeton personnel « {name} »",
+      "SECRET": "Clé secrète « {name} »",
+      "PUBLISHABLE": "Clé publique « {name} »"
     }
   },
   "apiKeys": {
@@ -1110,6 +1119,10 @@
       "slug": "identifiant",
       "description": "description",
       "publicListing": "liste publique"
-    }
+    },
+    "via": "Par l'API — {credential}",
+    "deletedCredential": "Identifiant d'API supprimé",
+    "delegated": "Jeton délégué",
+    "delegatedSubject": "Jeton délégué, utilisateur {subject}"
   }
 }
