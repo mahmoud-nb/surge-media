@@ -32,7 +32,9 @@
     "tooLong": "This field must not exceed {max} characters.",
     "tooShort": "This field must contain at least {min} characters.",
     "emailTaken": "This email address is already used by another account.",
-    "passwordMismatch": "The two passwords do not match."
+    "passwordMismatch": "The two passwords do not match.",
+    "slug": "Use only unaccented lowercase letters, digits and hyphens (e.g. marketing-site).",
+    "slugTaken": "This identifier is already used by another project."
   },
   "auth": {
     "logout": "Sign out"
@@ -105,10 +107,10 @@
       "menu": "Menu",
       "homeSuffix": ", dashboard",
       "dashboard": "Dashboard",
-      "media": "Media",
-      "projects": "Projects and API",
-      "tokens": "Access tokens",
-      "users": "Users"
+      "projects": "Projects",
+      "tokens": "Personal tokens",
+      "users": "Users",
+      "library": "Library"
     },
     "dashboard": {
       "meta": {
@@ -138,41 +140,38 @@
       "title": "Section in progress",
       "description": "This section will be available in an upcoming release. Your role already grants you access to it."
     },
-    "projects": {
-      "title": "Projects and API",
-      "description": "Manage projects, their allowed origins (CORS) and the API integration."
-    },
     "tokens": {
-      "title": "Access tokens",
-      "description": "Create and revoke the tokens your applications use to call the API."
+      "title": "Personal tokens",
+      "description": "Create tokens for your scripts, tools and integrations: they act with your permissions, on the projects you choose."
     }
   },
   "roles": {
     "ADMIN": {
       "label": "Administrator",
-      "description": "All privileges, including user management."
+      "description": "All privileges: users, every project and the library."
     },
     "EDITOR": {
       "label": "Editor",
-      "description": "Media management only."
+      "description": "The organization library and the media of the projects they belong to."
     },
     "DEVELOPER": {
       "label": "Developer",
-      "description": "Management of media, access tokens and APIs."
+      "description": "The library, project creation, API keys and integrations of the projects they belong to."
     }
   },
   "permissions": {
-    "media": {
-      "manage": "Manage media"
-    },
     "tokens": {
-      "manage": "Manage access tokens"
-    },
-    "api": {
-      "manage": "Manage projects and APIs"
+      "personal": "Create personal tokens"
     },
     "users": {
       "manage": "Manage users"
+    },
+    "library": {
+      "manage": "Manage the organization library"
+    },
+    "projects": {
+      "create": "Create projects",
+      "all": "Access every project"
     }
   },
   "errors": {
@@ -355,10 +354,10 @@
     },
     "list": {
       "meta": {
-        "title": "Media"
+        "title": "Library"
       },
-      "title": "Media",
-      "description": "Upload, find and manage the images of your projects.",
+      "title": "Library",
+      "description": "Media for the whole organization, reusable in any project by duplication.",
       "trashTitle": "Trash",
       "trashDescription": "Media removed from delivery. Restore them or delete them permanently.",
       "count": "No media | {count} media item | {count} media items",
@@ -382,10 +381,10 @@
         "size": "Size"
       },
       "show": "Show",
-      "library": "Library",
       "trash": "Trash",
       "apply": "Filter",
-      "reset": "Reset"
+      "reset": "Reset",
+      "active": "Media"
     },
     "upload": {
       "title": "Upload images",
@@ -414,7 +413,7 @@
       "network": "The connection was interrupted."
     },
     "detail": {
-      "backToList": "Back to media",
+      "backToList": "Back to the library",
       "backToTrash": "Back to the trash",
       "loadError": "Unable to load this media item.",
       "infoTitle": "Information",
@@ -427,7 +426,13 @@
       "createdAt": "Uploaded on",
       "checksum": "SHA-256 checksum",
       "editTitle": "Description",
-      "saved": "Changes saved."
+      "saved": "Changes saved.",
+      "backToProject": "Back to project media",
+      "space": "Space",
+      "duplicatedFrom": "Origin",
+      "duplicatedFromValue": "Copy of another media item",
+      "readOnly": "You can view this media item, but not change it.",
+      "archivedProject": "This media item's project is archived: it is read-only."
     },
     "fields": {
       "title": "Title",
@@ -469,6 +474,207 @@
       "confirmDescription": "\"{name}\", its file and its variants will be removed from storage. This action cannot be undone.",
       "confirm": "Delete permanently",
       "purged": "\"{name}\" has been permanently deleted."
+    },
+    "organize": {
+      "title": "Duplicate or move",
+      "description": "Duplicating creates an independent copy with its own address. Moving changes the media item's space without changing its address.",
+      "target": "Target space",
+      "current": "{space} (current)",
+      "duplicate": "Duplicate",
+      "move": "Move",
+      "moveDisabled": "Choose another space to move the media item.",
+      "duplicated": "Copy created in: {space}.",
+      "moved": "Media item moved to: {space}.",
+      "noTargets": "No space allows you to add media."
+    }
+  },
+  "projectRoles": {
+    "OWNER": {
+      "label": "Owner",
+      "description": "The whole project: settings, members, API keys and media."
+    },
+    "DEVELOPER": {
+      "label": "Developer",
+      "description": "API keys, allowed origins and media."
+    },
+    "EDITOR": {
+      "label": "Editor",
+      "description": "Project media."
+    }
+  },
+  "space": {
+    "library": "Organization library",
+    "project": "Project {name}"
+  },
+  "projects": {
+    "backToList": "Back to projects",
+    "status": {
+      "active": "Active",
+      "archived": "Archived"
+    },
+    "list": {
+      "meta": {
+        "title": "Projects"
+      },
+      "title": "Projects",
+      "description": "A project groups the media, members and access of an application and its environments.",
+      "create": "New project",
+      "caption": "Project list",
+      "count": "No projects | {count} project | {count} projects",
+      "empty": "No projects yet.",
+      "emptyMember": "You are not a member of any project. Ask a project owner to add you.",
+      "emptyFiltered": "No project matches these filters.",
+      "loadError": "Unable to load projects.",
+      "noRole": "—"
+    },
+    "filters": {
+      "label": "Filter projects",
+      "search": "Name, identifier or description",
+      "status": "Status",
+      "apply": "Filter",
+      "reset": "Reset filters"
+    },
+    "columns": {
+      "project": "Project",
+      "role": "Your role",
+      "media": "Media",
+      "members": "Members"
+    },
+    "fields": {
+      "name": "Name",
+      "slug": "Identifier",
+      "slugHint": "Lowercase letters, digits and hyphens. It identifies the project in tools and SDKs.",
+      "slugAuto": "Optional. If left empty: “{slug}”.",
+      "slugAutoEmpty": "Optional. If left empty, it is derived from the name.",
+      "description": "Description",
+      "descriptionHint": "Optional. For example the application and environments involved."
+    },
+    "create": {
+      "meta": {
+        "title": "New project"
+      },
+      "title": "New project",
+      "description": "You will become its owner and can then add members.",
+      "submit": "Create project",
+      "success": "The project “{name}” has been created."
+    },
+    "nav": {
+      "label": "Project sections",
+      "overview": "Overview",
+      "media": "Media",
+      "members": "Members"
+    },
+    "header": {
+      "yourRole": "Your role: {role}"
+    },
+    "archived": {
+      "title": "Archived project",
+      "description": "The project is read-only: its media are still delivered, but no upload or change is possible."
+    },
+    "overview": {
+      "meta": {
+        "title": "{name} · Overview"
+      },
+      "summaryTitle": "At a glance",
+      "slug": "Identifier",
+      "description": "Description",
+      "noDescription": "No description",
+      "mediaCount": "Media",
+      "trashCount": "In the trash",
+      "memberCount": "Members",
+      "createdAt": "Created on",
+      "loadError": "Unable to load this project."
+    },
+    "settings": {
+      "title": "Settings",
+      "saved": "Settings saved."
+    },
+    "archive": {
+      "title": "Archive the project",
+      "description": "The project becomes read-only: its media are still delivered, but no upload or change is possible anymore. Archiving is reversible and is required before deletion.",
+      "action": "Archive project",
+      "done": "Project archived.",
+      "restoreTitle": "Reactivate the project",
+      "restoreDescription": "The project can be changed again.",
+      "restoreAction": "Reactivate project",
+      "restored": "Project reactivated."
+    },
+    "delete": {
+      "title": "Delete the project",
+      "description": "Permanently deletes the project, its members and its folders. You will choose what happens to its media.",
+      "open": "Delete project…",
+      "confirmTitle": "Delete “{name}”?",
+      "confirmDescription": "This action cannot be undone.",
+      "mediaChoice": "Project media",
+      "library": {
+        "label": "Move them to the library",
+        "description": "They are still delivered at the same address."
+      },
+      "purge": {
+        "label": "Delete them permanently",
+        "description": "Their files and derivatives are erased from storage."
+      },
+      "confirmLabel": "To confirm, type the project identifier: {slug}",
+      "confirmMismatch": "The identifier you typed does not match.",
+      "confirm": "Delete permanently",
+      "success": "The project “{name}” has been deleted."
+    },
+    "media": {
+      "meta": {
+        "title": "{name} · Media"
+      }
+    },
+    "members": {
+      "meta": {
+        "title": "{name} · Members"
+      },
+      "title": "Members",
+      "description": "People with access to the project and their roles.",
+      "caption": "Project members",
+      "adminNote": "Administrators can access every project, even without being members.",
+      "empty": "No members.",
+      "loadError": "Unable to load members.",
+      "you": "You",
+      "columns": {
+        "member": "Member",
+        "platformRole": "Platform role",
+        "role": "Project role",
+        "actions": "Actions"
+      },
+      "roleLabel": "Project role of {name}",
+      "saveRole": "Save",
+      "saveRoleLabel": "Save the role of {name}",
+      "capped": "Acts as {role} (limited by their platform role).",
+      "roleUpdated": "Role of {name} updated.",
+      "remove": "Remove",
+      "removeLabel": "Remove {name} from the project",
+      "leave": "Leave project",
+      "removeConfirmTitle": "Remove {name} from the project?",
+      "removeConfirmDescription": "This person will lose access to the project and its media.",
+      "leaveConfirmTitle": "Leave this project?",
+      "leaveConfirmDescription": "You will lose access to the project and its media.",
+      "removed": "{name} has been removed from the project.",
+      "left": "You left the project “{name}”.",
+      "add": {
+        "title": "Add a member",
+        "search": "Find an account",
+        "searchHint": "Name or email address. Only active accounts that are not already members are listed.",
+        "searchAction": "Search",
+        "results": "Accounts found",
+        "noResults": "No available account matches.",
+        "role": "Role of {name}",
+        "action": "Add",
+        "actionLabel": "Add {name} to the project",
+        "added": "{name} has been added to the project."
+      }
+    },
+    "errors": {
+      "PROJECT_ARCHIVED": "The project is archived: this action is not possible.",
+      "PROJECT_NOT_ARCHIVED": "Archive the project first.",
+      "LAST_OWNER": "Not possible: the project must keep at least one owner.",
+      "ALREADY_MEMBER": "This account is already a member of the project.",
+      "ROLE_NOT_ASSIGNABLE": "This role exceeds what their platform role allows.",
+      "USER_NOT_FOUND": "This account no longer exists or has been deactivated."
     }
   }
 }

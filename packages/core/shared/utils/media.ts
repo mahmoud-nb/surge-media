@@ -53,6 +53,7 @@ export const MEDIA_ERROR_CODES = [
   'KIND_MISMATCH', // remplacement par un fichier d'un autre genre
   'VERSION_CONFLICT', // le fichier a été remplacé entre-temps
   'NOT_IN_TRASH', // suppression définitive d'un média qui n'est pas dans la corbeille
+  'IN_TRASH', // action impossible sur un média dans la corbeille (lien, duplication, déplacement)
   'MEDIA_FORBIDDEN', // média privé sans autorisation
   'SIGNATURE_INVALID', // lien signé altéré ou obsolète
   'SIGNATURE_EXPIRED', // lien signé expiré

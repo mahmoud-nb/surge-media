@@ -14,6 +14,11 @@ export interface MediaStorage {
   put: (key: string, body: Readable, info: { contentType: string, size: number }) => Promise<void>
   /** Lit un fichier en flux. */
   getStream: (key: string) => Promise<Readable>
+  /**
+   * Copie un fichier sous une nouvelle clé (duplication d'un média). Sous S3, la copie se fait
+   * côté service (CopyObject), sans transit par surgeMedia.
+   */
+  copy: (fromKey: string, toKey: string) => Promise<void>
   /** Taille du fichier, ou null s'il n'existe pas. */
   stat: (key: string) => Promise<{ size: number } | null>
   /** Supprime un fichier (sans erreur s'il n'existe plus). */

@@ -25,8 +25,15 @@ export const mediaMetadataSchema = z.object({
 }).partial()
 export type MediaMetadataInput = z.input<typeof mediaMetadataSchema>
 
+/** Identifiant d'un projet dans les paramètres d'URL ; absent = bibliothèque de l'organisation. */
+const projectParamSchema = z.string().trim().min(1).max(64).optional().catch(undefined)
+
+/** Espace visé par une requête (liste, envoi) : `?project=<id>`, absent = bibliothèque. */
+export const spaceQuerySchema = z.object({ project: projectParamSchema })
+
 /** Filtres de la médiathèque (paramètres d'URL) ; les valeurs invalides sont ignorées. */
 export const mediaListQuerySchema = z.object({
+  project: projectParamSchema,
   q: z.string().trim().max(MEDIA_TEXT_MAX_LENGTH).optional().catch(undefined),
   kind: z.enum(ENABLED_MEDIA_KINDS as [string, ...string[]]).optional().catch(undefined),
   visibility: visibilitySchema.optional().catch(undefined),
@@ -35,6 +42,11 @@ export const mediaListQuerySchema = z.object({
   page: z.coerce.number().int().min(1).max(10_000).catch(1),
 })
 export type MediaListQuery = z.infer<typeof mediaListQuerySchema>
+
+/** Espace cible d'une duplication ou d'un déplacement : un projet, ou null = bibliothèque. */
+export const mediaTargetSchema = z.object({
+  projectId: z.string('validation.required').trim().min(1).max(64).nullable(),
+})
 
 /** Lien temporaire vers un média privé. */
 export const signedUrlSchema = z.object({

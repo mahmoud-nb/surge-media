@@ -1,9 +1,17 @@
+import type { H3Event } from 'h3'
 import { extensionForMime } from '#shared/utils/media'
-import { signMediaTarget } from './signing'
+import { alignedExpiry, signMediaAccess } from './signing'
 
-/** Dérivés servis par /m/… ; les transformations (recadrage, formats…) viendront s'y ajouter. */
+/**
+ * Dérivés nommés servis par /m/ ; les transformations libres (phase C) auront leur propre
+ * segment (`w_800,h_600…`), distinct des noms de préréglages (jamais de « _ »).
+ */
 export const MEDIA_VARIANTS = ['preview'] as const
 export type MediaVariantName = (typeof MEDIA_VARIANTS)[number]
+
+/** Aperçus de l'administration : liens valables 1 h, échéance alignée sur le quart d'heure. */
+const ADMIN_LINK_TTL = 3600
+const ADMIN_LINK_BUCKET = 900
 
 interface UrlSource {
   id: string
@@ -37,8 +45,37 @@ export function mediaPath(media: UrlSource, variant?: MediaVariantName): string 
   return `/m/${media.id}/v${media.version}/${variant ? `${variant}/` : ''}${name}.${extension}`
 }
 
-/** Chemin signé, valable `ttlSeconds` secondes, pour un média privé. */
+/** Lien de partage d'un fichier précis, valable exactement `ttlSeconds` secondes. */
 export function signedMediaPath(media: UrlSource, ttlSeconds: number, variant?: MediaVariantName): { path: string, expiresAt: Date } {
-  const { exp, sig } = signMediaTarget({ mediaId: media.id, version: media.version, variant: variant ?? 'original' }, ttlSeconds)
-  return { path: `${mediaPath(media, variant)}?exp=${exp}&sig=${sig}`, expiresAt: new Date(exp * 1000) }
+  const expires = Math.floor(Date.now() / 1000) + ttlSeconds
+  const query = signMediaAccess(media, { variant: variant ?? 'original' }, expires)
+  return { path: `${mediaPath(media, variant)}?${query}`, expiresAt: new Date(expires * 1000) }
+}
+
+/**
+ * Chemins affichés dans l'administration. Un média public (hors corbeille) garde son URL
+ * permanente ; un média privé ou dans la corbeille reçoit un lien signé « admin » d'environ 1 h,
+ * identique pendant chaque quart d'heure (le navigateur réutilise les images en cache).
+ */
+export function adminMediaPaths(
+  media: UrlSource & { visibility: string, deletedAt: Date | null },
+  withPreview: boolean,
+): { url: string, previewUrl: string | null } {
+  const url = mediaPath(media)
+  const previewUrl = withPreview ? mediaPath(media, 'preview') : null
+  if (media.visibility === 'PUBLIC' && !media.deletedAt) return { url, previewUrl }
+
+  const expires = alignedExpiry(Math.floor(Date.now() / 1000), ADMIN_LINK_TTL, ADMIN_LINK_BUCKET)
+  const query = signMediaAccess(media, { scope: 'admin' }, expires)
+  return { url: `${url}?${query}`, previewUrl: previewUrl && `${previewUrl}?${query}` }
+}
+
+/**
+ * Base absolue des URL de diffusion : NUXT_MEDIA_PUBLIC_URL (CDN, domaine dédié), sinon
+ * NUXT_SITE_URL (domaine de l'application), sinon l'origine de la requête.
+ */
+export function mediaBaseUrl(event: H3Event): string {
+  const { siteUrl, media } = useRuntimeConfig(event)
+  const base = media.publicUrl || siteUrl || getRequestURL(event).origin
+  return base.replace(/\/+$/, '')
 }

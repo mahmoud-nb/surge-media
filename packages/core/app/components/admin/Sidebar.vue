@@ -4,7 +4,7 @@
  * rôle, langue, thème, utilisateur connecté et déconnexion.
  * La page courante est signalée par aria-current="page" (posé par <NuxtLink>).
  */
-import { Images, KeyRound, LayoutDashboard, LogOut, Plug, Users } from '@lucide/vue'
+import { FolderKanban, Images, KeyRound, LayoutDashboard, LogOut, Users } from '@lucide/vue'
 import type { Component } from 'vue'
 
 interface NavItem {
@@ -19,20 +19,23 @@ const { user, can, logout } = useAuth()
 
 const items = computed<NavItem[]>(() => [
   { to: '/admin', label: t('admin.nav.dashboard'), icon: LayoutDashboard },
-  { to: '/admin/media', label: t('admin.nav.media'), icon: Images, permission: 'media:manage' as const },
-  { to: '/admin/projects', label: t('admin.nav.projects'), icon: Plug, permission: 'api:manage' as const },
-  { to: '/admin/tokens', label: t('admin.nav.tokens'), icon: KeyRound, permission: 'tokens:manage' as const },
+  { to: '/admin/media', label: t('admin.nav.library'), icon: Images, permission: 'library:manage' as const },
+  { to: '/admin/projects', label: t('admin.nav.projects'), icon: FolderKanban },
+  { to: '/admin/tokens', label: t('admin.nav.tokens'), icon: KeyRound, permission: 'tokens:personal' as const },
   { to: '/admin/users', label: t('admin.nav.users'), icon: Users, permission: 'users:manage' as const },
 ].filter(item => !item.permission || can(item.permission)))
 
 const route = useRoute()
+const section = useAdminSection()
 
 /**
  * Page exacte → "page" ; sous-page d'une section (/admin/users/…) → "true".
- * Test sur le chemin : les pages d'une section sont des routes sœurs, pas imbriquées.
+ * Test sur le chemin : les pages d'une section sont des routes sœurs, pas imbriquées. Une page
+ * peut imposer sa section (fiche d'un média de projet → Projets) : useAdminSection().
  */
 function currentState(to: string): 'page' | 'true' | undefined {
   if (route.path === to) return 'page'
+  if (section.value) return section.value === to ? 'true' : undefined
   if (to !== '/admin' && route.path.startsWith(`${to}/`)) return 'true'
   return undefined
 }

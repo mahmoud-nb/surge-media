@@ -1,5 +1,5 @@
 <script setup lang="ts">
-definePageMeta({ layout: 'admin', permission: 'tokens:manage' })
+definePageMeta({ layout: 'admin', permission: 'tokens:personal' })
 
 const { t } = useI18n()
 useSeoMeta({ title: () => t('admin.tokens.title') })

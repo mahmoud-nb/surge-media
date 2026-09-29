@@ -9,6 +9,7 @@ export const en: Record<MessageKey, string> = {
   'args.url': 'Database connection URL',
   'args.yes': 'Non-interactive mode: accept defaults without confirmation',
   'args.skipMigrate': 'Configure the database without applying migrations',
+  'args.siteUrl': 'Public URL of the installation (e.g. https://media.example.com)',
 
   'command.init': 'Configure the database (provider and URL), then apply migrations',
   'command.db': 'Database management',
@@ -24,6 +25,7 @@ export const en: Record<MessageKey, string> = {
 
   'prompt.provider': 'Which database provider do you want to use?',
   'prompt.url': 'Connection URL',
+  'prompt.siteUrl': 'Public URL of surgeMedia (base of media links)',
   'provider.sqlite.label': 'SQLite',
   'provider.sqlite.hint': 'local file, nothing to install (ideal to get started)',
   'provider.postgresql.label': 'PostgreSQL',
@@ -34,6 +36,7 @@ export const en: Record<MessageKey, string> = {
   'summary.title': 'Summary',
   'summary.provider': 'Provider',
   'summary.url': 'URL',
+  'summary.siteUrl': 'Public URL',
   'summary.root': 'Directory',
 
   'warn.providerChange': 'Provider change ({from} → {to}): existing data is not transferred.',
@@ -62,6 +65,7 @@ export const en: Record<MessageKey, string> = {
   'error.rootNotFound': 'Core directory not found: no prisma/schema.prisma file in {path}. Specify it with --cwd.',
   'error.invalidProvider': 'Unsupported provider "{value}". Allowed values: {providers}.',
   'error.urlRequired': 'The connection URL is required.',
+  'error.siteUrl': 'The public URL must start with http:// or https:// and contain no credentials, query string or fragment.',
   'error.urlScheme': 'For {provider}, the URL must start with {schemes}',
   'error.urlChars': 'The URL must not contain quotes or line breaks (percent-encode special characters, e.g. %22).',
   'error.urlMissingNonInteractive': '--url is required for {provider} in non-interactive mode.',

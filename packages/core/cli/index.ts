@@ -2,7 +2,7 @@
 /**
  * CLI `surge-media` : installation et administration du core.
  *
- *   surge-media init        choisir le fournisseur de base de données et migrer
+ *   surge-media init        choisir le fournisseur de base de données, l'URL publique, et migrer
  *   surge-media db migrate  appliquer les migrations en attente
  *   surge-media db reset    recréer la base (éventuellement avec un autre fournisseur)
  */
@@ -40,6 +40,7 @@ const init = defineCommand({
     ...commonArgs,
     ...targetArgs,
     skipMigrate: { type: 'boolean', description: t('args.skipMigrate') },
+    siteUrl: { type: 'string', description: t('args.siteUrl'), valueHint: 'url' },
   },
   run: ({ args }) => runInit(context(args.cwd), args),
 })

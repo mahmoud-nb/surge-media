@@ -3,51 +3,35 @@ import type { MediaListQuery, MediaMetadataInput } from '#shared/schemas/media'
 import { MEDIA_PAGE_SIZE } from '#shared/schemas/media'
 import { ACCEPTED_MEDIA_TYPES, extensionForMime, mediaKindForMime, type MediaKind } from '#shared/utils/media'
 import type { Media, Prisma, User } from '../../generated/prisma/client'
+import type { Space } from '../../utils/access'
 import { useMediaStorage } from '../storage'
 import { mediaError } from './errors'
 import { handlerFor, type InspectedMedia } from './handlers'
 import { originalKey, variantPrefix } from './keys'
 import { sniffMimeType } from './sniff'
 import type { ReceivedUpload } from './upload'
-import { mediaPath } from './urls'
+import { adminMediaPaths } from './urls'
 
 /**
  * Logique métier des médias. Indépendante du stockage physique (MediaStorage) et du genre
  * de média (gestionnaires) : les API d'administration, l'API publique (phase B) et la
  * diffusion passent toutes par ce module.
+ *
+ * Chaque média appartient à un seul espace : un projet, ou la bibliothèque de l'organisation
+ * (projectId null). Les contrôles d'accès sont faits par les routes (server/utils/access.ts).
  */
 
 const UPLOADER = { select: { id: true, name: true, email: true } } as const
 type MediaWithUploader = Media & { uploadedBy: { id: string, name: string | null, email: string } | null }
 
-// ─── Projet par défaut ───────────────────────────────────────────────────────
-
-const DEFAULT_PROJECT_SLUG = 'default'
-let defaultProject: Promise<string> | undefined
-
-/** Projet utilisé tant que l'écran Projets n'existe pas (créé au premier besoin). */
-export function defaultProjectId(): Promise<string> {
-  defaultProject ??= (async () => {
-    const prisma = await usePrisma()
-    const project = await prisma.project.upsert({
-      where: { slug: DEFAULT_PROJECT_SLUG },
-      create: { slug: DEFAULT_PROJECT_SLUG, name: 'Default project' },
-      update: {},
-      select: { id: true },
-    })
-    return project.id
-  })().catch((error: unknown) => {
-    defaultProject = undefined
-    throw error
-  })
-  return defaultProject
-}
-
 // ─── Représentation API ──────────────────────────────────────────────────────
 
+/** Représentation pour l'administration (chemins relatifs, signés si privé ou en corbeille). */
 export function toMediaSummary(media: MediaWithUploader) {
+  const paths = adminMediaPaths(media, Boolean(handlerFor(media.kind)?.preview))
   return {
     id: media.id,
+    projectId: media.projectId,
     kind: media.kind,
     visibility: media.visibility,
     originalName: media.originalName,
@@ -60,9 +44,9 @@ export function toMediaSummary(media: MediaWithUploader) {
     height: media.height,
     duration: media.duration,
     version: media.version,
-    /** Chemin de diffusion ; pour un média privé, accessible avec une session ou un lien signé. */
-    url: mediaPath(media),
-    previewUrl: handlerFor(media.kind)?.preview ? mediaPath(media, 'preview') : null,
+    /** Chemins de diffusion ; signés (droit « admin ») pour un média privé ou dans la corbeille. */
+    url: paths.url,
+    previewUrl: paths.previewUrl,
     uploadedBy: media.uploadedBy,
     createdAt: media.createdAt,
     updatedAt: media.updatedAt,
@@ -71,17 +55,26 @@ export function toMediaSummary(media: MediaWithUploader) {
 }
 
 export function toMediaDetail(media: MediaWithUploader) {
-  return { ...toMediaSummary(media), checksum: media.checksum, metadata: media.metadata }
+  return { ...toMediaSummary(media), checksum: media.checksum, metadata: media.metadata, duplicatedFromId: media.duplicatedFromId }
 }
 
 // ─── Lecture ─────────────────────────────────────────────────────────────────
 
-/** Média par identifiant (corbeille comprise) ou 404. */
-export async function findMediaOr404(id: string): Promise<MediaWithUploader> {
+/** Média par identifiant (corbeille comprise), ou null. */
+export async function findMedia(id: string): Promise<MediaWithUploader | null> {
   const prisma = await usePrisma()
-  const media = await prisma.media.findUnique({ where: { id }, include: { uploadedBy: UPLOADER } })
+  return prisma.media.findUnique({ where: { id }, include: { uploadedBy: UPLOADER } })
+}
+
+async function findMediaOrFail(id: string): Promise<MediaWithUploader> {
+  const media = await findMedia(id)
   if (!media) throw createError({ statusCode: 404, statusMessage: 'Media not found' })
   return media
+}
+
+/** Valeur de Media.projectId pour un espace. */
+function projectIdOf(space: Space): string | null {
+  return space.type === 'project' ? space.id : null
 }
 
 const SORTS: Record<MediaListQuery['sort'], Prisma.MediaOrderByWithRelationInput[]> = {
@@ -91,9 +84,10 @@ const SORTS: Record<MediaListQuery['sort'], Prisma.MediaOrderByWithRelationInput
   size: [{ size: 'desc' }, { id: 'desc' }],
 }
 
-export async function listMedia(query: MediaListQuery) {
+/** Médias d'un espace ; l'espace est toujours imposé par le serveur, les filtres s'y ajoutent. */
+export async function listMedia(space: Space, query: MediaListQuery) {
   const where: Prisma.MediaWhereInput = {
-    projectId: await defaultProjectId(),
+    projectId: projectIdOf(space),
     deletedAt: query.status === 'trash' ? { not: null } : null,
   }
   if (query.q) {
@@ -167,8 +161,8 @@ function fileData(upload: ReceivedUpload, analyzed: AnalyzedUpload, storageKey: 
   }
 }
 
-/** Nouveau média : fichier écrit dans le stockage puis enregistré en base (annulé si l'une échoue). */
-export async function createMedia(upload: ReceivedUpload, input: MediaMetadataInput, actor: User): Promise<MediaWithUploader> {
+/** Nouveau média dans un espace : fichier écrit dans le stockage puis enregistré en base (annulé si l'une échoue). */
+export async function createMedia(space: Space, upload: ReceivedUpload, input: MediaMetadataInput, actor: User): Promise<MediaWithUploader> {
   const analyzed = await analyze(upload)
   const storage = await useMediaStorage()
   const key = await storeOriginal(upload, analyzed)
@@ -177,7 +171,7 @@ export async function createMedia(upload: ReceivedUpload, input: MediaMetadataIn
     return await prisma.media.create({
       data: {
         ...fileData(upload, analyzed, key),
-        projectId: await defaultProjectId(),
+        projectId: projectIdOf(space),
         visibility: input.visibility ?? 'PUBLIC',
         title: input.title ?? null,
         altText: input.altText ?? null,
@@ -217,7 +211,7 @@ export async function replaceMediaFile(media: Media, upload: ReceivedUpload): Pr
   await prisma.mediaVariant.deleteMany({ where: { mediaId: media.id, transformation: { startsWith: `v${media.version}/` } } })
   await storage.delete(media.storageKey)
   await storage.deletePrefix(`${variantPrefix(media.id)}v${media.version}-`)
-  return findMediaOr404(media.id)
+  return findMediaOrFail(media.id)
 }
 
 export async function updateMediaMetadata(media: Media, input: MediaMetadataInput): Promise<MediaWithUploader> {
@@ -244,13 +238,79 @@ export async function purgeMedia(media: Media): Promise<void> {
   if (!media.deletedAt) throw mediaError(409, 'NOT_IN_TRASH')
   const prisma = await usePrisma()
   await prisma.media.delete({ where: { id: media.id } })
+  await deleteStoredFiles([media])
+}
 
+/**
+ * Supprime du stockage l'original et les dérivés de médias déjà effacés de la base. Ne lève
+ * jamais : un échec ne laisse que des fichiers orphelins, signalés dans le journal.
+ */
+export async function deleteStoredFiles(items: Pick<Media, 'id' | 'storageKey'>[]): Promise<void> {
   const storage = await useMediaStorage()
+  for (const item of items) {
+    try {
+      await storage.delete(item.storageKey)
+      await storage.deletePrefix(variantPrefix(item.id))
+    }
+    catch (error) {
+      console.error(`[surge-media] Fichiers du média ${item.id} non supprimés du stockage :`, error)
+    }
+  }
+}
+
+// ─── Duplication, déplacement ────────────────────────────────────────────────
+
+/**
+ * Copie indépendante d'un média dans un espace (le même ou un autre) : nouvel identifiant,
+ * version 1, fichier copié dans le stockage, métadonnées reprises, provenance conservée. Les
+ * dérivés ne sont pas copiés : ils seront régénérés à la demande.
+ */
+export async function duplicateMedia(media: Media, target: Space, actor: User): Promise<MediaWithUploader> {
+  if (media.deletedAt) throw mediaError(409, 'IN_TRASH')
+  const storage = await useMediaStorage()
+  const key = originalKey(extensionForMime(media.mimeType) ?? 'bin')
+  await storage.copy(media.storageKey, key)
   try {
-    await storage.delete(media.storageKey)
-    await storage.deletePrefix(variantPrefix(media.id))
+    const prisma = await usePrisma()
+    return await prisma.media.create({
+      data: {
+        projectId: projectIdOf(target),
+        kind: media.kind,
+        visibility: media.visibility,
+        storageKey: key,
+        originalName: media.originalName,
+        mimeType: media.mimeType,
+        size: media.size,
+        checksum: media.checksum,
+        width: media.width,
+        height: media.height,
+        duration: media.duration,
+        title: media.title,
+        altText: media.altText,
+        // Json? : null s'omet (Prisma exige sinon une valeur spéciale, importée à l'exécution).
+        ...(media.metadata === null ? {} : { metadata: media.metadata as Prisma.InputJsonValue }),
+        duplicatedFromId: media.id,
+        uploadedById: actor.id,
+      },
+      include: { uploadedBy: UPLOADER },
+    })
   }
   catch (error) {
-    console.error(`[surge-media] Fichiers du média ${media.id} non supprimés du stockage :`, error)
+    await storage.delete(key)
+    throw error
   }
+}
+
+/**
+ * Change l'espace d'un média sans changer son identifiant ni ses URL (fichier et dérivés
+ * inchangés). Il quitte son dossier, propre à l'ancien espace.
+ */
+export async function moveMedia(media: Media, target: Space): Promise<MediaWithUploader> {
+  if (media.deletedAt) throw mediaError(409, 'IN_TRASH')
+  const prisma = await usePrisma()
+  return prisma.media.update({
+    where: { id: media.id },
+    data: { projectId: projectIdOf(target), folderId: null },
+    include: { uploadedBy: UPLOADER },
+  })
 }

@@ -1,8 +1,9 @@
 <script setup lang="ts">
-import { ArchiveRestore, ArrowLeft, Link2, Trash2 } from '@lucide/vue'
+import { ArchiveRestore, ArrowLeft, Copy, FolderInput, Link2, Trash2 } from '@lucide/vue'
 import { MEDIA_TEXT_MAX_LENGTH, mediaMetadataSchema } from '#shared/schemas/media'
 
-definePageMeta({ layout: 'admin', permission: 'media:manage' })
+// Accès décidé par l'espace du média (bibliothèque ou projet) : vérifié par l'API (404 sinon).
+definePageMeta({ layout: 'admin' })
 
 interface StatusMessage {
   variant: 'success' | 'error'
@@ -26,6 +27,28 @@ const displayName = computed(() => media.value?.title || media.value?.originalNa
 const inTrash = computed(() => Boolean(media.value?.deletedAt))
 
 useSeoMeta({ title: () => displayName.value || t('media.list.title') })
+
+// ─── Espace et droits ────────────────────────────────────────────────────────
+
+const space = computed(() => data.value?.space)
+const project = computed(() => space.value?.project ?? null)
+const scopes = computed<readonly string[]>(() => data.value?.scopes ?? [])
+const canWrite = computed(() => scopes.value.includes('media:write'))
+const canDelete = computed(() => scopes.value.includes('media:delete'))
+const spaceLabel = computed(() => (project.value ? t('space.project', { name: project.value.name }) : t('space.library')))
+
+/** Liste d'où l'on vient : médias du projet ou bibliothèque (corbeille le cas échéant). */
+const listPath = computed(() => (project.value ? `/admin/projects/${project.value.id}/media` : '/admin/media'))
+const backLink = computed(() => (inTrash.value ? { path: listPath.value, query: { status: 'trash' } } : listPath.value))
+
+// Barre latérale : la fiche d'un média de projet relève de la section Projets.
+const section = useAdminSection()
+watch(project, (value) => {
+  section.value = value ? '/admin/projects' : null
+}, { immediate: true })
+onBeforeUnmount(() => {
+  section.value = null
+})
 
 // ─── Métadonnées ─────────────────────────────────────────────────────────────
 
@@ -66,8 +89,7 @@ const visibilityOptions = computed(() => MEDIA_VISIBILITIES.map(value => ({
 
 // ─── Liens d'accès ───────────────────────────────────────────────────────────
 
-const origin = useRequestURL().origin
-const publicUrl = computed(() => (media.value ? new URL(media.value.url, origin).toString() : ''))
+const publicUrl = computed(() => data.value?.publicUrl ?? '')
 const durationId = useId()
 const duration = ref(String(SIGNED_URL_DURATIONS[0]))
 const DURATION_KEYS: Record<(typeof SIGNED_URL_DURATIONS)[number], string> = { 3600: 'hour', 86400: 'day', 604800: 'week' }
@@ -81,7 +103,7 @@ async function generateLink() {
   generating.value = true
   try {
     const result = await $api(`/api/admin/media/${mediaId.value}/signed-url`, { method: 'POST', body: { expiresIn: Number(duration.value) } })
-    link.value = { url: new URL(result.path, origin).toString(), expiresAt: String(result.expiresAt) }
+    link.value = { url: result.url, expiresAt: String(result.expiresAt) }
   }
   catch {
     linkError.value = t('common.unexpectedError')
@@ -110,7 +132,7 @@ async function moveToTrash() {
   try {
     await $api(`/api/admin/media/${mediaId.value}`, { method: 'DELETE' })
     flash.set({ variant: 'success', message: t('media.trash.moved', { name: displayName.value }) })
-    await navigateTo('/admin/media')
+    await navigateTo(listPath.value)
   }
   catch {
     actionError.value = t('common.unexpectedError')
@@ -145,7 +167,7 @@ async function purge() {
     await $api(`/api/admin/media/${mediaId.value}?permanent=true`, { method: 'DELETE' })
     flash.set({ variant: 'success', message: t('media.trash.purged', { name: displayName.value }) })
     purgeOpen.value = false
-    await navigateTo({ path: '/admin/media', query: { status: 'trash' } })
+    await navigateTo({ path: listPath.value, query: { status: 'trash' } })
   }
   catch {
     purgeError.value = t('common.unexpectedError')
@@ -154,13 +176,64 @@ async function purge() {
     busy.value = false
   }
 }
+
+// ─── Duplication, déplacement ────────────────────────────────────────────────
+
+const { data: targets } = await useApiFetch('/api/admin/spaces', { query: { scope: 'media:upload' } })
+const targetId = useId()
+const organizeStatus = ref<StatusMessage | null>(null)
+const organizing = ref<'duplicate' | 'move' | null>(null)
+
+/** Valeur du sélecteur : identifiant du projet, ou « library ». */
+const LIBRARY_VALUE = 'library'
+const currentTarget = computed(() => project.value?.id ?? LIBRARY_VALUE)
+const target = ref('')
+watch(currentTarget, (value) => {
+  target.value = value
+}, { immediate: true })
+
+const targetOptions = computed(() => (targets.value?.spaces ?? []).map((item) => {
+  const value = item.type === 'project' ? item.id : LIBRARY_VALUE
+  const label = item.type === 'project' ? t('space.project', { name: item.name }) : t('space.library')
+  return { value, label: value === currentTarget.value ? t('media.organize.current', { space: label }) : label }
+}))
+const canMove = computed(() => canDelete.value && target.value !== currentTarget.value)
+
+async function organize(action: 'duplicate' | 'move') {
+  if (!target.value) return
+  organizeStatus.value = null
+  organizing.value = action
+  const body = { projectId: target.value === LIBRARY_VALUE ? null : target.value }
+  try {
+    const result = await $api(`/api/admin/media/${mediaId.value}/${action}`, { method: 'POST', body })
+    const targetProject = targets.value?.spaces.find(item => item.type === 'project' && item.id === target.value)
+    const spaceName = targetProject?.type === 'project' ? t('space.project', { name: targetProject.name }) : t('space.library')
+    if (action === 'duplicate') {
+      flash.set({ variant: 'success', message: t('media.organize.duplicated', { space: spaceName }) })
+      await navigateTo(`/admin/media/${result.media.id}`)
+    }
+    else {
+      await refresh()
+      organizeStatus.value = { variant: 'success', message: t('media.organize.moved', { space: spaceName }) }
+    }
+  }
+  catch {
+    organizeStatus.value = { variant: 'error', message: t('common.unexpectedError') }
+  }
+  finally {
+    organizing.value = null
+  }
+}
+
+// Message laissé par une duplication (redirection vers la copie).
+const pageFlash = flash.consume()
 </script>
 
 <template>
   <div class="mx-auto max-w-6xl">
-    <NuxtLink :to="inTrash ? { path: '/admin/media', query: { status: 'trash' } } : '/admin/media'" class="mb-4 inline-flex items-center gap-1.5 rounded-lg text-sm font-medium text-muted-foreground hover:text-foreground">
+    <NuxtLink :to="backLink" class="mb-4 inline-flex items-center gap-1.5 rounded-lg text-sm font-medium text-muted-foreground hover:text-foreground">
       <ArrowLeft class="size-4" aria-hidden="true" />
-      {{ inTrash ? t('media.detail.backToTrash') : t('media.detail.backToList') }}
+      {{ inTrash ? t('media.detail.backToTrash') : project ? t('media.detail.backToProject') : t('media.detail.backToList') }}
     </NuxtLink>
 
     <UiAlert v-if="error" variant="error" live="assertive" :title="t('media.detail.loadError')">
@@ -178,9 +251,17 @@ async function purge() {
         </template>
       </AdminPageHeader>
 
+      <UiAlert v-if="pageFlash" :variant="pageFlash.variant" live="polite" class="mb-6">
+        {{ pageFlash.message }}
+      </UiAlert>
+
+      <UiAlert v-if="!canWrite" variant="info" class="mb-6">
+        {{ project?.archivedAt ? t('media.detail.archivedProject') : t('media.detail.readOnly') }}
+      </UiAlert>
+
       <UiAlert v-if="inTrash" variant="warning" :title="t('media.trash.bannerTitle')" class="mb-6">
         <p>{{ t('media.trash.bannerDescription') }}</p>
-        <div class="mt-3 flex flex-wrap gap-3">
+        <div v-if="canDelete" class="mt-3 flex flex-wrap gap-3">
           <UiButton variant="outline" size="sm" :loading="busy" @click="restore">
             <ArchiveRestore aria-hidden="true" />
             {{ t('media.trash.restore') }}
@@ -195,7 +276,7 @@ async function purge() {
         {{ actionError }}
       </UiAlert>
 
-      <div class="grid gap-6 lg:grid-cols-[minmax(0,2fr)_minmax(0,3fr)]">
+      <div class="grid gap-6 xl:grid-cols-[minmax(0,2fr)_minmax(0,3fr)]">
         <!-- Aperçu et informations -->
         <div class="grid content-start gap-6">
           <figure class="bg-checker overflow-hidden rounded-xl border border-border">
@@ -213,6 +294,27 @@ async function purge() {
               {{ t('media.detail.infoTitle') }}
             </h2>
             <dl class="mt-4 grid gap-x-6 gap-y-3 text-sm sm:grid-cols-2">
+              <div class="grid gap-0.5 sm:col-span-2">
+                <dt class="text-muted-foreground">
+                  {{ t('media.detail.space') }}
+                </dt>
+                <dd class="font-medium text-foreground">
+                  <NuxtLink v-if="project" :to="`/admin/projects/${project.id}`" class="text-primary underline-offset-4 hover:underline">
+                    {{ spaceLabel }}
+                  </NuxtLink>
+                  <template v-else>
+                    {{ spaceLabel }}
+                  </template>
+                </dd>
+              </div>
+              <div v-if="media.duplicatedFromId" class="grid gap-0.5 sm:col-span-2">
+                <dt class="text-muted-foreground">
+                  {{ t('media.detail.duplicatedFrom') }}
+                </dt>
+                <dd class="font-medium text-foreground">
+                  {{ t('media.detail.duplicatedFromValue') }}
+                </dd>
+              </div>
               <div class="grid gap-0.5">
                 <dt class="text-muted-foreground">
                   {{ t('media.detail.format') }}
@@ -279,7 +381,34 @@ async function purge() {
             <h2 id="edit-title" class="text-lg font-semibold text-foreground">
               {{ t('media.detail.editTitle') }}
             </h2>
-            <form class="mt-5 grid gap-5" novalidate @submit.prevent="save">
+            <!-- Lecture seule : les valeurs restent lisibles (pas de champs désactivés). -->
+            <dl v-if="!canWrite" class="mt-4 grid gap-3 text-sm">
+              <div class="grid gap-0.5">
+                <dt class="text-muted-foreground">
+                  {{ t('media.fields.title') }}
+                </dt>
+                <dd class="font-medium break-words text-foreground">
+                  {{ media.title || '—' }}
+                </dd>
+              </div>
+              <div class="grid gap-0.5">
+                <dt class="text-muted-foreground">
+                  {{ t('media.fields.altText') }}
+                </dt>
+                <dd class="font-medium break-words text-foreground">
+                  {{ media.altText || '—' }}
+                </dd>
+              </div>
+              <div class="grid gap-0.5">
+                <dt class="text-muted-foreground">
+                  {{ t('media.fields.visibility') }}
+                </dt>
+                <dd class="font-medium text-foreground">
+                  {{ t(`media.visibility.${media.visibility}.label`) }}
+                </dd>
+              </div>
+            </dl>
+            <form v-else class="mt-5 grid gap-5" novalidate @submit.prevent="save">
               <UiAlert v-if="saveStatus" :variant="saveStatus.variant" :live="saveStatus.variant === 'error' ? 'assertive' : 'polite'">
                 {{ saveStatus.message }}
               </UiAlert>
@@ -347,7 +476,7 @@ async function purge() {
           </section>
 
           <!-- Remplacement -->
-          <section v-if="!inTrash && rules" aria-labelledby="replace-title" class="rounded-xl border border-border bg-surface p-6 shadow-xs">
+          <section v-if="!inTrash && rules && canWrite" aria-labelledby="replace-title" class="rounded-xl border border-border bg-surface p-6 shadow-xs">
             <h2 id="replace-title" class="text-lg font-semibold text-foreground">
               {{ t('media.replace.title') }}
             </h2>
@@ -367,8 +496,49 @@ async function purge() {
             />
           </section>
 
+          <!-- Duplication, déplacement -->
+          <section v-if="!inTrash" aria-labelledby="organize-title" class="rounded-xl border border-border bg-surface p-6 shadow-xs">
+            <h2 id="organize-title" class="text-lg font-semibold text-foreground">
+              {{ t('media.organize.title') }}
+            </h2>
+            <p class="mt-2 text-sm text-muted-foreground">
+              {{ t('media.organize.description') }}
+            </p>
+            <p v-if="targetOptions.length === 0" class="mt-4 text-sm text-foreground">
+              {{ t('media.organize.noTargets') }}
+            </p>
+            <div v-else class="mt-4 grid gap-4">
+              <div class="flex flex-wrap items-end gap-3">
+                <div class="grid min-w-56 flex-1 gap-1.5">
+                  <label :for="targetId" class="text-sm font-medium text-foreground">{{ t('media.organize.target') }}</label>
+                  <UiSelect :id="targetId" v-model="target" :options="targetOptions" />
+                </div>
+                <UiButton variant="outline" :loading="organizing === 'duplicate'" @click="organize('duplicate')">
+                  <Copy aria-hidden="true" />
+                  {{ t('media.organize.duplicate') }}
+                </UiButton>
+                <UiButton
+                  v-if="canDelete"
+                  variant="outline"
+                  :disabled="!canMove"
+                  :loading="organizing === 'move'"
+                  @click="organize('move')"
+                >
+                  <FolderInput aria-hidden="true" />
+                  {{ t('media.organize.move') }}
+                </UiButton>
+              </div>
+              <p v-if="canDelete && !canMove" class="text-sm text-muted-foreground">
+                {{ t('media.organize.moveDisabled') }}
+              </p>
+              <UiAlert v-if="organizeStatus" :variant="organizeStatus.variant" :live="organizeStatus.variant === 'error' ? 'assertive' : 'polite'">
+                {{ organizeStatus.message }}
+              </UiAlert>
+            </div>
+          </section>
+
           <!-- Corbeille -->
-          <section v-if="!inTrash" aria-labelledby="trash-title" class="rounded-xl border border-border bg-surface p-6 shadow-xs">
+          <section v-if="!inTrash && canDelete" aria-labelledby="trash-title" class="rounded-xl border border-border bg-surface p-6 shadow-xs">
             <h2 id="trash-title" class="text-lg font-semibold text-foreground">
               {{ t('media.trash.title') }}
             </h2>

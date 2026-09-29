@@ -27,6 +27,10 @@ export function createFlydriveStorage(driver: string, disk: Disk, prefix = ''): 
       return disk.getStream(full(key))
     },
 
+    async copy(fromKey, toKey) {
+      await disk.copy(full(fromKey), full(toKey))
+    },
+
     async stat(key) {
       try {
         const meta = await disk.getMetaData(full(key))

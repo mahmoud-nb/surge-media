@@ -10,6 +10,7 @@ export const fr = {
   'args.url': 'URL de connexion à la base de données',
   'args.yes': 'Mode non interactif : accepte les valeurs par défaut sans confirmation',
   'args.skipMigrate': 'Configure la base sans appliquer les migrations',
+  'args.siteUrl': 'URL publique de l\'installation (ex. https://media.example.com)',
 
   'command.init': 'Configure la base de données (fournisseur et URL) puis applique les migrations',
   'command.db': 'Gestion de la base de données',
@@ -25,6 +26,7 @@ export const fr = {
 
   'prompt.provider': 'Quel fournisseur de base de données utiliser ?',
   'prompt.url': 'URL de connexion',
+  'prompt.siteUrl': 'URL publique de surgeMedia (base des liens vers les médias)',
   'provider.sqlite.label': 'SQLite',
   'provider.sqlite.hint': 'fichier local, rien à installer (idéal pour démarrer)',
   'provider.postgresql.label': 'PostgreSQL',
@@ -35,6 +37,7 @@ export const fr = {
   'summary.title': 'Récapitulatif',
   'summary.provider': 'Fournisseur',
   'summary.url': 'URL',
+  'summary.siteUrl': 'URL publique',
   'summary.root': 'Dossier',
 
   'warn.providerChange': 'Changement de fournisseur ({from} → {to}) : les données existantes ne sont pas transférées.',
@@ -63,6 +66,7 @@ export const fr = {
   'error.rootNotFound': 'Dossier du core introuvable : aucun fichier prisma/schema.prisma dans {path}. Précisez-le avec --cwd.',
   'error.invalidProvider': 'Fournisseur « {value} » non supporté. Valeurs possibles : {providers}.',
   'error.urlRequired': 'L\'URL de connexion est obligatoire.',
+  'error.siteUrl': 'L\'URL publique doit commencer par http:// ou https:// et ne contenir ni identifiants, ni paramètres, ni ancre.',
   'error.urlScheme': 'Pour {provider}, l\'URL doit commencer par {schemes}',
   'error.urlChars': 'L\'URL ne doit contenir ni guillemets ni retour à la ligne (encodez les caractères spéciaux, ex. %22).',
   'error.urlMissingNonInteractive': '--url est obligatoire pour {provider} en mode non interactif.',
