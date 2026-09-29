@@ -49,26 +49,37 @@ surge-media/
       │  ├─ assets/css/    Tailwind v4 + jetons de design (clair / sombre)
       │  ├─ components/
       │  │  ├─ ui/         composants de base (Button, Input, FormField, Alert, Badge, Select,
-      │  │  │              Switch, PasswordInput, Dialog, Pagination, RadioCards, CopyField) → <UiButton>…
+      │  │  │              Switch, PasswordInput, Dialog, Pagination, RadioCards, CheckboxGroup, CopyField,
+      │  │  │              CopyButton) → <UiButton>…
       │  │  ├─ app/        briques transverses : logo, lien d'évitement, thème, langue
-      │  │  └─ admin/      barre latérale, en-tête de page, rôle, lien de mot de passe, médias (envoi, carte)…
-      │  ├─ composables/   useAuth(), useApiFetch(), useFormValidation(), useFlash(), useMediaUpload(), useAppHead()
+      │  │  └─ admin/      barre latérale, en-tête de page, rôle, lien de mot de passe, médias (envoi, carte),
+      │  │                  projet (en-tête à onglets), confirmation du mot de passe, identifiants d'API…
+      │  ├─ composables/   useAuth(), useApiFetch(), useFormValidation(), useFlash(), useMediaUpload(), useAppHead(),
+      │  │                 useAdminSection(), useReauth(), useCredentialLabels()
       │  ├─ plugins/       api.ts ($api : appels de l'administration, gestion des sessions expirées)
       │  ├─ layouts/       default (public) et admin (barre latérale)
       │  ├─ middleware/    auth.global.ts (protection de /admin/*)
-      │  ├─ pages/         index, login, password/[token], admin/… (media/, media/[id], users/, users/new, users/[id])
+      │  ├─ pages/         index, login, password/[token], admin/… (media/, users/, projects/[id]/{media,members,keys,origins},
+      │  │                 tokens/, audit)
       │  └─ error.vue      pages d'erreur traduites (401, 403, 404, 500)
       ├─ i18n/locales/     traductions de l'interface (fr.json = référence, en.json)
       ├─ server/
-      │  ├─ api/           auth/*, auth/password/*, admin/users/*, admin/media/*, admin/config/*, health
+      │  ├─ api/           auth/*, admin/users/*, admin/media/*, admin/projects/* (membres, clés, origines),
+      │  │                 admin/tokens/*, admin/audit, admin/config/*, health
       │  ├─ routes/m/      diffusion des médias : /m/<id>/v<version>/…
       │  ├─ lib/storage/   interface MediaStorage + adaptateur Flydrive (local, S3)
       │  ├─ lib/media/     métier des médias : service, gestionnaires par genre, envoi, signature, diffusion
+      │  ├─ lib/projects/  projets, membres, origines autorisées
+      │  ├─ lib/access/    format des identifiants d'API (jetons opaques, CRC)
+      │  ├─ lib/credentials/  clés de projet et jetons personnels (création, rotation, révocation)
+      │  ├─ lib/audit/     lecture du journal d'audit
       │  ├─ middleware/    csrf.ts
       │  ├─ plugins/       base, sessions, rappels d'amorçage
-      │  ├─ utils/         usePrisma(), requireAuth(), utilisateurs, liens de mot de passe… (auto-importés)
+      │  ├─ utils/         usePrisma(), requireAuth(), requireSpaceAccess(), requireRecentPassword(),
+      │  │                 recordAudit(), utilisateurs, liens de mot de passe… (auto-importés)
       │  └─ generated/     client Prisma généré (non versionné)
-      ├─ shared/           code partagé app / serveur / CLI : permissions, schémas zod, BDD
+      ├─ shared/           code partagé app / serveur / CLI : permissions et portées, identifiants, origines,
+      │                    journal d'audit, schémas zod, BDD
       ├─ prisma/
       │  ├─ schema.prisma
       │  └─ migrations/<fournisseur>/   un historique par fournisseur
@@ -113,6 +124,7 @@ pnpm --filter @surge-media/core remove unstorage   # remplacé par Flydrive pour
 
 # étape B1 — tests unitaires
 pnpm --filter @surge-media/core add -D vitest
+# étape B2 — aucune nouvelle dépendance (CRC32 : node:zlib ; SQLite des scripts de test : node:sqlite)
 
 # pnpm 12 bloque les scripts d'installation : autoriser les modules natifs nécessaires
 pnpm approve-builds better-sqlite3 esbuild @prisma/engines prisma
@@ -127,7 +139,7 @@ Depuis la racine :
 | `pnpm dev` | serveur de développement du core |
 | `pnpm build` | build de tous les packages |
 | `pnpm typecheck` | vérification TypeScript (vue-tsc) |
-| `pnpm test` | tests unitaires Vitest (`packages/core/tests/` : rôles et portées, liens signés, projets) |
+| `pnpm test` | tests unitaires Vitest (`packages/core/tests/` : rôles et portées, liens signés, projets, identifiants et origines) |
 | `pnpm i18n:check` | cohérence des traductions et des clés utilisées dans le code |
 | `pnpm a11y:contrast` | contrastes WCAG AA des jetons de couleur (clair et sombre) |
 | `pnpm db:init` | configure la base (fournisseur + URL), applique les migrations, génère le secret de session |
@@ -220,12 +232,14 @@ Le fichier `packages/core/.env` est créé par `pnpm db:init` à partir de `.env
 | Modèle | Rôle |
 | --- | --- |
 | `User` | comptes de l'administration (rôle `ADMIN`/`EDITOR`/`DEVELOPER`, langue préférée, actif ou non) |
-| `Session` | sessions d'administration (seule l'empreinte SHA-256 du jeton est stockée) |
+| `Session` | sessions d'administration (seule l'empreinte SHA-256 du jeton est stockée) ; dernière saisie du mot de passe (`passwordVerifiedAt`, « mode sudo ») |
 | `PasswordToken` | lien à usage unique d'invitation ou de réinitialisation du mot de passe (empreinte, échéance, date d'utilisation) |
 | `Project` | application cliente et ses environnements : médias, dossiers, membres, jetons et origines CORS ; archivage (`archivedAt`) |
 | `ProjectMember` | membre d'un projet et son rôle (`OWNER`, `DEVELOPER`, `EDITOR`) |
-| `AccessToken` | jeton d'API d'un projet (empreinte + préfixe lisible, portées, expiration, révocation) — étape B2 |
-| `AllowedOrigin` | origines autorisées (CORS) pour les appels navigateur d'un projet — étape B2 |
+| `AccessToken` | identifiant d'API (`type` : jeton personnel `PERSONAL`, clé `SECRET` ou `PUBLISHABLE` d'un projet) : empreinte SHA-256 + préfixe lisible, valeur en clair pour la seule clé publique, environnement (clés), portées immuables, échéance, révocation, clé remplaçante (`replacedById`), dernière utilisation (B3) |
+| `AccessTokenProject` | sélection de projets d'un jeton personnel (s'il ne couvre pas « tous mes projets ») |
+| `AllowedOrigin` | origines autorisées (CORS) pour les appels navigateur d'un projet (tous environnements) |
+| `AuditEvent` | journal d'audit des actions sensibles (sans clés étrangères : survit aux suppressions ; libellé lisible dans `data.label`) |
 | `Folder` | arborescence de dossiers d'un espace (projet, ou bibliothèque si `projectId` est vide) — étape B5 |
 | `Media` | fichier original, dans **un seul espace** (`projectId` vide = bibliothèque) : genre, visibilité publique/privée, clé de stockage opaque, version (incrémentée à chaque remplacement), dimensions, empreinte, alt, corbeille, média d'origine s'il est une copie |
 | `MediaVariant` | dérivé généré à la demande puis conservé (v1 : aperçu ; bientôt crop, resize, format, qualité) |
@@ -419,14 +433,14 @@ Source unique : `shared/utils/permissions.ts` (auto-importé côté app et serve
 
 Deux niveaux : le **rôle de plateforme** (`User.role`) donne des permissions globales et les droits
 sur la bibliothèque ; le **rôle de projet** (`ProjectMember.role`) donne les droits dans ce projet,
-**plafonnés** par le rôle de plateforme. Un rôle n'est qu'un ensemble de **portées** : les jetons
-d'accès (étape B2) utiliseront le même vocabulaire.
+**plafonnés** par le rôle de plateforme. Un rôle n'est qu'un ensemble de **portées** : les
+identifiants d'API (§ 9.6) utilisent le même vocabulaire.
 
-| Rôle de plateforme | Bibliothèque (`library:manage`) | Projets | `projects:create` | `tokens:personal` | `users:manage` |
-| --- | :---: | --- | :---: | :---: | :---: |
-| `ADMIN` | ✓ | **tous** (`projects:all`), comme propriétaire | ✓ | ✓ | ✓ |
-| `DEVELOPER` | ✓ | ceux dont il est membre ; rôle de projet jusqu'à `OWNER` | ✓ | ✓ | |
-| `EDITOR` | ✓ | ceux dont il est membre ; rôle de projet `EDITOR` au plus | | | |
+| Rôle de plateforme | Bibliothèque (`library:manage`) | Projets | `projects:create` | `tokens:personal` | `users:manage` | `audit:read` |
+| --- | :---: | --- | :---: | :---: | :---: | :---: |
+| `ADMIN` | ✓ | **tous** (`projects:all`), comme propriétaire | ✓ | ✓ | ✓ | ✓ |
+| `DEVELOPER` | ✓ | ceux dont il est membre ; rôle de projet jusqu'à `OWNER` | ✓ | ✓ | | |
+| `EDITOR` | ✓ | ceux dont il est membre ; rôle de projet `EDITOR` au plus | | | | |
 
 | Rôle de projet | Portées |
 | --- | --- |
@@ -445,13 +459,16 @@ désarchivage, suppression).
 - **Validation côté serveur** : chaque lecture de session (`/api/_auth/session`) et chaque appel
   protégé (`requireAuth`) vérifient la session en base. Supprimer la session ou désactiver le compte
   (`User.isActive = false`) coupe l'accès immédiatement. Le rôle affiché est relu en base.
-- **API applicative** (étape à venir) : les applications tierces utiliseront des jetons d'accès
-  (`AccessToken`), pas de cookie.
+- **API applicative** (API v1, étape B3) : les applications tierces s'identifient par clé de projet ou
+  jeton personnel (`Authorization: Bearer`, § 9.6), jamais par cookie.
+- **Actions sensibles** : la session retient la dernière saisie du mot de passe (connexion ou
+  confirmation) ; au-delà de 10 minutes, l'API répond 403 `REAUTH_REQUIRED` (§ 9.7).
 
 | Endpoint | Rôle |
 | --- | --- |
 | `POST /api/auth/login` | `{ email, password }` → 200 + cookie · 400 invalide · 401 refusé · 429 trop de tentatives (`Retry-After`) |
 | `POST /api/auth/logout` | ferme la session (cookie + base) |
+| `POST /api/auth/confirm-password` | `{ password }` → 200 `{ verifiedUntil }` · 422 `PASSWORD_INCORRECT` (la session reste ouverte) · 429 après 5 échecs en 15 min |
 | `GET /api/admin/status` | état de l'instance pour les administrateurs (`users:manage`) |
 | `/api/admin/users/*`, `/api/auth/password/*` | gestion des utilisateurs, voir § 9.4 |
 
@@ -462,7 +479,9 @@ export default defineEventHandler(async (event) => {
   const user = await requireAuth(event, 'users:manage')       // permission de plateforme : 401 / 403
   const access = await requireSpaceAccess(event, spaceFor(projectId), 'media:upload') // espace : 404 / 403
   const { media } = await requireMediaAccess(event, () => findMedia(id), 'media:write') // média : 404 / 403
+  await requireRecentPassword(event)                           // action sensible : 403 REAUTH_REQUIRED
   // …
+  await recordAudit(event, { action: 'key.created', projectId, targetType: 'token', targetId, data: { label } })
 })
 ```
 
@@ -533,7 +552,7 @@ toutes les sessions du compte sont fermées.
 
 Une installation sert **une organisation cliente** et tous ses projets. Un projet = une application
 et ses environnements (développement, test, staging, production) : ils partagent ses médias, et
-chaque environnement aura sa propre clé d'API (étape B2). Un environnement qui produit des envois
+chaque environnement a ses propres clés d'API (§ 9.6). Un environnement qui produit des envois
 jetables (tests automatisés) utilise plutôt un projet distinct, alimenté par duplication.
 
 - **Visibilité** : un ADMIN voit tous les projets ; les autres ne voient que ceux dont ils sont
@@ -541,11 +560,12 @@ jetables (tests automatisés) utilise plutôt un projet distinct, alimenté par 
 - **Création** (`projects:create` : ADMIN, DEVELOPER) : nom, identifiant lisible (déduit du nom et
   suffixé `-2`, `-3`… s'il est pris ; saisi et déjà pris → 409 `SLUG_TAKEN`), description. Le
   créateur devient propriétaire.
-- **Membres** (`project:members`) : ajout parmi les comptes actifs non membres, rôle limité par le
-  plafond du rôle de plateforme (422 `ROLE_NOT_ASSIGNABLE`), un projet garde toujours un propriétaire
-  (409 `LAST_OWNER`) ; chacun peut quitter un projet de lui-même.
-- **Archivage** (`project:settings`) : lecture seule (aucun envoi ni modification ; clés d'API refusées
-  à partir de B2), réversible.
+- **Membres** (`project:members` + confirmation récente du mot de passe) : ajout parmi les comptes
+  actifs non membres, rôle limité par le plafond du rôle de plateforme (422 `ROLE_NOT_ASSIGNABLE`), un
+  projet garde toujours un propriétaire (409 `LAST_OWNER`) ; chacun peut quitter un projet de lui-même
+  (sans confirmation).
+- **Archivage** (`project:settings`) : lecture seule (aucun envoi ni modification ; clés et origines
+  non gérables, clés refusées par l'API v1), réversible.
 - **Suppression** : projet archivé uniquement (409 `PROJECT_NOT_ARCHIVED`), confirmation par saisie de
   l'identifiant, avec un choix pour ses médias : **les déplacer vers la bibliothèque** (adresses
   conservées) ou **les supprimer définitivement** (fichiers effacés en tâche de fond). `Media.projectId`
@@ -565,7 +585,86 @@ jetables (tests automatisés) utilise plutôt un projet distinct, alimenté par 
 | `DELETE /api/admin/projects/:id/members/:userId` | `project:members` (ou soi-même) | retrait |
 
 Pages : `/admin/projects` (liste, filtres), `/admin/projects/new`, puis pour chaque projet `Aperçu`
-(résumé, réglages, archivage, suppression), `Médias` et `Membres`.
+(résumé, réglages, archivage, suppression, lien vers le journal pour un ADMIN), `Médias`, `Membres`,
+`Clés d'API` et `Origines autorisées` (ces deux onglets avec `project:credentials`).
+
+### 9.6 Identifiants d'API : clés de projet, jetons personnels, origines
+
+Les applications tierces s'identifieront auprès de l'API v1 (étape B3) avec l'un de ces identifiants,
+créés et gérés dans l'administration. **Aucun identifiant ne gère les accès** : ses portées se limitent
+à `project:read` et `media:*` (jamais membres, clés, origines ni réglages).
+
+| Identifiant | Préfixe | Pour | Portées | Échéance | Affichage |
+| --- | --- | --- | --- | --- | --- |
+| Clé publique d'un projet | `sm_pk_` | un frontend (site, application mobile) | lecture des médias **publics** (fixe) | aucune (révocable) | réaffichable, copiable |
+| Clé secrète d'un projet | `sm_sk_` | un serveur du client, jamais un navigateur | lecture + envoi / modification / suppression au choix | 30 j, 90 j, 1 an (défaut) ou aucune | **une seule fois** |
+| Jeton personnel | `sm_pat_` | scripts, CI, outils d'un utilisateur | lecture + portées au choix, **∩ droits actuels de son propriétaire** | 30, 90 (défaut) ou 365 j, obligatoire | **une seule fois** |
+
+- **Format** : `sm_<type>_` + 32 octets aléatoires en base62 (43 caractères) + CRC32 en base62
+  (6 caractères, calculé sur tout ce qui précède). Le CRC permet de rejeter un identifiant mal formé
+  sans accès à la base et aide les outils de détection de secrets ; la sécurité vient des 256 bits
+  aléatoires. Seule l'empreinte SHA-256 est stockée ; le préfixe lisible (`sm_sk_4fQ9Zt…`) sert à
+  reconnaître l'identifiant. Module pur et testé : `server/lib/access/tokens.ts`.
+- **Clés de projet** (onglet « Clés d'API », portée `project:credentials` : propriétaires et
+  développeurs du projet) : nom, **environnement** (`production`, `staging`, `development`, `test` ou
+  étiquette libre `[a-z0-9-]`), type ; liste groupée par environnement. Elles appartiennent au projet :
+  elles restent actives si leur créateur est désactivé (l'écran le signale).
+- **Renouvellement (rotation)** : nouvelle clé avec les mêmes nom, environnement, portées et durée ;
+  l'ancienne est révoquée tout de suite ou reste valable 1 h, 24 h ou 7 jours (« Remplacée »), le temps
+  de déployer la nouvelle.
+- **Révocation** immédiate ; **suppression** possible seulement une fois révoquée ou expirée
+  (409 `TOKEN_ACTIVE` sinon). Portées immuables : pour en changer, créer un nouvel identifiant.
+- **Jetons personnels** (`/admin/tokens`, permission `tokens:personal` : ADMIN et DEVELOPER) :
+  « tous mes projets » (y compris ceux rejoints plus tard) ou une sélection de projets actifs
+  (422 `PROJECT_UNAVAILABLE` sinon), bibliothèque en option. Chacun ne voit et ne gère que les siens ;
+  supprimer un compte supprime ses jetons, le désactiver les rend inutilisables.
+- **Origines autorisées** (onglet « Origines autorisées », `project:credentials`) : origines exactes
+  `schéma://hôte[:port]` normalisées (minuscules, port par défaut et « / » final retirés) ou joker de
+  sous-domaine `https://*.example.com` (couvre `a.example.com`, jamais `example.com`) ; 100 au plus
+  par projet ; valables pour tous les environnements. Elles serviront au CORS de l'API v1 (B3).
+  Fonctions pures et testées : `shared/utils/origins.ts` (`normalizeOrigin`, `isOriginAllowed`).
+- **Dernière utilisation** (date, IP) : colonnes prêtes, renseignées par l'API v1 (B3).
+
+| Endpoint | Accès | Rôle |
+| --- | --- | --- |
+| `GET /api/admin/projects/:id/keys` | `project:credentials` | clés du projet (sans empreinte ; valeur des seules clés publiques) |
+| `POST /api/admin/projects/:id/keys` | `project:credentials` (+ mot de passe récent pour une clé secrète) | `{ type, name, environment, scopes?, lifetime? }` → 201 `{ key, value }` |
+| `POST /api/admin/projects/:id/keys/:keyId/rotate` | idem | `{ overlap: 'now' \| '1h' \| '24h' \| '7d' }` → 201 `{ key, value }` · 409 `TOKEN_NOT_ACTIVE` / `TOKEN_REPLACED` |
+| `POST /api/admin/projects/:id/keys/:keyId/revoke` | `project:credentials` | 204 · 409 `TOKEN_NOT_ACTIVE` |
+| `DELETE /api/admin/projects/:id/keys/:keyId` | `project:credentials` | 204 · 409 `TOKEN_ACTIVE` |
+| `GET` / `POST /api/admin/projects/:id/origins` | `project:credentials` | liste · `{ origin }` → 201 · 409 `ORIGIN_EXISTS` / `ORIGIN_LIMIT_REACHED` |
+| `DELETE /api/admin/projects/:id/origins/:originId` | `project:credentials` | 204 |
+| `GET /api/admin/tokens` | `tokens:personal` | ses jetons personnels |
+| `POST /api/admin/tokens` | `tokens:personal` + mot de passe récent | `{ name, lifetime, scopes?, allProjects?, projectIds?, includeLibrary? }` → 201 `{ token, value }` |
+| `POST /api/admin/tokens/:id/revoke` · `DELETE /api/admin/tokens/:id` | `tokens:personal` (ses jetons) | 204 · 409 |
+
+Un projet archivé répond 403 `PROJECT_ARCHIVED` sur ses clés et origines.
+
+### 9.7 Confirmation du mot de passe (« mode sudo »)
+
+Créer une clé secrète ou un jeton personnel, renouveler une clé secrète, ajouter un membre, changer
+son rôle ou le retirer exigent une saisie du mot de passe datant de **moins de 10 minutes**
+(`REAUTH_WINDOW_SECONDS`, `shared/utils/auth.ts`) ; la connexion compte comme une saisie
+(`Session.passwordVerifiedAt`). Sinon l'API répond 403 `REAUTH_REQUIRED` : l'interface
+(`useReauth().run(action)` + `<AdminReauthDialog>` dans la mise en page) demande le mot de passe puis
+rejoue l'action ; « Annuler » ou Échap l'abandonnent sans message d'erreur. Côté serveur, appeler
+`requireRecentPassword(event)` **avant** tout effet de bord. Les actions qui retirent des droits
+(révoquer, quitter un projet) ne demandent pas de confirmation.
+
+### 9.8 Journal d'audit (`/admin/audit`, permission `audit:read` : ADMIN)
+
+`recordAudit(event, { action, projectId?, targetType?, targetId?, data })` (`server/utils/audit.ts`)
+enregistre l'auteur (session), l'adresse IP et un libellé lisible de la cible (`data.label`) ; un échec
+d'écriture est journalisé sans faire échouer l'action. La table n'a pas de clés étrangères : les
+entrées survivent aux comptes, projets et identifiants supprimés (affichés « supprimés »). Aucun secret
+n'y est écrit.
+
+Actions (`shared/utils/audit.ts`) : projets (création, modification, archivage, réactivation,
+suppression), membres (ajout, changement de rôle, retrait), clés (création, renouvellement,
+révocation, suppression), jetons personnels, origines, médias (changement de visibilité, déplacement,
+suppression définitive), comptes (création, modification du rôle ou du statut, suppression, lien de
+mot de passe, fermeture des sessions). L'écran filtre par catégorie et par projet (lien « Voir les
+actions sur ce projet » de l'aperçu d'un projet). Pas encore de purge automatique des anciennes entrées.
 
 ## 10. Interface d'administration
 
@@ -676,6 +775,8 @@ pnpm start                          # node --env-file-if-exists=.env .output/ser
 - Le client Prisma est lié au fournisseur choisi : tout changement de fournisseur impose un rebuild.
 - `GET /api/health` : 200 si base, stockage et sharp répondent, 503 sinon (sonde Docker / orchestrateur).
 - Stockage local : sauvegarder `NUXT_MEDIA_STORAGE_ROOT` avec la base (volume persistant en conteneur).
+- Le journal d'audit (`AuditEvent`) n'a pas encore de purge automatique : prévoir un nettoyage des
+  entrées anciennes selon votre politique de conservation.
 - Placer un CDN ou un cache devant `/m/` est possible : les URL publiques sont immuables et la
   diffusion n'utilise pas de cookie. Limite : passer un média public en privé ou le mettre à la
   corbeille n'efface pas les copies déjà en cache (navigateurs, CDN).
@@ -702,6 +803,9 @@ pnpm start                          # node --env-file-if-exists=.env .output/ser
 | Un média = un seul espace (bibliothèque ou projet), réutilisation par duplication | validé à l'étape B1 : pas de partage entre projets, donc aucune règle de modification croisée ; chaque espace garde le contrôle de ses médias |
 | Rôles = ensembles de portées, plafonnés par le rôle de plateforme | un seul moteur (`spaceScopes`), pur et testé, pour les sessions aujourd'hui et les jetons demain |
 | Diffusion `/m/` sans cookie, liens signés v2 (`kid`, droit élargi, échéance alignée) | cachable par un CDN, domaine dédié possible, rotation du secret sans coupure, URL stables pendant 15 min pour l'administration |
+| Identifiants opaques `sm_<type>_…` + CRC32, empreinte SHA-256 (pas de JWT durable, pas d'argon2) | révocation instantanée, rejet des jetons mal formés sans base, repérage par les outils de détection de secrets ; 256 bits d'entropie rendent un hachage lent inutile |
+| « Mode sudo » stocké dans la session en base (`passwordVerifiedAt`) | vérifié côté serveur à chaque action sensible, révocable avec la session ; l'interface rejoue l'action après confirmation |
+| Journal d'audit sans clés étrangères | les entrées survivent aux suppressions (comptes, projets, clés) ; libellé lisible conservé dans `data.label` |
 | **Vitest** 5 (tests des modules purs) | autorisation et signatures : la partie la plus sensible, testée sans serveur ni base |
 | `oxc-transform` forcé en **0.141.0** (`pnpm-workspace.yaml` › `overrides`) | contournement local : le « Contrôle intelligent des applications » de Windows bloque le binaire de la 0.143.0 exigée par Nuxt 3.21 ; hors de la plage déclarée par Nuxt (`^0.143.0`), vérifié par typecheck, dev et build — à retirer dès que possible |
 
@@ -731,6 +835,10 @@ pnpm start                          # node --env-file-if-exists=.env .output/ser
 | Média introuvable (404) juste après sa mise à la corbeille | normal : un média en corbeille n'est plus diffusé (sauf aperçu dans l'administration) |
 | `An Application Control policy has blocked this file` (`…binding-win32-x64-msvc…node`) au lancement de Nuxt | Windows (« Contrôle intelligent des applications ») refuse un module natif non signé : voir l'override `oxc-transform` (§ 13) ; pour un autre paquet, tester une version voisine ou débloquer le fichier côté Windows |
 | Projet introuvable (404) alors qu'il existe | l'utilisateur n'en est pas membre (seuls les ADMIN voient tous les projets) |
+| Une boîte « Confirmez votre mot de passe » s'ouvre | normal : action sensible (clé secrète, jeton personnel, membres) plus de 10 min après la dernière saisie du mot de passe (§ 9.7) |
+| Clé secrète ou jeton personnel perdu | la valeur complète n'est jamais conservée : renouveler la clé (rotation avec recouvrement) ou créer un nouveau jeton, puis révoquer l'ancien |
+| Onglets « Clés d'API » et « Origines autorisées » absents | il faut la portée `project:credentials` (rôle de projet OWNER ou DEVELOPER, jamais un EDITOR de plateforme) et un projet non archivé |
+| `TS2321: Excessive stack depth` sur un appel `$api(…)` passé à une fonction générique (ex. `useReauth().run`) | isoler l'appel dans une fonction nommée (`function createRequest(body) { return $api(…) }`) : son type de retour n'est alors calculé qu'une fois |
 | Image privée cassée dans une page externe après un changement de secret | lien signé avec l'ancien secret : déclarer celui-ci dans `NUXT_MEDIA_PREVIOUS_SIGNING_SECRET` pendant 7 jours |
 
 ---
@@ -926,4 +1034,60 @@ Non vérifié : lecteurs d'écran réels ; MySQL/MariaDB et PostgreSQL réels po
 pnpm install        # Vitest, override oxc-transform
 pnpm db:migrate     # projets, membres, espaces + client Prisma
 pnpm db:init --yes  # facultatif : ajoute NUXT_SITE_URL (http://localhost:3000) au .env
+```
+
+### Étape 6 — 2026-09-29 — Phase B2 : identifiants d'API, mode sudo et journal d'audit
+
+**Cadre** : architecture validée de la phase B (`.claude/architecture-phase-b.md`, § 4, § 12, § 15).
+
+**Ajouté**
+- Migration `b2_credentials` (3 fournisseurs) : `AccessToken` restructuré (`type` PERSONAL / SECRET /
+  PUBLISHABLE, `environment`, `userId`, `allProjects`, `includeLibrary`, `publicValue`, `lastUsedIp`,
+  `replacedById`, `projectId` facultatif), `AccessTokenProject`, `AuditEvent`,
+  `Session.passwordVerifiedAt`. Reprises écrites à la main : anciennes lignes `AccessToken` supprimées
+  (format jamais accepté par une API), `passwordVerifiedAt` des sessions ouvertes = leur connexion.
+- Identifiants opaques `sm_pat_` / `sm_sk_` / `sm_pk_` (base62 + CRC32, empreinte SHA-256, préfixe
+  lisible) ; clés de projet par environnement (création, renouvellement avec recouvrement, révocation,
+  suppression des clés inactives), jetons personnels (projets choisis ou tous, bibliothèque, portées,
+  échéance obligatoire), origines autorisées normalisées avec jokers de sous-domaine (§ 9.6).
+- Confirmation du mot de passe pour les actions sensibles : `POST /api/auth/confirm-password`,
+  `requireRecentPassword`, `useReauth` + `<AdminReauthDialog>` ; appliquée aussi à la gestion des
+  membres (§ 9.7).
+- Journal d'audit : `recordAudit` sur les routes projets, membres, clés, jetons, origines, médias
+  (visibilité, déplacement, suppression définitive) et comptes ; écran `/admin/audit` (permission
+  `audit:read`, filtres catégorie et projet) (§ 9.8).
+- Écrans : onglets « Clés d'API » (`/keys`, `/keys/new`) et « Origines autorisées » d'un projet,
+  `/admin/tokens` et `/admin/tokens/new` (la section « à venir » disparaît), entrée « Journal d'audit »
+  de la barre latérale ; composants `UiCheckboxGroup`, `UiCopyButton`, `AdminSecretPanel`,
+  `AdminScopeList`, `AdminTokenStatusBadge`, `AdminReauthDialog`.
+- Tests Vitest : format des jetons (CRC, altérations), portées, schémas, origines, fenêtre de
+  confirmation (67 tests au total). Configuration `core-start-3100` dans `.claude/launch.json` (build de
+  production sur le port 3100 quand un serveur de dev occupe le 3000).
+
+**Vérifié** : typecheck, 67 tests Vitest, i18n (718 clés), contrastes, migrations (`--check`), build de
+production. 91 scénarios d'API sur la build de production : confirmation du mot de passe (fenêtre de
+10 min, 422, 429, départ sans confirmation), clés (formats, portées, environnement, aucune empreinte ni
+secret renvoyé, 403 / 404 selon le rôle, autre projet), renouvellement (recouvrement, `TOKEN_REPLACED`,
+révocation immédiate), révocation et suppression, origines (normalisation, doublon, joker, 404),
+projet archivé (`PROJECT_ARCHIVED`), jetons personnels (sélection, projet étranger ou archivé, durée,
+portée de gestion refusée, isolement entre comptes), journal (actions, auteurs, libellés, filtres,
+aucun secret) ; 58 scénarios de B1 rejoués sans régression. Interface : création de clés et de jetons
+(validation, focus sur l'erreur), confirmation du mot de passe (erreur, annulation avec Échap sans
+fermer le dialogue parent, reprise de l'action), panneau de la valeur affichée une fois (focus),
+renouvellement, révocation, origines, journal ; axe-core : 0 violation WCAG 2.2 AA sur les pages
+nouvelles ou modifiées (formulaires en erreur, dialogues ouverts, sections repliées ouvertes) en
+fr/en × clair/sombre.
+Non vérifié : lecteurs d'écran réels ; la migration sur PostgreSQL et MySQL/MariaDB réels.
+
+**Limites connues**
+- Les identifiants ne sont pas encore utilisables : l'API v1 (résolution `Bearer`, CORS par projet,
+  dernière utilisation, limitation de débit) arrive en B3.
+- Un ADMIN ne peut pas révoquer les jetons personnels d'un autre compte depuis l'interface (désactiver
+  ou supprimer le compte les coupe).
+- Pas de purge automatique du journal d'audit ; limiteur de confirmation du mot de passe en mémoire.
+
+**Après `git pull`**
+```bash
+pnpm install
+pnpm db:migrate     # identifiants d'API, journal d'audit, mode sudo + client Prisma
 ```

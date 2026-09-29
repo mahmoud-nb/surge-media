@@ -1,8 +1,25 @@
 # Phase B — Projets, médias, jetons d'accès et cache
 
 > **Statut : VALIDÉE — révision 2 (2026-09-29), toutes les décisions D1–D15 confirmées par l'utilisateur.**
-> Référence d'implémentation de la phase B. Avancement : **B1 réalisée** (voir `setup.md`, Journal, étape 5, et
-> `.claude/project-context.md`) ; prochaine sous-étape : **B2**.
+> Référence d'implémentation de la phase B. Avancement : **B1 et B2 réalisées** (voir `setup.md`, Journal,
+> étapes 5 et 6, et `.claude/project-context.md`) ; prochaine sous-étape : **B3** (API v1 en lecture).
+>
+> Écarts et précisions de B2 (identifiants, mode sudo, audit) :
+> - `AccessToken` a en plus `replacedById` (rotation : clé remplaçante, relation `AccessTokenRotation`) ;
+>   `Session` a `passwordVerifiedAt` (mode sudo stocké côté serveur) ; `AuditEvent` a aussi un index
+>   `(actorUserId, at)`. `lastUsedAt`/`lastUsedIp` existent mais ne sont écrits qu'à partir de B3.
+> - Portées d'un identifiant = `TOKEN_BASE_SCOPES` (`project:read`, `media:read`, toujours incluses) +
+>   au choix `media:upload|write|delete` ; clé publique fixée à la base. Le CRC32 couvre préfixe + corps.
+> - Mode sudo (10 min) exigé pour : clé secrète (création, **rotation**), jeton personnel (création),
+>   membres (ajout, rôle, retrait d'autrui ; quitter reste libre). 403 `REAUTH_REQUIRED`,
+>   422 `PASSWORD_INCORRECT` (pas 401), 429 après 5 échecs / 15 min par compte.
+> - Rotation possible aussi pour une clé publique (sans sudo). Suppression d'un identifiant seulement
+>   s'il est révoqué ou expiré (409 `TOKEN_ACTIVE`). Codes : `TOKEN_NOT_ACTIVE`, `TOKEN_REPLACED`,
+>   `PROJECT_UNAVAILABLE`, `ORIGIN_EXISTS`, `ORIGIN_LIMIT_REACHED` (100 origines par projet).
+> - Environnement obligatoire sur les clés (défaut `production`, étiquette libre `[a-z0-9-]`, ≤ 32).
+> - Journal d'audit : écran `/admin/audit` pour l'ADMIN (nouvelle permission de plateforme `audit:read`) ;
+>   pas d'écran « journal du projet » pour les propriétaires (lien filtré depuis l'aperçu, ADMIN seulement).
+> - Un ADMIN ne gère pas les jetons personnels des autres comptes (seulement via désactivation/suppression).
 >
 > Écarts de B1 par rapport à ce document (à connaître pour la suite) :
 > - les **liens signés v2** (§ 4.6 : `kid`, droit élargi, échéance alignée) et `Access-Control-Allow-Origin: *` sur `/m/`
@@ -12,9 +29,9 @@
 >   bibliothèque) ; le PAT (`includeLibrary`) s'appuiera dessus ;
 > - la duplication s'appelle aussi dans l'administration (`POST /api/admin/media/:id/duplicate` et `/move`) ; la route
 >   équivalente de l'API v1 reste prévue en B4 ;
-> - les colonnes `searchTitle/searchName/searchAlt`, `uploadedByTokenId`, `uploadSubject` et les tables de B2–B4
->   (`AccessTokenProject`, `DelegatedTokenUsage`, `CacheRevision`, `AuditEvent`) ne sont **pas** encore créées ;
->   `Project.publicListing` non plus (B3).
+> - les colonnes `searchTitle/searchName/searchAlt`, `uploadedByTokenId`, `uploadSubject` et les tables de B3–B4
+>   (`DelegatedTokenUsage`, `CacheRevision`) ne sont **pas** encore créées ; `Project.publicListing` non plus (B3).
+>   (`AccessTokenProject` et `AuditEvent` ont été créées en B2.)
 
 ## 0. Révision 2 — ce qui a changé après les remarques de l'utilisateur
 
