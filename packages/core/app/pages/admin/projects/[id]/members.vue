@@ -13,6 +13,8 @@ const route = useRoute()
 const { $api } = useNuxtApp()
 const { user: currentUser } = useAuth()
 const flash = useFlash()
+// Gestion des membres : confirmation récente du mot de passe exigée par l'API.
+const reauth = useReauth()
 
 const projectId = computed(() => String(route.params.id))
 const { data: projectData, error: projectLoadError, refresh: refreshProject } = await useApiFetch(() => `/api/admin/projects/${projectId.value}`)
@@ -67,11 +69,14 @@ async function saveRole(member: Member) {
   status.value = null
   savingRole.value = member.user.id
   try {
-    await $api(`/api/admin/projects/${projectId.value}/members/${member.user.id}`, { method: 'PATCH', body: { role } })
+    await reauth.run(async () => {
+      await $api(`/api/admin/projects/${projectId.value}/members/${member.user.id}`, { method: 'PATCH', body: { role } })
+    })
     await reload()
     status.value = { variant: 'success', message: t('projects.members.roleUpdated', { name: displayName(member.user) }) }
   }
   catch (error) {
+    if (isReauthCancelled(error)) return
     roleDrafts[member.user.id] = member.role
     status.value = { variant: 'error', message: errorMessage(error) }
   }
@@ -104,7 +109,9 @@ async function confirmRemove() {
   removeError.value = undefined
   removing.value = true
   try {
-    await $api(`/api/admin/projects/${projectId.value}/members/${member.user.id}`, { method: 'DELETE' })
+    await reauth.run(async () => {
+      await $api(`/api/admin/projects/${projectId.value}/members/${member.user.id}`, { method: 'DELETE' })
+    })
     removeTarget.value = null
     if (member.user.id === currentUser.value?.id) {
       flash.set({ variant: 'success', message: t('projects.members.left', { name: project.value?.name ?? '' }) })
@@ -118,7 +125,7 @@ async function confirmRemove() {
     document.getElementById('members-title')?.focus()
   }
   catch (error) {
-    removeError.value = errorMessage(error)
+    if (!isReauthCancelled(error)) removeError.value = errorMessage(error)
   }
   finally {
     removing.value = false
@@ -169,7 +176,9 @@ async function addCandidate(candidate: Candidate) {
   addStatus.value = null
   adding.value = candidate.id
   try {
-    await $api(`/api/admin/projects/${projectId.value}/members`, { method: 'POST', body: { userId: candidate.id, role } })
+    await reauth.run(async () => {
+      await $api(`/api/admin/projects/${projectId.value}/members`, { method: 'POST', body: { userId: candidate.id, role } })
+    })
     candidates.value = candidates.value.filter(item => item.id !== candidate.id)
     await reload()
     addStatus.value = { variant: 'success', message: t('projects.members.add.added', { name: displayName(candidate) }) }
@@ -178,7 +187,7 @@ async function addCandidate(candidate: Candidate) {
     document.getElementById(resultsId)?.focus()
   }
   catch (error) {
-    addStatus.value = { variant: 'error', message: errorMessage(error) }
+    if (!isReauthCancelled(error)) addStatus.value = { variant: 'error', message: errorMessage(error) }
   }
   finally {
     adding.value = null
@@ -195,7 +204,7 @@ async function addCandidate(candidate: Candidate) {
     </UiAlert>
 
     <template v-else-if="project">
-      <AdminProjectHeader :project="project" />
+      <AdminProjectHeader :project="project" :scopes="projectData?.scopes ?? []" />
 
       <section aria-labelledby="members-title" class="mb-8">
         <h2 id="members-title" tabindex="-1" class="text-lg font-semibold text-foreground">

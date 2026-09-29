@@ -14,5 +14,6 @@ export default defineEventHandler(async (event) => {
 
   const prisma = await usePrisma()
   const { count } = await prisma.session.deleteMany({ where })
+  await recordAudit(event, { action: 'user.sessions_revoked', targetType: 'user', targetId: target.id, data: { label: target.email, count } })
   return { revoked: count }
 })

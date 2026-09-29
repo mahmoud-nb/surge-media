@@ -224,6 +224,7 @@ async function assertNotLastOwner(projectId: string, member: { role: ProjectRole
   if (owners <= 1) throw projectError(409, 'LAST_OWNER')
 }
 
+/** Nouveau rôle d'un membre ; renvoie aussi le rôle précédent (journal d'audit). */
 export async function updateMemberRole(projectId: string, userId: string, role: ProjectRole) {
   const member = await findMemberOr404(projectId, userId)
   assertAssignable(member.user, role)
@@ -234,14 +235,16 @@ export async function updateMemberRole(projectId: string, userId: string, role: 
     data: { role },
     include: { user: MEMBER_USER },
   })
-  return toMemberSummary(updated)
+  return { member: toMemberSummary(updated), previousRole: member.role }
 }
 
-export async function removeMember(projectId: string, userId: string): Promise<void> {
+/** Retire un membre ; renvoie le membre retiré (journal d'audit). */
+export async function removeMember(projectId: string, userId: string) {
   const member = await findMemberOr404(projectId, userId)
   await assertNotLastOwner(projectId, member)
   const prisma = await usePrisma()
   await prisma.projectMember.delete({ where: { projectId_userId: { projectId, userId } } })
+  return toMemberSummary(member)
 }
 
 // ─── Espaces ─────────────────────────────────────────────────────────────────

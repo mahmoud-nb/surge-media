@@ -9,5 +9,7 @@ export default defineEventHandler(async (event) => {
   if (!target.isActive) {
     throw createError({ statusCode: 409, statusMessage: 'User is inactive' })
   }
-  return issuePasswordLink(target, actor.id)
+  const link = await issuePasswordLink(target, actor.id)
+  await recordAudit(event, { action: 'user.password_link', targetType: 'user', targetId: target.id, data: { label: target.email, purpose: link.purpose } })
+  return link
 })
