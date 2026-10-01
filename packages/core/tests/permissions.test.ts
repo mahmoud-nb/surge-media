@@ -46,9 +46,9 @@ describe('permissions de plateforme', () => {
     expect(PERMISSIONS.filter(permission => hasPermission('EDITOR', permission))).toEqual(['library:manage'])
   })
 
-  it('permet au DEVELOPER de créer des projets et des jetons personnels, sans accès global', () => {
+  it('permet au DEVELOPER de créer des projets et des jetons personnels, et de tester l\'API, sans accès global', () => {
     expect(PERMISSIONS.filter(permission => hasPermission('DEVELOPER', permission)))
-      .toEqual(['library:manage', 'projects:create', 'tokens:personal'])
+      .toEqual(['library:manage', 'projects:create', 'tokens:personal', 'api:docs'])
   })
 
   it('refuse tout sans rôle', () => {

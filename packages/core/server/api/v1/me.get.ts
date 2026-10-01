@@ -3,6 +3,23 @@ import { API_CREDENTIAL_TYPES, DELEGATED_TOKEN_PREFIX } from '#shared/utils/api'
 import { defineApiHandler } from '../../lib/api/context'
 import { getProjectState } from '../../lib/projects/state'
 
+defineRouteMeta({
+  openAPI: {
+    'operationId': 'getMe',
+    'tags': ['identity'],
+    'summary': 'Identifiant utilisé',
+    'description': 'Type, nom, préfixe, environnement, portées déclarées et échéance de l\'identifiant ; propriétaire (jeton personnel), projet (clé, jeton délégué) ou sélection de projets (jeton personnel) ; sujet, origine et contraintes d\'un jeton délégué. Répond aussi quand le projet est archivé (diagnostic).',
+    'x-credentials': ['publishable', 'secret', 'personal', 'delegated'],
+    'responses': { 200: { $ref: '#/components/responses/Me' } },
+    'x-i18n': {
+      en: {
+        summary: 'Credential in use',
+        description: 'Type, name, prefix, environment, declared scopes and expiry of the credential; owner (personal token), project (key, delegated token) or project selection (personal token); subject, origin and constraints of a delegated token. Also answers when the project is archived (diagnostics).',
+      },
+    },
+  },
+})
+
 /**
  * GET /api/v1/me — identifiant utilisé : type, nom, préfixe, environnement, portées déclarées,
  * échéance ; propriétaire (jeton personnel), projet (clé, jeton délégué) ou sélection (jeton

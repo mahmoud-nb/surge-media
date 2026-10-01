@@ -132,6 +132,9 @@ pnpm --filter @surge-media/core remove unstorage   # remplacé par Flydrive pour
 pnpm --filter @surge-media/core add -D vitest
 # étape B2 — aucune nouvelle dépendance (CRC32 : node:zlib ; SQLite des scripts de test : node:sqlite)
 # étapes B3, B4 et B5 — aucune nouvelle dépendance
+# étape 10 — documentation interactive de l'API (Scalar, version épinglée)
+pnpm --filter @surge-media/core add @scalar/api-reference@1.72.3
+# vue-demi (dépendance de Scalar) : script d'installation refusé (allowBuilds › vue-demi: false)
 
 # pnpm 12 bloque les scripts d'installation : autoriser les modules natifs nécessaires
 pnpm approve-builds better-sqlite3 esbuild @prisma/engines prisma
@@ -475,11 +478,13 @@ sur la bibliothèque ; le **rôle de projet** (`ProjectMember.role`) donne les d
 **plafonnés** par le rôle de plateforme. Un rôle n'est qu'un ensemble de **portées** : les
 identifiants d'API (§ 9.6) utilisent le même vocabulaire.
 
-| Rôle de plateforme | Bibliothèque (`library:manage`) | Projets | `projects:create` | `tokens:personal` | `users:manage` | `audit:read` |
-| --- | :---: | --- | :---: | :---: | :---: | :---: |
-| `ADMIN` | ✓ | **tous** (`projects:all`), comme propriétaire | ✓ | ✓ | ✓ | ✓ |
-| `DEVELOPER` | ✓ | ceux dont il est membre ; rôle de projet jusqu'à `OWNER` | ✓ | ✓ | | |
-| `EDITOR` | ✓ | ceux dont il est membre ; rôle de projet `EDITOR` au plus | | | | |
+| Rôle de plateforme | Bibliothèque (`library:manage`) | Projets | `projects:create` | `tokens:personal` | `api:docs` | `users:manage` | `audit:read` |
+| --- | :---: | --- | :---: | :---: | :---: | :---: | :---: |
+| `ADMIN` | ✓ | **tous** (`projects:all`), comme propriétaire | ✓ | ✓ | ✓ | ✓ | ✓ |
+| `DEVELOPER` | ✓ | ceux dont il est membre ; rôle de projet jusqu'à `OWNER` | ✓ | ✓ | ✓ | | |
+| `EDITOR` | ✓ | ceux dont il est membre ; rôle de projet `EDITOR` au plus | | | | | |
+
+`api:docs` : documentation interactive de l'API (§ 9.12).
 
 | Rôle de projet | Portées |
 | --- | --- |
@@ -709,8 +714,9 @@ actions sur ce projet » de l'aperçu d'un projet). Pas encore de purge automati
 ### 9.9 API publique v1 (`/api/v1`)
 
 API REST pour les applications du client (sites, applications mobiles, serveurs, scripts), distincte
-de l'administration. Spécification **OpenAPI 3.1** : `GET /api/v1/openapi.json` (publique, générée
-depuis les schémas zod de `shared/schemas/api.ts`) ; catalogue des erreurs : `GET /api/v1/errors`.
+de l'administration. Spécification **OpenAPI 3.1** : `GET /api/v1/openapi.json[?lang=fr|en]` (publique,
+générée depuis le code des routes et les schémas zod, § 9.12) ; catalogue des erreurs : `GET /api/v1/errors`.
+Documentation interactive : `/admin/api` (ADMIN, DEVELOPER).
 L'onglet « Clés d'API » d'un projet affiche son adresse et le lien vers la spécification.
 
 - **Authentification** : `Authorization: Bearer <identifiant>` (§ 9.6), **jamais de cookie** (la
@@ -903,6 +909,67 @@ comme avant) ; `folderId` à l'envoi, au `PATCH` (`null` = hors dossier) et à l
 entre-temps → 404 `FOLDER_NOT_FOUND`, envoi non décompté). Une clé publique peut filtrer par `folder`
 (médias publics, liste publique activée). Dossier d'un autre espace → 404 `FOLDER_NOT_FOUND`.
 
+### 9.12 Documentation interactive de l'API (`/admin/api`, permission `api:docs`)
+
+**Génération de la spécification** (aucun fichier à maintenir à la main) :
+
+1. Chaque route de `server/api/v1/**` décrit son opération avec `defineRouteMeta({ openAPI: { … } })`,
+   en tête de fichier. Nitro l'extrait **à la compilation** (`nitro.experimental.openAPI: true` dans
+   `nuxt.config.ts`) : la méthode et le chemin viennent du nom du fichier.
+2. `GET /api/v1/openapi.json` (`server/api/v1/openapi.json.get.ts`) lit ces métadonnées (module
+   virtuel `#nitro-internal-virtual/server-handlers-meta`) et `server/lib/api/openapi.ts` assemble le
+   document : schémas, corps et paramètres de requête **dérivés des schémas zod** de
+   `shared/schemas/api.ts` (ceux qui valident les requêtes), paramètres de chemin, erreurs groupées par
+   statut avec un exemple RFC 9457 par code, portées et identifiants admis, puis traduction.
+3. Une route sans métadonnées apparaît quand même (a minima) ; toute incohérence (route non décrite,
+   `operationId` en double, code d'erreur inconnu, traduction manquante, référence pendante) est
+   signalée dans la console en développement (`[surge-media] OpenAPI — …`) et fait échouer
+   `tests/openapi.test.ts`, qui lit les vrais fichiers de routes.
+
+Les interfaces intégrées de Nitro (`/_scalar`, `/_swagger`, chargées depuis un CDN) sont désactivées ;
+`/_openapi.json` (toutes les routes, brutes) n'existe qu'en développement.
+
+**Documenter une nouvelle route** : copier le bloc d'une route voisine. **Littéraux seulement** (Nitro
+lit l'objet sans exécuter le fichier : ni variable, ni gabarit `${…}`, ni appel de fonction) :
+
+| Clé de `openAPI` | Rôle |
+| --- | --- |
+| `operationId`, `tags`, `summary`, `description` | standard OpenAPI ; textes en **français** (référence) ; étiquettes : `identity`, `projects`, `media`, `folders`, `delegated-tokens`, `reference` |
+| `x-i18n: { en: { summary, description } }` | traduction anglaise (obligatoire) |
+| `x-scopes`, `x-credentials` | portée(s) exigée(s), types d'identifiants admis (`publishable`, `secret`, `personal`, `delegated`) : ligne « Portée · Identifiants » et `security` générées |
+| `x-query` | paramètres de requête : nom d'un schéma zod déclaré dans `QUERY_SCHEMAS` (`openapi.ts`) |
+| `x-errors` | codes propres à l'opération (catalogue `API_ERRORS`, statut déduit) ; les erreurs d'authentification et de débit sont ajoutées d'office |
+| `requestBody`, `responses` | références aux composants (`#/components/requestBodies/…`, `#/components/responses/…`) définis dans `openapi.ts` |
+| `security: []` | route publique |
+
+Descriptions des champs : `.meta(doc('français', 'English'))` dans `shared/schemas/api.ts`. Les
+extensions `x-*` sont retirées du document servi ; `?lang=en` applique les traductions (français par
+défaut, langue inconnue → français).
+
+**La page** (`app/pages/admin/api.vue`, composant `AdminApiReference`) :
+
+- **Scalar** (`@scalar/api-reference`, composant Vue) **embarqué** dans l'application et chargé à la
+  demande (≈ 3 Mo, uniquement sur cette page) : aucun script tiers ni CDN, agent IA, télémétrie, outils
+  de développement et mémorisation de l'authentification **désactivés** (seul le choix du client des
+  exemples de code est mémorisé dans le navigateur). Langue (fr/en) et thème (clair/sombre) suivent
+  l'administration ; couleurs reprises des jetons (`app/assets/css/scalar.css`, `theme: 'none'`).
+- **Données réelles** (`GET /api/admin/api-docs`) : serveur = cette installation (puis `NUXT_SITE_URL`
+  s'il diffère), projets de l'utilisateur proposés comme exemples de `projectId` (ceux de la clé injectée
+  en premier), exemples de code (curl, JS, Python…) prêts à copier.
+- **Clé injectée** : une **clé publique** valide d'un projet dont l'utilisateur gère les identifiants
+  (choix dans une liste) est placée dans l'en-tête `Authorization` des requêtes d'essai, qui partent du
+  navigateur vers cette installation (même origine, sans CORS). Elle lit les médias publics (liste si le
+  projet l'autorise). Les **clés secrètes et jetons personnels** ne sont jamais relisibles (empreinte
+  seule) et restent **refusés depuis un navigateur** (`SECRET_IN_BROWSER`, garde-fou inchangé) : pour
+  essayer une écriture, saisir un jeton délégué émis par son serveur ; sinon utiliser les exemples de
+  code depuis un terminal.
+- **Variables d'environnement** : fichier `.env` de l'application cliente, par projet et
+  environnement : `SURGE_MEDIA_API_URL`, `SURGE_MEDIA_PROJECT_ID`, `SURGE_MEDIA_PUBLISHABLE_KEY`
+  (valeur réelle), `SURGE_MEDIA_SECRET_KEY` (vide : nom et préfixe de la clé en commentaire). Ce sont
+  des conventions pour les applications clientes, pas des variables du serveur surgeMedia.
+- Mise en page : barre latérale de Scalar à partir de 1280 px seulement (en dessous, recherche
+  ⌘K/Ctrl+K) ; la page fournit le repère `main` de Scalar (`definePageMeta({ providesMain: true })`).
+
 ## 10. Interface d'administration
 
 ### 10.1 Pile et conventions
@@ -975,6 +1042,12 @@ await new Promise((resolve) => {
 ```
 
 À faire pour chaque page, en fr et en, en thème clair et sombre (l'état de l'étape 2 : 0 violation).
+
+Documentation de l'API (`/admin/api`, Scalar) : 0 violation sur la page et la référence ; la fenêtre
+« Tester la requête » de Scalar (code tiers) garde des écarts signalés par axe (éditeurs `combobox` sans
+`aria-expanded`, bouton de menu `role="none"` étiqueté, second `main`, région de notifications
+dupliquée). Un correctif local requalifie les blocs « Code sample » de Scalar en groupes traduits
+(`AdminApiReference`).
 
 ## 11. Multilingue
 
@@ -1061,6 +1134,8 @@ pnpm start                          # node --env-file-if-exists=.env .output/ser
 | Dossiers : arbre chargé en entier (mis en cache par révision), filtre récursif par liste d'identifiants, sans colonne de chemin | portable sur les 3 bases, pas de limite de 191 caractères sur un chemin, un déplacement de dossier ne réécrit aucune ligne de média ; unicité des noms contrôlée par l'application (les bases traitent différemment `NULL` dans les index uniques) |
 | Jetons délégués signés (HMAC, charge lisible), sans état | aucun secret durable dans un navigateur ; vérification sans base ; révoquer l'émetteur suffit ; seul `maxFiles` utilise un compteur en base |
 | File bornée des traitements + pré-génération des aperçus | un pic d'envois ou d'aperçus ne sature ni la mémoire ni le processeur (503 + `Retry-After`) ; premier affichage sans attente |
+| **Scalar** (`@scalar/api-reference`) **1.72.3** épinglé exactement, composant Vue embarqué | documentation interactive dans l'administration : interface reconnue, langues fr/en intégrées, client de requêtes ; épinglé car l'API de configuration évolue vite (agent IA, télémétrie, repères à revérifier à chaque mise à jour) ; embarqué plutôt que chargé d'un CDN (aucun script tiers dans une page authentifiée) |
+| Spécification OpenAPI : `defineRouteMeta` par route + schémas zod | la documentation vit à côté du code de chaque route ; une route ajoutée apparaît d'elle-même ; les schémas qui valident les requêtes décrivent aussi la spécification ; module virtuel de Nitro (`server-handlers-meta`) à revérifier lors du passage à Nitro 3 |
 | **Vitest** 5 (tests des modules purs) | autorisation et signatures : la partie la plus sensible, testée sans serveur ni base |
 | `oxc-transform` forcé en **0.141.0** (`pnpm-workspace.yaml` › `overrides`) | contournement local : le « Contrôle intelligent des applications » de Windows bloque le binaire de la 0.143.0 exigée par Nuxt 3.21 ; hors de la plage déclarée par Nuxt (`^0.143.0`), vérifié par typecheck, dev et build — à retirer dès que possible |
 
@@ -1070,6 +1145,10 @@ pnpm start                          # node --env-file-if-exists=.env .output/ser
 | --- | --- |
 | `ERR_PNPM_IGNORED_BUILDS` | pnpm 12 bloque les scripts d'installation : `pnpm approve-builds <paquet>` (la liste autorisée est dans `pnpm-workspace.yaml` › `allowBuilds`) |
 | Avertissement *unmet peer @nuxt/schema ^4* (via `@nuxt/cli`) | sans effet : la CLI Nuxt est partagée entre Nuxt 3 et 4 |
+| `pnpm start` : *Cannot find native binding* … *An Application Control policy has blocked this file* (`.output/server/node_modules/@node-rs/argon2-win32-x64-msvc`) | Windows « Contrôle intelligent des applications » bloque la **copie** du module natif faite par la build (l'original de `node_modules` reste autorisé). Ne pas désactiver la protection : débloquer le fichier dans les réglages de sécurité Windows si vous le souhaitez, ou tester avec `pnpm dev` |
+| `/admin/api` en dev : *Cannot define property modal, object is not extensible* | deux copies de Vue chargées après la découverte tardive de Scalar par Vite : `vite.optimizeDeps.include` le pré-optimise (`nuxt.config.ts`) ; recharger la page si l'erreur apparaît encore après une mise à jour |
+| Avertissement de build *[vite:css][postcss] Lexical error … (50 - l) * infinity* | syntaxe CSS récente dans la feuille de style de Scalar, non comprise par PostCSS : sans effet (émise telle quelle) |
+| `[surge-media] OpenAPI — …` dans la console (dev) | documentation d'une route incomplète : voir § 9.12 (`defineRouteMeta`, traduction `x-i18n`, codes d'erreur) |
 | `File '../.nuxt/tsconfig.server.json' not found` pendant `prisma generate` | lancer `nuxt prepare` avant `prisma generate` (ordre du `postinstall`) |
 | `File URL path must be absolute` au démarrage (Windows) | ne jamais importer statiquement `server/generated/prisma` dans le code serveur : passer par `await usePrisma()` |
 | `P3019` / fournisseur différent de `migration_lock.toml` | `.env` et schéma désynchronisés : relancer `pnpm db:init` |
@@ -1528,4 +1607,65 @@ Non vérifié : PostgreSQL et MySQL/MariaDB réels (transactions des dossiers).
 ```bash
 pnpm install
 pnpm db:migrate     # aucune migration, régénère seulement le client Prisma
+```
+
+### Étape 10 — 2026-10-01 — Documentation interactive de l'API
+
+**Cadre** : demande de l'utilisateur — page de l'espace connecté documentant l'API de façon interactive,
+générée par OpenAPI depuis le code des routes (Nitro), affichée avec Scalar, avec les vraies valeurs
+(serveur, projets, identifiants, variables d'environnement) et une clé pré-injectée pour tester.
+
+**Ajouté**
+- Génération (§ 9.12) : `nitro.experimental.openAPI` ; `defineRouteMeta` sur les 18 routes de l'API v1
+  (textes français + `x-i18n` anglais, portées, identifiants admis, codes d'erreur) ; assemblage dans
+  `server/lib/api/openapi.ts` (réécrit : composants `parameters`, `requestBodies`, `responses`,
+  `headers` ; erreurs par code avec exemples ; contrôles d'incohérence) ; descriptions des schémas zod
+  bilingues (`doc(fr, en)`) ; `GET /api/v1/openapi.json?lang=fr|en` ; schémas `apiOpenApiQuerySchema`,
+  `apiErrorCatalogSchema` ; bornes « entier sûr » de zod retirées du document. Interfaces CDN de Nitro
+  désactivées.
+- Page `/admin/api` + entrée « Documentation de l'API » de la barre latérale ; permission `api:docs`
+  (ADMIN, DEVELOPER) ; `GET /api/admin/api-docs` (projets, clés valables : valeur des clés publiques,
+  préfixe des clés secrètes — mêmes règles que `GET /api/admin/projects/:id/keys`) ; composant
+  `AdminApiReference` (Scalar embarqué, chargé à la demande) ; clé publique injectée ; exemples de
+  `projectId` ; fichier `.env` par projet et environnement.
+- Jetons de couleur `--code-blue|orange|purple|teal` (méthodes HTTP, coloration du code) vérifiés par
+  `pnpm a11y:contrast` (51 couples) ; `UiButton` accepte `external` ; la mise en page admin accepte
+  `providesMain` (page qui fournit son propre `<main>`).
+- Tests : `tests/openapi.test.ts` (lit les vrais `defineRouteMeta`, 7 tests) remplace l'ancien test
+  OpenAPI ; matrice des permissions mise à jour (120 tests au total).
+
+**Vérifié** : typecheck, 120 tests Vitest, i18n (835 clés), contrastes (51 couples × 2 thèmes),
+migrations (`--check`), build de production (18 opérations extraites par Nitro dans le bundle, aucune
+route `/_openapi.json`, `/_scalar`, `/_swagger` ; Scalar dans un morceau chargé seulement par la
+page). Sur le serveur de développement (la build ne démarre pas sur ce poste, voir Dépannage) :
+28 contrôles HTTP (le 29e, absence de `/_openapi.json`, ne vaut que pour la build : vérifié dans le bundle) — spécification fr/en, langue inconnue, références toutes résolues, extensions
+retirées, CORS ouvert, cache ; contexte : 401 sans session, 403 EDITOR, 200 DEVELOPER, valeur de la clé
+publique, jamais celle d'une clé secrète ; clé injectée depuis la page : liste et `/me` 200, écriture
+refusée ; clé secrète refusée depuis un navigateur, acceptée depuis un serveur). Interface (comptes
+jetables, clics réels) : requête d'essai « Liste des médias » avec la clé injectée → 200 et le média du
+projet ; exemples de code avec l'URL et l'identifiant réels ; aucune requête hors de l'installation
+(250 ressources, une seule origine) ; aucune clé en `localStorage` ; navigation aller-retour sans
+erreur ; axe-core : 0 violation en fr/en × clair/sombre sur la page et la référence.
+Non vérifié : démarrage de la build de production (module natif argon2 bloqué par Windows sur ce poste),
+lecteurs d'écran réels.
+
+**Limites connues**
+- Les clés secrètes et jetons personnels ne peuvent pas être pré-injectés (valeurs jamais relisibles,
+  refusées depuis un navigateur) : la clé injectée est une clé publique (lecture des médias publics).
+  Un « jeton de console » lié à la session a été étudié (voir ci-dessous) puis écarté en attendant une
+  décision, car il assouplit le garde-fou `SECRET_IN_BROWSER`.
+- Fenêtre « Tester la requête » de Scalar : écarts d'accessibilité dans le code de Scalar (§ 10.3).
+- Deux titres `h1` sur la page (le titre de la page et celui de la spécification, rendu par Scalar
+  dans son repère `main`).
+- L'API d'administration (`/api/admin/**`, cookie de session) n'est pas documentée : interne à
+  l'interface, hors contrat public ; la diffusion `/m/…` est décrite dans l'introduction de la
+  spécification, pas comme opération.
+- **En attente de décision** : migration `20261001154517_api_console` (colonne `AccessToken.sessionId`,
+  inutilisée par le code), préparée pour le jeton de console. Si l'option est écartée, la retirer
+  avant le commit (et de la base de développement).
+
+**Après `git pull`**
+```bash
+pnpm install          # @scalar/api-reference
+pnpm db:migrate       # migration api_console (colonne AccessToken.sessionId, voir ci-dessus)
 ```

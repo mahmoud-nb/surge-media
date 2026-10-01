@@ -5,12 +5,14 @@
 > français, avec le « Journal des étapes »). En cas de divergence, **le code fait foi**, puis
 > `setup.md`, puis ce fichier.
 >
-> **État décrit** : commit `e41489b` (B4) + sous-étape **B5** (2026-09-29, non commitée au moment de la
-> rédaction : vérifier `git log`). Étapes terminées : 1 (monorepo, core, base), 2 (UI, auth, rôles),
+> **État décrit** : commit `e9f841e` (B5) + **étape 10** (2026-10-01, documentation interactive de l'API,
+> non commitée au moment de la rédaction : vérifier `git log`). Étapes terminées : 1 (monorepo, core, base), 2 (UI, auth, rôles),
 > 3 (utilisateurs), 4 (médias, phase A), 5 = **B1** (projets, espaces, autorisations), 6 = **B2**
 > (identifiants d'API, origines, mode sudo, journal d'audit), 7 = **B3** (API publique v1 en lecture),
 > 8 = **B4** (API v1 en écriture, jetons délégués `sm_dt_`, file bornée des traitements, pré-génération),
-> 9 = **B5** (dossiers : arborescence, navigation et rangement dans l'admin, API v1). **La phase B est terminée.**
+> 9 = **B5** (dossiers : arborescence, navigation et rangement dans l'admin, API v1), 10 = **documentation
+> interactive de l'API** (OpenAPI généré depuis `defineRouteMeta`, page `/admin/api` avec Scalar, § 9.15).
+> **La phase B est terminée.**
 > **Prochaine étape** : **phase C** — transformations à la demande (architecture § 10), à présenter et faire valider
 > avant de commencer. Architecture de la phase B : `.claude/architecture-phase-b.md` (en-tête = écarts B1 à B5).
 >
@@ -61,6 +63,7 @@
 | zod | 4.6 | schémas partagés app/serveur |
 | citty 0.2, @clack/prompts 1.8, tsdown 0.23, tsx 4 | | CLI |
 | Vitest | 5.0 | tests des modules purs (`packages/core/tests/`, `vitest.config.ts`, alias `#shared`) |
+| @scalar/api-reference | **1.72.3 exact** | documentation interactive (étape 10) ; `vue-demi` (dépendance) : `allowBuilds: false` ; `vite.optimizeDeps.include` |
 | node:sqlite (intégré) | Node 24 | uniquement dans les scripts de test ad hoc (vieillir `Session.passwordVerifiedAt`, nettoyer l'audit) ; avertissement « experimental » |
 | oxc-transform | **0.141.0 forcé** (`pnpm-workspace.yaml` › `overrides`) | Windows Smart App Control bloque le binaire 0.143.0 exigé par Nuxt 3.21 (`^0.143.0`) ; typecheck/dev/build vérifiés ; à retirer dès que possible (l'utilisateur a choisi cette option) |
 
@@ -129,7 +132,10 @@ Couches serveur :
   **ScopeList**, **TokenStatusBadge** (prop `kind: key|token` pour l'accord en français). `UpcomingSection` supprimé en B2.
 - `pages/` : `index` (accueil), `login`, `password/[token]`, `admin/index` (tableau de bord), `admin/users/{index,new,[id]}`,
   `admin/media/{index (bibliothèque),[id]}`, `admin/projects/{index,new}`, `admin/projects/[id]/{index (aperçu, réglages, archivage, suppression),media,members}`,
-  `admin/projects/[id]/keys/{index,new}`, `admin/projects/[id]/origins`, `admin/tokens/{index,new}` (`tokens:personal`), `admin/audit` (`audit:read`).
+  `admin/projects/[id]/keys/{index,new}`, `admin/projects/[id]/origins`, `admin/tokens/{index,new}` (`tokens:personal`), `admin/audit` (`audit:read`),
+  `admin/api` (`api:docs`, étape 10 : documentation interactive, `providesMain`).
+- Étape 10 : `components/admin/ApiReference.client.vue` (Scalar, chargé par `<LazyAdminApiReference>`), `assets/css/scalar.css`
+  (thème Scalar sur nos jetons), `types/page-meta.d.ts` + `providesMain` (la mise en page rend alors `<div id="main">`), `UiButton` prop `external`.
 - `assets/css/main.css` : Tailwind v4, jetons de couleur `:root` / `.dark`, `@theme inline`, focus `outline`, `@utility bg-checker`, reduced-motion.
 
 **server/**
@@ -137,7 +143,8 @@ Couches serveur :
   `api/admin/status.get.ts`, `api/admin/users/**`, `api/admin/media/**` (dont `[id]/duplicate.post.ts`, `[id]/move.post.ts`),
   `api/admin/config/media.get.ts`, `api/admin/spaces.get.ts`, `api/admin/projects/**` (`index.{get,post}`, `[id].{get,patch,delete}`,
   `[id]/members/{index.get,index.post,[userId].patch,[userId].delete}`, `[id]/candidates.get`, `[id]/keys/{index.get,index.post,[keyId].delete,[keyId]/revoke.post,[keyId]/rotate.post}`,
-  `[id]/origins/{index.get,index.post,[originId].delete}`), `api/admin/tokens/{index.get,index.post,[id].delete,[id]/revoke.post}`, `api/admin/audit.get.ts`.
+  `[id]/origins/{index.get,index.post,[originId].delete}`), `api/admin/tokens/{index.get,index.post,[id].delete,[id]/revoke.post}`, `api/admin/audit.get.ts`,
+  `api/admin/api-docs.get.ts` (étape 10).
 - `routes/m/[...path].ts` (diffusion des médias, sans cookie ; Bearer, Range, OPTIONS depuis B3).
 - `api/v1/**` (API publique, § 9.12).
 - `middleware/api-v1.ts` (entrée de l'API v1), `middleware/csrf.ts`.
@@ -154,7 +161,8 @@ Couches serveur :
   CRC, empreinte), **`credentials/service.ts`** (clés, jetons personnels, rotation, révocation, suppression), **`audit/service.ts`** (`listAuditEvents`),
   B3 : **`access/credentials.ts`**, **`api/{context,problem,rate-limit,cursor,queries,serializers,openapi}.ts`**, **`cache/{lru,revisions}.ts`**,
   **`media/{cache,range}.ts`**, **`projects/state.ts`** (§ 9.12) ; B4 : **`access/{principal,delegated}.ts`**, **`api/writes.ts`**,
-  **`media/{processing,variants}.ts`** (dérivés sortis de `delivery.ts`) (§ 9.13) ; B5 : **`folders/service.ts`** (§ 9.14). Les nouveaux modules **importent explicitement** les utilitaires de
+  **`media/{processing,variants}.ts`** (dérivés sortis de `delivery.ts`) (§ 9.13) ; B5 : **`folders/service.ts`** (§ 9.14) ;
+  étape 10 : **`api/docs.ts`** (`docsProjects`), `api/openapi.ts` réécrit (§ 9.15), `server/types/nitro-handlers-meta.d.ts`. Les nouveaux modules **importent explicitement** les utilitaires de
   `#shared/utils/*` (un auto-import non injecté a causé un `ReferenceError` en production, voir § 18).
   Les **types** exportés de `server/utils` (ex. `Space`) s'importent explicitement (`import type { Space } from '../../utils/access'`).
 
@@ -283,11 +291,11 @@ Core : `dev` / `build` / `typecheck` lancent d'abord `prisma generate` ; `build`
 
 Permissions de **plateforme** (`User.role`) :
 
-| Rôle | `library:manage` | `projects:create` | `projects:all` | `tokens:personal` | `users:manage` | `audit:read` (B2) |
-| --- | :---: | :---: | :---: | :---: | :---: | :---: |
-| ADMIN | ✓ | ✓ | ✓ (OWNER implicite partout) | ✓ | ✓ | ✓ |
-| DEVELOPER | ✓ | ✓ | | ✓ | | |
-| EDITOR (défaut, moindre privilège) | ✓ | | | | | |
+| Rôle | `library:manage` | `projects:create` | `projects:all` | `tokens:personal` | `api:docs` (étape 10) | `users:manage` | `audit:read` (B2) |
+| --- | :---: | :---: | :---: | :---: | :---: | :---: | :---: |
+| ADMIN | ✓ | ✓ | ✓ (OWNER implicite partout) | ✓ | ✓ | ✓ | ✓ |
+| DEVELOPER | ✓ | ✓ | | ✓ | ✓ | | |
+| EDITOR (défaut, moindre privilège) | ✓ | | | | | | |
 
 Portées d'**espace** : `media:read|upload|write|delete` (bibliothèque ou projet) et `project:read|credentials|members|settings`.
 - Bibliothèque : `library:manage` → toutes les portées `media:*`.
@@ -304,7 +312,7 @@ Portées d'**espace** : `media:read|upload|write|delete` (bibliothèque ou proje
 - Portées des identifiants d'API (B2) : `TOKEN_SCOPES` = `project:read` + `media:*` ; `TOKEN_BASE_SCOPES` (`project:read`, `media:read`)
   toujours incluses ; `tokenScopes(optionnelles)` rend l'ensemble canonique. Jamais de portée de gestion (membres, clés, réglages).
 - Barre latérale : Tableau de bord (tous), Bibliothèque (`library:manage`), Projets (tous), Jetons personnels (`tokens:personal`),
-  Utilisateurs (`users:manage`), Journal d'audit (`audit:read`).
+  Utilisateurs (`users:manage`), Journal d'audit (`audit:read`), Documentation de l'API (`api:docs`).
 
 ### 7.2 Sessions hybrides (cookie scellé + base)
 
@@ -585,9 +593,7 @@ clé `originals/…` ; nouvelle ligne (version 1, mêmes kind/visibility/origina
 - **Erreurs** (`server/lib/api/problem.ts`) : `ApiProblem(code, { detail, errors, headers })`, `toProblem` (h3 400/404/405/413/415 →
   codes, autre → 500 journalisé), `sendProblem` (`application/problem+json`, `no-store`, `WWW-Authenticate` sur 401), `apiBaseUrl(event)`
   = `NUXT_SITE_URL` ou origine + `/api/v1`. Catalogue : `API_ERRORS` (`shared/utils/api.ts`).
-- **OpenAPI** (`server/lib/api/openapi.ts`) : registre zod local (`Media`, `MediaList`, `Project`, `ProjectList`, `Me`, `SignedUrl`,
-  `Problem`) → `z.toJSONSchema(registry, { uri })`, paramètres de requête dérivés des schémas (`io: 'input'`), `$schema`/`$id` retirés ;
-  document mis en cache par base d'URL.
+- **OpenAPI** : réécrit à l'étape 10 (génération depuis `defineRouteMeta`, bilingue) — voir § 9.15.
 - **Caches** (`server/lib/cache/lru.ts` `createLruCache({ max, ttlMs, now })`, `deleteWhere`) : identités (`access/credentials.ts`,
   `invalidateCredential(hash)` sur révocation/rotation/suppression, `invalidateUserCredentials(userId)` sur PATCH/DELETE d'un compte),
   état des projets (`projects/state.ts`, `invalidateProjectState` sur réglages/archivage/suppression/origines), métadonnées de diffusion
@@ -685,6 +691,42 @@ clé `originals/…` ; nouvelle ligne (version 1, mêmes kind/visibility/origina
   i18n : `folders.*`, `media.selection.*`, `media.filters.recursive`, `media.list.emptyFolder|emptyFilteredFolder`,
   `media.detail.folder|noFolder`, `media.organize.folder`, `validation.folderName`.
 
+### 9.15 Documentation interactive de l'API (étape 10)
+
+- **Génération** : `nitro.experimental.openAPI: true` (+ `openAPI.ui.scalar/swagger: false` ; `/_openapi.json` brut seulement en dev).
+  Chaque route `server/api/v1/**` porte `defineRouteMeta({ openAPI })` **littéral** (Nitro l'analyse sans exécuter : `astToObject` ne
+  connaît que objets, tableaux, littéraux — ni variable, ni gabarit, ni appel). `openapi.json.get.ts` importe `handlersMeta` du module virtuel
+  `#nitro-internal-virtual/server-handlers-meta` (déclaré dans `server/types/nitro-handlers-meta.d.ts`, interne à Nitro 2 : à revérifier en Nitro 3).
+- **`server/lib/api/openapi.ts`** (pur, testé) : `describeApi(routes, serverUrl)` → document français + `x-i18n` + `problems` ;
+  `localize(doc, lang)` applique `x-i18n[lang]` (sauf fr) et retire l'extension partout ; `buildOpenApiDocument(routes, { serverUrl, lang })` ;
+  `openApiProblems(routes)`. Extensions de route : `x-scopes`, `x-credentials` (ligne « **Portée** · **Identifiants** » + `security: [{ bearerAuth: scopes }]`
+  — OpenAPI 3.1 admet des rôles pour http), `x-query` (`QUERY_SCHEMAS` : MediaListQuery, ProjectListQuery, FolderDeleteQuery, OpenApiQuery),
+  `x-errors` (codes → réponses par statut avec exemples RFC 9457 ; d'office TOKEN_*, RATE_LIMITED, + SECRET_IN_BROWSER si secret/personal,
+  ORIGIN_NOT_ALLOWED si publishable/delegated), `x-i18n`. `security: []` = publique. Composants : `schemas` (registre zod + `ErrorCatalog`),
+  `parameters` (projectId, mediaId, folderId), `headers` (ETag, Location, RetryAfter, WWWAuthenticate), `requestBodies` (MediaUpload, FileReplace,
+  MediaUpdate, MediaDuplicate, SignedUrlRequest, DelegatedTokenRequest, FolderCreate, FolderUpdate), `responses` (Me, ProjectList, Project, MediaList,
+  Media, MediaCreated, MediaCopy, FolderList, Folder, FolderCreated, SignedUrl, DelegatedToken, ErrorCatalog, OpenApiDocument, NoContent, NotModified).
+  Étiquettes : id stable + `x-displayName` traduit. Bornes ±2⁵³−1 de zod retirées. Contrôles : route sans méta (listée a minima), operationId
+  manquant/double, étiquette ou code inconnu, `x-query` inconnu, paramètre de chemin non décrit, traduction anglaise manquante (partout,
+  y compris les `.meta(doc(fr, en))` des schémas zod), `$ref` pendante → console en dev, `tests/openapi.test.ts` (lit les vrais fichiers).
+- **`GET /api/v1/openapi.json?lang=fr|en`** : français par défaut (`apiOpenApiQuerySchema`, `.catch`), cache mémoire par (base, langue),
+  `public, max-age=300`, CORS `*` (chemin public du middleware). `OPENAPI_LANGS`, `OPENAPI_DEFAULT_LANG` dans `shared/utils/api.ts`.
+- **`GET /api/admin/api-docs`** (`api:docs`, `no-store`) : `{ apiBaseUrl, specUrl, projects: [{ id, name, slug, keys: null | [{ id, type,
+  name, environment, prefix, publicValue }] }] }` (100 projets actifs au plus ; `keys` si `project:credentials` ; clés valables non remplacées ;
+  `publicValue` seulement pour PUBLISHABLE).
+- **Page `/admin/api`** : spécification chargée par le navigateur dans la langue de l'interface, clonée et enrichie (`components.parameters.projectId.examples`
+  = projets, celui de la clé choisie en premier) ; `servers` = origine de la page + `/api/v1` (puis `apiBaseUrl` s'il diffère) ; clé publique
+  choisie injectée (`authentication.securitySchemes.bearerAuth.token`) ; `.env` (`SURGE_MEDIA_API_URL`, `_PROJECT_ID`, `_PUBLISHABLE_KEY` réelle,
+  `_SECRET_KEY` vide + nom/préfixe en commentaire). `AdminApiReference` : config Scalar `theme: 'none'`, `forceDarkModeState`, `localization.locale`,
+  `withDefaultFonts: false`, `telemetry: false`, `agent.disabled` (sinon activé d'office sur localhost), `mcp.disabled`, `showDeveloperTools: 'never'`,
+  `persistAuth: false`, `showSidebar` seulement ≥ 80rem ; recréé (`:key` = langue, thème, largeur, génération du jeton — jamais la valeur) ;
+  retire `light-mode`/`dark-mode` de `<body>` en partant ; correctif a11y : blocs `[role=region][aria-label="Code sample"]` → `role=group` + libellé
+  traduit (MutationObserver sur `<body>`, nœuds ajoutés). `scalar.css` : variables `--scalar-*` sur `body.light-mode/.dark-mode` (fenêtres de Scalar
+  hors composant), fond de `<body>` rétabli, `--scalar-custom-header-height` 3.5rem sous `lg`.
+- **Écarté (décision de l'utilisateur à prendre)** : « jeton de console » = jeton personnel lié à la session (`AccessToken.sessionId`, cascade),
+  1 h, admis depuis l'origine de l'installation malgré `SECRET_IN_BROWSER`. Le classifieur de sécurité de l'agent a refusé sa création (assouplissement
+  du garde-fou) ; le code a été retiré, **seule la migration `20261001154517_api_console` (colonne inutilisée) reste**, appliquée en dev.
+
 ## 10. Référence des API
 
 Format d'erreur (h3) : `{ statusCode, statusMessage, message, data? }` ; **codes métier dans `data.code`** (lus côté client par
@@ -759,7 +801,8 @@ Format d'erreur (h3) : `{ statusCode, statusMessage, message, data? }` ; **codes
 | POST `/api/v1/projects/:projectId/delegated-tokens` | portées ⊆ émetteur (secret, PAT) | `{ scopes, expiresIn?, subject?, origin?, upload? }` | 201 `{ token, expiresAt, scopes }` (`no-store`) · 400 · 403 · 404 |
 | GET `/api/v1/projects/:projectId/folders` | `media:read`, pas une clé publique | — | `{ items: Folder[] }` · 304 · 403 `CREDENTIAL_NOT_ALLOWED` |
 | POST · PATCH · DELETE `/api/v1/projects/:projectId/folders[/:folderId]` | `media:write` | `{ name, parentId? }` · `{ name?, parentId? }` · `?content=parent` | 201 `Folder` · `Folder` · 204 · 404/409/422 `FOLDER_*` |
-| GET `/api/v1/openapi.json` · `/api/v1/errors` | public | — | spécification OpenAPI 3.1 · catalogue des codes |
+| GET `/api/v1/openapi.json` · `/api/v1/errors` | public | `?lang=fr\|en` (openapi) | spécification OpenAPI 3.1 générée (§ 9.15) · catalogue des codes |
+| GET `/api/admin/api-docs` | `api:docs` | — | `{ apiBaseUrl, specUrl, projects }` (§ 9.15) |
 
 Contrats de données :
 - `SessionUser` : `{ id, email, name, role, locale }` ; session client : `{ user, loggedInAt }`.
@@ -835,9 +878,9 @@ Contrats de données :
 
 - `@nuxtjs/i18n`, stratégie `no_prefix`, cookie `surge-media-locale`, détection navigateur, repli `fr`. `useAppHead` synchronise
   `<html lang dir>`. Sélecteur `AppLocaleSwitcher` (bouton de divulgation, noms des langues dans leur langue, attribut `lang`).
-- Fichiers `i18n/locales/fr.json` (référence) et `en.json` — 799 clés (B5). Espaces de noms : `app, a11y, nav, footer, theme, locale, form,
+- Fichiers `i18n/locales/fr.json` (référence) et `en.json` — 835 clés (étape 10 : `apiDocs.*`, `admin.nav.apiDocs`, `permissions.api.docs`). Espaces de noms : `app, a11y, nav, footer, theme, locale, form,
   validation, auth, common, landing, login, admin, roles, permissions, errors, pagination, users, password, media, projectRoles, space,
-  projects, reauth, scopes, credentials, apiKeys, origins, tokens, audit`. Clés de portées : `scopes.<a>.<b>.{label,short,description}`
+  projects, reauth, scopes, credentials, apiKeys, origins, tokens, audit, apiDocs`. Clés de portées : `scopes.<a>.<b>.{label,short,description}`
   (`scope.replace(':', '.')`) ; statuts accordés : `credentials.status.{key,token}.*` ; actions d'audit : `audit.actions.<catégorie>.<verbe>`.
 - **Aucun texte en dur** (y compris `aria-label`, `title`, `alt`, ponctuation dépendante de la langue : ex. `locale.current`
   « Langue : {name} »). Composants insérés dans une phrase : `<i18n-t keypath scope="global">` avec slot (ex. dates).
@@ -853,12 +896,15 @@ Contrats de données :
 - Cible WCAG 2.2 AA. Lien d'évitement, landmarks (header/nav/main/footer ; en admin le `<header>` englobe la barre latérale),
   un `h1` par page, **hiérarchie de titres continue** (h2 masqué ajouté si besoin), `NuxtRouteAnnouncer`, focus visible par `outline`
   (conservé en contrastes élevés), Échap ferme menus/dialogues et rend le focus, `prefers-reduced-motion`.
-- Jetons (`main.css`) vérifiés par `pnpm a11y:contrast` (30 couples × 2 thèmes : texte ≥ 4.5:1, bordures de champ et focus ≥ 3:1).
+- Jetons (`main.css`) vérifiés par `pnpm a11y:contrast` (51 couples × 2 thèmes depuis l'étape 10 : texte ≥ 4.5:1, bordures de champ et focus ≥ 3:1 ;
+  `--code-blue|orange|purple|teal` + success/destructive/warning sur background/surface/muted pour Scalar).
   Primaire clair `#3b4cc0`, sombre `#8b9cf7` (texte sombre dessus).
 - Procédure d'audit : axe-core 4.13 injecté dans la page (snippet dans `setup.md` § 10.3), exclure `#nuxt-devtools-container` et
   `nuxt-error-overlay` (dev) ; pour chaque page, fr/en × clair/sombre, avec états d'erreur et dialogues ouverts. État actuel :
   **0 violation** sur toutes les pages existantes. Seul « incomplete » connu : contraste dans `<dialog>` (fond semi-transparent, couvert
-  par le script de contrastes).
+  par le script de contrastes). `/admin/api` : 0 violation (page + référence Scalar, fr/en × clair/sombre) ; fenêtre « Tester la requête » de
+  Scalar : écarts dans le code tiers (combobox sans aria-expanded/aria-controls, bouton role=none étiqueté, 2e `main`, région Notifications dupliquée) ;
+  deux `h1` (page + titre de la spécification dans le `main` de Scalar).
 - **Non testé** : lecteurs d'écran réels (NVDA, VoiceOver).
 
 ## 15. CLI `surge-media` (`packages/core/cli/`)
@@ -915,6 +961,9 @@ Contrats de données :
 | SVG exclu, originaux servis tels quels | SVG peut porter du script ; retrait EXIF prévu via les dérivés (phase C) |
 | Recherche : `textSearch` (terme + minuscules) et `mode: 'insensitive'` seulement sous PostgreSQL | portabilité ; SQLite ne gère la casse que pour l'ASCII |
 | `/api/admin/config/media` (et non `/api/admin/media/config`) | inférence des types Nitro |
+| OpenAPI : `defineRouteMeta` littéral par route + composants zod, français + `x-i18n` (étape 10) | doc à côté du code, route nouvelle visible d'office, une seule source de schémas ; langue de référence du projet ; contrôles en test |
+| Scalar embarqué (npm, version exacte) dans `/admin/api`, pas l'UI Nitro (CDN) ni `@scalar/nuxt` | aucun script tiers dans une page authentifiée, accès par permission, données réelles injectées, thème/langue de l'admin |
+| Clé injectée = **clé publique** ; secrets jamais injectés (étape 10) | valeurs des secrets non relisibles ; `SECRET_IN_BROWSER` conservé ; « jeton de console » refusé par le garde-fou de l'agent, en attente de décision |
 
 ## 17. Règles métier et contraintes
 
@@ -1006,6 +1055,14 @@ Contrats de données :
 - Tests d'API : script Node en `scratchpad` (`b1-api-test.mjs` : comptes jetables DEVELOPER/EDITOR créés par invitation puis supprimés,
   identifiants admin lus dans `.env` sans les afficher) ; pour l'interface, cookie de session obtenu par un script puis posé dans le
   navigateur, et **déconnexion** à la fin.
+- **Build de production bloquée sur ce poste (étape 10)** : Smart App Control bloque la **copie** de `argon2.win32-x64-msvc.node` dans
+  `.output/server/node_modules` (l'original de `node_modules`, identique, reste autorisé) → `pnpm start` échoue au démarrage. Ne pas contourner
+  (lien physique, désactivation) : laisser l'utilisateur débloquer ; tester sur le `pnpm dev` de l'utilisateur (port 3000) sans l'arrêter, et
+  vérifier la build statiquement (`grep operationId .output/server/chunks`).
+- **Scalar en dev** : découverte tardive → seconde copie de Vue (« Cannot define property modal, object is not extensible ») ; corrigé par
+  `vite.optimizeDeps.include: ['@scalar/api-reference']`. Scalar écrit le hash d'URL (`#tag/…`) et y revient au rechargement.
+- **Bootstrap admin** : variables `NUXT_BOOTSTRAP_ADMIN_*` **commentées** dans `.env` depuis le 2026-10-01 (le compte ADMIN existe) ; les
+  scripts de test lisent les lignes commentées (regex `^#?\s*NAME=`), sans jamais afficher la valeur.
 - Médias de l'utilisateur à préserver : une photo (« granola », envoyée le 26/09) désormais dans la bibliothèque, et un compte EDITOR
   existant : ne jamais les supprimer dans les nettoyages de tests.
 - Pas d'outil de copie entre stockages, pas de nettoyage des fichiers orphelins ni des liens de mot de passe utilisés.
@@ -1061,6 +1118,9 @@ Contrats de données :
 - Automatisé dans le dépôt depuis B1 : tests unitaires Vitest des modules purs (114 tests depuis B5 : `tests/{permissions,signing,projects,credentials,api,delegated,processing,folders}.test.ts`). Le reste (API, interface, axe) reste manuel
   (piste : tests d'intégration API + Playwright + @axe-core/playwright).
 - Viewport du navigateur intégré : 1024 px (DPR 1,25) ; les mises en page à 5 colonnes doivent attendre `xl`.
+- Étape 10 : `apidocs-test.mjs setup|check|cleanup` (comptes DEVELOPER/EDITOR jetables, projet, clés publique/secrète, média ; 28 contrôles
+  sur le serveur de dev ; nettoyage audit + `CacheRevision`), tests d'interface (requête d'essai réelle, réseau 100 % même origine, axe ×4) ;
+  `tests/openapi.test.ts` (120 tests Vitest au total).
 - B5 : `b5-api-test.mjs` (71 contrôles : administration et API v1 des dossiers, limite de 1 000 insérée en SQL, jeton délégué à dossier
   imposé ; nettoyage) ; `ui-b5.mjs setup|cleanup` (compte ADMIN, projet, dossiers, médias) ; B1 à B4 rejoués.
 - B4 : `b4-api-test.mjs` (94 contrôles : écritures, duplication, jetons délégués — jetons expirés fabriqués avec le secret de `.env`, jamais
@@ -1104,7 +1164,9 @@ et portées, projets et membres, duplication/déplacement, diffusion sans cookie
   restriction des écritures d'un jeton délégué aux médias de son sujet, compteur d'envois restants dans `/me`, révocation individuelle
   (liste de `jti`), journal de l'émission (échantillonné), file des traitements partagée (multi-instances), priorité des tâches de fond.
 - Pistes B3 : cache L2 Redis et limiteurs partagés, `X-Forwarded-For` de confiance, cache serveur des résultats de liste, option « liste
-  publique cachable » (CDN), limitation de débit sur `/m/`, interface de documentation (Swagger UI / Scalar) sur l'OpenAPI.
+  publique cachable » (CDN), limitation de débit sur `/m/` (l'interface de documentation est faite : étape 10).
+- Pistes étape 10 : décision sur le « jeton de console » (ou jeton délégué de test émis par l'admin), opération `/m/` dans la spécification,
+  signaler à Scalar ses écarts d'accessibilité (client de requêtes), `h1` de Scalar, retirer la migration `api_console` si l'option est écartée.
 - Pistes B2 : révocation des jetons d'autrui par un ADMIN (fiche utilisateur), journal par projet pour les propriétaires, purge du journal,
   sudo pour les actions sensibles sur les comptes (liens de mot de passe, rôles), limiteur de confirmation partagé (Redis).
 - Autres pistes notées : commande CLI de secours admin, page « Mon compte », SMTP, copie entre stockages, nettoyage des orphelins,
@@ -1122,6 +1184,10 @@ et portées, projets et membres, duplication/déplacement, diffusion sans cookie
   testé seulement via `prisma dev` (PGlite) jusqu'à l'étape 1, et `db reset` jamais exécuté dessus.
 - **S3 réel** (AWS, R2, MinIO) jamais testé (seulement `s3rver`) ; `MediaStorage.copy` (CopyObject) et la lecture par plage (`Range`) testés seulement en local.
 - Lecteurs d'écran réels jamais testés.
+- **Migration `20261001154517_api_console`** (colonne `AccessToken.sessionId` inutilisée, appliquée en dev) : à garder (jeton de console validé)
+  ou à retirer (supprimer les dossiers de migration, remettre le schéma et l'instantané, puis `ALTER TABLE … DROP COLUMN` et la ligne de
+  `_prisma_migrations` de la base de dev) — décision de l'utilisateur.
+- Démarrage de la build de production de l'étape 10 non vérifié sur ce poste (argon2 bloqué par Smart App Control).
 - **Override `oxc-transform` 0.141.0** hors de la plage de Nuxt 3.21 : fonctionne (typecheck, dev, build), mais à surveiller et retirer.
 - Environnement local actuel (non versionné, indicatif) : compte `admin@surge-media.test` (ADMIN, créé par amorçage ; mot de passe dans
   `packages/core/.env`, variables d'amorçage encore présentes → avertissement au tableau de bord), un compte EDITOR créé par

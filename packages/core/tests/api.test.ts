@@ -1,6 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { decodeCursor, encodeCursor } from '../server/lib/api/cursor'
-import { buildOpenApiDocument } from '../server/lib/api/openapi'
 import { ApiProblem, apiProblem, invalidRequest, problemBody, toProblem } from '../server/lib/api/problem'
 import { createTokenBucketLimiter, rateLimitHeaders } from '../server/lib/api/rate-limit'
 import { etagMatches, mediaEtag, toApiMedia, weakEtag } from '../server/lib/api/serializers'
@@ -292,30 +291,5 @@ describe('problèmes RFC 9457', () => {
     expect(toProblem({ statusCode: 409, data: { code: 'VERSION_CONFLICT' } }).status).toBe(409)
     // Code métier inconnu du catalogue : repli sur le statut HTTP.
     expect(toProblem({ statusCode: 400, data: { code: 'SOMETHING_ELSE' } }).code).toBe('INVALID_REQUEST')
-  })
-})
-
-describe('spécification OpenAPI', () => {
-  it('se génère avec les chemins, la sécurité et les composants', () => {
-    const document = buildOpenApiDocument('https://media.example.com/api/v1')
-    expect(document.openapi).toBe('3.1.0')
-    expect(Object.keys(document.paths)).toEqual([
-      '/me', '/projects', '/projects/{projectId}', '/projects/{projectId}/delegated-tokens', '/projects/{projectId}/folders',
-      '/projects/{projectId}/folders/{folderId}', '/projects/{projectId}/media',
-      '/projects/{projectId}/media/{mediaId}', '/projects/{projectId}/media/{mediaId}/file', '/projects/{projectId}/media/{mediaId}/duplicate',
-      '/projects/{projectId}/media/{mediaId}/signed-url', '/errors',
-    ])
-    expect(Object.keys(document.components.schemas).sort()).toEqual([
-      'DelegatedToken', 'DelegatedTokenClaims', 'Folder', 'FolderList', 'Me', 'Media', 'MediaList', 'Problem', 'Project', 'ProjectList', 'SignedUrl',
-      'UploadConstraints',
-    ])
-    expect(Object.keys(document.paths['/projects/{projectId}/media'])).toEqual(['get', 'post'])
-    expect(Object.keys(document.paths['/projects/{projectId}/media/{mediaId}'])).toEqual(['get', 'patch', 'delete'])
-    const upload = document.paths['/projects/{projectId}/media'].post.requestBody.content['multipart/form-data'].schema
-    expect(upload.required).toEqual(['file'])
-    expect(Object.keys(upload.properties)).toEqual(['file', 'title', 'altText', 'visibility', 'folderId'])
-    const listParameters = document.paths['/projects/{projectId}/media'].get.parameters.map(parameter => parameter.name)
-    expect(listParameters).toEqual(['projectId', 'q', 'kind', 'visibility', 'ids', 'folder', 'recursive', 'sort', 'limit', 'cursor', 'withTotal'])
-    expect(JSON.stringify(document)).not.toContain('"$schema"')
   })
 })

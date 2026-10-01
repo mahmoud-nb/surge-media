@@ -22,6 +22,7 @@ export const PERMISSIONS = [
   'projects:create', // créer des projets (le créateur en devient propriétaire)
   'projects:all', // accès à tous les projets comme propriétaire, sans en être membre
   'tokens:personal', // jetons d'accès personnels
+  'api:docs', // documentation interactive de l'API et jeton de console (requêtes de test)
   'users:manage', // comptes et rôles de plateforme
   'audit:read', // journal d'audit de toute l'installation
 ] as const
@@ -30,7 +31,7 @@ export type Permission = (typeof PERMISSIONS)[number]
 export const ROLE_PERMISSIONS: Record<Role, readonly Permission[]> = {
   ADMIN: PERMISSIONS,
   EDITOR: ['library:manage'],
-  DEVELOPER: ['library:manage', 'projects:create', 'tokens:personal'],
+  DEVELOPER: ['library:manage', 'projects:create', 'tokens:personal', 'api:docs'],
 }
 
 export function hasPermission(role: Role | null | undefined, permission: Permission): boolean {

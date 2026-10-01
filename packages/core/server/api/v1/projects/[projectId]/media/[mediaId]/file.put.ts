@@ -6,6 +6,41 @@ import { withApiUpload } from '../../../../../../lib/api/writes'
 import { replaceMediaFile } from '../../../../../../lib/media/service'
 import { mediaBaseUrl } from '../../../../../../lib/media/urls'
 
+defineRouteMeta({
+  openAPI: {
+    'operationId': 'replaceMediaFile',
+    'tags': ['media'],
+    'summary': 'Remplacer le fichier',
+    'description': 'Identifiant, titre, texte alternatif et visibilité conservés ; version incrémentée, donc nouvelles URL (les anciennes redirigent). Mêmes contrôles que l\'envoi ; un fichier d\'un autre genre est refusé.',
+    'x-scopes': ['media:write'],
+    'x-credentials': ['secret', 'personal', 'delegated'],
+    'x-errors': [
+      'MULTIPART_REQUIRED',
+      'NO_FILE',
+      'UPLOAD_LIMIT_REACHED',
+      'MEDIA_NOT_FOUND',
+      'VERSION_CONFLICT',
+      'FILE_TOO_LARGE',
+      'UNSUPPORTED_TYPE',
+      'UNREADABLE_FILE',
+      'DIMENSIONS_TOO_LARGE',
+      'KIND_MISMATCH',
+      'SERVER_BUSY',
+      'PROJECT_NOT_FOUND',
+      'PROJECT_ARCHIVED',
+      'INSUFFICIENT_SCOPE',
+    ],
+    'requestBody': { $ref: '#/components/requestBodies/FileReplace' },
+    'responses': { 200: { $ref: '#/components/responses/Media' } },
+    'x-i18n': {
+      en: {
+        summary: 'Replace the file',
+        description: 'Id, title, alternative text and visibility are kept; the version is incremented, hence new URLs (old ones redirect). Same checks as an upload; a file of another kind is rejected.',
+      },
+    },
+  },
+})
+
 /**
  * PUT /api/v1/projects/:projectId/media/:mediaId/file — multipart/form-data `file` : remplace le
  * fichier (portée media:write) en gardant l'identifiant, le titre, le texte alternatif et la

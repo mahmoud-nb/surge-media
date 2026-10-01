@@ -52,6 +52,10 @@ const PAIRS: [string, string, number][] = [
   ['warning', 'warning-soft', 4.5],
   ['warning', 'surface', 4.5],
   ['foreground', 'warning-soft', 4.5],
+  // Documentation de l'API (Scalar) : méthodes HTTP et coloration du code sur ses trois fonds.
+  ...['background', 'surface', 'muted'].flatMap(bg =>
+    ['success', 'destructive', 'warning', 'code-blue', 'code-orange', 'code-purple', 'code-teal'].map(fg => [fg, bg, 4.5]),
+  ) as [string, string, number][],
   ['input', 'surface', 3],
   ['input', 'background', 3],
   ['input', 'muted', 3],

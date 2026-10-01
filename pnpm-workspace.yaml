@@ -5,6 +5,8 @@ allowBuilds:
   better-sqlite3: true
   esbuild: true
   prisma: true
+  # vue-demi (dépendance de Scalar) : fichiers Vue 3 déjà publiés, script d'installation inutile
+  vue-demi: false
 # Contournement local (2026-09-29) : le module natif de oxc-transform 0.143.0 (dépendance de
 # Nuxt 3.21) est bloqué par le « Contrôle intelligent des applications » de Windows ; la 0.141.0
 # est acceptée. Hors de la plage déclarée par Nuxt (^0.143.0) : à retirer dès que possible.

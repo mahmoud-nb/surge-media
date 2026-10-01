@@ -23,6 +23,22 @@ export default defineNuxtConfig({
   },
   vite: {
     plugins: [tailwindcss()],
+    // Documentation de l'API (Scalar, chargé à la demande) : pré-optimisé au démarrage du serveur de
+    // développement, sinon sa découverte tardive charge une seconde copie de Vue (erreur au montage).
+    optimizeDeps: { include: ['@scalar/api-reference'] },
+  },
+
+  nitro: {
+    // Documentation de l'API v1 générée depuis le code : chaque route décrit son opération avec
+    // `defineRouteMeta({ openAPI })`, que Nitro extrait à la compilation ; la spécification est
+    // assemblée par GET /api/v1/openapi.json (server/lib/api/openapi.ts) et affichée dans
+    // l'administration (/admin/api). Les interfaces intégrées de Nitro (/_scalar, /_swagger, chargées
+    // depuis un CDN) restent désactivées ; /_openapi.json (toutes les routes) n'existe qu'en développement.
+    experimental: { openAPI: true },
+    openAPI: {
+      meta: { title: 'surgeMedia', version: '1.0.0' },
+      ui: { scalar: false, swagger: false },
+    },
   },
 
   runtimeConfig: {
