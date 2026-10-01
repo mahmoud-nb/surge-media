@@ -37,7 +37,8 @@
     "slugTaken": "Cet identifiant est déjà utilisé par un autre projet.",
     "tokenSpaceRequired": "Choisissez au moins un projet ou la bibliothèque.",
     "environment": "Utilisez uniquement des lettres minuscules non accentuées, des chiffres et des tirets (ex. preview-eu).",
-    "origin": "Saisissez une origine valide : schéma et hôte, sans chemin (ex. https://app.example.com ou https://*.example.com)."
+    "origin": "Saisissez une origine valide : schéma et hôte, sans chemin (ex. https://app.example.com ou https://*.example.com).",
+    "folderName": "Le nom ne peut contenir ni barre oblique ni caractère de contrôle, ni valoir « . » ou « .. »."
   },
   "auth": {
     "logout": "Se déconnecter"
@@ -366,7 +367,9 @@
       "emptyFiltered": "Aucun média ne correspond à ces filtres.",
       "emptyTrash": "La corbeille est vide.",
       "loadError": "Impossible de charger les médias.",
-      "results": "Résultats"
+      "results": "Résultats",
+      "emptyFolder": "Aucun média dans ce dossier.",
+      "emptyFilteredFolder": "Aucun média de ce dossier ne correspond. Cochez « Inclure les sous-dossiers » pour chercher aussi dans les sous-dossiers."
     },
     "filters": {
       "label": "Filtrer les médias",
@@ -384,7 +387,8 @@
       "trash": "Corbeille",
       "apply": "Filtrer",
       "reset": "Réinitialiser",
-      "active": "Médias"
+      "active": "Médias",
+      "recursive": "Inclure les sous-dossiers"
     },
     "upload": {
       "title": "Téléverser des images",
@@ -436,7 +440,9 @@
       "archivedProject": "Le projet de ce média est archivé : il est en lecture seule.",
       "apiUploader": "Une application (API)",
       "credential": "Identifiant d'API",
-      "subject": "Utilisateur de l'application"
+      "subject": "Utilisateur de l'application",
+      "folder": "Dossier",
+      "noFolder": "Aucun (racine)"
     },
     "fields": {
       "title": "Titre",
@@ -481,15 +487,26 @@
     },
     "organize": {
       "title": "Dupliquer ou déplacer",
-      "description": "Dupliquer crée une copie indépendante, avec sa propre adresse. Déplacer change l'espace du média sans changer son adresse.",
+      "description": "Dupliquer crée une copie indépendante, avec sa propre adresse. Déplacer change l'espace ou le dossier du média sans changer son adresse.",
       "target": "Espace cible",
       "current": "{space} (actuel)",
       "duplicate": "Dupliquer",
       "move": "Déplacer",
-      "moveDisabled": "Choisissez un autre espace pour déplacer le média.",
+      "moveDisabled": "Choisissez un autre espace ou un autre dossier pour déplacer le média.",
       "duplicated": "Copie créée dans : {space}.",
       "moved": "Média déplacé vers : {space}.",
-      "noTargets": "Aucun espace ne vous permet d'y ajouter des médias."
+      "noTargets": "Aucun espace ne vous permet d'y ajouter des médias.",
+      "folder": "Dossier cible"
+    },
+    "selection": {
+      "start": "Sélectionner des médias",
+      "done": "Terminer la sélection",
+      "count": "Aucun média sélectionné | 1 média sélectionné | {count} médias sélectionnés",
+      "item": "Sélectionner {name}",
+      "selectPage": "Tout sélectionner sur la page",
+      "target": "Ranger dans",
+      "submit": "Ranger",
+      "moved": "Aucun média rangé. | 1 média rangé dans « {folder} ». | {count} médias rangés dans « {folder} »."
     }
   },
   "projectRoles": {
@@ -1124,5 +1141,73 @@
     "deletedCredential": "Identifiant d'API supprimé",
     "delegated": "Jeton délégué",
     "delegatedSubject": "Jeton délégué, utilisateur {subject}"
+  },
+  "folders": {
+    "title": "Dossiers",
+    "root": "Racine",
+    "breadcrumbLabel": "Emplacement",
+    "listLabel": "Sous-dossiers",
+    "empty": "Aucun sous-dossier.",
+    "mediaCount": "Aucun média | 1 média | {count} médias",
+    "missing": {
+      "title": "Dossier introuvable",
+      "description": "Ce dossier a été supprimé ou n'appartient pas à cet espace.",
+      "back": "Revenir à la racine"
+    },
+    "actions": {
+      "create": "Nouveau dossier",
+      "rename": "Renommer le dossier",
+      "move": "Déplacer le dossier",
+      "delete": "Supprimer le dossier"
+    },
+    "fields": {
+      "name": "Nom du dossier",
+      "nameHint": "100 caractères au plus, sans barre oblique. Deux dossiers voisins ne peuvent pas porter le même nom.",
+      "destination": "Destination"
+    },
+    "create": {
+      "title": "Nouveau dossier",
+      "descriptionRoot": "Le dossier sera créé à la racine.",
+      "descriptionIn": "Le dossier sera créé dans « {name} ».",
+      "submit": "Créer",
+      "created": "Dossier « {name} » créé."
+    },
+    "rename": {
+      "title": "Renommer le dossier",
+      "submit": "Renommer",
+      "renamed": "Dossier renommé : « {name} »."
+    },
+    "move": {
+      "title": "Déplacer le dossier « {name} »",
+      "description": "Le dossier est déplacé avec tout son contenu. Les adresses des médias ne changent pas.",
+      "currentLocation": "{path} (emplacement actuel)",
+      "submit": "Déplacer",
+      "moved": "Dossier « {name} » déplacé dans « {destination} »."
+    },
+    "delete": {
+      "title": "Supprimer le dossier « {name} » ?",
+      "emptyDescription": "Le dossier est vide.",
+      "contentDescription": "Son contenu ({content}) sera déplacé dans « {parent} » avant la suppression.",
+      "submit": "Supprimer",
+      "submitWithContent": "Déplacer le contenu et supprimer",
+      "deleted": "Dossier « {name} » supprimé.",
+      "deletedWithContent": "Dossier « {name} » supprimé ; son contenu est maintenant dans « {parent} »."
+    },
+    "counts": {
+      "media": "aucun média | un média | {count} médias",
+      "folders": "aucun sous-dossier | un sous-dossier | {count} sous-dossiers"
+    },
+    "upload": {
+      "destinationRoot": "Les fichiers seront ajoutés à la racine.",
+      "destinationFolder": "Les fichiers seront ajoutés au dossier « {name} »."
+    },
+    "errors": {
+      "FOLDER_NOT_FOUND": "Ce dossier n'existe plus : rechargez la page.",
+      "FOLDER_NAME_TAKEN": "Un dossier voisin porte déjà ce nom.",
+      "FOLDER_NOT_EMPTY": "Le dossier n'est pas vide.",
+      "FOLDER_DEPTH_EXCEEDED": "Les dossiers ne peuvent pas être imbriqués sur plus de 8 niveaux.",
+      "FOLDER_CYCLE": "Un dossier ne peut pas être déplacé dans lui-même ni dans l'un de ses sous-dossiers.",
+      "FOLDER_LIMIT_REACHED": "Cet espace a atteint la limite de 1 000 dossiers."
+    }
   }
 }

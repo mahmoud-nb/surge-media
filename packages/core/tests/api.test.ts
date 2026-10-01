@@ -223,13 +223,16 @@ describe('paramètres de l\'API', () => {
       .toEqual({ title: 'Affiche', altText: null, visibility: 'private' })
     expect(apiMediaUpdateSchema.parse({ title: null })).toEqual({ title: null })
     expect(apiMediaUpdateSchema.parse({})).toEqual({})
-    for (const body of [{ visibility: 'PRIVATE' }, { title: 'x'.repeat(192) }, { folderId: 'abc' }, { titre: 'x' }]) {
+    for (const body of [{ visibility: 'PRIVATE' }, { title: 'x'.repeat(192) }, { folderId: '../x' }, { titre: 'x' }]) {
       expect(apiMediaUpdateSchema.safeParse(body).success, JSON.stringify(body)).toBe(false)
     }
     expect(toMetadataInput({ title: null, visibility: 'private' })).toEqual({ title: null, visibility: 'PRIVATE' })
     // Visibilité imposée par un jeton délégué : prioritaire sur le champ envoyé.
-    expect(toMetadataInput({ visibility: 'public' }, 'private')).toEqual({ visibility: 'PRIVATE' })
+    expect(toMetadataInput({ visibility: 'public' }, { visibility: 'private' })).toEqual({ visibility: 'PRIVATE' })
     expect(toMetadataInput({})).toEqual({})
+    // Dossier : null = hors dossier ; imposé par un jeton délégué.
+    expect(toMetadataInput({ folderId: null })).toEqual({ folderId: null })
+    expect(toMetadataInput({ folderId: 'cmfolder0001' }, { folderId: 'cmfolder0002' })).toEqual({ folderId: 'cmfolder0002' })
   })
 
   it('duplication : projet ou bibliothèque, un seul à la fois', () => {
@@ -297,20 +300,22 @@ describe('spécification OpenAPI', () => {
     const document = buildOpenApiDocument('https://media.example.com/api/v1')
     expect(document.openapi).toBe('3.1.0')
     expect(Object.keys(document.paths)).toEqual([
-      '/me', '/projects', '/projects/{projectId}', '/projects/{projectId}/delegated-tokens', '/projects/{projectId}/media',
+      '/me', '/projects', '/projects/{projectId}', '/projects/{projectId}/delegated-tokens', '/projects/{projectId}/folders',
+      '/projects/{projectId}/folders/{folderId}', '/projects/{projectId}/media',
       '/projects/{projectId}/media/{mediaId}', '/projects/{projectId}/media/{mediaId}/file', '/projects/{projectId}/media/{mediaId}/duplicate',
       '/projects/{projectId}/media/{mediaId}/signed-url', '/errors',
     ])
     expect(Object.keys(document.components.schemas).sort()).toEqual([
-      'DelegatedToken', 'DelegatedTokenClaims', 'Me', 'Media', 'MediaList', 'Problem', 'Project', 'ProjectList', 'SignedUrl', 'UploadConstraints',
+      'DelegatedToken', 'DelegatedTokenClaims', 'Folder', 'FolderList', 'Me', 'Media', 'MediaList', 'Problem', 'Project', 'ProjectList', 'SignedUrl',
+      'UploadConstraints',
     ])
     expect(Object.keys(document.paths['/projects/{projectId}/media'])).toEqual(['get', 'post'])
     expect(Object.keys(document.paths['/projects/{projectId}/media/{mediaId}'])).toEqual(['get', 'patch', 'delete'])
     const upload = document.paths['/projects/{projectId}/media'].post.requestBody.content['multipart/form-data'].schema
     expect(upload.required).toEqual(['file'])
-    expect(Object.keys(upload.properties)).toEqual(['file', 'title', 'altText', 'visibility'])
+    expect(Object.keys(upload.properties)).toEqual(['file', 'title', 'altText', 'visibility', 'folderId'])
     const listParameters = document.paths['/projects/{projectId}/media'].get.parameters.map(parameter => parameter.name)
-    expect(listParameters).toEqual(['projectId', 'q', 'kind', 'visibility', 'ids', 'sort', 'limit', 'cursor', 'withTotal'])
+    expect(listParameters).toEqual(['projectId', 'q', 'kind', 'visibility', 'ids', 'folder', 'recursive', 'sort', 'limit', 'cursor', 'withTotal'])
     expect(JSON.stringify(document)).not.toContain('"$schema"')
   })
 })

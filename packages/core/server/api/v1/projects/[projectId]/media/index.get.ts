@@ -7,11 +7,12 @@ import { apiLinkExpiry, etagMatches, toApiMedia, weakEtag } from '../../../../..
 import { mediaBaseUrl } from '../../../../../lib/media/urls'
 
 /**
- * GET /api/v1/projects/:projectId/media — ?q&kind&visibility&ids&sort&limit&cursor&withTotal
+ * GET /api/v1/projects/:projectId/media — ?q&kind&visibility&folder&recursive&ids&sort&limit&cursor&withTotal
  * (portée media:read) → { items: Media[], nextCursor, total? }.
  * Clé publique : médias publics seulement, et liste/recherche seulement si le projet a activé la
  * « liste publique » (sinon `ids` uniquement : 403 LISTING_DISABLED).
- * ETag = révision de l'espace + requête + audience + tranche des URL signées : un If-None-Match
+ * `folder` : identifiant ou `root` (+ `recursive` : sous-dossiers compris) ; 404 FOLDER_NOT_FOUND.
+ * ETag = révision de l'espace (médias et dossiers) + requête + audience + tranche des URL signées : un If-None-Match
  * identique répond 304 sans exécuter la requête.
  */
 export default defineApiHandler(async (event, principal) => {

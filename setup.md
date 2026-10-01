@@ -52,8 +52,9 @@ surge-media/
       │  │  │              Switch, PasswordInput, Dialog, Pagination, RadioCards, CheckboxGroup, CopyField,
       │  │  │              CopyButton) → <UiButton>…
       │  │  ├─ app/        briques transverses : logo, lien d'évitement, thème, langue
-      │  │  └─ admin/      barre latérale, en-tête de page, rôle, lien de mot de passe, médias (envoi, carte),
-      │  │                  projet (en-tête à onglets), confirmation du mot de passe, identifiants d'API…
+      │  │  └─ admin/      barre latérale, en-tête de page, rôle, lien de mot de passe, médias (envoi, carte,
+      │  │                  navigation par dossiers, actions sur les dossiers), projet (en-tête à onglets),
+      │  │                  confirmation du mot de passe, identifiants d'API…
       │  ├─ composables/   useAuth(), useApiFetch(), useFormValidation(), useFlash(), useMediaUpload(), useAppHead(),
       │  │                 useAdminSection(), useReauth(), useCredentialLabels()
       │  ├─ plugins/       api.ts ($api : appels de l'administration, gestion des sessions expirées)
@@ -71,6 +72,7 @@ surge-media/
       │  ├─ lib/media/     métier des médias : service, gestionnaires par genre, envoi, signature, diffusion,
       │  │                 dérivés (pré-génération), file bornée des traitements
       │  ├─ lib/projects/  projets, membres, origines autorisées
+      │  ├─ lib/folders/   dossiers d'un espace : arbre (cache par révision), écritures, filtre des listes
       │  ├─ lib/access/    identifiants d'API : format (CRC), résolution, jetons délégués, identité de l'appelant
       │  ├─ lib/credentials/  clés de projet et jetons personnels (création, rotation, révocation)
       │  ├─ lib/audit/     lecture du journal d'audit
@@ -83,7 +85,7 @@ surge-media/
       │  │                 recordAudit(), utilisateurs, liens de mot de passe… (auto-importés)
       │  └─ generated/     client Prisma généré (non versionné)
       ├─ shared/           code partagé app / serveur / CLI : permissions et portées, identifiants, origines,
-      │                    journal d'audit, schémas zod, BDD
+      │                    dossiers (règles de l'arborescence), journal d'audit, schémas zod, BDD
       ├─ prisma/
       │  ├─ schema.prisma
       │  └─ migrations/<fournisseur>/   un historique par fournisseur
@@ -129,7 +131,7 @@ pnpm --filter @surge-media/core remove unstorage   # remplacé par Flydrive pour
 # étape B1 — tests unitaires
 pnpm --filter @surge-media/core add -D vitest
 # étape B2 — aucune nouvelle dépendance (CRC32 : node:zlib ; SQLite des scripts de test : node:sqlite)
-# étapes B3 et B4 — aucune nouvelle dépendance
+# étapes B3, B4 et B5 — aucune nouvelle dépendance
 
 # pnpm 12 bloque les scripts d'installation : autoriser les modules natifs nécessaires
 pnpm approve-builds better-sqlite3 esbuild @prisma/engines prisma
@@ -144,7 +146,7 @@ Depuis la racine :
 | `pnpm dev` | serveur de développement du core |
 | `pnpm build` | build de tous les packages |
 | `pnpm typecheck` | vérification TypeScript (vue-tsc) |
-| `pnpm test` | tests unitaires Vitest (`packages/core/tests/` : rôles et portées, liens signés, projets, identifiants et origines, API v1, jetons délégués, file des traitements) |
+| `pnpm test` | tests unitaires Vitest (`packages/core/tests/` : rôles et portées, liens signés, projets, identifiants et origines, API v1, jetons délégués, file des traitements, dossiers) |
 | `pnpm i18n:check` | cohérence des traductions et des clés utilisées dans le code |
 | `pnpm a11y:contrast` | contrastes WCAG AA des jetons de couleur (clair et sombre) |
 | `pnpm db:init` | configure la base (fournisseur + URL), applique les migrations, génère le secret de session |
@@ -250,7 +252,7 @@ Le fichier `packages/core/.env` est créé par `pnpm db:init` à partir de `.env
 | `AuditEvent` | journal d'audit des actions sensibles (sans clés étrangères : survit aux suppressions ; libellé lisible dans `data.label`) |
 | `DelegatedTokenUsage` | envois consommés par un jeton délégué limité en nombre de fichiers (`jti`, compteur, échéance) ; purgé après échéance |
 | `CacheRevision` | compteur de révision par espace (`project:<id>`, `library`), incrémenté par toute écriture de médias : ETag des listes de l'API |
-| `Folder` | arborescence de dossiers d'un espace (projet, ou bibliothèque si `projectId` est vide) — étape B5 |
+| `Folder` | dossier d'un espace (projet, ou bibliothèque si `projectId` est vide) et son parent ; nom unique parmi les voisins (casse ignorée, contrôlé par l'application), 8 niveaux, 1 000 par espace (§ 9.11) |
 | `Media` | fichier original, dans **un seul espace** (`projectId` vide = bibliothèque) : genre, visibilité publique/privée, clé de stockage opaque, version (incrémentée à chaque remplacement), dimensions, empreinte, alt, corbeille, média d'origine s'il est une copie ; colonnes de recherche normalisées (`searchTitle`, `searchName`, `searchAlt`) ; provenance API (`uploadedByTokenId`, sujet final `uploadSubject`) |
 | `MediaVariant` | dérivé généré à la demande puis conservé (v1 : aperçu ; bientôt crop, resize, format, qualité) |
 
@@ -308,6 +310,8 @@ Ne modifiez jamais une migration déjà publiée.
   **un projet** (§ 9.5). Le réutiliser ailleurs = le **dupliquer** (copie indépendante : nouvel
   identifiant, fichier copié dans le stockage — côté service sous S3 —, métadonnées reprises,
   provenance `duplicatedFromId`). Le **déplacer** change son espace sans changer son adresse.
+- **Dossiers** : dans son espace, un média est rangé dans 0 ou 1 dossier (arborescence de 8 niveaux,
+  § 9.11) ; le changer de dossier ne change pas non plus son adresse.
 
 ### 7.2 Configurer le stockage
 
@@ -422,20 +426,26 @@ manquante **403** (`PROJECT_ARCHIVED` si c'est l'archivage du projet qui la reti
 | `POST /api/admin/media/:id/duplicate` | `media:read` + `media:upload` dans la cible | `{ projectId \| null }` → copie indépendante (201) · 409 `IN_TRASH` |
 | `POST /api/admin/media/:id/move` | `media:delete` + `media:upload` dans la cible | `{ projectId \| null }` → même média, même adresse, autre espace |
 | `GET /api/admin/spaces?scope=media:upload` | session | espaces où l'utilisateur a la portée (cibles de duplication / déplacement) |
+| Dossiers et rangement | `media:read` / `media:write` | § 9.11 (`folder`, `recursive` et `folderId` sur les routes ci-dessus) |
 
 Codes d'erreur (`data.code`, `shared/utils/media.ts`) : `NO_FILE`, `MULTIPART_REQUIRED` (400),
 `FILE_TOO_LARGE` (413), `UNSUPPORTED_TYPE` (415), `UNREADABLE_FILE`, `DIMENSIONS_TOO_LARGE`,
 `KIND_MISMATCH` (422), `VERSION_CONFLICT`, `NOT_IN_TRASH`, `IN_TRASH` (409), `MEDIA_FORBIDDEN`,
-`SIGNATURE_INVALID`, `SIGNATURE_EXPIRED` (403), `SERVER_BUSY` (503).
+`SIGNATURE_INVALID`, `SIGNATURE_EXPIRED` (403), `SERVER_BUSY` (503) ; dossiers (`shared/utils/folders.ts`) :
+`FOLDER_NOT_FOUND` (404), `FOLDER_NAME_TAKEN`, `FOLDER_NOT_EMPTY`, `FOLDER_LIMIT_REACHED` (409),
+`FOLDER_DEPTH_EXCEEDED`, `FOLDER_CYCLE` (422).
 
 ### 7.6 Interface
 
 - `/admin/media` : **bibliothèque** de l'organisation ; `/admin/projects/:id/media` : médias d'un
-  projet. Même composant (`AdminMediaBrowser`) : envoi par bouton ou glisser-déposer (si la portée le
-  permet), progression annoncée aux lecteurs d'écran, filtres dans l'URL, grille, corbeille.
+  projet. Même composant (`AdminMediaBrowser`) : **dossiers** (fil d'Ariane, sous-dossiers, créer,
+  renommer, déplacer, supprimer), envoi par bouton ou glisser-déposer dans le dossier affiché (si la
+  portée le permet), progression annoncée aux lecteurs d'écran, filtres dans l'URL (dont « Inclure les
+  sous-dossiers »), grille, sélection pour ranger plusieurs médias, corbeille.
 - `/admin/media/:id` : fiche d'un média (aperçu, informations dont l'espace et la provenance — compte,
   identifiant d'API, utilisateur de l'application pour un envoi par jeton délégué —, titre, texte alternatif,
-  visibilité, adresse publique ou lien temporaire, remplacement, **dupliquer ou déplacer**, corbeille).
+  visibilité, adresse publique ou lien temporaire, remplacement, **dupliquer ou déplacer** vers un espace
+  et un dossier, corbeille).
   Sans droit d'écriture (ou projet archivé), la fiche passe en lecture seule.
 
 ## 8. Traitement d'images (sharp)
@@ -744,10 +754,12 @@ L'onglet « Clés d'API » d'un projet affiche son adresse et le lien vers la sp
 | `GET /api/v1/projects/:projectId/media/:mediaId` | `media:read` | un média actif (clé publique : public seulement) |
 | `POST /api/v1/projects/:projectId/media/:mediaId/signed-url` | `media:read` (clé secrète, jeton personnel ; jeton délégué : 1 h au plus) | `{ target: 'file' \| 'preset' \| 'derived', preset?, expiresIn? }` → `{ url, query, expiresAt }` |
 | Écritures et jetons délégués | — | § 9.10 |
+| Dossiers | — | § 9.11 |
 
 **Listes** : pagination par **curseur** (opaque, lié au tri ; `sort` = `newest`, `oldest`, `name`,
 `size`), `limit` 1–100 (24 par défaut), `total` seulement avec `withTotal=true`. `ids=a,b,c`
-(100 au plus) renvoie ces médias dans cet ordre (réhydratation d'une sélection). La **recherche** `q`
+(100 au plus) renvoie ces médias dans cet ordre (réhydratation d'une sélection). `folder=<id>|root`
+(+ `recursive=true`) limite la liste à un dossier (§ 9.11). La **recherche** `q`
 porte sur le titre, le nom de fichier et le texte alternatif, **insensible à la casse et aux accents**
 sur les trois bases (colonnes normalisées `Media.search*`, remplies à l'écriture et, pour les médias
 existants, au démarrage par `server/plugins/search-backfill.ts` ; l'administration en profite aussi).
@@ -773,11 +785,11 @@ caches invalidés, aperçu pré-généré). Toutes exigent la portée indiquée 
 
 | Endpoint | Portée | Identifiants | Rôle |
 | --- | --- | --- | --- |
-| `POST /api/v1/projects/:projectId/media` | `media:upload` | clé secrète, jeton personnel, jeton délégué | multipart : `file` + `title?`, `altText?`, `visibility?` (`public` par défaut) → 201 `Media` + `Location` |
-| `PATCH /api/v1/projects/:projectId/media/:mediaId` | `media:write` | idem | `{ title?, altText?, visibility? }` (`null` ou texte vide efface) → `Media` |
+| `POST /api/v1/projects/:projectId/media` | `media:upload` | clé secrète, jeton personnel, jeton délégué | multipart : `file` + `title?`, `altText?`, `visibility?` (`public` par défaut), `folderId?` → 201 `Media` + `Location` |
+| `PATCH /api/v1/projects/:projectId/media/:mediaId` | `media:write` | idem | `{ title?, altText?, visibility?, folderId? }` (`null` ou texte vide efface) → `Media` |
 | `PUT /api/v1/projects/:projectId/media/:mediaId/file` | `media:write` | idem | multipart `file` : nouveau fichier, version + 1 (nouvelles URL) → `Media` |
 | `DELETE /api/v1/projects/:projectId/media/:mediaId` | `media:delete` | idem | corbeille → 204 (restauration et suppression définitive : administration) |
-| `POST /api/v1/projects/:projectId/media/:mediaId/duplicate` | `media:read` ici + `media:upload` dans la cible | clé secrète (son projet), jeton personnel | `{ target?: { projectId } \| { library: true } }` (défaut : le projet du média) → 201 `Media` (`projectId` null = bibliothèque) |
+| `POST /api/v1/projects/:projectId/media/:mediaId/duplicate` | `media:read` ici + `media:upload` dans la cible | clé secrète (son projet), jeton personnel | `{ target?: { projectId } \| { library: true }, folderId? }` (défaut : le projet du média, hors dossier) → 201 `Media` (`projectId` null = bibliothèque) |
 | `POST /api/v1/projects/:projectId/delegated-tokens` | portées ⊆ celles de l'émetteur | clé secrète, jeton personnel | émet un jeton délégué → 201 `{ token, expiresAt, scopes }` |
 
 - **Champs stricts** : un champ inconnu (formulaire ou JSON) → 400 `INVALID_REQUEST` ; visibilité en
@@ -805,7 +817,7 @@ Navigateur                    Serveur du client (sm_sk_…)                 surg
 ```
 
 - Demande : `{ scopes, expiresIn? (60–3600 s, 900 par défaut), subject?, origin?, upload? }`, avec
-  `upload = { maxFiles?, maxSize?, types?, visibility? }` (exige `media:upload` ou `media:write`).
+  `upload = { maxFiles?, maxSize?, types?, visibility?, folderId? }` (exige `media:upload` ou `media:write`).
   Chaque portée doit être détenue **aujourd'hui** par l'émetteur dans ce projet (403
   `INSUFFICIENT_SCOPE` sinon) ; `origin` doit être une origine exacte parmi celles du projet ; l'échéance
   ne dépasse jamais celle de l'émetteur. Émission non journalisée (fréquente) ; les écritures faites avec
@@ -824,8 +836,8 @@ Navigateur                    Serveur du client (sm_sk_…)                 surg
   (`NUXT_API_RATE_LIMIT_DELEGATED`).
 - Contraintes d'envoi, vérifiées côté serveur : `maxFiles` (fichiers acceptés, envois et remplacements ;
   un envoi refusé n'est pas décompté ; 403 `UPLOAD_LIMIT_REACHED` au-delà), `maxSize` (bornée par
-  `NUXT_MEDIA_MAX_UPLOAD_SIZE`), `types` (détectés d'après le contenu), `visibility` imposée aux
-  nouveaux médias.
+  `NUXT_MEDIA_MAX_UPLOAD_SIZE`), `types` (détectés d'après le contenu), `visibility` et `folderId`
+  imposés aux nouveaux médias.
 - Interdit avec un jeton délégué : émettre d'autres jetons, dupliquer (403 `CREDENTIAL_NOT_ALLOWED`),
   lien signé de plus d'une heure (400). Permis : lecture des médias privés du projet s'il a
   `media:read` (URL signées dans les réponses, et `/m/` avec `Authorization: Bearer`).
@@ -839,6 +851,57 @@ curl -X POST -H "Authorization: Bearer $SURGE_MEDIA_SECRET_KEY" -H "Content-Type
   -d '{"scopes":["media:upload"],"subject":"user-42","origin":"https://app.example.com","upload":{"maxFiles":5,"types":["image/jpeg","image/png"],"visibility":"private"}}' \
   "https://media.example.com/api/v1/projects/<projectId>/delegated-tokens"
 ```
+
+### 9.11 Dossiers
+
+Chaque espace (bibliothèque, projet) a son arborescence de dossiers, pour regrouper, filtrer et
+naviguer. Un média est dans **0 ou 1 dossier de son espace** ; changer de dossier ne change jamais
+son adresse. Règles (module pur `shared/utils/folders.ts`, testé) :
+
+- nom de 1 à 100 caractères, sans `/`, `\` ni caractère de contrôle, ni `.` / `..` ; **unique parmi
+  les dossiers voisins, sans tenir compte de la casse** (409 `FOLDER_NAME_TAKEN`) ;
+- **8 niveaux** au plus (422 `FOLDER_DEPTH_EXCEEDED`), jamais déplacé dans lui-même ou l'un de ses
+  sous-dossiers (422 `FOLDER_CYCLE`), **1 000 dossiers** par espace (409 `FOLDER_LIMIT_REACHED`) ;
+- suppression d'un dossier **vide** seulement (409 `FOLDER_NOT_EMPTY`), ou avec `content=parent` :
+  sous-dossiers et médias (corbeille comprise) remontent d'abord dans le dossier parent (409
+  `FOLDER_NAME_TAKEN` si un sous-dossier y trouve un homonyme). Les médias de la corbeille n'empêchent
+  pas la suppression : restaurés, ils reviennent hors dossier ;
+- droits : `media:read` pour lire l'arbre, `media:write` pour créer, renommer, déplacer, supprimer et
+  ranger des médias ; un projet archivé est en lecture seule ;
+- chaque changement d'arbre incrémente la **révision de l'espace** : les ETag des listes (y compris
+  récursives) changent d'eux-mêmes. L'arbre est gardé en mémoire par révision (`server/lib/folders/service.ts`).
+
+**Administration** (`AdminMediaBrowser`) : fil d'Ariane (« Racine › Campagnes › Été 2026 »), sous-dossiers
+avec leur nombre de médias, actions « Nouveau dossier », « Renommer », « Déplacer », « Supprimer »
+(boîtes de dialogue ; suppression avec remontée du contenu proposée si le dossier n'est pas vide), envoi
+dans le dossier affiché, case « Inclure les sous-dossiers », mode **sélection** pour ranger plusieurs
+médias d'un coup. La fiche d'un média indique son dossier et permet de le déplacer vers un autre
+dossier (ou un autre espace et l'un de ses dossiers) ; la duplication choisit aussi le dossier cible.
+
+| Endpoint (administration) | Portée | Rôle |
+| --- | --- | --- |
+| `GET /api/admin/folders?project=` | `media:read` | dossiers de l'espace, à plat, avec le nombre de médias actifs de chacun |
+| `POST /api/admin/folders?project=` | `media:write` | `{ name, parentId? }` → 201 `{ folder }` |
+| `PATCH /api/admin/folders/:id` | `media:write` | `{ name?, parentId? }` (null = racine) → `{ folder }` |
+| `DELETE /api/admin/folders/:id[?content=parent]` | `media:write` | → `{ media, folders }` (éléments remontés) |
+| `PATCH /api/admin/media?project=` | `media:write` | `{ ids (1 à 100), folderId \| null }` : rangement groupé → `{ moved }` |
+| `GET /api/admin/media?…&folder=&recursive=1` | `media:read` | médias du dossier (absent = racine), sous-dossiers compris avec `recursive=1` ; la corbeille ignore le dossier |
+
+`POST /api/admin/media` accepte le champ `folderId`, `PATCH /api/admin/media/:id` `{ folderId }`,
+`…/duplicate` et `…/move` `{ projectId, folderId? }` (dossier de l'espace cible, racine par défaut).
+
+| Endpoint (API v1) | Portée | Rôle |
+| --- | --- | --- |
+| `GET /api/v1/projects/:projectId/folders` | `media:read` (jamais une clé publique : 403 `CREDENTIAL_NOT_ALLOWED`) | `{ items: Folder[] }` à plat (`id`, `parentId`, `name`, dates), ETag → 304 |
+| `POST /api/v1/projects/:projectId/folders` | `media:write` | `{ name, parentId? }` → 201 `Folder` |
+| `PATCH /api/v1/projects/:projectId/folders/:folderId` | `media:write` | `{ name?, parentId? }` → `Folder` |
+| `DELETE /api/v1/projects/:projectId/folders/:folderId[?content=parent]` | `media:write` | → 204 |
+
+Dans l'API v1 : liste des médias `?folder=<id>|root&recursive=true` (sans `folder` : tout le projet,
+comme avant) ; `folderId` à l'envoi, au `PATCH` (`null` = hors dossier) et à la duplication ; contrainte
+`upload.folderId` d'un jeton délégué (dossier **imposé** à ses envois, vérifié à l'émission ; supprimé
+entre-temps → 404 `FOLDER_NOT_FOUND`, envoi non décompté). Une clé publique peut filtrer par `folder`
+(médias publics, liste publique activée). Dossier d'un autre espace → 404 `FOLDER_NOT_FOUND`.
 
 ## 10. Interface d'administration
 
@@ -995,6 +1058,7 @@ pnpm start                          # node --env-file-if-exists=.env .output/ser
 | Caches L1 en mémoire + compteurs de révision en base | ETag de liste → 304 sans requête, invalidation « générationnelle » sans purge ; le cache partagé (Redis) viendra avec le multi-instances |
 | Colonnes de recherche normalisées | recherche insensible aux accents identique sur SQLite, PostgreSQL et MySQL, sans extension |
 | SQLite en WAL | la diffusion et l'API lisent pendant les envois |
+| Dossiers : arbre chargé en entier (mis en cache par révision), filtre récursif par liste d'identifiants, sans colonne de chemin | portable sur les 3 bases, pas de limite de 191 caractères sur un chemin, un déplacement de dossier ne réécrit aucune ligne de média ; unicité des noms contrôlée par l'application (les bases traitent différemment `NULL` dans les index uniques) |
 | Jetons délégués signés (HMAC, charge lisible), sans état | aucun secret durable dans un navigateur ; vérification sans base ; révoquer l'émetteur suffit ; seul `maxFiles` utilise un compteur en base |
 | File bornée des traitements + pré-génération des aperçus | un pic d'envois ou d'aperçus ne sature ni la mémoire ni le processeur (503 + `Retry-After`) ; premier affichage sans attente |
 | **Vitest** 5 (tests des modules purs) | autorisation et signatures : la partie la plus sensible, testée sans serveur ni base |
@@ -1036,6 +1100,10 @@ pnpm start                          # node --env-file-if-exists=.env .output/ser
 | API v1 : 429 pour toutes les requêtes d'une machine | plus de 30 identifiants refusés en une minute depuis cette IP : corriger l'identifiant, attendre la fin de la fenêtre |
 | Adresse en `http://localhost/…` (sans port) dans une page de l'administration | rendu serveur sans `NUXT_SITE_URL` : définir la variable (le plugin `$api` transmet aussi l'hôte d'origine depuis cette étape) |
 | `ReferenceError: X is not defined` au runtime alors que le typecheck passe | auto-import de Nitro non injecté (ex. après un prédicat de type `(x): x is T => (X as …)`) : importer explicitement depuis `#shared/utils/…` |
+| 409 `FOLDER_NOT_EMPTY` à la suppression d'un dossier | il contient des médias ou des sous-dossiers : les ranger ailleurs, ou supprimer avec remontée du contenu (`content=parent`, proposé par l'interface) |
+| 409 `FOLDER_NAME_TAKEN` | un dossier voisin porte déjà ce nom (majuscules et minuscules confondues), y compris lors d'une remontée de contenu |
+| Un média « disparaît » de la liste après un rangement | la liste montre le dossier affiché seulement : cocher « Inclure les sous-dossiers », ou ouvrir le dossier de destination |
+| Recherche sans résultat alors que le média existe | elle porte sur le dossier affiché : cocher « Inclure les sous-dossiers » (depuis la racine : tout l'espace) |
 | API v1 : 403 `UPLOAD_LIMIT_REACHED` | le jeton délégué a atteint son nombre de fichiers (`maxFiles`) : en demander un nouveau à votre serveur |
 | API v1 : 401 `TOKEN_REVOKED` avec un jeton délégué valide | son émetteur a été révoqué, a expiré ou appartient à un compte désactivé : émettre les jetons avec un identifiant actif |
 | API v1 : 403 `INSUFFICIENT_SCOPE` en liste avec un jeton délégué | aucune portée n'est donnée d'office : demander `media:read` à l'émission (en plus de `media:upload`) |
@@ -1405,4 +1473,59 @@ Non vérifié : PostgreSQL et MySQL/MariaDB réels pour la migration ; un vrai b
 ```bash
 pnpm install
 pnpm db:migrate     # provenance des médias, compteur des jetons délégués + client Prisma
+```
+
+### Étape 9 — 2026-09-29 — Phase B5 : dossiers
+
+**Cadre** : architecture validée de la phase B (§ 11 ; décision D11). Aucune migration : les tables
+`Folder` et `Media.folderId` existaient depuis l'étape 1.
+
+**Ajouté**
+- Règles de l'arborescence (`shared/utils/folders.ts`, pur et testé) : noms uniques parmi les voisins
+  (casse ignorée), 8 niveaux, pas de cycle, 1 000 dossiers par espace ; chemins, descendants, ordre
+  d'affichage.
+- Service des dossiers (`server/lib/folders/service.ts`) : arbre en cache par révision de l'espace,
+  création, renommage, déplacement, suppression (vide, ou avec remontée du contenu dans le parent),
+  rangement groupé de médias, filtre des listes (dossier, sous-dossiers compris ou non). Chaque
+  changement incrémente la révision de l'espace (ETag des listes).
+- Administration (§ 9.11) : routes `folders`, filtre `folder`/`recursive` de la médiathèque,
+  rangement groupé (`PATCH /api/admin/media`), `folderId` à l'envoi, à la modification, à la
+  duplication et au déplacement entre espaces.
+- API v1 : `GET/POST /projects/:id/folders`, `PATCH/DELETE /projects/:id/folders/:folderId`,
+  `?folder=<id>|root&recursive=true` sur la liste des médias, `folderId` à l'envoi, au `PATCH` et à la
+  duplication, contrainte `upload.folderId` des jetons délégués ; codes `FOLDER_*` ; OpenAPI à jour.
+- Interface : fil d'Ariane, sous-dossiers avec leur nombre de médias, boîtes de dialogue « Nouveau
+  dossier », « Renommer », « Déplacer », « Supprimer », envoi dans le dossier affiché, case « Inclure
+  les sous-dossiers », mode sélection pour ranger plusieurs médias ; fiche média : dossier affiché,
+  déplacement et duplication vers un espace et un dossier. `UiDialog` accepte `return-focus` (le focus
+  va au titre « Dossiers » après la suppression du dossier affiché).
+- Tests Vitest : arborescence (chemins, descendants, cycles, profondeur, données incohérentes, noms),
+  schémas de l'administration et de l'API (114 tests au total).
+
+**Vérifié** : typecheck, 114 tests Vitest, i18n (799 clés), contrastes, migrations (`--check` : aucun
+changement), build de production. 71 scénarios sur la build de production : création (racine,
+sous-dossier, EDITOR de projet, homonymes, nom invalide, parent d'un autre espace, 9e niveau),
+invisibilité pour un autre compte, envoi dans un dossier, listes (racine, dossier, récursive,
+dossier étranger), nombre de médias, rangement unitaire et groupé, renommage, déplacement (cycle,
+racine, profondeur), suppression (non vide, remontée du contenu, homonyme, vide, corbeille),
+duplication et déplacement entre espaces vers un dossier, limite de 1 000 dossiers ; API v1 (arbre,
+ETag et 304, clé publique refusée, création, droits, champs stricts, cycle, renommage, envoi, filtres
+`folder`/`root`/`recursive`, ETag d'une liste récursive après déplacement d'un dossier, `PATCH`,
+duplication, suppression), jeton délégué à dossier imposé, projet archivé. B1, B2, B3 (97) et B4 (94)
+rejoués sans régression. Interface (clics réels) : création avec erreur d'homonyme puis succès, focus
+et annonces, navigation, rangement groupé, suppression avec remontée, déplacement depuis la fiche,
+dossier introuvable ; axe-core : 0 violation WCAG 2.2 AA en fr/en × clair/sombre (vue d'un dossier,
+mode sélection, boîtes de dialogue, fiche média, bibliothèque).
+Non vérifié : PostgreSQL et MySQL/MariaDB réels (transactions des dossiers).
+
+**Limites connues**
+- Unicité des noms contrôlée par l'application : deux créations simultanées du même nom peuvent passer.
+- Pas de glisser-déposer vers un dossier, pas d'arbre complet dans une barre latérale (fil d'Ariane et
+  sous-dossiers), pas de déplacement d'un dossier vers un autre espace.
+- Les opérations sur les dossiers ne sont pas journalisées (comme la corbeille et les envois).
+
+**Après `git pull`**
+```bash
+pnpm install
+pnpm db:migrate     # aucune migration, régénère seulement le client Prisma
 ```

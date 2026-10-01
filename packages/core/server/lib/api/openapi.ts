@@ -3,6 +3,11 @@ import {
   apiDelegatedTokenBodySchema,
   apiDelegatedTokenSchema,
   apiDuplicateBodySchema,
+  apiFolderCreateSchema,
+  apiFolderDeleteQuerySchema,
+  apiFolderListSchema,
+  apiFolderSchema,
+  apiFolderUpdateSchema,
   apiMediaListQuerySchema,
   apiMediaListSchema,
   apiMediaSchema,
@@ -54,11 +59,11 @@ const ERRORS = {
   400: problem('Paramètres invalides (INVALID_REQUEST, INVALID_CURSOR).'),
   401: problem('Identifiant absent, invalide, expiré ou révoqué (TOKEN_*).'),
   403: problem('Portée insuffisante, origine refusée, secret utilisé depuis un navigateur, projet archivé…'),
-  404: problem('Projet ou média introuvable ou hors du périmètre de l\'identifiant.'),
-  409: problem('Fichier remplacé entre-temps par une autre requête (VERSION_CONFLICT).'),
+  404: problem('Projet, média ou dossier introuvable ou hors du périmètre de l\'identifiant.'),
+  409: problem('Conflit : fichier remplacé entre-temps (VERSION_CONFLICT), nom de dossier déjà pris (FOLDER_NAME_TAKEN), dossier non vide (FOLDER_NOT_EMPTY), trop de dossiers (FOLDER_LIMIT_REACHED).'),
   413: problem('Fichier trop volumineux (FILE_TOO_LARGE).'),
   415: problem('Type de fichier non accepté, détecté d\'après le contenu (UNSUPPORTED_TYPE).'),
-  422: problem('Fichier illisible, image trop grande ou d\'un autre genre (UNREADABLE_FILE, DIMENSIONS_TOO_LARGE, KIND_MISMATCH).'),
+  422: problem('Fichier illisible, image trop grande ou d\'un autre genre (UNREADABLE_FILE, DIMENSIONS_TOO_LARGE, KIND_MISMATCH) ; arborescence invalide (FOLDER_DEPTH_EXCEEDED, FOLDER_CYCLE).'),
   429: problem('Trop de requêtes (en-têtes RateLimit, Retry-After).'),
   503: problem('Serveur occupé par d\'autres traitements (SERVER_BUSY, Retry-After).'),
 }
@@ -89,6 +94,8 @@ export function buildOpenApiDocument(serverUrl: string) {
   const registry = z.registry<{ id: string }>()
   registry.add(apiMediaSchema, { id: 'Media' })
   registry.add(apiMediaListSchema, { id: 'MediaList' })
+  registry.add(apiFolderSchema, { id: 'Folder' })
+  registry.add(apiFolderListSchema, { id: 'FolderList' })
   registry.add(apiProjectSchema, { id: 'Project' })
   registry.add(apiProjectListSchema, { id: 'ProjectList' })
   registry.add(apiMeSchema, { id: 'Me' })
@@ -101,6 +108,7 @@ export function buildOpenApiDocument(serverUrl: string) {
 
   const projectId = pathParam('projectId', 'Identifiant du projet.')
   const mediaId = pathParam('mediaId', 'Identifiant du média.')
+  const folderId = pathParam('folderId', 'Identifiant du dossier.')
   const notModified = { description: 'Inchangé depuis l\'ETag fourni (If-None-Match).' }
   const jsonBody = (schema: z.ZodType, required = true) => ({ required, content: { 'application/json': { schema: inputSchema(schema) } } })
   const mediaResponse = (description: string) => ({ description, content: json('Media') })
@@ -119,7 +127,7 @@ export function buildOpenApiDocument(serverUrl: string) {
     },
     servers: [{ url: serverUrl }],
     security: [{ bearerAuth: [] }],
-    tags: [{ name: 'Identité' }, { name: 'Projets' }, { name: 'Médias' }, { name: 'Jetons délégués' }],
+    tags: [{ name: 'Identité' }, { name: 'Projets' }, { name: 'Médias' }, { name: 'Dossiers' }, { name: 'Jetons délégués' }],
     paths: {
       '/me': {
         get: { tags: ['Identité'], summary: 'Identifiant utilisé', operationId: 'getMe', responses: { 200: { description: 'Identifiant', content: json('Me') }, ...errors(401, 429) } },
@@ -151,6 +159,44 @@ export function buildOpenApiDocument(serverUrl: string) {
           parameters: [projectId],
           requestBody: jsonBody(apiDelegatedTokenBodySchema),
           responses: { 201: { description: 'Jeton délégué', content: json('DelegatedToken') }, ...errors(400, 401, 403, 404, 429) },
+        },
+      },
+      '/projects/{projectId}/folders': {
+        get: {
+          tags: ['Dossiers'],
+          summary: 'Arborescence des dossiers',
+          description: 'Portée `media:read` ; pas avec une clé publique. Tous les dossiers du projet, à plat (arbre par `parentId`). ETag → 304.',
+          operationId: 'listFolders',
+          parameters: [projectId],
+          responses: { 200: { description: 'Dossiers', content: json('FolderList') }, 304: notModified, ...errors(401, 403, 404, 429) },
+        },
+        post: {
+          tags: ['Dossiers'],
+          summary: 'Créer un dossier',
+          description: 'Portée `media:write`. Nom unique parmi les dossiers frères (sans tenir compte de la casse), 8 niveaux au plus.',
+          operationId: 'createFolder',
+          parameters: [projectId],
+          requestBody: jsonBody(apiFolderCreateSchema),
+          responses: { 201: { description: 'Dossier créé', content: json('Folder') }, ...errors(400, 401, 403, 404, 409, 422, 429) },
+        },
+      },
+      '/projects/{projectId}/folders/{folderId}': {
+        patch: {
+          tags: ['Dossiers'],
+          summary: 'Renommer ou déplacer un dossier',
+          description: 'Portée `media:write`. `parentId: null` : à la racine. Jamais dans lui-même ou un de ses sous-dossiers.',
+          operationId: 'updateFolder',
+          parameters: [projectId, folderId],
+          requestBody: jsonBody(apiFolderUpdateSchema),
+          responses: { 200: { description: 'Dossier modifié', content: json('Folder') }, ...errors(400, 401, 403, 404, 409, 422, 429) },
+        },
+        delete: {
+          tags: ['Dossiers'],
+          summary: 'Supprimer un dossier',
+          description: 'Portée `media:write`. Dossier vide, ou `content=parent` pour remonter d\'abord son contenu dans le dossier parent.',
+          operationId: 'deleteFolder',
+          parameters: [projectId, folderId, ...queryParameters(apiFolderDeleteQuerySchema)],
+          responses: { 204: { description: 'Dossier supprimé' }, ...errors(400, 401, 403, 404, 409, 429) },
         },
       },
       '/projects/{projectId}/media': {

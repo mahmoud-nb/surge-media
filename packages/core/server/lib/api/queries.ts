@@ -4,6 +4,7 @@ import { credentialScopes, hasPermission, spaceScopes, type TokenScope } from '#
 import { normalizeSearchText } from '#shared/utils/search'
 import type { Media, Prisma } from '../../generated/prisma/client'
 import { type Principal, principalProjectScopes } from '../access/principal'
+import { folderWhere } from '../folders/service'
 import { getProjectState } from '../projects/state'
 import { type Cursor, decodeCursor, encodeCursor } from './cursor'
 import { apiProblem } from './problem'
@@ -11,8 +12,8 @@ import type { ApiProjectSource } from './serializers'
 
 /**
  * Lectures de l'API v1. Les requêtes partent toujours du périmètre imposé par le serveur (projet de
- * l'URL, hors corbeille, médias publics pour une clé publique) ; les filtres demandés s'y ajoutent
- * (ET), jamais ne s'y substituent. Pagination par curseur (keyset) sur (champ de tri, id).
+ * l'URL, hors corbeille, médias publics pour une clé publique) ; les filtres demandés (dont le
+ * dossier) s'y ajoutent (ET), jamais ne s'y substituent. Pagination par curseur (keyset) sur (champ de tri, id).
  */
 
 const SORTS: Record<ApiMediaSort, { field: 'createdAt' | 'originalName' | 'size', direction: 'asc' | 'desc' }> = {
@@ -63,6 +64,8 @@ export async function listApiMedia(projectId: string, query: ApiMediaListQuery, 
     base.visibility = query.visibility.toUpperCase() as Media['visibility']
   }
   if (query.kind) base.kind = query.kind.toUpperCase() as Media['kind']
+  // Dossier (et descendants si récursif) ; 404 FOLDER_NOT_FOUND pour un dossier d'un autre espace.
+  if (query.folder) Object.assign(base, await folderWhere({ type: 'project', id: projectId }, query.folder === 'root' ? null : query.folder, Boolean(query.recursive)))
 
   const prisma = await usePrisma()
 

@@ -12,11 +12,14 @@
  *   </UiDialog>
  *
  * Pour une action destructive, placez `autofocus` sur le bouton d'annulation.
+ * `return-focus=false` (évalué à la fermeture) : l'appelant place lui-même le focus, par exemple
+ * quand l'action a changé le sens du bouton d'ouverture.
  */
-const props = defineProps<{
+const props = withDefaults(defineProps<{
   title: string
   description?: string
-}>()
+  returnFocus?: boolean
+}>(), { returnFocus: true })
 
 const open = defineModel<boolean>('open', { default: false })
 const dialog = useTemplateRef<HTMLDialogElement>('dialog')
@@ -39,7 +42,7 @@ watch(open, (value) => {
 /** Fermeture (bouton, Échap ou close()) : synchronise l'état et rend le focus. */
 function onClose() {
   open.value = false
-  opener?.focus()
+  if (props.returnFocus) opener?.focus()
   opener = null
 }
 </script>

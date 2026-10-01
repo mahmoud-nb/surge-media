@@ -24,6 +24,8 @@ const props = withDefaults(defineProps<{
   multiple?: boolean
   /** Choix de la visibilité des fichiers envoyés (création uniquement). */
   withVisibility?: boolean
+  /** Champs ajoutés à chaque envoi (ex. dossier de destination). */
+  fields?: Record<string, string>
 }>(), {
   endpoint: '/api/admin/media',
   method: 'POST',
@@ -72,7 +74,7 @@ async function enqueue(files: File[]) {
     }
     item.status = 'uploading'
     try {
-      const fields: Record<string, string> = props.withVisibility ? { visibility: visibility.value } : {}
+      const fields: Record<string, string> = { ...props.fields, ...(props.withVisibility ? { visibility: visibility.value } : {}) }
       const result = await send(props.endpoint, file, fields, { method: props.method, onProgress: percent => (item.progress = percent) })
       if (result.status >= 200 && result.status < 300) {
         Object.assign(item, { status: 'done', progress: 100 })

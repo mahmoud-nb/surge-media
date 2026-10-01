@@ -46,7 +46,14 @@ const spaceLabel = computed(() => (project.value ? t('space.project', { name: pr
 
 /** Liste d'où l'on vient : médias du projet ou bibliothèque (corbeille le cas échéant). */
 const listPath = computed(() => (project.value ? `/admin/projects/${project.value.id}/media` : '/admin/media'))
-const backLink = computed(() => (inTrash.value ? { path: listPath.value, query: { status: 'trash' } } : listPath.value))
+const backLink = computed(() => (inTrash.value
+  ? { path: listPath.value, query: { status: 'trash' } }
+  : { path: listPath.value, query: { folder: media.value?.folderId ?? undefined } }))
+
+// Dossiers de l'espace du média (dossier affiché dans les informations, choix de rangement).
+const { data: spaceFolders } = await useApiFetch('/api/admin/folders', { query: computed(() => ({ project: project.value?.id })) })
+const spaceFolderIndex = computed(() => indexFolders(spaceFolders.value?.folders ?? []))
+const folderPath = computed(() => (media.value?.folderId ? folderPathLabel(spaceFolderIndex.value, media.value.folderId) : ''))
 
 // Barre latérale : la fiche d'un média de projet relève de la section Projets.
 const section = useAdminSection()
@@ -204,28 +211,64 @@ const targetOptions = computed(() => (targets.value?.spaces ?? []).map((item) =>
   const label = item.type === 'project' ? t('space.project', { name: item.name }) : t('space.library')
   return { value, label: value === currentTarget.value ? t('media.organize.current', { space: label }) : label }
 }))
-const canMove = computed(() => canDelete.value && target.value !== currentTarget.value)
+
+// Dossier cible dans l'espace choisi (racine par défaut ; dossier actuel pour l'espace du média).
+const ROOT_FOLDER = 'root'
+const targetFolderId = useId()
+const targetFolder = ref(ROOT_FOLDER)
+const sameSpace = computed(() => target.value === currentTarget.value)
+const currentFolderValue = computed(() => media.value?.folderId ?? ROOT_FOLDER)
+const { data: targetFolders } = await useApiFetch('/api/admin/folders', {
+  query: computed(() => ({ project: target.value && target.value !== LIBRARY_VALUE ? target.value : undefined })),
+})
+const targetFolderIndex = computed(() => indexFolders(targetFolders.value?.folders ?? []))
+const targetFolderOptions = computed(() => [
+  { value: ROOT_FOLDER, label: t('folders.root') },
+  ...flattenFolders(targetFolderIndex.value).map(({ folder }) => ({ value: folder.id, label: folderPathLabel(targetFolderIndex.value, folder.id) })),
+].map(option => (sameSpace.value && option.value === currentFolderValue.value
+  ? { ...option, label: t('media.organize.current', { space: option.label }) }
+  : option)))
+watch([target, currentFolderValue], () => {
+  targetFolder.value = sameSpace.value ? currentFolderValue.value : ROOT_FOLDER
+}, { immediate: true })
+
+/** Déplacer : vers un autre espace (media:delete) ou un autre dossier du même espace (media:write). */
+const canMove = computed(() => (sameSpace.value ? canWrite.value && targetFolder.value !== currentFolderValue.value : canDelete.value))
+
+function spaceRequest(action: 'duplicate' | 'move', body: { projectId: string | null, folderId: string | null }) {
+  return $api(`/api/admin/media/${mediaId.value}/${action}`, { method: 'POST', body })
+}
+
+function folderRequest(folderId: string | null) {
+  return $api(`/api/admin/media/${mediaId.value}`, { method: 'PATCH', body: { folderId } })
+}
 
 async function organize(action: 'duplicate' | 'move') {
   if (!target.value) return
   organizeStatus.value = null
   organizing.value = action
-  const body = { projectId: target.value === LIBRARY_VALUE ? null : target.value }
+  const folderId = targetFolder.value === ROOT_FOLDER ? null : targetFolder.value
+  const targetProject = targets.value?.spaces.find(item => item.type === 'project' && item.id === target.value)
+  const spaceName = targetProject?.type === 'project' ? t('space.project', { name: targetProject.name }) : t('space.library')
+  const destination = folderId ? `${spaceName} / ${folderPathLabel(targetFolderIndex.value, folderId)}` : spaceName
   try {
-    const result = await $api(`/api/admin/media/${mediaId.value}/${action}`, { method: 'POST', body })
-    const targetProject = targets.value?.spaces.find(item => item.type === 'project' && item.id === target.value)
-    const spaceName = targetProject?.type === 'project' ? t('space.project', { name: targetProject.name }) : t('space.library')
     if (action === 'duplicate') {
-      flash.set({ variant: 'success', message: t('media.organize.duplicated', { space: spaceName }) })
+      const result = await spaceRequest('duplicate', { projectId: target.value === LIBRARY_VALUE ? null : target.value, folderId })
+      flash.set({ variant: 'success', message: t('media.organize.duplicated', { space: destination }) })
       await navigateTo(`/admin/media/${result.media.id}`)
+      return
     }
-    else {
-      await refresh()
-      organizeStatus.value = { variant: 'success', message: t('media.organize.moved', { space: spaceName }) }
-    }
+    if (sameSpace.value) await folderRequest(folderId)
+    else await spaceRequest('move', { projectId: target.value === LIBRARY_VALUE ? null : target.value, folderId })
+    await refresh()
+    organizeStatus.value = { variant: 'success', message: t('media.organize.moved', { space: destination }) }
   }
-  catch {
-    organizeStatus.value = { variant: 'error', message: t('common.unexpectedError') }
+  catch (error) {
+    const { code } = apiError(error)
+    organizeStatus.value = {
+      variant: 'error',
+      message: code && (FOLDER_ERROR_CODES as readonly string[]).includes(code) ? t(`folders.errors.${code}`) : t('common.unexpectedError'),
+    }
   }
   finally {
     organizing.value = null
@@ -311,6 +354,19 @@ const pageFlash = flash.consume()
                   </NuxtLink>
                   <template v-else>
                     {{ spaceLabel }}
+                  </template>
+                </dd>
+              </div>
+              <div class="grid gap-0.5 sm:col-span-2">
+                <dt class="text-muted-foreground">
+                  {{ t('media.detail.folder') }}
+                </dt>
+                <dd class="font-medium break-words text-foreground">
+                  <NuxtLink v-if="media.folderId && folderPath" :to="{ path: listPath, query: { folder: media.folderId } }" class="text-primary underline-offset-4 hover:underline">
+                    {{ folderPath }}
+                  </NuxtLink>
+                  <template v-else>
+                    {{ t('media.detail.noFolder') }}
                   </template>
                 </dd>
               </div>
@@ -537,12 +593,16 @@ const pageFlash = flash.consume()
                   <label :for="targetId" class="text-sm font-medium text-foreground">{{ t('media.organize.target') }}</label>
                   <UiSelect :id="targetId" v-model="target" :options="targetOptions" />
                 </div>
+                <div class="grid min-w-56 flex-1 gap-1.5">
+                  <label :for="targetFolderId" class="text-sm font-medium text-foreground">{{ t('media.organize.folder') }}</label>
+                  <UiSelect :id="targetFolderId" v-model="targetFolder" :options="targetFolderOptions" />
+                </div>
                 <UiButton variant="outline" :loading="organizing === 'duplicate'" @click="organize('duplicate')">
                   <Copy aria-hidden="true" />
                   {{ t('media.organize.duplicate') }}
                 </UiButton>
                 <UiButton
-                  v-if="canDelete"
+                  v-if="canDelete || canWrite"
                   variant="outline"
                   :disabled="!canMove"
                   :loading="organizing === 'move'"
@@ -552,7 +612,7 @@ const pageFlash = flash.consume()
                   {{ t('media.organize.move') }}
                 </UiButton>
               </div>
-              <p v-if="canDelete && !canMove" class="text-sm text-muted-foreground">
+              <p v-if="(canDelete || canWrite) && !canMove" class="text-sm text-muted-foreground">
                 {{ t('media.organize.moveDisabled') }}
               </p>
               <UiAlert v-if="organizeStatus" :variant="organizeStatus.variant" :live="organizeStatus.variant === 'error' ? 'assertive' : 'polite'">

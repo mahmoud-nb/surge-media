@@ -5,6 +5,7 @@ import { ACCEPTED_MEDIA_TYPES, extensionForMime, mediaKindForMime, type MediaKin
 import { mediaSearchColumns, normalizeSearchText } from '#shared/utils/search'
 import type { AccessToken, Media, Prisma } from '../../generated/prisma/client'
 import type { Space } from '../../utils/access'
+import { folderWhere, requireFolderInSpace } from '../folders/service'
 import { useMediaStorage } from '../storage'
 import { mediaChanged } from './cache'
 import { mediaError } from './errors'
@@ -22,7 +23,8 @@ import { pregenerateVariants } from './variants'
  * diffusion passent toutes par ce module.
  *
  * Chaque média appartient à un seul espace : un projet, ou la bibliothèque de l'organisation
- * (projectId null). Les contrôles d'accès sont faits par les routes (server/utils/access.ts).
+ * (projectId null), et à 0 ou 1 dossier de cet espace (vérifié ici à chaque affectation). Les
+ * contrôles d'accès sont faits par les routes (server/utils/access.ts).
  *
  * Toute écriture passe par `mediaChanged` (cache de diffusion invalidé, révision de l'espace
  * incrémentée pour les ETag de l'API) et tient à jour les colonnes de recherche normalisées. Les
@@ -70,6 +72,7 @@ export function toMediaSummary(media: MediaWithUploader) {
   return {
     id: media.id,
     projectId: media.projectId,
+    folderId: media.folderId,
     kind: media.kind,
     visibility: media.visibility,
     originalName: media.originalName,
@@ -125,11 +128,16 @@ const SORTS: Record<MediaListQuery['sort'], Prisma.MediaOrderByWithRelationInput
   size: [{ size: 'desc' }, { id: 'desc' }],
 }
 
-/** Médias d'un espace ; l'espace est toujours imposé par le serveur, les filtres s'y ajoutent. */
+/**
+ * Médias d'un espace ; l'espace est toujours imposé par le serveur, les filtres s'y ajoutent.
+ * Médias actifs : ceux du dossier demandé (racine par défaut), sous-dossiers compris si
+ * `recursive` ; corbeille : tout l'espace.
+ */
 export async function listMedia(space: Space, query: MediaListQuery) {
   const where: Prisma.MediaWhereInput = {
     projectId: projectIdOf(space),
     deletedAt: query.status === 'trash' ? { not: null } : null,
+    ...(query.status === 'trash' ? {} : await folderWhere(space, query.folder ?? null, Boolean(query.recursive))),
   }
   if (query.q) {
     // Colonnes normalisées : insensible à la casse et aux accents sur les trois bases.
@@ -214,6 +222,8 @@ export async function createMedia(
   provenance: MediaProvenance,
   options: UploadOptions = {},
 ): Promise<MediaWithUploader> {
+  const folderId = input.folderId ?? null
+  if (folderId) await requireFolderInSpace(space, folderId)
   const analyzed = await analyze(upload, options)
   const storage = await useMediaStorage()
   const key = await storeOriginal(upload, analyzed)
@@ -226,6 +236,7 @@ export async function createMedia(
         ...fileData(upload, analyzed, key),
         ...mediaSearchColumns({ originalName: upload.filename, title, altText }),
         projectId: projectIdOf(space),
+        folderId,
         visibility: input.visibility ?? 'PUBLIC',
         title,
         altText,
@@ -275,7 +286,8 @@ export async function replaceMediaFile(media: Media, upload: ReceivedUpload, opt
 }
 
 export async function updateMediaMetadata(media: Media, input: MediaMetadataInput): Promise<MediaWithUploader> {
-  const data: Prisma.MediaUpdateInput = { ...input }
+  if (input.folderId) await requireFolderInSpace(spaceOfMedia(media), input.folderId)
+  const data: Prisma.MediaUncheckedUpdateInput = { ...input }
   if (input.title !== undefined) data.searchTitle = input.title ? normalizeSearchText(input.title) : null
   if (input.altText !== undefined) data.searchAlt = input.altText ? normalizeSearchText(input.altText) : null
   const prisma = await usePrisma()
@@ -330,12 +342,13 @@ export async function deleteStoredFiles(items: Pick<Media, 'id' | 'storageKey'>[
 // ─── Duplication, déplacement ────────────────────────────────────────────────
 
 /**
- * Copie indépendante d'un média dans un espace (le même ou un autre) : nouvel identifiant,
- * version 1, fichier copié dans le stockage, métadonnées reprises, provenance conservée. Les
- * dérivés ne sont pas copiés : ils seront régénérés à la demande.
+ * Copie indépendante d'un média dans un espace (le même ou un autre) et l'un de ses dossiers
+ * (racine par défaut) : nouvel identifiant, version 1, fichier copié dans le stockage, métadonnées
+ * reprises, provenance conservée. Les dérivés ne sont pas copiés : l'aperçu est pré-généré.
  */
-export async function duplicateMedia(media: Media, target: Space, provenance: MediaProvenance): Promise<MediaWithUploader> {
+export async function duplicateMedia(media: Media, target: Space, provenance: MediaProvenance, folderId: string | null = null): Promise<MediaWithUploader> {
   if (media.deletedAt) throw mediaError(409, 'IN_TRASH')
+  if (folderId) await requireFolderInSpace(target, folderId)
   const storage = await useMediaStorage()
   const key = originalKey(extensionForMime(media.mimeType) ?? 'bin')
   await storage.copy(media.storageKey, key)
@@ -344,6 +357,7 @@ export async function duplicateMedia(media: Media, target: Space, provenance: Me
     const copy = await prisma.media.create({
       data: {
         projectId: projectIdOf(target),
+        folderId,
         kind: media.kind,
         visibility: media.visibility,
         storageKey: key,
@@ -376,14 +390,16 @@ export async function duplicateMedia(media: Media, target: Space, provenance: Me
 
 /**
  * Change l'espace d'un média sans changer son identifiant ni ses URL (fichier et dérivés
- * inchangés). Il quitte son dossier, propre à l'ancien espace.
+ * inchangés). Il quitte son dossier, propre à l'ancien espace, pour `folderId` (dossier de
+ * l'espace cible, racine par défaut).
  */
-export async function moveMedia(media: Media, target: Space): Promise<MediaWithUploader> {
+export async function moveMedia(media: Media, target: Space, folderId: string | null = null): Promise<MediaWithUploader> {
   if (media.deletedAt) throw mediaError(409, 'IN_TRASH')
+  if (folderId) await requireFolderInSpace(target, folderId)
   const prisma = await usePrisma()
   const moved = await prisma.media.update({
     where: { id: media.id },
-    data: { projectId: projectIdOf(target), folderId: null },
+    data: { projectId: projectIdOf(target), folderId },
     include: MEDIA_INCLUDE,
   })
   await mediaChanged([media.id], spaceOfMedia(media), target)

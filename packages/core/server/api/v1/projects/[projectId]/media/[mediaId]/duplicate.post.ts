@@ -10,9 +10,10 @@ import { mediaBaseUrl } from '../../../../../../lib/media/urls'
 import type { Space } from '../../../../../../utils/access'
 
 /**
- * POST /api/v1/projects/:projectId/media/:mediaId/duplicate — { target?: { projectId } | { library: true } }
+ * POST /api/v1/projects/:projectId/media/:mediaId/duplicate — { target?: { projectId } | { library: true }, folderId? }
  * Copie indépendante (nouvel identifiant, version 1, fichier copié dans le stockage, provenance
- * conservée) dans un projet (par défaut celui du média) ou dans la bibliothèque de l'organisation.
+ * conservée) dans un projet (par défaut celui du média) ou dans la bibliothèque de l'organisation,
+ * dans l'un de ses dossiers (`folderId`, hors dossier par défaut ; 404 FOLDER_NOT_FOUND sinon).
  * Portées : media:read ici, media:upload dans la cible. Clé secrète (son projet seulement) ou jeton
  * personnel (seul identifiant multi-espaces) ; jamais une clé publique ni un jeton délégué.
  * → 201 Media (+ Location si la copie est dans un projet) · 403 CREDENTIAL_NOT_ALLOWED /
@@ -25,7 +26,7 @@ export default defineApiHandler(async (event, principal) => {
   const { project } = await requireApiProject(event, principal, 'media:read')
   const media = await findApiMedia(project.id, getRouterParam(event, 'mediaId') ?? '', false)
   if (!media) throw apiProblem('MEDIA_NOT_FOUND')
-  const { target } = await readApiBody(event, apiDuplicateBodySchema)
+  const { target, folderId } = await readApiBody(event, apiDuplicateBodySchema)
 
   let space: Space
   if (target && 'library' in target) {
@@ -41,7 +42,7 @@ export default defineApiHandler(async (event, principal) => {
   }
 
   requireUploadAllowance(event, principal)
-  const copy = await duplicateMedia(media, space, principalProvenance(principal))
+  const copy = await duplicateMedia(media, space, principalProvenance(principal), folderId ?? null)
   const expires = apiLinkExpiry()
   const location = apiMediaLocation(event, copy)
   setResponseStatus(event, 201)

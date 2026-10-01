@@ -24,13 +24,18 @@ export function principalProvenance(principal: ApiPrincipal): MediaProvenance {
   }
 }
 
-/** Champs publics (visibilité en minuscules) → saisie du service médias. */
-export function toMetadataInput(fields: ApiMediaUpdate, imposedVisibility?: string): MediaMetadataInput {
-  const visibility = imposedVisibility ?? fields.visibility
+/**
+ * Champs publics (visibilité en minuscules) → saisie du service médias. `imposed` : contraintes d'un
+ * jeton délégué (visibilité, dossier), prioritaires sur les champs envoyés.
+ */
+export function toMetadataInput(fields: ApiMediaUpdate, imposed: { visibility?: string, folderId?: string } | null = null): MediaMetadataInput {
+  const visibility = imposed?.visibility ?? fields.visibility
+  const folderId = imposed?.folderId ?? fields.folderId
   return {
     ...(fields.title === undefined ? {} : { title: fields.title }),
     ...(fields.altText === undefined ? {} : { altText: fields.altText }),
     ...(visibility ? { visibility: visibility.toUpperCase() as MediaVisibility } : {}),
+    ...(folderId === undefined ? {} : { folderId }),
   }
 }
 

@@ -5,14 +5,14 @@
 > français, avec le « Journal des étapes »). En cas de divergence, **le code fait foi**, puis
 > `setup.md`, puis ce fichier.
 >
-> **État décrit** : commit `195bb06` (B3) + sous-étape **B4** (2026-09-29, non commitée au moment de la
+> **État décrit** : commit `e41489b` (B4) + sous-étape **B5** (2026-09-29, non commitée au moment de la
 > rédaction : vérifier `git log`). Étapes terminées : 1 (monorepo, core, base), 2 (UI, auth, rôles),
 > 3 (utilisateurs), 4 (médias, phase A), 5 = **B1** (projets, espaces, autorisations), 6 = **B2**
 > (identifiants d'API, origines, mode sudo, journal d'audit), 7 = **B3** (API publique v1 en lecture),
-> 8 = **B4** (API v1 en écriture, jetons délégués `sm_dt_`, file bornée des traitements, pré-génération).
-> **Prochaine étape** : **B5** — dossiers (arbre par espace, filtre `folder`/`recursive`, contrainte d'envoi
-> par dossier). Architecture validée de la phase B : `.claude/architecture-phase-b.md` (**à lire** ; en-tête =
-> écarts B1/B2/B3/B4).
+> 8 = **B4** (API v1 en écriture, jetons délégués `sm_dt_`, file bornée des traitements, pré-génération),
+> 9 = **B5** (dossiers : arborescence, navigation et rangement dans l'admin, API v1). **La phase B est terminée.**
+> **Prochaine étape** : **phase C** — transformations à la demande (architecture § 10), à présenter et faire valider
+> avant de commencer. Architecture de la phase B : `.claude/architecture-phase-b.md` (en-tête = écarts B1 à B5).
 >
 > Les éléments marqués **[À CONFIRMER]** sont des hypothèses ou des points non validés par
 > l'utilisateur (récapitulés en § 22).
@@ -125,7 +125,7 @@ Couches serveur :
 - `components/admin/` (`<Admin…>`) : Sidebar, PageHeader, RoleField, UserStatusBadge, PasswordLinkPanel, MediaUploader, MediaCard,
   **MediaBrowser** (médias d'un espace : envoi si portée, filtres URL, grille, corbeille ; prop `projectId?`), **ProjectHeader** (retour, h1, badges,
   onglets Aperçu/Médias/Membres + Clés d'API/Origines si `project:credentials` — prop `scopes` ; `aria-current="true"` sur une sous-page ; alerte archivé),
-  **ReauthDialog** (dans `layouts/admin.vue`), **SecretPanel** (valeur affichée une fois, focus sur le titre, `defineExpose({ focus })`),
+  **FolderActions** (B5 : nouveau dossier, renommer, déplacer, supprimer), **ReauthDialog** (dans `layouts/admin.vue`), **SecretPanel** (valeur affichée une fois, focus sur le titre, `defineExpose({ focus })`),
   **ScopeList**, **TokenStatusBadge** (prop `kind: key|token` pour l'accord en français). `UpcomingSection` supprimé en B2.
 - `pages/` : `index` (accueil), `login`, `password/[token]`, `admin/index` (tableau de bord), `admin/users/{index,new,[id]}`,
   `admin/media/{index (bibliothèque),[id]}`, `admin/projects/{index,new}`, `admin/projects/[id]/{index (aperçu, réglages, archivage, suppression),media,members}`,
@@ -154,7 +154,7 @@ Couches serveur :
   CRC, empreinte), **`credentials/service.ts`** (clés, jetons personnels, rotation, révocation, suppression), **`audit/service.ts`** (`listAuditEvents`),
   B3 : **`access/credentials.ts`**, **`api/{context,problem,rate-limit,cursor,queries,serializers,openapi}.ts`**, **`cache/{lru,revisions}.ts`**,
   **`media/{cache,range}.ts`**, **`projects/state.ts`** (§ 9.12) ; B4 : **`access/{principal,delegated}.ts`**, **`api/writes.ts`**,
-  **`media/{processing,variants}.ts`** (dérivés sortis de `delivery.ts`) (§ 9.13). Les nouveaux modules **importent explicitement** les utilitaires de
+  **`media/{processing,variants}.ts`** (dérivés sortis de `delivery.ts`) (§ 9.13) ; B5 : **`folders/service.ts`** (§ 9.14). Les nouveaux modules **importent explicitement** les utilitaires de
   `#shared/utils/*` (un auto-import non injecté a causé un `ReferenceError` en production, voir § 18).
   Les **types** exportés de `server/utils` (ex. `Space`) s'importent explicitement (`import type { Space } from '../../utils/access'`).
 
@@ -163,6 +163,7 @@ Couches serveur :
 - `utils/permissions.ts` (`CredentialContext` a un cas `DELEGATED` depuis B4 ; ROLES, PERMISSIONS, ROLE_PERMISSIONS, hasPermission, MEDIA_SCOPES, PROJECT_SCOPES, PROJECT_ROLES,
   PROJECT_ROLE_SCOPES, PROJECT_ROLE_CEILING, ARCHIVED_PROJECT_SCOPES, assignableProjectRoles, effectiveProjectRole, spaceScopes, hasScope,
   TOKEN_SCOPES, TOKEN_BASE_SCOPES, TOKEN_OPTIONAL_SCOPES, tokenScopes) — auto-importé, **pur** (testé).
+- `utils/folders.ts` (B5 : règles pures de l'arborescence, § 9.14), `schemas/folders.ts`.
 - `utils/projects.ts` (longueurs, `PROJECT_SLUG_PATTERN`, `PROJECT_STATUSES`, `PROJECT_MEDIA_ON_DELETE`, `slugify`, `PROJECT_ERROR_CODES`) — auto-importé.
 - `utils/credentials.ts` (`TOKEN_TYPES`, `PROJECT_KEY_TYPES`, `TOKEN_PREFIXES`, `KEY_ENVIRONMENTS`, `ENVIRONMENT_PATTERN`, durées, `ROTATION_OVERLAPS`,
   `tokenStatus`, `MAX_ALLOWED_ORIGINS`, `CREDENTIAL_ERROR_CODES`), `utils/origins.ts` (`normalizeOrigin`, `isWildcardOrigin`, `isOriginAllowed` — purs, testés),
@@ -199,7 +200,7 @@ Identifiants : `String @id @default(cuid())` partout. Horodatages `createdAt @de
 | **DelegatedTokenUsage** (B4) | `jti @id`, `uploads Int`, `expiresAt` | aucune relation ; index expiresAt ; purgé toutes les heures |
 | **CacheRevision** (B3) | `scope @id` (`project:<id>` \| `library`), `revision Int`, `updatedAt` | aucune relation |
 | **AuditEvent** (B2) | `at`, `actorUserId?`, `tokenId?` (B3), `projectId?`, `action`, `targetType?`, `targetId?`, `ipAddress?`, `data Json?` (`label` lisible + détails) | **aucune clé étrangère** (survit aux suppressions) ; index (projectId, at), (actorUserId, at), at |
-| **Folder** | `projectId?` (null = bibliothèque), `parentId?`, `name` | projet (Cascade), arbre (`FolderTree`, Cascade), media ; index (projectId, parentId) — **non utilisé par l'UI (B5)** |
+| **Folder** | `projectId?` (null = bibliothèque), `parentId?`, `name` | projet (Cascade), arbre (`FolderTree`, Cascade : jamais déclenché, la suppression exige un dossier vide ou remonte le contenu), media (SetNull) ; index (projectId, parentId) — utilisé depuis B5 (§ 9.14) |
 | **Media** | `projectId?` (**null = bibliothèque** ; un seul espace), `folderId?`, `kind MediaKind`, `visibility Visibility @default(PUBLIC)`, `storageKey @unique` (clé opaque), `version Int @default(1)`, `originalName`, `mimeType`, `size Int` (octets, ≤ 2 Gio sous PG/MySQL), `checksum` (SHA-256 hex), `width?`, `height?`, `duration?`, `title?`, `altText?`, `searchTitle?`, `searchName` (défaut `''` = à indexer), `searchAlt?` (B3, normalisées), `metadata Json?`, `uploadedById?`, `uploadedByTokenId?` (B4, identifiant d'API ou émetteur d'un jeton délégué), `uploadSubject?` (B4, sujet final d'un jeton délégué), `duplicatedFromId?` (provenance d'une copie), `deletedAt?` (corbeille) | project (**Restrict** : un projet n'emporte jamais ses médias), folder (SetNull), uploadedBy (SetNull), uploadedByToken (`MediaUploadedByToken`, SetNull ; index), duplicatedFrom/duplicates (`MediaDuplicates`, SetNull), variants ; index (projectId, deletedAt, createdAt), (projectId, checksum), folderId, deletedAt, duplicatedFromId |
 | **MediaVariant** | `mediaId`, `transformation` (ex. `v3/preview`), `storageKey @unique`, `format` (webp…), `size`, `width`, `height` | media (Cascade) ; `@@unique([mediaId, transformation])` |
 
@@ -647,6 +648,43 @@ clé `originals/…` ; nouvelle ligne (version 1, mêmes kind/visibility/origina
   `credentials.named.<TYPE>`, `media.detail.{apiUploader,credential,subject}`, `media.errors.SERVER_BUSY`,
   `audit.{via,deletedCredential,delegated,delegatedSubject}`.
 
+### 9.14 Dossiers (B5)
+
+- **Règles pures** (`shared/utils/folders.ts`, auto-importé, testé) : `FOLDER_NAME_MAX_LENGTH` 100, `FOLDER_MAX_DEPTH` 8,
+  `FOLDERS_PER_SPACE_MAX` 1000, `FOLDER_ERROR_CODES`, `folderNameKey` (NFC + minuscules : unicité parmi les voisins),
+  `indexFolders` (byId, enfants triés ; parent inconnu → racine), `folderAncestors`, `folderDepth`, `descendantIds`,
+  `subtreeHeight`, `folderMoveProblem` (cycle / profondeur), `flattenFolders`, `folderPathLabel`. Schémas :
+  `shared/schemas/folders.ts` (messages i18n : `folderNameSchema`, `folderIdSchema`, `folderFormSchema`, `createFolderSchema`,
+  `updateFolderSchema`, `deleteFolderQuerySchema`, `assignFolderSchema`, `isValidFolderName`) ; API v1 dans `schemas/api.ts`
+  (`apiFolderCreateSchema`, `apiFolderUpdateSchema`, `apiFolderDeleteQuerySchema`, `apiFolderSchema`, `apiFolderListSchema`,
+  messages en anglais) ; `mediaListQuerySchema` + `folder`/`recursive` ; `mediaMetadataSchema` + `folderId` ; `mediaTargetSchema`
+  + `folderId`.
+- **Service** (`server/lib/folders/service.ts`) : `listFolders(espace)` (LRU par `scope:révision`, 5 min), `findFolder`,
+  `requireFolderInSpace` (404 `FOLDER_NOT_FOUND`), `folderMediaCounts` (groupBy), `folderWhere(espace, dossier|null, récursif)`
+  (condition Prisma ; racine récursive = `{}`), `createFolder` / `updateFolder` / `deleteFolder(dossier, { moveContentToParent })`
+  (transactions interactives, contrôles sur l'arbre relu en base, `bumpRevision` après validation), `assignMediaFolder` (médias
+  actifs de l'espace seulement, `mediaChanged`). `server/utils/folders.ts` : `folderError`, `requireFolderAccess` (404 si invisible,
+  403 si portée), `toFolderSummary`.
+- **Service médias** : `listMedia` filtre par dossier hors corbeille ; `createMedia` / `updateMediaMetadata` vérifient
+  `folderId` dans l'espace ; `duplicateMedia(…, folderId)` et `moveMedia(…, folderId)` dans l'espace cible ; `toMediaSummary`
+  expose `folderId`.
+- **Routes admin** : `folders/{index.get,index.post,[id].patch,[id].delete}`, `media/index.patch` (rangement groupé) ;
+  `media/index.get` (`folder`, `recursive`), `index.post` (`folderId`), `[id].patch`, `[id]/duplicate|move` (`folderId`).
+- **Routes v1** : `projects/[projectId]/folders/{index.get (ETag révision, pas de clé publique), index.post, [folderId].patch,
+  [folderId].delete}` ; `listApiMedia` applique `folderWhere` si `folder` ; `toMetadataInput(champs, imposed = grant.upload)`
+  (visibilité et dossier imposés) ; `delegated-tokens` vérifie `upload.folderId` ; `toApiFolder` ; `problemDetail` couvre les
+  codes `FOLDER_*`.
+- **Interface** : `AdminMediaBrowser` (URL `folder`, `recursive=1` ; section « Dossiers » : titre focusable `#folders-title`,
+  `AdminFolderActions`, fil d'Ariane `nav` + `ol` avec `aria-current="page"`, sous-dossiers en liens ; alerte « Dossier
+  introuvable » ; envoi avec `fields.folderId` ; case « Inclure les sous-dossiers » ; mode sélection : `AdminMediaCard selectable
+  v-model:selected` (libellé englobant 28 px, texte sr-only), barre « Ranger dans » ; message de rangement effacé au changement
+  de dossier). `AdminFolderActions` : dialogues nom (création/renommage, erreur d'homonyme sur le champ), déplacement (options =
+  chemins valides), suppression (texte selon le contenu, `Intl.ListFormat`, `return-focus=false` après succès puis focus sur
+  `#folders-title` par le parent) ; message lié au dossier où il s'affiche. `UiDialog` : prop `returnFocus` (défaut true). Fiche
+  média : ligne « Dossier », « Dossier cible » (dossiers de l'espace choisi), déplacement même espace = `PATCH { folderId }`.
+  i18n : `folders.*`, `media.selection.*`, `media.filters.recursive`, `media.list.emptyFolder|emptyFilteredFolder`,
+  `media.detail.folder|noFolder`, `media.organize.folder`, `validation.folderName`.
+
 ## 10. Référence des API
 
 Format d'erreur (h3) : `{ statusCode, statusMessage, message, data? }` ; **codes métier dans `data.code`** (lus côté client par
@@ -671,7 +709,7 @@ Format d'erreur (h3) : `{ statusCode, statusMessage, message, data? }` ; **codes
 | DELETE `/api/admin/users/:id/sessions` | `users:manage` | — | `{ revoked }` |
 | GET `/api/admin/config/media` | session | — | `{ maxUploadSize, acceptedTypes, signedUrlDurations }` |
 | GET `/api/admin/spaces` | session | `?scope=` (défaut `media:upload`) | `{ spaces: ({ type: 'library' } \| { type: 'project', id, name })[] }` |
-| GET `/api/admin/media` | `media:read` (espace) | `?project&q&kind&visibility&status=active\|trash&sort=newest\|oldest\|name\|size&page` | `{ items: MediaSummary[], total, page, pageSize: 24, space, projectRole, scopes }` · 404 |
+| GET `/api/admin/media` | `media:read` (espace) | `?project&folder&recursive=1&q&kind&visibility&status=active\|trash&sort=newest\|oldest\|name\|size&page` | `{ items: MediaSummary[], total, page, pageSize: 24, space, projectRole, scopes }` · 404 |
 | POST `/api/admin/media` | `media:upload` (espace) | `?project` + multipart `file` + `title?`, `altText?`, `visibility?` | 201 `{ media: MediaDetail }` · 400/403/404/413/415/422 |
 | GET `/api/admin/media/:id` | `media:read` | — | `{ media: MediaDetail, publicUrl (absolue \| null), space, projectRole, scopes }` (corbeille comprise) · 404 |
 | PATCH `/api/admin/media/:id` | `media:write` | `{ title?, altText?, visibility? }` | `{ media }` |
@@ -701,6 +739,10 @@ Format d'erreur (h3) : `{ statusCode, statusMessage, message, data? }` ; **codes
 | GET `/api/admin/tokens` | `tokens:personal` | — | `{ tokens }` (les siens) |
 | POST `/api/admin/tokens` | `tokens:personal` + sudo | `{ name, lifetime, scopes?, allProjects?, projectIds?, includeLibrary? }` | 201 `{ token, value }` · 422 `PROJECT_UNAVAILABLE` |
 | POST `/api/admin/tokens/:id/revoke` · DELETE `/api/admin/tokens/:id` | `tokens:personal` | — | 204 · 404 · 409 |
+| GET `/api/admin/folders?project=` | `media:read` | — | `{ folders: { id, parentId, name, mediaCount, … }[], space, projectRole, scopes }` |
+| POST `/api/admin/folders?project=` | `media:write` | `{ name, parentId? }` | 201 `{ folder }` · 404/409/422 `FOLDER_*` |
+| PATCH / DELETE `/api/admin/folders/:id` | `media:write` | `{ name?, parentId? }` · `?content=parent` | `{ folder }` · `{ media, folders }` |
+| PATCH `/api/admin/media?project=` | `media:write` | `{ ids (≤ 100), folderId \| null }` | `{ moved }` |
 | GET `/api/admin/audit` | `audit:read` | `?category&project&page` | `{ items, total, page, pageSize: 50, filterProject }` |
 | GET\|HEAD `/m/...` | selon § 9.6 (sans cookie ; Bearer depuis B3) | `Range` | fichier en flux · 206/302/304/401/403/404/405/416 ; OPTIONS 204 |
 | GET `/api/v1/me` | tout identifiant valable | — | `Me` (credential, user, project, access) |
@@ -715,12 +757,14 @@ Format d'erreur (h3) : `{ statusCode, statusMessage, message, data? }` ; **codes
 | DELETE `/api/v1/projects/:projectId/media/:mediaId` | `media:delete` | — | 204 (corbeille) · 404 |
 | POST `/api/v1/projects/:projectId/media/:mediaId/duplicate` | `media:read` + `media:upload` cible (secret : son projet ; PAT) | `{ target?: { projectId } \| { library: true } }` | 201 `Media` (+ `Location` si projet) · 403 `CREDENTIAL_NOT_ALLOWED` · 404 |
 | POST `/api/v1/projects/:projectId/delegated-tokens` | portées ⊆ émetteur (secret, PAT) | `{ scopes, expiresIn?, subject?, origin?, upload? }` | 201 `{ token, expiresAt, scopes }` (`no-store`) · 400 · 403 · 404 |
+| GET `/api/v1/projects/:projectId/folders` | `media:read`, pas une clé publique | — | `{ items: Folder[] }` · 304 · 403 `CREDENTIAL_NOT_ALLOWED` |
+| POST · PATCH · DELETE `/api/v1/projects/:projectId/folders[/:folderId]` | `media:write` | `{ name, parentId? }` · `{ name?, parentId? }` · `?content=parent` | 201 `Folder` · `Folder` · 204 · 404/409/422 `FOLDER_*` |
 | GET `/api/v1/openapi.json` · `/api/v1/errors` | public | — | spécification OpenAPI 3.1 · catalogue des codes |
 
 Contrats de données :
 - `SessionUser` : `{ id, email, name, role, locale }` ; session client : `{ user, loggedInAt }`.
 - `UserSummary` (`toUserSummary`) : `{ id, email, name, role, locale, isActive, status, lastLoginAt, createdAt }` (jamais d'empreinte).
-- `MediaSummary` (`toMediaSummary`) : `{ id, projectId, kind, visibility, originalName, title, altText, mimeType, extension, size, width,
+- `MediaSummary` (`toMediaSummary`) : `{ id, projectId, folderId (B5), kind, visibility, originalName, title, altText, mimeType, extension, size, width,
   height, duration, version, url, previewUrl, uploadedBy { id, name, email } | null, createdAt, updatedAt, deletedAt }` ;
   `MediaDetail` = + `checksum`, `metadata`, `duplicatedFromId` ; B4 : + `uploadedByToken { id, name, type, prefix } | null`, `uploadSubject`. `url`/`previewUrl` sont des chemins **relatifs**, signés `scope=admin`
   si privé ou en corbeille ; les adresses à copier (`publicUrl`, `signed-url`) sont **absolues** (`mediaBaseUrl`).
@@ -791,7 +835,7 @@ Contrats de données :
 
 - `@nuxtjs/i18n`, stratégie `no_prefix`, cookie `surge-media-locale`, détection navigateur, repli `fr`. `useAppHead` synchronise
   `<html lang dir>`. Sélecteur `AppLocaleSwitcher` (bouton de divulgation, noms des langues dans leur langue, attribut `lang`).
-- Fichiers `i18n/locales/fr.json` (référence) et `en.json` — 738 clés (B4). Espaces de noms : `app, a11y, nav, footer, theme, locale, form,
+- Fichiers `i18n/locales/fr.json` (référence) et `en.json` — 799 clés (B5). Espaces de noms : `app, a11y, nav, footer, theme, locale, form,
   validation, auth, common, landing, login, admin, roles, permissions, errors, pagination, users, password, media, projectRoles, space,
   projects, reauth, scopes, credentials, apiKeys, origins, tokens, audit`. Clés de portées : `scopes.<a>.<b>.{label,short,description}`
   (`scope.replace(':', '.')`) ; statuts accordés : `credentials.status.{key,token}.*` ; actions d'audit : `audit.actions.<catégorie>.<verbe>`.
@@ -866,6 +910,7 @@ Contrats de données :
 | Jetons délégués HMAC sans état, charge lisible, émetteur relu (B4) | architecture § 4.5 ; aucune portée d'office ; sur `/m/` aussi ; seul `maxFiles` a un compteur en base |
 | Identité unique `Principal` (émetteur + délégation) pour l'API et `/m/` (B4) | une seule logique d'accès ; empêche qu'un délégué hérite des droits de son émetteur par un test `credential.type` |
 | File bornée des traitements (sémaphore) + pré-génération des aperçus (B4) | architecture § 9.2 ; 503 `SERVER_BUSY` plutôt qu'un serveur saturé ; premier affichage sans attente |
+| Dossiers : arbre entier en mémoire par révision, filtre récursif en IN, pas de colonne de chemin (B5) | architecture § 11 ; portable, déplacement sans réécriture des médias ; unicité des noms par l'application |
 | Journal d'audit sans clés étrangères + écran ADMIN (`audit:read`) (B2) | les entrées survivent aux suppressions ; pas d'écran de journal par projet pour les propriétaires (piste) |
 | SVG exclu, originaux servis tels quels | SVG peut porter du script ; retrait EXIF prévu via les dérivés (phase C) |
 | Recherche : `textSearch` (terme + minuscules) et `mode: 'insensitive'` seulement sous PostgreSQL | portabilité ; SQLite ne gère la casse que pour l'ASCII |
@@ -893,6 +938,8 @@ Contrats de données :
 - API v1 (B4) : écritures seulement via le service médias (`withApiUpload` pour les fichiers) ; jeton délégué : portées ⊆ émetteur (aucune
   d'office), projet unique, 1–60 min ≤ échéance de l'émetteur, pas d'émission ni de duplication, liens signés ≤ 1 h ; `maxFiles` compte les
   fichiers acceptés (envois et remplacements) ; visibilité imposée aux nouveaux médias ; clé publique jamais en écriture.
+- Dossiers (B5) : un média est dans 0 ou 1 dossier **de son espace** ; noms uniques parmi les voisins (casse ignorée) ; 8 niveaux ;
+  1 000 par espace ; suppression d'un dossier vide ou avec remontée du contenu ; `media:write` pour toute écriture.
 - Actions sensibles (sudo) : clé secrète (création, rotation), jeton personnel (création), membres (ajout, rôle, retrait d'autrui) ;
   jamais pour une action qui retire des droits (révoquer, quitter).
 
@@ -913,7 +960,7 @@ Contrats de données :
 - Recherche SQLite : casse ignorée seulement pour l'ASCII (atténué par la recherche en minuscules), accents non ignorés.
 - Deux ADMIN se rétrogradant simultanément pourraient laisser 0 admin (pas de verrou) ; **aucune commande de secours** si le seul
   admin perd son mot de passe (l'amorçage ne marche qu'avec 0 utilisateur).
-- `User.locale` stocké mais non utilisé ; `Folder` (B5) non utilisé par l'interface ni par l'API.
+- `User.locale` stocké mais non utilisé.
 - **Windows Smart App Control** peut bloquer un module natif non signé (`An Application Control policy has blocked this file`) :
   diagnostic `process.dlopen` + journal `Microsoft-Windows-CodeIntegrity/Operational` ; ne jamais modifier les réglages de sécurité,
   proposer une version voisine (cas oxc-transform) ou laisser l'utilisateur débloquer.
@@ -941,6 +988,11 @@ Contrats de données :
   avec `NUXT_SITE_URL` défini, la question ne se pose pas.
 - **Cookie de session posé par script refusé** dans le navigateur intégré : un ancien cookie `surge-media-session` HttpOnly ne peut pas être
   remplacé par `document.cookie` → se connecter par le formulaire avec le compte temporaire (mot de passe généré, gardé dans le scratchpad).
+- **Focus après une boîte de dialogue dont l'ouvreur survit** (ex. « Supprimer le dossier », qui désigne ensuite le dossier parent) :
+  `UiDialog` rend le focus à l'ouvreur à l'événement `close` (asynchrone) → passer `:return-focus="false"` juste avant de fermer
+  après succès, puis placer le focus soi-même (`document.getElementById(…)?.focus()` après `nextTick`).
+- Outil `read_page`/`find` du navigateur intégré : cases à cocher et radios affichées par leur **valeur** (« on »), pas par leur nom
+  accessible ; vérifier les libellés avec `input.labels` ou axe. La liste interactive s'arrête à la zone visible.
 - **Axe en thème sombre** : ne pas basculer la classe `dark` à la main (thème à moitié appliqué, faux contrastes) → cookie
   `surge-media-color-mode=dark` (et `surge-media-locale`) puis rechargement de la page.
 - **File des traitements avec `_QUEUE=0`** : la pré-génération d'un aperçu occupe une place ; des envois simultanés reçoivent 503 — normal ;
@@ -983,6 +1035,8 @@ Contrats de données :
   `if (isReauthCancelled(error)) return` dans le `catch` (aucun message).
 - Toute action sensible réussie appelle `recordAudit` (action déclarée dans `shared/utils/audit.ts`, libellé `data.label`, jamais de secret),
   avec sa traduction `audit.actions.*` et, si utile, un cas dans `details()` de `pages/admin/audit.vue`.
+- Dossiers : tout contrôle d'appartenance passe par `requireFolderInSpace` / `requireFolderAccess` ; les règles de forme dans
+  `shared/utils/folders.ts` (avec leur test) ; toute écriture d'arbre incrémente la révision de l'espace.
 - Accès de l'API v1 et de `/m/` : `principal.type`, `principalProjectScopes`, `browserGuard` (jamais `principal.credential.type` pour
   décider : pour un jeton délégué c'est l'émetteur). Corps d'écriture en `z.strictObject` ; fichiers via `withApiUpload`.
 - Route de l'API v1 : `defineApiHandler` + `requireApiProject(event, principal, scope)` + `parseApiQuery`/`readApiBody` ; erreurs par
@@ -1004,9 +1058,11 @@ Contrats de données :
 - Tests d'API faits jusqu'ici avec des scripts Node temporaires (fetch + FormData + cookie), rejoués en dev **et** en prod ;
   S3 testé contre `s3rver` (faux S3 local, `pnpm dlx s3rver@3.7.1 --port 4568 --configure-bucket surge-media`).
 - Interface : navigateur intégré (pilotage par JS quand le panneau ne s'affiche pas), audits axe injectés depuis jsDelivr.
-- Automatisé dans le dépôt depuis B1 : tests unitaires Vitest des modules purs (105 tests depuis B4 : `tests/{permissions,signing,projects,credentials,api,delegated,processing}.test.ts`). Le reste (API, interface, axe) reste manuel
+- Automatisé dans le dépôt depuis B1 : tests unitaires Vitest des modules purs (114 tests depuis B5 : `tests/{permissions,signing,projects,credentials,api,delegated,processing,folders}.test.ts`). Le reste (API, interface, axe) reste manuel
   (piste : tests d'intégration API + Playwright + @axe-core/playwright).
 - Viewport du navigateur intégré : 1024 px (DPR 1,25) ; les mises en page à 5 colonnes doivent attendre `xl`.
+- B5 : `b5-api-test.mjs` (71 contrôles : administration et API v1 des dossiers, limite de 1 000 insérée en SQL, jeton délégué à dossier
+  imposé ; nettoyage) ; `ui-b5.mjs setup|cleanup` (compte ADMIN, projet, dossiers, médias) ; B1 à B4 rejoués.
 - B4 : `b4-api-test.mjs` (94 contrôles : écritures, duplication, jetons délégués — jetons expirés fabriqués avec le secret de `.env`, jamais
   affiché —, débit des envois ; nettoyage audit/révisions/`DelegatedTokenUsage`) ; `b4-busy-test.mjs` (serveur temporaire sur 3101 avec
   `NUXT_MEDIA_PROCESSING_CONCURRENCY=1`, `_QUEUE=0` : 503 puis succès ; configuration de lancement retirée ensuite) ; `ui-b4.mjs setup|cleanup`
@@ -1025,7 +1081,8 @@ publique/privée/signée, aperçus, remplacement versionné, corbeille, écrans)
 et portées, projets et membres, duplication/déplacement, diffusion sans cookie + liens v2, `NUXT_SITE_URL`/`NUXT_MEDIA_PUBLIC_URL`, Vitest) ;
 **B2** (clés publiques/secrètes par environnement avec rotation, jetons personnels, origines CORS, mode sudo, journal d'audit + écran) ;
 **B3** (API publique v1 en lecture, caches et révisions, recherche normalisée, Bearer et Range sur `/m/`, OpenAPI, SQLite WAL) ;
-**B4** (API v1 en écriture, jetons délégués, provenance des médias, file bornée des traitements, pré-génération des aperçus).
+**B4** (API v1 en écriture, jetons délégués, provenance des médias, file bornée des traitements, pré-génération des aperçus) ;
+**B5** (dossiers : arborescence par espace, navigation, rangement groupé, API v1 et contrainte des jetons délégués).
 
 **Section vide** : aucune (la section « à venir » des jetons a été remplacée en B2).
 
@@ -1036,11 +1093,13 @@ et portées, projets et membres, duplication/déplacement, diffusion sans cookie
 - **B2 (faite)** : voir § 9.11 et `setup.md` étape 6.
 - **B3 (faite)** : voir § 9.12 et `setup.md` étape 7.
 - **B4 (faite)** : voir § 9.13 et `setup.md` étape 8.
-- **B5 (prochaine)** : dossiers (arbre par espace dans l'admin, filtre `folder`/`recursive` dans l'API, `folderId` à l'envoi et contrainte
-  `upload.folderId` des jetons délégués, déplacement de dossier, 409 `FOLDER_NOT_EMPTY`, révision de l'espace à chaque changement d'arbre).
-- **Phase C** : transformations à la demande (grammaire réservée : préréglages vs `clé_valeur`, format par l'extension, ordre fixe,
+- **B5 (faite)** : voir § 9.14 et `setup.md` étape 9.
+- **Phase C (prochaine, à faire valider)** : transformations à la demande (grammaire réservée : préréglages vs `clé_valeur`, format par l'extension, ordre fixe,
   forme canonique + 301, politique par projet `open|signed|presets`, quotas) — architecture § 10.
 - Puis `@surge-media/client` + composants (Vue d'abord) ; **Phase D** : vidéos et documents (gestionnaires, signatures, Range).
+- Pistes B5 : glisser-déposer vers un dossier, arbre complet en barre latérale, déplacement d'un dossier vers un autre espace,
+  étiquettes (classement transversal), journalisation des opérations sur les dossiers, unicité des noms garantie en base (colonne
+  normalisée + index), nombre de médias par dossier dans l'API.
 - Pistes B4 : restauration / suppression définitive / déplacement par l'API, `If-Match` sur PATCH/PUT, clé d'idempotence des envois,
   restriction des écritures d'un jeton délégué aux médias de son sujet, compteur d'envois restants dans `/me`, révocation individuelle
   (liste de `jti`), journal de l'émission (échantillonné), file des traitements partagée (multi-instances), priorité des tâches de fond.

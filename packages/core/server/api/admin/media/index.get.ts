@@ -2,9 +2,10 @@ import { mediaListQuerySchema } from '#shared/schemas/media'
 import { listMedia } from '../../../lib/media/service'
 
 /**
- * GET /api/admin/media?project=&q=&kind=&visibility=&status=active|trash&sort=&page=
+ * GET /api/admin/media?project=&folder=&recursive=1&q=&kind=&visibility=&status=active|trash&sort=&page=
  * Médias d'un espace : `project` = identifiant d'un projet, absent = bibliothèque de
- * l'organisation. 24 par page ; filtres invalides ignorés. Renvoie aussi l'espace et les
+ * l'organisation ; `folder` = dossier affiché (absent = racine), `recursive` = sous-dossiers
+ * compris (404 FOLDER_NOT_FOUND pour un dossier d'un autre espace). 24 par page ; filtres invalides ignorés. Renvoie aussi l'espace et les
  * portées de l'utilisateur. 404 si l'espace est invisible pour lui.
  */
 export default defineEventHandler(async (event) => {

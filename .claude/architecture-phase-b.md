@@ -1,9 +1,26 @@
 # Phase B — Projets, médias, jetons d'accès et cache
 
 > **Statut : VALIDÉE — révision 2 (2026-09-29), toutes les décisions D1–D15 confirmées par l'utilisateur.**
-> Référence d'implémentation de la phase B. Avancement : **B1, B2, B3 et B4 réalisées** (voir
-> `setup.md`, Journal, étapes 5 à 8, et `.claude/project-context.md`) ; prochaine sous-étape : **B5**
-> (dossiers).
+> Référence d'implémentation de la phase B. Avancement : **phase B terminée** (B1 à B5 ; voir
+> `setup.md`, Journal, étapes 5 à 9, et `.claude/project-context.md`). Suite : phase C
+> (transformations, § 10), puis `@surge-media/client` et composants.
+>
+> Écarts et précisions de B5 (dossiers) :
+> - **Aucune migration** (tables existantes). Limite ajoutée : **1 000 dossiers par espace** (409
+>   `FOLDER_LIMIT_REACHED`) ; noms : 1–100 caractères, sans `/`, `\`, contrôle, `.`/`..`, uniques parmi les
+>   voisins **sans tenir compte de la casse** (NFC). Codes : `FOLDER_NOT_FOUND` (404), `FOLDER_NAME_TAKEN`,
+>   `FOLDER_NOT_EMPTY`, `FOLDER_LIMIT_REACHED` (409), `FOLDER_DEPTH_EXCEEDED`, `FOLDER_CYCLE` (422).
+> - **Suppression** : vide exigé, ou `content=parent` (sous-dossiers et médias, corbeille comprise,
+>   remontent dans le parent ; homonyme → 409). Les médias en corbeille ne bloquent pas : `folderId` → null.
+> - **API v1 en écriture sur les dossiers** (ajout au § 6.2, qui ne prévoyait que la lecture) :
+>   `POST /folders`, `PATCH/DELETE /folders/{id}` avec `media:write` ; `GET /folders` refusé à la clé
+>   publique (403 `CREDENTIAL_NOT_ALLOWED`), qui peut toutefois filtrer la liste par `folder`.
+> - Liste v1 : `folder=<id>|root` + `recursive=true` ; **sans `folder` : tout le projet** (compatible B3).
+>   Administration : sans `folder` = racine (navigation), `recursive=1` = sous-dossiers ; corbeille = tout l'espace.
+> - Jeton délégué : `upload.folderId` **imposé** (comme la visibilité, prioritaire sur le champ envoyé),
+>   vérifié à l'émission (404) et à l'envoi. Rangement groupé dans l'administration (`PATCH /api/admin/media`,
+>   100 médias) ; dossiers non journalisés.
+> - Arbre gardé en L1 par (espace, révision) ; toute écriture de dossier incrémente la révision.
 >
 > Écarts et précisions de B4 (API v1 en écriture, jetons délégués, traitements) :
 > - **Jeton délégué** : aucune portée d'office (un jeton `media:upload` seul ne liste rien) ; portées
