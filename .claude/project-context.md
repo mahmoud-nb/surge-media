@@ -13,8 +13,9 @@
 > 9 = **B5** (dossiers : arborescence, navigation et rangement dans l'admin, API v1), 10 = **documentation
 > interactive de l'API** (OpenAPI généré depuis `defineRouteMeta`, page `/admin/api` avec Scalar, § 9.15).
 > **La phase B est terminée.**
-> **Prochaine étape** : **phase C** — transformations à la demande (architecture § 10), à présenter et faire valider
-> avant de commencer. Architecture de la phase B : `.claude/architecture-phase-b.md` (en-tête = écarts B1 à B5).
+> **Prochaine étape** : **phase C** — transformations à la demande. Proposition rédigée le 2026-10-01 dans
+> `.claude/architecture-phase-c.md` (sous-étapes C1 à C4, décisions CD1 à CD12), **en attente de validation** : ne rien
+> développer avant. Architecture de la phase B : `.claude/architecture-phase-b.md` (en-tête = écarts B1 à B5).
 >
 > Les éléments marqués **[À CONFIRMER]** sont des hypothèses ou des points non validés par
 > l'utilisateur (récapitulés en § 22).
@@ -1155,7 +1156,8 @@ et portées, projets et membres, duplication/déplacement, diffusion sans cookie
 - **B4 (faite)** : voir § 9.13 et `setup.md` étape 8.
 - **B5 (faite)** : voir § 9.14 et `setup.md` étape 9.
 - **Phase C (prochaine, à faire valider)** : transformations à la demande (grammaire réservée : préréglages vs `clé_valeur`, format par l'extension, ordre fixe,
-  forme canonique + 301, politique par projet `open|signed|presets`, quotas) — architecture § 10.
+  forme canonique + 301, politique par projet `open|signed|presets`, quotas) — architecture phase B § 10, détaillée dans
+  `.claude/architecture-phase-c.md` (proposition à valider).
 - Puis `@surge-media/client` + composants (Vue d'abord) ; **Phase D** : vidéos et documents (gestionnaires, signatures, Range).
 - Pistes B5 : glisser-déposer vers un dossier, arbre complet en barre latérale, déplacement d'un dossier vers un autre espace,
   étiquettes (classement transversal), journalisation des opérations sur les dossiers, unicité des noms garantie en base (colonne
