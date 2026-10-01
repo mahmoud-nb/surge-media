@@ -39,8 +39,8 @@ export function extensionForMime(mimeType: string): string | undefined {
 }
 
 /**
- * Dérivés nommés (préréglages) servis par /m/<id>/v<n>/<préréglage>/<nom> ; les transformations
- * libres (phase C) auront leur propre segment (`w_800,h_600…`), jamais de « _ » dans un nom de préréglage.
+ * Préréglages qu'une application peut demander par l'API (lien signé `preset`). Tous les
+ * préréglages et les transformations libres (`w_800,h_600…`) : shared/utils/transforms.ts.
  */
 export const MEDIA_PRESETS = ['preview'] as const
 export type MediaPreset = (typeof MEDIA_PRESETS)[number]
@@ -65,5 +65,7 @@ export const MEDIA_ERROR_CODES = [
   'SIGNATURE_INVALID', // lien signé altéré ou obsolète
   'SIGNATURE_EXPIRED', // lien signé expiré
   'SERVER_BUSY', // file des traitements d'images pleine : réessayer dans quelques secondes (503)
+  'INVALID_TRANSFORM', // transformation d'URL invalide, hors bornes ou zone hors de l'image (400)
+  'TRANSFORM_QUOTA', // quota de dérivés de la version ou débit de nouvelles générations atteint (429)
 ] as const
 export type MediaErrorCode = (typeof MEDIA_ERROR_CODES)[number]

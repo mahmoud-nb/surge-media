@@ -1,6 +1,8 @@
 import type { Readable } from 'node:stream'
 import sharp from 'sharp'
+import { TRANSFORM_MIME_TYPES } from '#shared/utils/transforms'
 import { mediaError } from '../errors'
+import type { TransformPlan } from '../transform-plan'
 import type { MediaTypeHandler } from './types'
 
 /**
@@ -8,7 +10,8 @@ import type { MediaTypeHandler } from './types'
  * « bombes de décompression », petits fichiers qui occuperaient des gigaoctets une fois décodés.
  */
 const MAX_PIXELS = 100_000_000
-const PREVIEW_SIZE = 480
+/** Effort d'encodage AVIF (0 à 9, défaut de sharp : 4) : réduit, l'AVIF étant coûteux en calcul. */
+const AVIF_EFFORT = 2
 
 // Cache d'opérations libvips désactivé : il garde les fichiers d'entrée ouverts (verrouillés
 // sous Windows, ce qui empêche la suppression des fichiers temporaires) pour un gain nul ici.
@@ -55,15 +58,56 @@ export const imageHandler: MediaTypeHandler = {
     }
   },
 
-  async preview(source: Readable) {
+  async transform(source: Readable, plan: TransformPlan) {
     // Première image seulement, orientation EXIF appliquée ; la sortie ne contient aucune
-    // métadonnée (EXIF, GPS…).
-    const transformer = sharp({ limitInputPixels: MAX_PIXELS })
-      .rotate()
-      .resize({ width: PREVIEW_SIZE, height: PREVIEW_SIZE, fit: 'inside', withoutEnlargement: true })
-      .webp({ quality: 72 })
-    source.pipe(transformer)
-    const { data, info } = await transformer.toBuffer({ resolveWithObject: true })
-    return { data, mimeType: 'image/webp', extension: 'webp', width: info.width, height: info.height }
+    // métadonnée (EXIF, GPS, profil : conversion en sRVB).
+    let pipeline = sharp({ limitInputPixels: MAX_PIXELS }).autoOrient()
+
+    // Ordre validé : rotation puis miroir. sharp applique toujours le miroir avant la rotation
+    // explicite ; après un quart de tour, un miroir horizontal équivaut à un miroir vertical
+    // appliqué avant (et inversement).
+    const quarter = plan.rotate === 90 || plan.rotate === 270
+    const horizontal = plan.flip?.includes('h') ?? false
+    const vertical = plan.flip?.includes('v') ?? false
+    if (quarter ? vertical : horizontal) pipeline = pipeline.flop()
+    if (quarter ? horizontal : vertical) pipeline = pipeline.flip()
+    if (plan.rotate) pipeline = pipeline.rotate(plan.rotate)
+
+    if (plan.extract) {
+      const { x, y, width, height } = plan.extract
+      pipeline = pipeline.extract({ left: x, top: y, width, height })
+    }
+    if (plan.resize) {
+      const { width, height, fit, position, background } = plan.resize
+      pipeline = pipeline.resize({
+        width,
+        height,
+        fit,
+        position,
+        background: background ? `#${background}` : { r: 0, g: 0, b: 0, alpha: 0 },
+      })
+    }
+    if (plan.flatten) pipeline = pipeline.flatten({ background: `#${plan.flatten}` })
+
+    const quality = plan.quality ?? undefined
+    switch (plan.format) {
+      case 'jpg':
+        pipeline = pipeline.jpeg({ quality, mozjpeg: true })
+        break
+      case 'png':
+        // Sans perte, sauf qualité demandée : palette (quantification).
+        pipeline = pipeline.png(quality ? { palette: true, quality } : {})
+        break
+      case 'webp':
+        pipeline = pipeline.webp({ quality })
+        break
+      case 'avif':
+        pipeline = pipeline.avif({ quality, effort: AVIF_EFFORT })
+        break
+    }
+
+    source.pipe(pipeline)
+    const { data, info } = await pipeline.toBuffer({ resolveWithObject: true })
+    return { data, mimeType: TRANSFORM_MIME_TYPES[plan.format], extension: plan.format, width: info.width, height: info.height }
   },
 }

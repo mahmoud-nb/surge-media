@@ -85,6 +85,13 @@ export default defineNuxtConfig({
         concurrency: 0,
         queue: 100,
       },
+      // Transformations à la demande (/m/<id>/v<n>/w_800,h_600/<nom>.webp) — NUXT_MEDIA_TRANSFORM_*
+      transform: {
+        maxDimension: 4096, // largeur et hauteur de sortie maximales — _MAX_DIMENSION
+        formats: 'jpg,png,webp,avif', // formats de sortie activés — _FORMATS
+        maxVariants: 50, // dérivés par version de média, au-delà : plus de paramètres libres nouveaux — _MAX_VARIANTS
+        rateLimit: 60, // nouvelles générations libres non signées par IP et par minute, 0 = sans limite — _RATE_LIMIT
+      },
       storage: {
         driver: 'local', // local | s3 — NUXT_MEDIA_STORAGE_DRIVER
         root: './data/media', // pilote local — NUXT_MEDIA_STORAGE_ROOT
