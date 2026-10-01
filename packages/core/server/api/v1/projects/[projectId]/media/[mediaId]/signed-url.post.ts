@@ -53,7 +53,7 @@ export default defineApiHandler(async (event, principal) => {
   }
   const media = await findApiMedia(project.id, getRouterParam(event, 'mediaId') ?? '', false)
   if (!media) throw apiProblem('MEDIA_NOT_FOUND')
-  if (body.target !== 'file' && !handlerFor(media.kind)?.preview) {
+  if (body.target !== 'file' && !handlerFor(media.kind)?.transform) {
     throw apiProblem('INVALID_REQUEST', 'This media has no derived files.')
   }
 

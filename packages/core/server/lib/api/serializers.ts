@@ -26,7 +26,7 @@ export function apiLinkExpiry(nowMs = Date.now()): number {
 export function toApiMedia(media: Media, base: string, expires: number): ApiMedia {
   const signed = media.visibility === 'PRIVATE'
   const signature = (variant: 'original' | 'preview') => (signed ? `?${signMediaAccess(media, { variant }, expires)}` : '')
-  const hasPreview = Boolean(handlerFor(media.kind)?.preview)
+  const hasPreview = Boolean(handlerFor(media.kind)?.transform)
   return {
     id: media.id,
     projectId: media.projectId,

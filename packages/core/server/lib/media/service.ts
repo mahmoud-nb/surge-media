@@ -68,7 +68,7 @@ function provenanceData(provenance: MediaProvenance) {
 
 /** Représentation pour l'administration (chemins relatifs, signés si privé ou en corbeille). */
 export function toMediaSummary(media: MediaWithUploader) {
-  const paths = adminMediaPaths(media, Boolean(handlerFor(media.kind)?.preview))
+  const paths = adminMediaPaths(media, Boolean(handlerFor(media.kind)?.transform))
   return {
     id: media.id,
     projectId: media.projectId,

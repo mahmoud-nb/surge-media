@@ -5,17 +5,18 @@
 > français, avec le « Journal des étapes »). En cas de divergence, **le code fait foi**, puis
 > `setup.md`, puis ce fichier.
 >
-> **État décrit** : commit `e9f841e` (B5) + **étape 10** (2026-10-01, documentation interactive de l'API,
-> non commitée au moment de la rédaction : vérifier `git log`). Étapes terminées : 1 (monorepo, core, base), 2 (UI, auth, rôles),
+> **État décrit** : commit `c2165c3` (proposition de la phase C) + sous-étape **C1** (2026-10-01, non commitée au moment de la
+> rédaction : vérifier `git log`). Étapes terminées : 1 (monorepo, core, base), 2 (UI, auth, rôles),
 > 3 (utilisateurs), 4 (médias, phase A), 5 = **B1** (projets, espaces, autorisations), 6 = **B2**
 > (identifiants d'API, origines, mode sudo, journal d'audit), 7 = **B3** (API publique v1 en lecture),
 > 8 = **B4** (API v1 en écriture, jetons délégués `sm_dt_`, file bornée des traitements, pré-génération),
 > 9 = **B5** (dossiers : arborescence, navigation et rangement dans l'admin, API v1), 10 = **documentation
-> interactive de l'API** (OpenAPI généré depuis `defineRouteMeta`, page `/admin/api` avec Scalar, § 9.15).
-> **La phase B est terminée.**
-> **Prochaine étape** : **phase C** — transformations à la demande. Proposition rédigée le 2026-10-01 dans
-> `.claude/architecture-phase-c.md` (sous-étapes C1 à C4, décisions CD1 à CD12), **en attente de validation** : ne rien
-> développer avant. Architecture de la phase B : `.claude/architecture-phase-b.md` (en-tête = écarts B1 à B5).
+> interactive de l'API** (OpenAPI généré depuis `defineRouteMeta`, page `/admin/api` avec Scalar, § 9.15),
+> 11 = **C1** (transformations d'images à la demande : moteur et diffusion par `/m/`, § 9.16). **La phase B est terminée.**
+> **Phase C** (transformations) : architecture **validée** le 2026-10-01 (`.claude/architecture-phase-c.md`, décisions CD1 à CD12,
+> écarts en tête). **Prochaine étape** : **C2** — politique par projet (`open|signed|presets`), préréglages globaux et de projet,
+> page « Réglages » (`settings:manage`), onglet « Transformations », migration `c2_transforms`. Architecture de la phase B :
+> `.claude/architecture-phase-b.md` (en-tête = écarts B1 à B5).
 >
 > Les éléments marqués **[À CONFIRMER]** sont des hypothèses ou des points non validés par
 > l'utilisateur (récapitulés en § 22).
@@ -163,7 +164,9 @@ Couches serveur :
   B3 : **`access/credentials.ts`**, **`api/{context,problem,rate-limit,cursor,queries,serializers,openapi}.ts`**, **`cache/{lru,revisions}.ts`**,
   **`media/{cache,range}.ts`**, **`projects/state.ts`** (§ 9.12) ; B4 : **`access/{principal,delegated}.ts`**, **`api/writes.ts`**,
   **`media/{processing,variants}.ts`** (dérivés sortis de `delivery.ts`) (§ 9.13) ; B5 : **`folders/service.ts`** (§ 9.14) ;
-  étape 10 : **`api/docs.ts`** (`docsProjects`), `api/openapi.ts` réécrit (§ 9.15), `server/types/nitro-handlers-meta.d.ts`. Les nouveaux modules **importent explicitement** les utilitaires de
+  étape 10 : **`api/docs.ts`** (`docsProjects`), `api/openapi.ts` réécrit (§ 9.15), `server/types/nitro-handlers-meta.d.ts` ;
+  C1 : **`media/{delivery-path,transform-plan,transform-settings}.ts`** (chemins et opération effective purs, bornes), plugin
+  `server/plugins/variant-keys.ts` (§ 9.16). Les nouveaux modules **importent explicitement** les utilitaires de
   `#shared/utils/*` (un auto-import non injecté a causé un `ReferenceError` en production, voir § 18).
   Les **types** exportés de `server/utils` (ex. `Space`) s'importent explicitement (`import type { Space } from '../../utils/access'`).
 
@@ -173,6 +176,7 @@ Couches serveur :
   PROJECT_ROLE_SCOPES, PROJECT_ROLE_CEILING, ARCHIVED_PROJECT_SCOPES, assignableProjectRoles, effectiveProjectRole, spaceScopes, hasScope,
   TOKEN_SCOPES, TOKEN_BASE_SCOPES, TOKEN_OPTIONAL_SCOPES, tokenScopes) — auto-importé, **pur** (testé).
 - `utils/folders.ts` (B5 : règles pures de l'arborescence, § 9.14), `schemas/folders.ts`.
+- `utils/transforms.ts` (C1 : grammaire et forme canonique des transformations, préréglages intégrés, § 9.16) — auto-importé, **pur** (testé).
 - `utils/projects.ts` (longueurs, `PROJECT_SLUG_PATTERN`, `PROJECT_STATUSES`, `PROJECT_MEDIA_ON_DELETE`, `slugify`, `PROJECT_ERROR_CODES`) — auto-importé.
 - `utils/credentials.ts` (`TOKEN_TYPES`, `PROJECT_KEY_TYPES`, `TOKEN_PREFIXES`, `KEY_ENVIRONMENTS`, `ENVIRONMENT_PATTERN`, durées, `ROTATION_OVERLAPS`,
   `tokenStatus`, `MAX_ALLOWED_ORIGINS`, `CREDENTIAL_ERROR_CODES`), `utils/origins.ts` (`normalizeOrigin`, `isWildcardOrigin`, `isOriginAllowed` — purs, testés),
@@ -259,6 +263,7 @@ Ne jamais modifier une migration publiée.
 | `NUXT_MEDIA_STORAGE_S3_BUCKET/REGION/ENDPOINT/ACCESS_KEY_ID/SECRET_ACCESS_KEY/FORCE_PATH_STYLE` | vides / false | pilote S3 (endpoint vide = AWS) |
 | `NUXT_API_RATE_LIMIT_PUBLISHABLE/SECRET/PERSONAL/DELEGATED/UPLOADS/AUTH_FAILURES` | 300 / 1200 / 1200 / 300 / 60 / 30 | par minute, API v1 (`runtimeConfig.api.rateLimit`) ; `DELEGATED` par (émetteur, IP), `UPLOADS` = fichiers par identifiant |
 | `NUXT_MEDIA_PROCESSING_CONCURRENCY` / `_QUEUE` | 0 (= cœurs) / 100 | file bornée des traitements d'images (`runtimeConfig.media.processing`) |
+| `NUXT_MEDIA_TRANSFORM_MAX_DIMENSION` / `_FORMATS` / `_MAX_VARIANTS` / `_RATE_LIMIT` | 4096 / `jpg,png,webp,avif` / 50 / 60 | transformations (`runtimeConfig.media.transform`, C1) : borne de sortie, formats, dérivés par version, générations libres non signées par IP et par minute (0 = sans limite) |
 | `SURGE_MEDIA_LANG` | locale système, sinon fr | langue de la CLI |
 
 `NUXT_STORAGE_BASE` (étape 1) **n'existe plus** (remplacée par `NUXT_MEDIA_STORAGE_ROOT`).
@@ -452,10 +457,10 @@ clé `originals/…` ; nouvelle ligne (version 1, mêmes kind/visibility/origina
 
 ### 9.6 Diffusion (`server/routes/m/[...path].ts`, `server/lib/media/delivery.ts`)
 
-- URL : `/m/<id>/v<version>/<nom>.<ext>` (original) · `/m/<id>/v<version>/preview/<nom>.webp` (aperçu). `<nom>` = slug ASCII de
-  `title || originalName` (≤ 80), **purement indicatif**. Grammaire : 3–4 segments, id `^[a-z0-9]{8,64}$`, version `v\d{1,9}`,
-  dérivés connus `['preview']` ; sinon 404. Méthodes GET/HEAD (autres → 405 + `Allow`). HEAD : 200 avec en-têtes seuls.
-- Version différente de la courante → **302** vers l'URL courante (`Cache-Control: no-cache`) ; **404** si le média est en corbeille.
+- URL : `/m/<id>/v<version>/<nom>.<ext>` (original) · `/m/<id>/v<version>/<préréglage|paramètres>/<nom>.<format>` (dérivé, C1 :
+  § 9.16 ; aperçu = `preview/<nom>.webp`). `<nom>` = slug ASCII de `title || originalName` (≤ 80), **purement indicatif**. Grammaire :
+  3–4 segments, id `^[a-z0-9]{8,64}$`, version `v\d{1,9}` ; sinon 404. Méthodes GET/HEAD (autres → 405 + `Allow`). HEAD : 200 avec en-têtes seuls.
+- Version différente de la courante → **302** vers l'URL courante, même transformation (`Cache-Control: no-cache`) ; **404** si le média est en corbeille.
 - Accès (`authorizeDelivery`, **synchrone, sans cookie ni session** depuis B1) :
 
 | Situation | Règle | Cache-Control |
@@ -469,11 +474,11 @@ clé `originals/…` ; nouvelle ligne (version 1, mêmes kind/visibility/origina
 - L'administration reçoit des chemins **signés `scope=admin`** pour les médias privés ou en corbeille (`adminMediaPaths`, ~1 h,
   échéance alignée sur 15 min) ; chemins publics inchangés sinon.
 
-- En-têtes : `Content-Type` (base), `ETag` (original : 32 premiers hex du SHA-256 ; dérivé : 24 hex + `-preview`), 304 sur `If-None-Match`,
+- En-têtes : `Content-Type` (base, ou format du dérivé), `ETag` (original : 32 premiers hex du SHA-256 ; dérivé : 24 hex + `-` + 10 hex de l'opération), 304 sur `If-None-Match`,
   `Content-Length`, `X-Content-Type-Options: nosniff`, `Content-Security-Policy: default-src 'none'; sandbox`,
   `Cross-Origin-Resource-Policy: cross-origin`, `Access-Control-Allow-Origin: *` (B1), `Content-Disposition: inline; filename="ascii"; filename*=UTF-8''…` (nom d'origine pour
   l'original), `X-Robots-Tag: noindex` hors public ; plus les en-têtes globaux (`X-Frame-Options: DENY`…).
-- Dérivés (`media/variants.ts` depuis B4) : `resolveDeliverable` → cache → ligne `MediaVariant (mediaId, "v<version>/<variant>")` sinon
+- Dérivés (`media/variants.ts` depuis B4, généralisés en C1 : § 9.16) : `resolveDeliverable` → cache → ligne `MediaVariant (mediaId, "v<version>/<opération>.<format>")` sinon
   génération par le gestionnaire dans la file bornée (dédoublonnée par processus via une Map de promesses), `put` puis `create`
   (violation d'unicité ignorée) ; pré-générés après envoi/remplacement/duplication ; file pleine → 503 + `Retry-After`.
 
@@ -728,6 +733,52 @@ clé `originals/…` ; nouvelle ligne (version 1, mêmes kind/visibility/origina
   1 h, admis depuis l'origine de l'installation malgré `SECRET_IN_BROWSER`. Le classifieur de sécurité de l'agent a refusé sa création (assouplissement
   du garde-fou) ; le code a été retiré, **seule la migration `20261001154517_api_console` (colonne inutilisée) reste**, appliquée en dev.
 
+### 9.16 Transformations à la demande (phase C, C1)
+
+Architecture validée : `.claude/architecture-phase-c.md` (CD1–CD12 ; écarts de C1 en tête). Référence d'exploitation : `setup.md` § 8.1.
+
+- **Grammaire** (`shared/utils/transforms.ts`, pur, auto-importé, testé) : `/m/<id>/v<n>/<segment>/<nom>.<format>` ; segment avec `_` =
+  paramètres `clé_valeur` séparés par `,`, sinon préréglage (`PRESET_NAME_PATTERN` `^[a-z][a-z0-9-]{0,31}$`). Formats `TRANSFORM_FORMATS`
+  (`jpg`, `png`, `webp`, `avif` ; `jpeg` → 301 `jpg`), `TRANSFORM_MIME_TYPES`, `TRANSFORM_DEFAULT_QUALITY` (jpg/webp 80, avif 50, png null =
+  sans perte). `BUILTIN_PRESETS` : `preview` = `w_480,h_480,fit_inside,q_72`, `full` = '' ; `RESERVED_PRESET_NAMES` = + `original`.
+  `parseTransformation(segment, { maxDimension })` → `{ ok, transformation, canonical } | { ok: false, param, message }` (messages en anglais) ;
+  `formatTransformation` ; `transformationSegment('')` = `full` ; `IDENTITY_TRANSFORMATION`.
+- **Forme canonique** : ordre d'**exécution** `r, flip, crop, w, h, fit, g, q, bg` (écart : le document disait `crop, r, flip…`) ; défauts et
+  paramètres sans effet retirés (`r_0`, `fit_cover`, `g_focal`, `fit`/`g` sans les deux dimensions, `dpr` appliqué puis retiré) ;
+  **indépendante du format** (`q_`/`bg_` explicites conservés) pour qu'une signature vaille pour toutes les sources d'un `<picture>`.
+- **Chemins** (`server/lib/media/delivery-path.ts`, pur) : `parseDeliveryPath(path, { maxDimension, formats })` → `target` (`original` |
+  `preset` | `transform`) | `redirect` (chemin canonique, sans `/m/`) | `invalid` | null ; `deliveryVariant(target)` = `original` / nom /
+  `t:<canonique>` (droit signé, sans format) ; `derivedSegment`. `delivery.ts` le réexporte.
+- **Opération effective** (`server/lib/media/transform-plan.ts`, pur) : `planTransform(t, { width, height, hasAlpha, focal }, format, max)`
+  → `{ rotate, flip, extract, resize { fit fill|cover|contain, position, background }, flatten, quality, width, height, key }`. Zone vérifiée
+  dans l'image tournée ; **jamais d'agrandissement** (cover/fill : `k = min(1, W/w, H/h)` sur la boîte ; contain : boîte réduite tant que
+  l'image y serait agrandie ; inside/outside/une dimension : échelle ≤ 1) ; borne `max` appliquée aussi sans redimensionnement ; réductions
+  proportionnelles exprimées en `fill` exact ; `g_focal` + point → zone calculée (prêt pour C3), sinon `position` sharp (`centre`).
+  `key` = `[r_,flip_,crop_x-y-w-h,size_WxH[,fit_cover,g_…|,fit_contain,bg_…],flatten_…,q_…]|full` + `.format` : les demandes équivalentes
+  (`w_1600`, `w_4096`, `full` sur 1200 px) partagent un fichier.
+- **Rendu** (`handlers/image.ts`, `transform(source, plan)` remplace `preview`) : `sharp({ limitInputPixels }).autoOrient()`, puis
+  **miroir avant rotation avec axes permutés après un quart de tour** (sharp applique toujours `flip`/`flop` avant `rotate`, quel que soit
+  l'ordre des appels — vérifié), `extract`, `resize`, `flatten`, encodage (jpeg mozjpeg, png palette si `q`, webp, avif effort 2).
+  Testé sur une image repère (`tests/image-transform.test.ts` : 16 combinaisons, EXIF 6, 4 formats).
+- **Dérivés** (`variants.ts`) : `resolveDeliverable(media, 'original' | DerivedRequest { transformation, format, free, beforeGenerate? })` ;
+  `MediaVariant.transformation` = `v<n>/<key>` ; ETag `<checksum 24>-<sha256(key) 10>` ; quota (`assertVariantQuota` : lignes de la version ≥
+  `maxVariants` → 429 `TRANSFORM_QUOTA`) puis `beforeGenerate` (débit) **dans** la promesse dédoublonnée ; `builtinPresetTransformation`,
+  `previewRequest()` (preview en WebP), `hasDerivedFiles(media)` (remplace `handler.preview`), `transformSource(media)` (focal null jusqu'à C3).
+  `transform-settings.ts` : `useTransformSettings()` (`runtimeConfig.media.transform` : `maxDimension` 4096, `formats`, `maxVariants` 50,
+  `rateLimit` 60 ; valeurs invalides → défaut).
+- **Route `/m/`** : 404 / 400 `INVALID_TRANSFORM` (`data.detail`) / 301 (`public, max-age=86400`, chaîne de requête conservée) → média → 302
+  de version avec le même segment (`derivedPath`) → `authorizeDelivery` → préréglage inconnu 404 → `resolveDeliverable` ; débit
+  `createTokenBucketLimiter` clé `gen:<ip>` seulement si `generationRateLimited(access)` (public non signé, ou `scope=derived`) ;
+  `Retry-After` depuis `data.retryAfter` ; `Content-Disposition` = nom de l'URL décodé.
+- **Accès** : `DeliveryAccess` = `{ mode: 'public', signed }` | `{ mode: 'signed', expires, scope }` | `{ mode: 'credential' }` ; signature
+  permanente valide + média public → `public` (cache immuable) ; sinon 403 `SIGNATURE_INVALID`.
+- **Signatures** : `targetGrant('t:…')` = lui-même ; `computeSignature(…, expires | null)` (`perm`) ; `buildSignatureQuery(…, null)` sans `exp`
+  (lève pour l'original ou un droit élargi) ; `checkSignature` : `exp` absent = permanente, refusée avec `scope` ou pour l'original.
+- **Reprise** : plugin `server/plugins/variant-keys.ts` (lignes sans `.` = anciennes `v<n>/preview` → renommées en `v<n>/<key>` du préréglage,
+  fichier conservé ; orpheline ou conflit d'unicité → ligne et fichier supprimés).
+- `urls.ts` : `derivedPath(media, segment, format)` ; `mediaPath(media, 'preview')` inchangé. `MEDIA_PRESETS` (API) reste `['preview']`
+  jusqu'à C3. `mediaError` accepte 429. Codes `INVALID_TRANSFORM`, `TRANSFORM_QUOTA` dans `MEDIA_ERROR_CODES` (pas encore dans `API_ERRORS` : C3).
+
 ## 10. Référence des API
 
 Format d'erreur (h3) : `{ statusCode, statusMessage, message, data? }` ; **codes métier dans `data.code`** (lus côté client par
@@ -958,8 +1009,11 @@ Contrats de données :
 | Identité unique `Principal` (émetteur + délégation) pour l'API et `/m/` (B4) | une seule logique d'accès ; empêche qu'un délégué hérite des droits de son émetteur par un test `credential.type` |
 | File bornée des traitements (sémaphore) + pré-génération des aperçus (B4) | architecture § 9.2 ; 503 `SERVER_BUSY` plutôt qu'un serveur saturé ; premier affichage sans attente |
 | Dossiers : arbre entier en mémoire par révision, filtre récursif en IN, pas de colonne de chemin (B5) | architecture § 11 ; portable, déplacement sans réécriture des médias ; unicité des noms par l'application |
+| Transformations : forme canonique syntaxique (indépendante du média et du format) + opération effective calculée (C1) | une URL par résultat (301), une signature pour toutes les sources d'un `<picture>`, un fichier par résultat ; non-agrandissement calculé par nous (sharp ignore le rapport demandé avec `withoutEnlargement`) |
+| AVIF effort 2 (C1) | mesuré (photo de 3000 px) : 0,5 s au lieu de 2,1 s (effort 4), fichier ~30 % plus lourd, toujours plus léger que WebP |
+| Reprise des anciens aperçus au démarrage (plugin), pas en migration (C1) | aucune migration en C1 ; l'identifiant dépend des dimensions (calcul applicatif, pas SQL) ; fichiers conservés |
 | Journal d'audit sans clés étrangères + écran ADMIN (`audit:read`) (B2) | les entrées survivent aux suppressions ; pas d'écran de journal par projet pour les propriétaires (piste) |
-| SVG exclu, originaux servis tels quels | SVG peut porter du script ; retrait EXIF prévu via les dérivés (phase C) |
+| SVG exclu, originaux servis tels quels | SVG peut porter du script ; copie sans EXIF par les dérivés (`full`, C1) |
 | Recherche : `textSearch` (terme + minuscules) et `mode: 'insensitive'` seulement sous PostgreSQL | portabilité ; SQLite ne gère la casse que pour l'ASCII |
 | `/api/admin/config/media` (et non `/api/admin/media/config`) | inférence des types Nitro |
 | OpenAPI : `defineRouteMeta` littéral par route + composants zod, français + `x-i18n` (étape 10) | doc à côté du code, route nouvelle visible d'office, une seule source de schémas ; langue de référence du projet ; contrôles en test |
@@ -990,6 +1044,9 @@ Contrats de données :
   fichiers acceptés (envois et remplacements) ; visibilité imposée aux nouveaux médias ; clé publique jamais en écriture.
 - Dossiers (B5) : un média est dans 0 ou 1 dossier **de son espace** ; noms uniques parmi les voisins (casse ignorée) ; 8 niveaux ;
   1 000 par espace ; suppression d'un dossier vide ou avec remontée du contenu ; `media:write` pour toute écriture.
+- Transformations (C1) : jamais d'agrandissement ; sortie ≤ 4096 px ; formats jpg/png/webp/avif ; 50 dérivés par version (au-delà, plus de
+  nouveaux paramètres libres, existants et préréglages toujours servis) ; 60 générations libres non signées par IP et par minute ;
+  signature permanente seulement pour un dérivé précis d'un média public ; politique `open` partout jusqu'à C2.
 - Actions sensibles (sudo) : clé secrète (création, rotation), jeton personnel (création), membres (ajout, rôle, retrait d'autrui) ;
   jamais pour une action qui retire des droits (révoquer, quitter).
 
@@ -1056,7 +1113,15 @@ Contrats de données :
 - Tests d'API : script Node en `scratchpad` (`b1-api-test.mjs` : comptes jetables DEVELOPER/EDITOR créés par invitation puis supprimés,
   identifiants admin lus dans `.env` sans les afficher) ; pour l'interface, cookie de session obtenu par un script puis posé dans le
   navigateur, et **déconnexion** à la fin.
-- **Build de production bloquée sur ce poste (étape 10)** : Smart App Control bloque la **copie** de `argon2.win32-x64-msvc.node` dans
+- **sharp** : `flip`/`flop` s'appliquent **toujours avant** `rotate(n)`, quel que soit l'ordre des appels (après `autoOrient`) → pour
+  « rotation puis miroir », permuter h/v après un quart de tour (`handlers/image.ts`). `resize({ withoutEnlargement })` en `cover` sur une
+  boîte plus grande que l'image renvoie l'image entière **sans recadrage** (rapport demandé perdu) → bornage calculé dans `transform-plan.ts`.
+- **Scénarios rejoués à la suite** : `b3-api-test.mjs` déclenche volontairement le limiteur d'échecs d'authentification par IP → toutes
+  les requêtes v1 de l'IP reçoivent 429 pendant ~1 min : attendre (commande en arrière-plan) avant B4/B5. Les anciens scripts lisent
+  maintenant les lignes commentées de `.env` (regex `^#? *NAME=`).
+- **Rebuild** : arrêter d'abord le serveur `core-start-3100` (il verrouille `argon2…node` dans `.output` → `EPERM unlink`), puis le relancer ;
+  il s'arrête aussi pendant une pause de l'agent (relancer avant de rejouer des scénarios).
+- **Build de production bloquée sur ce poste (étape 10)** — **plus constaté le 2026-10-01 en C1** (la build démarre) : Smart App Control bloquait la **copie** de `argon2.win32-x64-msvc.node` dans
   `.output/server/node_modules` (l'original de `node_modules`, identique, reste autorisé) → `pnpm start` échoue au démarrage. Ne pas contourner
   (lien physique, désactivation) : laisser l'utilisateur débloquer ; tester sur le `pnpm dev` de l'utilisateur (port 3000) sans l'arrêter, et
   vérifier la build statiquement (`grep operationId .output/server/chunks`).
@@ -1100,6 +1165,9 @@ Contrats de données :
 - Route de l'API v1 : `defineApiHandler` + `requireApiProject(event, principal, scope)` + `parseApiQuery`/`readApiBody` ; erreurs par
   `apiProblem(code, detail)` (code ajouté au catalogue `API_ERRORS` et documenté) ; réponse typée par un schéma de `shared/schemas/api.ts`
   (et ajoutée au registre OpenAPI si nouvelle).
+- Transformations : tout nouveau paramètre passe par `shared/utils/transforms.ts` (analyse, bornes, forme canonique) **et**
+  `transform-plan.ts` (opération effective, identifiant), avec leurs tests ; un dérivé n'est servi que par `resolveDeliverable`
+  (garde-fous, dédoublonnage) ; jamais de format hors de l'extension.
 - Toute écriture de médias passe par le service médias (qui appelle `mediaChanged`) — jamais de `prisma.media.update` direct depuis une
   route, sinon caches de diffusion et ETag de liste deviennent faux.
 - Valeur secrète à afficher une fois : `useFlash().set({ …, payload })` puis `AdminSecretPanel` sur la page suivante (disparaît au rechargement).
@@ -1116,9 +1184,14 @@ Contrats de données :
 - Tests d'API faits jusqu'ici avec des scripts Node temporaires (fetch + FormData + cookie), rejoués en dev **et** en prod ;
   S3 testé contre `s3rver` (faux S3 local, `pnpm dlx s3rver@3.7.1 --port 4568 --configure-bucket surge-media`).
 - Interface : navigateur intégré (pilotage par JS quand le panneau ne s'affiche pas), audits axe injectés depuis jsDelivr.
-- Automatisé dans le dépôt depuis B1 : tests unitaires Vitest des modules purs (114 tests depuis B5 : `tests/{permissions,signing,projects,credentials,api,delegated,processing,folders}.test.ts`). Le reste (API, interface, axe) reste manuel
+- Automatisé dans le dépôt depuis B1 : tests unitaires Vitest des modules purs (164 tests depuis C1 : `tests/{permissions,signing,projects,credentials,api,openapi,delegated,processing,folders,transforms,image-transform}.test.ts` ;
+  `image-transform` exécute le vrai pipeline sharp). Le reste (API, interface, axe) reste manuel
   (piste : tests d'intégration API + Playwright + @axe-core/playwright).
 - Viewport du navigateur intégré : 1024 px (DPR 1,25) ; les mises en page à 5 colonnes doivent attendre `xl`.
+- C1 : `c1-delivery-test.mjs` (66 contrôles HTTP sur la build de production : formats, 301/302, 400/404, ETag/304/HEAD/Range, EXIF,
+  dérivés partagés, générations simultanées, signatures exactes/`derived`/permanentes/admin — calculées avec le secret de `.env`, jamais
+  affiché —, corbeille, remplacement, quota, débit ; projet jetable purgé) ; B1 à B5 rejoués (contrôle B4 de l'aperçu adapté au nouvel
+  identifiant `v1/[size_…,]q_72.webp`).
 - Étape 10 : `apidocs-test.mjs setup|check|cleanup` (comptes DEVELOPER/EDITOR jetables, projet, clés publique/secrète, média ; 28 contrôles
   sur le serveur de dev ; nettoyage audit + `CacheRevision`), tests d'interface (requête d'essai réelle, réseau 100 % même origine, axe ×4) ;
   `tests/openapi.test.ts` (120 tests Vitest au total).
@@ -1143,7 +1216,9 @@ et portées, projets et membres, duplication/déplacement, diffusion sans cookie
 **B2** (clés publiques/secrètes par environnement avec rotation, jetons personnels, origines CORS, mode sudo, journal d'audit + écran) ;
 **B3** (API publique v1 en lecture, caches et révisions, recherche normalisée, Bearer et Range sur `/m/`, OpenAPI, SQLite WAL) ;
 **B4** (API v1 en écriture, jetons délégués, provenance des médias, file bornée des traitements, pré-génération des aperçus) ;
-**B5** (dossiers : arborescence par espace, navigation, rangement groupé, API v1 et contrainte des jetons délégués).
+**B5** (dossiers : arborescence par espace, navigation, rangement groupé, API v1 et contrainte des jetons délégués) ; étape 10
+(documentation interactive de l'API) ; **C1** (transformations à la demande : grammaire, forme canonique, opération effective, diffusion,
+garde-fous, signatures de transformation et permanentes).
 
 **Section vide** : aucune (la section « à venir » des jetons a été remplacée en B2).
 
@@ -1155,10 +1230,15 @@ et portées, projets et membres, duplication/déplacement, diffusion sans cookie
 - **B3 (faite)** : voir § 9.12 et `setup.md` étape 7.
 - **B4 (faite)** : voir § 9.13 et `setup.md` étape 8.
 - **B5 (faite)** : voir § 9.14 et `setup.md` étape 9.
-- **Phase C (prochaine, à faire valider)** : transformations à la demande (grammaire réservée : préréglages vs `clé_valeur`, format par l'extension, ordre fixe,
-  forme canonique + 301, politique par projet `open|signed|presets`, quotas) — architecture phase B § 10, détaillée dans
-  `.claude/architecture-phase-c.md` (proposition à valider).
+- **Phase C (validée, en cours)** : `.claude/architecture-phase-c.md`. **C1 (faite)** : § 9.16 et `setup.md` étape 11. **C2 (prochaine)** :
+  politique par projet et bibliothèque (`Project.transformPolicy`, `Setting`), préréglages `TransformPreset` (globaux ADMIN, projet
+  `project:settings`, cache 7 j + revalidation), page « Réglages » (`settings:manage`), onglet « Transformations », `GET …/presets`,
+  403 `TRANSFORM_NOT_ALLOWED`, migration `c2_transforms`. **C3** : `urlTemplate`, `focalPoint` (version + 1), `signed-url` étendu
+  (`transform`, `format`, signatures permanentes délivrées), lot `signed-urls`, OpenAPI (`API_ERRORS` + codes de transformation).
+  **C4** : générateur d'URL sur la fiche média (aperçu non conservé).
 - Puis `@surge-media/client` + composants (Vue d'abord) ; **Phase D** : vidéos et documents (gestionnaires, signatures, Range).
+- Pistes C1 : sortie GIF/animations, `X-Forwarded-For` de confiance (débit par IP derrière un CDN), limiteur partagé (Redis),
+  purge des dérivés jamais redemandés.
 - Pistes B5 : glisser-déposer vers un dossier, arbre complet en barre latérale, déplacement d'un dossier vers un autre espace,
   étiquettes (classement transversal), journalisation des opérations sur les dossiers, unicité des noms garantie en base (colonne
   normalisée + index), nombre de médias par dossier dans l'API.
@@ -1189,7 +1269,7 @@ et portées, projets et membres, duplication/déplacement, diffusion sans cookie
 - **Migration `20261001154517_api_console`** (colonne `AccessToken.sessionId` inutilisée, appliquée en dev) : à garder (jeton de console validé)
   ou à retirer (supprimer les dossiers de migration, remettre le schéma et l'instantané, puis `ALTER TABLE … DROP COLUMN` et la ligne de
   `_prisma_migrations` de la base de dev) — décision de l'utilisateur.
-- Démarrage de la build de production de l'étape 10 non vérifié sur ce poste (argon2 bloqué par Smart App Control).
+- Démarrage de la build de production : bloqué à l'étape 10 (argon2, Smart App Control), mais **fonctionnel le 2026-10-01 en C1**.
 - **Override `oxc-transform` 0.141.0** hors de la plage de Nuxt 3.21 : fonctionne (typecheck, dev, build), mais à surveiller et retirer.
 - Environnement local actuel (non versionné, indicatif) : compte `admin@surge-media.test` (ADMIN, créé par amorçage ; mot de passe dans
   `packages/core/.env`, variables d'amorçage encore présentes → avertissement au tableau de bord), un compte EDITOR créé par

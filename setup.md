@@ -70,7 +70,8 @@ surge-media/
       │  ├─ routes/m/      diffusion des médias : /m/<id>/v<version>/…
       │  ├─ lib/storage/   interface MediaStorage + adaptateur Flydrive (local, S3)
       │  ├─ lib/media/     métier des médias : service, gestionnaires par genre, envoi, signature, diffusion,
-      │  │                 dérivés (pré-génération), file bornée des traitements
+      │  │                 transformations (chemins, opération effective), dérivés (pré-génération),
+      │  │                 file bornée des traitements
       │  ├─ lib/projects/  projets, membres, origines autorisées
       │  ├─ lib/folders/   dossiers d'un espace : arbre (cache par révision), écritures, filtre des listes
       │  ├─ lib/access/    identifiants d'API : format (CRC), résolution, jetons délégués, identité de l'appelant
@@ -85,7 +86,8 @@ surge-media/
       │  │                 recordAudit(), utilisateurs, liens de mot de passe… (auto-importés)
       │  └─ generated/     client Prisma généré (non versionné)
       ├─ shared/           code partagé app / serveur / CLI : permissions et portées, identifiants, origines,
-      │                    dossiers (règles de l'arborescence), journal d'audit, schémas zod, BDD
+      │                    dossiers (règles de l'arborescence), transformations (grammaire, forme
+      │                    canonique), journal d'audit, schémas zod, BDD
       ├─ prisma/
       │  ├─ schema.prisma
       │  └─ migrations/<fournisseur>/   un historique par fournisseur
@@ -239,6 +241,10 @@ Le fichier `packages/core/.env` est créé par `pnpm db:init` à partir de `.env
 | `NUXT_API_RATE_LIMIT_*` | 300 / 1200 / 1200 / 300 / 60 / 30 | par minute, API v1 : requêtes `PUBLISHABLE` (par clé et IP), `SECRET`, `PERSONAL`, `DELEGATED` (par émetteur et IP) ; `UPLOADS` (fichiers envoyés par identifiant) ; `AUTH_FAILURES` (identifiants refusés par IP) |
 | `NUXT_MEDIA_PROCESSING_CONCURRENCY` | `0` (= nombre de cœurs) | traitements d'images simultanés (analyse des envois, aperçus) |
 | `NUXT_MEDIA_PROCESSING_QUEUE` | `100` | traitements en attente au-delà ; file pleine → 503 `SERVER_BUSY` + `Retry-After` |
+| `NUXT_MEDIA_TRANSFORM_MAX_DIMENSION` | `4096` | largeur et hauteur maximales d'une image transformée (§ 8.1) |
+| `NUXT_MEDIA_TRANSFORM_FORMATS` | `jpg,png,webp,avif` | formats de sortie activés |
+| `NUXT_MEDIA_TRANSFORM_MAX_VARIANTS` | `50` | dérivés par version de média ; au-delà, plus de nouveaux paramètres libres (429 `TRANSFORM_QUOTA`) |
+| `NUXT_MEDIA_TRANSFORM_RATE_LIMIT` | `60` | nouvelles transformations libres non signées par IP et par minute ; `0` = sans limite (à relever derrière un CDN) |
 
 ### 6.4 Modèle de données (`prisma/schema.prisma`)
 
@@ -363,8 +369,8 @@ corbeille uniquement (enregistrement, original et dérivés).
 
 `GET|HEAD /m/<id>/v<version>/<nom>.<ext>` (original) et `/m/<id>/v<version>/preview/<nom>.webp`
 (aperçu 480 px, métadonnées EXIF retirées, pré-généré après l'envoi — sinon généré à la première
-demande — puis conservé).
-Le nom est indicatif ; une ancienne version redirige (302) vers l'URL courante.
+demande — puis conservé). Toute autre transformation (taille, recadrage, format…) : § 8.1.
+Le nom est indicatif ; une ancienne version redirige (302) vers l'URL courante (même transformation).
 
 **La diffusion n'utilise jamais de cookie** : elle ne dépend que de l'URL (publique ou signée),
 ce qui la rend cachable par un CDN et indépendante des projets.
@@ -372,14 +378,15 @@ ce qui la rend cachable par un CDN et indépendante des projets.
 | Accès | Condition | Cache |
 | --- | --- | --- |
 | Public | aucune | `public, max-age=1 an, immutable` (l'URL change à chaque remplacement) |
-| Privé, lien de partage | `?exp&kid&sig` pour un fichier précis (original ou aperçu), 7 jours max | `private`, jusqu'à l'échéance (1 h max) |
+| Privé, lien de partage | `?exp&kid&sig` pour un fichier précis (original, préréglage ou transformation), 7 jours max | `private`, jusqu'à l'échéance (1 h max) |
 | Privé ou corbeille, aperçu d'administration | `?exp&kid&scope=admin&sig` : tout fichier de la version, ~1 h, échéance alignée sur le quart d'heure (même URL pendant 15 min → cache navigateur) | `private`, jusqu'à l'échéance |
 | Privé, identifiant d'API | `Authorization: Bearer` : clé secrète ou jeton personnel ayant `media:read` dans l'espace du média (jamais une clé publique, jamais depuis un navigateur), ou jeton délégué `media:read` de son projet (depuis une origine autorisée) | `private, no-cache` + `Vary: Authorization` |
 | Corbeille, autre accès | 404 (existence non révélée, pas de redirection de version) | — |
 
 Liens signés (v2, `server/lib/media/signing.ts`) : HMAC-SHA256 de `v2:<id>:<version>:<droit>:<échéance>`,
-où le droit est le fichier exact (`file`, `preset:preview`) ou un droit élargi (`scope=derived` : tout
-dérivé, jamais l'original ; `scope=admin`). `kid` = empreinte courte du secret : pour changer
+où le droit est le fichier exact (`file`, `preset:<nom>`, `t:<transformation canonique>` — sans le format)
+ou un droit élargi (`scope=derived` : tout dérivé, jamais l'original ; `scope=admin`). Sans `exp`, la
+signature est **permanente** (`perm`) : réservée à un dérivé précis d'un média public (§ 8.1). `kid` = empreinte courte du secret : pour changer
 `NUXT_MEDIA_SIGNING_SECRET` sans casser les liens en cours, placer l'ancien dans
 `NUXT_MEDIA_PREVIOUS_SIGNING_SECRET` pendant 7 jours. Invalidation : remplacer le fichier (un média),
 ou retirer l'ancien secret (tous).
@@ -407,7 +414,8 @@ Les chemins renvoyés à l'interface d'administration restent relatifs ; les adr
 (adresse publique, lien de partage) sont absolues, construites sur cette base.
 
 **Confidentialité** : l'original est servi tel quel, métadonnées EXIF comprises (appareil, parfois
-coordonnées GPS). Les dérivés (aperçu, transformations à venir) n'en contiennent pas.
+coordonnées GPS). Les dérivés (aperçu, transformations) n'en contiennent pas : `full` en donne une copie
+entière sans métadonnées.
 
 ### 7.5 API d'administration (portées par espace)
 
@@ -434,7 +442,8 @@ manquante **403** (`PROJECT_ARCHIVED` si c'est l'archivage du projet qui la reti
 Codes d'erreur (`data.code`, `shared/utils/media.ts`) : `NO_FILE`, `MULTIPART_REQUIRED` (400),
 `FILE_TOO_LARGE` (413), `UNSUPPORTED_TYPE` (415), `UNREADABLE_FILE`, `DIMENSIONS_TOO_LARGE`,
 `KIND_MISMATCH` (422), `VERSION_CONFLICT`, `NOT_IN_TRASH`, `IN_TRASH` (409), `MEDIA_FORBIDDEN`,
-`SIGNATURE_INVALID`, `SIGNATURE_EXPIRED` (403), `SERVER_BUSY` (503) ; dossiers (`shared/utils/folders.ts`) :
+`SIGNATURE_INVALID`, `SIGNATURE_EXPIRED` (403), `SERVER_BUSY` (503), `INVALID_TRANSFORM` (400) et
+`TRANSFORM_QUOTA` (429) sur `/m/` ; dossiers (`shared/utils/folders.ts`) :
 `FOLDER_NOT_FOUND` (404), `FOLDER_NAME_TAKEN`, `FOLDER_NOT_EMPTY`, `FOLDER_LIMIT_REACHED` (409),
 `FOLDER_DEPTH_EXCEEDED`, `FOLDER_CYCLE` (422).
 
@@ -463,6 +472,69 @@ traitements simultanés (0 = nombre de cœurs), les suivants attendent dans une 
 `NUXT_MEDIA_PROCESSING_QUEUE` places ; file pleine → 503 `SERVER_BUSY` + `Retry-After: 5` (envoi,
 remplacement, aperçu demandé à `/m/`) plutôt qu'un serveur saturé en mémoire. La pré-génération des
 aperçus s'efface devant les demandes en attente.
+
+### 8.1 Transformations à la demande
+
+Toute image se transforme par son URL de diffusion (architecture : `.claude/architecture-phase-c.md`) :
+
+```text
+/m/<id>/v<n>/w_800,h_450,q_70/affiche.avif   paramètres libres
+/m/<id>/v<n>/preview/affiche.webp           préréglage intégré : aperçu 480 px (URL inchangée)
+/m/<id>/v<n>/full/affiche.jpg               préréglage intégré : image entière réencodée
+```
+
+- **Le format de sortie est l'extension** : `jpg`, `png`, `webp`, `avif` (`NUXT_MEDIA_TRANSFORM_FORMATS`) ;
+  `jpeg` est redirigé vers `jpg`. GIF et images animées en sortie : pas encore (première image seulement).
+- Un segment sans `_` est un **préréglage** (`preview`, `full` ; préréglages globaux et de projet : sous-étape
+  C2), un segment avec `_` une liste de **paramètres** `clé_valeur` séparés par des virgules.
+- Toute sortie est **sans métadonnées** (EXIF, GPS, profil : conversion en sRVB), orientation EXIF appliquée.
+
+| Paramètre | Valeurs | Défaut | Effet |
+| --- | --- | --- | --- |
+| `r` | `90`, `180`, `270` | 0 | rotation horaire |
+| `flip` | `h`, `v`, `hv` | — | miroir horizontal, vertical, les deux |
+| `crop` | `x-y-largeur-hauteur` (pixels) | — | zone extraite, dans l'image orientée **et tournée** |
+| `w`, `h` | 1 à 4096 (`NUXT_MEDIA_TRANSFORM_MAX_DIMENSION`) | — | dimensions cibles |
+| `dpr` | 1 à 3, pas de 0,5 | 1 | multiplie `w` et `h` (dans la borne), puis disparaît de l'URL |
+| `fit` | `cover`, `contain`, `fill`, `inside`, `outside` | `cover` | avec `w` **et** `h` seulement ; une seule dimension : réduction proportionnelle |
+| `g` | `center`, `north` … `northwest`, `attention`, `entropy`, `focal` | `focal` | ancrage de `fit_cover` ; `focal` = point d'intérêt du média (sous-étape C3), centre à défaut |
+| `q` | 1 à 100 | JPEG 80, WebP 80, AVIF 50 | qualité ; PNG sans perte, sauf `q_` (palette) |
+| `bg` | `rrggbb` | transparent, blanc en JPEG | fond de `fit_contain` et de la transparence convertie en JPEG |
+
+- **Ordre d'exécution fixe** : orientation EXIF → rotation → miroir → zone → taille → fond → encodage.
+- **Forme canonique** (sinon **301** vers elle, `Cache-Control: public, max-age=86400`, signature conservée) :
+  clés dans l'ordre d'exécution `r, flip, crop, w, h, fit, g, q, bg` ; valeurs par défaut et paramètres
+  sans effet retirés (`r_0`, `fit_cover`, `g_focal`, `fit` ou `g` sans les deux dimensions) ; nombres sans
+  zéro initial ; `dpr` appliqué ; transformation vide → `full`. Elle ne dépend pas du format : un `q_` ou
+  un `bg_` explicite est conservé (une signature vaut alors pour toutes les sources d'un `<picture>`).
+- **Jamais d'agrandissement** : une demande plus grande que l'image est réduite en **gardant le rapport
+  demandé** (`w_2000,h_1000` sur 1200 × 800 → 1200 × 600 recadré). Toute sortie est bornée à 4096 px,
+  image entière comprise.
+- **Un fichier par opération effective** : `w_1600`, `w_4096` et `full` sur une image de 1200 px de large
+  produisent le même dérivé. Dérivés générés à la première demande (file bornée, § 8), conservés
+  (`MediaVariant` : `v<n>/<opération>.<format>`, fichier `variants/<id>/v<n>-<empreinte>.<format>`),
+  servis avec le cache des médias publics (1 an, immuable) et supprimés au remplacement du fichier.
+- **Accès** : mêmes règles que l'original (§ 7.4). Signature d'une transformation : droit
+  `t:<transformation canonique>`, **sans le format** ; **signature permanente** (sans `exp`) acceptée
+  pour un dérivé précis d'un **média public** seulement (jamais l'original, jamais un droit élargi).
+
+| Garde-fou | Défaut | Au-delà |
+| --- | --- | --- |
+| Transformation invalide, zone hors de l'image, `w`/`h` au-delà de la borne, format non activé | — | 400 `INVALID_TRANSFORM` (`data.detail` en anglais) |
+| Dérivés par version de média (`NUXT_MEDIA_TRANSFORM_MAX_VARIANTS`) | 50 | 429 `TRANSFORM_QUOTA` pour un nouveau dérivé libre |
+| Nouvelles générations libres non signées par IP et par minute (`NUXT_MEDIA_TRANSFORM_RATE_LIMIT`, 0 = sans limite) | 60 | 429 `TRANSFORM_QUOTA` + `Retry-After` |
+| Traitements simultanés | § 8 | 503 `SERVER_BUSY` + `Retry-After` |
+
+Les dérivés déjà générés et les préréglages restent toujours servis. Le débit par IP ne s'applique ni
+aux URL signées pour une cible précise, ni aux identifiants d'API, ni aux liens de l'administration (il
+s'applique au droit élargi `derived`). **Derrière un CDN**, toutes les requêtes arrivent de quelques
+adresses : relever `NUXT_MEDIA_TRANSFORM_RATE_LIMIT` ou le mettre à 0.
+
+Au démarrage, les aperçus générés avant les transformations sont repris sous leur nouvel identifiant
+(fichier conservé, rien n'est régénéré). Politique des transformations par projet (`open`, `signed`,
+`presets`) et préréglages personnalisés : sous-étape C2 — d'ici là, tout espace accepte les paramètres
+libres dans les bornes ci-dessus.
+
 
 ## 9. Authentification et rôles
 
@@ -1133,6 +1205,8 @@ pnpm start                          # node --env-file-if-exists=.env .output/ser
 | SQLite en WAL | la diffusion et l'API lisent pendant les envois |
 | Dossiers : arbre chargé en entier (mis en cache par révision), filtre récursif par liste d'identifiants, sans colonne de chemin | portable sur les 3 bases, pas de limite de 191 caractères sur un chemin, un déplacement de dossier ne réécrit aucune ligne de média ; unicité des noms contrôlée par l'application (les bases traitent différemment `NULL` dans les index uniques) |
 | Jetons délégués signés (HMAC, charge lisible), sans état | aucun secret durable dans un navigateur ; vérification sans base ; révoquer l'émetteur suffit ; seul `maxFiles` utilise un compteur en base |
+| Transformations : forme canonique syntaxique (indépendante du média et du format) + opération effective calculée selon l'image | une URL par résultat (301 sinon), une signature pour toutes les sources d'un `<picture>`, un fichier pour les demandes équivalentes ; non-agrandissement calculé par nous (sharp ignore le rapport demandé quand il refuse d'agrandir) |
+| AVIF : effort d'encodage 2 (sur 9) | mesuré sur une photo de 3000 px : 0,5 s au lieu de 2,1 s (effort 4), fichier ~30 % plus lourd mais toujours plus léger que le WebP |
 | File bornée des traitements + pré-génération des aperçus | un pic d'envois ou d'aperçus ne sature ni la mémoire ni le processeur (503 + `Retry-After`) ; premier affichage sans attente |
 | **Scalar** (`@scalar/api-reference`) **1.72.3** épinglé exactement, composant Vue embarqué | documentation interactive dans l'administration : interface reconnue, langues fr/en intégrées, client de requêtes ; épinglé car l'API de configuration évolue vite (agent IA, télémétrie, repères à revérifier à chaque mise à jour) ; embarqué plutôt que chargé d'un CDN (aucun script tiers dans une page authentifiée) |
 | Spécification OpenAPI : `defineRouteMeta` par route + schémas zod | la documentation vit à côté du code de chaque route ; une route ajoutée apparaît d'elle-même ; les schémas qui valident les requêtes décrivent aussi la spécification ; module virtuel de Nitro (`server-handlers-meta`) à revérifier lors du passage à Nitro 3 |
@@ -1187,6 +1261,10 @@ pnpm start                          # node --env-file-if-exists=.env .output/ser
 | API v1 : 401 `TOKEN_REVOKED` avec un jeton délégué valide | son émetteur a été révoqué, a expiré ou appartient à un compte désactivé : émettre les jetons avec un identifiant actif |
 | API v1 : 403 `INSUFFICIENT_SCOPE` en liste avec un jeton délégué | aucune portée n'est donnée d'office : demander `media:read` à l'émission (en plus de `media:upload`) |
 | API v1 : 403 `ORIGIN_NOT_ALLOWED` avec un jeton délégué | l'`Origin` de la page doit figurer dans les origines du projet et, si le jeton en fixe une, être exactement celle-ci |
+| Une URL de transformation redirige (301) | elle n'est pas sous forme canonique (ordre des paramètres, valeur par défaut, `jpeg`, `dpr`) : utiliser l'URL de destination (§ 8.1) |
+| 400 `INVALID_TRANSFORM` sur `/m/` | paramètre inconnu, répété ou hors bornes, zone hors de l'image (après rotation), format non activé : voir `data.detail` |
+| 429 `TRANSFORM_QUOTA` | 50 dérivés pour cette version (réutiliser des tailles existantes ou un préréglage), ou trop de nouvelles transformations depuis une adresse (derrière un CDN : relever `NUXT_MEDIA_TRANSFORM_RATE_LIMIT` ou le mettre à 0) |
+| Image transformée plus petite que demandée | jamais d'agrandissement : la sortie est réduite en gardant le rapport demandé, et bornée à 4096 px |
 | 503 `SERVER_BUSY` à l'envoi ou sur un aperçu | file des traitements pleine : réessayer après `Retry-After` ; en production, ajuster `NUXT_MEDIA_PROCESSING_*` (§ 8) |
 | Image privée cassée dans une page externe après un changement de secret | lien signé avec l'ancien secret : déclarer celui-ci dans `NUXT_MEDIA_PREVIOUS_SIGNING_SECRET` pendant 7 jours |
 
@@ -1668,4 +1746,63 @@ lecteurs d'écran réels.
 ```bash
 pnpm install          # @scalar/api-reference
 pnpm db:migrate       # migration api_console (colonne AccessToken.sessionId, voir ci-dessus)
+```
+
+### Étape 11 — 2026-10-01 — Phase C1 : moteur de transformation et diffusion
+
+**Cadre** : phase C (transformations d'images à la demande) présentée puis **validée** par l'utilisateur
+(décisions CD1 à CD12, `.claude/architecture-phase-c.md`), livrée en quatre sous-étapes. C1 : le moteur
+et la diffusion par `/m/`, sans migration ni interface.
+
+**Ajouté**
+- `shared/utils/transforms.ts` (pur, partagé) : formats, paramètres, préréglages intégrés (`preview`,
+  `full`) et noms réservés, `parseTransformation` (bornes, erreurs nommées), forme canonique
+  (`formatTransformation`, ordre d'exécution, `dpr` appliqué), `parseTransformFormat`.
+- `server/lib/media/transform-plan.ts` (pur) : opération effective selon l'image (zone vérifiée après
+  rotation, jamais d'agrandissement en gardant le rapport demandé, borne de sortie, recadrage par point
+  d'intérêt prêt pour C3, aplatissement JPEG, qualité par format) ; son identifiant regroupe les
+  demandes qui produisent la même image.
+- `server/lib/media/delivery-path.ts` (pur) : grammaire de `/m/` (original, préréglage, paramètres),
+  301 vers la forme canonique, 400 `INVALID_TRANSFORM`, droit signé sans format.
+- Gestionnaire d'images : `transform(source, plan)` remplace `preview` (pipeline sharp générique ;
+  miroir et rotation réordonnés : sharp applique toujours le miroir avant la rotation) ; AVIF effort 2
+  (mesuré : 4 fois plus rapide que l'effort 4 pour ~30 % de poids en plus).
+- `variants.ts` : dérivés par opération effective, quota par version, rappel de débit avant une
+  génération libre, dédoublonnage garde-fous compris ; `transform-settings.ts` (variables
+  `NUXT_MEDIA_TRANSFORM_*`) ; route `/m/` (redirections 301 et 302 avec la transformation, débit par IP,
+  `Retry-After`) ; `delivery.ts` : signature permanente (média public), mode d'accès détaillé.
+- Signatures : droit `t:<transformation canonique>`, signature permanente (`perm`, sans `exp`) pour un
+  dérivé précis.
+- Plugin `variant-keys` : reprise au démarrage des aperçus existants (renommés, fichiers conservés).
+- Codes `INVALID_TRANSFORM` (400), `TRANSFORM_QUOTA` (429).
+- Tests : `tests/transforms.test.ts` (analyse, forme canonique, chemins, opération effective),
+  `tests/image-transform.test.ts` (pipeline sharp réel : 16 combinaisons rotation × miroir, orientation
+  EXIF, 4 formats), signatures (`t:`, permanentes) — 164 tests au total.
+
+**Vérifié** : typecheck, 164 tests Vitest, i18n, contrastes, migrations (`--check` : aucune), build de
+production ; **66 scénarios HTTP** sur la build de production (original et aperçu inchangés, aperçu
+pré-généré sous son nouvel identifiant, formats par l'extension, ETag/304/HEAD/Range, non-agrandissement,
+fichier partagé, 301 canoniques avec signature conservée, erreurs 400/404, orientation EXIF, 6 demandes
+simultanées → un seul dérivé, médias privés et signatures exactes / `derived` / permanentes / admin /
+expirées, corbeille, remplacement → 302 et dérivés supprimés, quota de 50, débit de 60/min avec
+`Retry-After`, exemptions) ; scénarios B1 à B5 rejoués sans régression ; journaux du serveur sans
+erreur ; aperçu existant de la base de développement repris sans régénération.
+
+**Écarts par rapport au document validé** : ordre canonique aligné sur l'ordre d'exécution
+(`r, flip, crop, …` au lieu de `crop, r, flip, …`) ; `q_` et `bg_` explicites conservés dans la forme
+canonique (elle ne dépend pas du format, condition de CD5) ; sortie bornée à 4096 px même pour `full`
+(image réduite plutôt que refusée) ; aperçus existants repris au démarrage (plutôt que par la migration
+de C2).
+
+**Limites connues**
+- Débit par IP en mémoire du processus (comme les autres limiteurs) ; derrière un CDN, à relever.
+- Un préréglage inconnu répond 404 ; les préréglages personnalisés et la politique par projet arrivent
+  en C2, le point d'intérêt en C3 (`g_focal` = centre d'ici là).
+- Pas encore de lien signé de transformation par l'API (C3) : les signatures `t:` et permanentes sont
+  vérifiées mais pas encore délivrées.
+
+**Après `git pull`**
+```bash
+pnpm install          # aucune nouvelle dépendance
+pnpm db:migrate       # aucune migration
 ```

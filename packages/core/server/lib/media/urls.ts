@@ -1,9 +1,9 @@
 import type { H3Event } from 'h3'
-import { extensionForMime, MEDIA_PRESETS, type MediaPreset } from '#shared/utils/media'
+import { extensionForMime, type MediaPreset } from '#shared/utils/media'
+import type { TransformFormat } from '#shared/utils/transforms'
 import { alignedExpiry, signMediaAccess } from './signing'
 
-/** Dérivés nommés servis par /m/ (shared/utils/media.ts). */
-export const MEDIA_VARIANTS = MEDIA_PRESETS
+/** Préréglages exposés aux applications (shared/utils/media.ts) ; `preview` est servi en WebP. */
 export type MediaVariantName = MediaPreset
 
 /** Aperçus de l'administration : liens valables 1 h, échéance alignée sur le quart d'heure. */
@@ -37,9 +37,17 @@ export function urlSlug(value: string): string {
  * La version change à chaque remplacement : les URL publiques sont mises en cache sans limite.
  */
 export function mediaPath(media: UrlSource, variant?: MediaVariantName): string {
-  const extension = variant === 'preview' ? 'webp' : (extensionForMime(media.mimeType) ?? 'bin')
+  if (variant) return derivedPath(media, variant, 'webp')
   const name = urlSlug(media.title || media.originalName)
-  return `/m/${media.id}/v${media.version}/${variant ? `${variant}/` : ''}${name}.${extension}`
+  return `/m/${media.id}/v${media.version}/${name}.${extensionForMime(media.mimeType) ?? 'bin'}`
+}
+
+/**
+ * Chemin d'un dérivé : `segment` = nom de préréglage ou transformation canonique
+ * (shared/utils/transforms.ts, `transformationSegment`), format donné par l'extension.
+ */
+export function derivedPath(media: UrlSource, segment: string, format: TransformFormat): string {
+  return `/m/${media.id}/v${media.version}/${segment}/${urlSlug(media.title || media.originalName)}.${format}`
 }
 
 /** Lien de partage d'un fichier précis, valable exactement `ttlSeconds` secondes. */

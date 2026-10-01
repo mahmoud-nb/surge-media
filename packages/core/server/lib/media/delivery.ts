@@ -4,45 +4,29 @@ import type { Media } from '../../generated/prisma/client'
 import { touchCredential } from '../access/credentials'
 import { browserGuard, principalLibraryScopes, principalProjectScopes, resolvePrincipal } from '../access/principal'
 import { getProjectState } from '../projects/state'
+import { deliveryVariant, type DeliveryTarget } from './delivery-path'
 import { mediaError } from './errors'
-import { verifyMediaSignature } from './signing'
-import { MEDIA_VARIANTS, type MediaVariantName } from './urls'
+import { verifyMediaSignature, type SignatureScope } from './signing'
 
 /**
- * Diffusion des médias (/m/…) : analyse de l'URL et contrôle d'accès (fichiers : variants.ts).
- * Le chemin physique n'est jamais exposé : l'URL ne contient que l'identifiant,
- * la version et un nom indicatif.
+ * Diffusion des médias (/m/…) : contrôle d'accès (analyse des chemins : delivery-path.ts ; fichiers :
+ * variants.ts). Le chemin physique n'est jamais exposé : l'URL ne contient que l'identifiant, la
+ * version, la transformation et un nom indicatif.
  */
 
-export interface DeliveryTarget {
-  id: string
-  version: number
-  variant: 'original' | MediaVariantName
-  /** Nom de fichier de l'URL : indicatif, ignoré pour retrouver le fichier. */
-  filename: string
-}
-
-/** `<id>/v<version>/<nom>` ou `<id>/v<version>/<dérivé>/<nom>`, sinon null (404). */
-export function parseDeliveryPath(path: string): DeliveryTarget | null {
-  const segments = path.split('/').filter(Boolean)
-  if (segments.length < 3 || segments.length > 4) return null
-  const [id, versionSegment] = segments as [string, string]
-  const version = /^v(\d{1,9})$/.exec(versionSegment)
-  const variant = segments.length === 4 ? segments[2]! : 'original'
-  if (!/^[a-z0-9]{8,64}$/i.test(id) || !version) return null
-  if (variant !== 'original' && !(MEDIA_VARIANTS as readonly string[]).includes(variant)) return null
-  return { id, version: Number(version[1]), variant: variant as DeliveryTarget['variant'], filename: segments.at(-1)! }
-}
+export { parseDeliveryPath, type DeliveryTarget } from './delivery-path'
 
 /** Mode d'accès accordé, qui détermine la mise en cache de la réponse. */
 export type DeliveryAccess =
-  | { mode: 'public' }
-  | { mode: 'signed', expires: number }
+  /** `signed` : signature permanente d'un dérivé précis (média public). */
+  | { mode: 'public', signed: boolean }
+  /** `scope` null : cible exacte. */
+  | { mode: 'signed', expires: number, scope: SignatureScope | null }
   | { mode: 'credential' }
 
 /**
  * Diffusion sans cookie (aucune session lue) :
- *   - média public : libre ;
+ *   - média public : libre ; une signature permanente (dérivé précis) y est aussi acceptée ;
  *   - média privé : lien signé valable (fichier précis, droit « derived » ou « admin »), ou
  *     identifiant d'API (`Authorization: Bearer`) ayant `media:read` dans l'espace du média
  *     (jamais une clé publique ; jamais une clé secrète ou un jeton personnel depuis un navigateur ;
@@ -52,9 +36,15 @@ export type DeliveryAccess =
 export async function authorizeDelivery(event: H3Event, media: Media, target: DeliveryTarget): Promise<DeliveryAccess> {
   const query = getQuery(event)
   if (query.sig !== undefined || query.exp !== undefined) {
-    const check = verifyMediaSignature({ mediaId: media.id, version: media.version, variant: target.variant }, query)
-    if (check.status === 'valid' && (!media.deletedAt || check.scope === 'admin')) {
-      return { mode: 'signed', expires: check.expires }
+    const check = verifyMediaSignature({ mediaId: media.id, version: media.version, variant: deliveryVariant(target) }, query)
+    if (check.status === 'valid') {
+      // Signature permanente : seulement pour un média public (un média privé exige une échéance).
+      if (check.expires === null) {
+        if (!media.deletedAt && media.visibility === 'PUBLIC') return { mode: 'public', signed: true }
+      }
+      else if (!media.deletedAt || check.scope === 'admin') {
+        return { mode: 'signed', expires: check.expires, scope: check.scope }
+      }
     }
     // Corbeille : on ne révèle pas que le média existe.
     if (media.deletedAt) throw createError({ statusCode: 404, statusMessage: 'Not Found' })
@@ -62,7 +52,7 @@ export async function authorizeDelivery(event: H3Event, media: Media, target: De
   }
 
   if (media.deletedAt) throw createError({ statusCode: 404, statusMessage: 'Not Found' })
-  if (media.visibility === 'PUBLIC') return { mode: 'public' }
+  if (media.visibility === 'PUBLIC') return { mode: 'public', signed: false }
   const authorization = getRequestHeader(event, 'authorization')
   if (authorization) {
     await authorizeCredential(event, authorization, media)
@@ -95,6 +85,17 @@ async function authorizeCredential(event: H3Event, authorization: string, media:
   // Une clé publique ne lit jamais un média privé ; un jeton délégué seulement avec media:read.
   if (principal.type === 'publishable' || !scopes.includes('media:read')) throw mediaError(403, 'MEDIA_FORBIDDEN')
   if (!principal.delegated) touchCredential(principal.credential, getRequestIP(event))
+}
+
+/**
+ * Une nouvelle génération libre est-elle soumise au débit par IP ? Non si l'appelant a été
+ * authentifié (identifiant d'API) ou si l'URL a été signée pour cette cible précise (par le serveur
+ * de l'application ou l'administration) ; oui sans signature ou avec le droit élargi « derived ».
+ */
+export function generationRateLimited(access: DeliveryAccess): boolean {
+  if (access.mode === 'public') return !access.signed
+  if (access.mode === 'signed') return access.scope === 'derived'
+  return false
 }
 
 /** Cache HTTP selon le mode d'accès. */

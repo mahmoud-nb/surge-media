@@ -1,6 +1,25 @@
 # Phase C — Transformations d'images à la demande
 
-> **Statut : PROPOSITION (2026-10-01), à valider par l'utilisateur avant tout développement.**
+> **Statut : VALIDÉE (2026-10-01) — toutes les décisions CD1 à CD12 acceptées par l'utilisateur.**
+> Avancement : **C1 faite** (`setup.md` étape 11, `.claude/project-context.md` § 9.16). Suite : C2.
+>
+> Écarts et précisions de C1 (moteur et diffusion) :
+> - **Ordre canonique = ordre d'exécution** : `r, flip, crop, w, h, fit, g, q, bg` (et non `crop, r, flip…` comme au § 3.1) : une
+>   URL se lit dans l'ordre où elle s'applique (la zone s'entend dans l'image tournée).
+> - **Forme canonique indépendante du format** : `q_` et `bg_` explicites sont conservés même égaux au défaut du format (le § 2.1
+>   annonçait `q_80/x.jpg` → `full`) ; c'est la condition de CD5 (une signature pour toutes les sources). Le fichier reste partagé
+>   (l'opération effective résout la qualité). Seule une transformation vide (`r_0`, `fit_cover` seuls…) devient `full`.
+> - **Borne de sortie sans erreur** pour une sortie issue de l'image (`full`, zone, `inside`/`outside`) : réduite dans 4096 × 4096 ;
+>   seuls `w`/`h` demandés au-delà de la borne donnent 400.
+> - **Opération effective** : identifiant `[r_,flip_,crop_,size_WxH[,fit_cover,g_|,fit_contain,bg_],flatten_,q_]|full.<format>` ;
+>   réductions proportionnelles en dimensions exactes ; `g_focal` sans point d'intérêt = `centre` (C3 fournira le point).
+> - **sharp** applique toujours le miroir avant la rotation explicite : axes du miroir permutés après un quart de tour (vérifié
+>   sur les 16 combinaisons). AVIF : effort 2 (mesuré).
+> - **Aperçus existants** repris au démarrage (plugin `variant-keys`, fichier conservé) plutôt que par la migration de C2.
+> - Débit par IP : appliqué aux générations libres non signées **et** au droit élargi `derived` ; exemptés : signature exacte ou
+>   permanente, `scope=admin`, identifiant d'API. Erreurs `/m/` au format d'erreur Nitro (`data.code`, `data.detail`), pas RFC 9457.
+> - Signature permanente : droit signé `…:perm`, sans `exp` ; refusée avec `scope` ou pour l'original ; acceptée seulement pour un
+>   média public (privé → 403 `SIGNATURE_INVALID`). Pas encore délivrée par l'API (C3).
 > Prolonge la décision **D15** de la phase B (validée) : grammaire d'URL, paramètres, format donné par
 > l'extension, ordre d'exécution fixe, forme canonique avec redirection 301, politique par projet
 > (`open` borné par défaut), liens signés v2. Référence : `.claude/architecture-phase-b.md` § 10.

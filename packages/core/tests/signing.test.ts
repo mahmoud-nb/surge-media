@@ -37,6 +37,7 @@ describe('utilitaires', () => {
   it('associe chaque fichier à son droit', () => {
     expect(targetGrant('original')).toBe('file')
     expect(targetGrant('preview')).toBe('preset:preview')
+    expect(targetGrant('t:w_800,h_450')).toBe('t:w_800,h_450')
   })
 
   it('aligne l\'échéance sur la tranche suivante, sans jamais raccourcir la durée', () => {
@@ -108,6 +109,37 @@ describe('droits élargis', () => {
     expect(check(forged, 'preview')).toEqual({ status: 'invalid' })
     const unknown = new URLSearchParams({ ...exact, scope: 'everything' }).toString()
     expect(check(unknown)).toEqual({ status: 'invalid' })
+  })
+})
+
+describe('transformations', () => {
+  it('une signature de transformation ne vaut que pour elle', () => {
+    const query = buildSignatureQuery(SECRET, media, { variant: 't:w_800' }, NOW + 60)
+    expect(check(query, 't:w_800')).toEqual({ status: 'valid', expires: NOW + 60, scope: null })
+    expect(check(query, 't:w_801')).toEqual({ status: 'invalid' })
+    expect(check(query, 'preview')).toEqual({ status: 'invalid' })
+    expect(check(query, 'original')).toEqual({ status: 'invalid' })
+  })
+
+  it('une signature permanente couvre un dérivé précis, sans échéance', () => {
+    const query = buildSignatureQuery(SECRET, media, { variant: 't:w_800' }, null)
+    expect(parse(query).exp).toBeUndefined()
+    expect(check(query, 't:w_800', { now: NOW * 2 })).toEqual({ status: 'valid', expires: null, scope: null })
+    expect(check(query, 't:w_800', { version: 4 })).toEqual({ status: 'invalid' })
+    const preset = buildSignatureQuery(SECRET, media, { variant: 'thumb' }, null)
+    expect(check(preset, 'thumb')).toMatchObject({ status: 'valid', expires: null })
+  })
+
+  it('jamais pour l\'original ni un droit élargi', () => {
+    expect(() => buildSignatureQuery(SECRET, media, { variant: 'original' }, null)).toThrow()
+    expect(() => buildSignatureQuery(SECRET, media, { scope: 'derived' }, null)).toThrow()
+    // Retirer l'échéance d'un lien temporaire ne le rend pas permanent.
+    const { exp: _exp, ...timed } = parse(buildSignatureQuery(SECRET, media, { variant: 't:w_800' }, NOW + 60))
+    expect(check(new URLSearchParams(timed).toString(), 't:w_800')).toEqual({ status: 'invalid' })
+    const { exp: _exp2, ...derived } = parse(buildSignatureQuery(SECRET, media, { scope: 'derived' }, NOW + 60))
+    expect(check(new URLSearchParams(derived).toString(), 't:w_800')).toEqual({ status: 'invalid' })
+    const { exp: _exp3, ...file } = parse(buildSignatureQuery(SECRET, media, { variant: 'original' }, NOW + 60))
+    expect(check(new URLSearchParams(file).toString(), 'original')).toEqual({ status: 'invalid' })
   })
 })
 

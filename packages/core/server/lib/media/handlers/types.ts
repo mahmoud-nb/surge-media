@@ -1,5 +1,6 @@
 import type { Readable } from 'node:stream'
 import type { MediaKind } from '#shared/utils/media'
+import type { TransformPlan } from '../transform-plan'
 
 /** Caractéristiques extraites d'un fichier par son gestionnaire. */
 export interface InspectedMedia {
@@ -11,7 +12,7 @@ export interface InspectedMedia {
   metadata: Record<string, string | number | boolean | null>
 }
 
-/** Dérivé produit par un gestionnaire (aperçu, plus tard transformations). */
+/** Dérivé produit par un gestionnaire (préréglage ou transformation libre). */
 export interface RenderedVariant {
   data: Buffer
   mimeType: string
@@ -32,6 +33,9 @@ export interface MediaTypeHandler {
    * Lève une erreur métier (422) si le fichier est illisible ou hors limites.
    */
   inspect: (path: string, mimeType: string) => Promise<InspectedMedia>
-  /** Aperçu réduit pour l'administration ; absent si le genre n'en produit pas. */
-  preview?: (source: Readable) => Promise<RenderedVariant>
+  /**
+   * Applique une transformation déjà résolue (transform-plan.ts) : aperçu, préréglages, paramètres
+   * libres. Absent si le genre ne produit pas de dérivés (aucune transformation, aucun aperçu).
+   */
+  transform?: (source: Readable, plan: TransformPlan) => Promise<RenderedVariant>
 }
