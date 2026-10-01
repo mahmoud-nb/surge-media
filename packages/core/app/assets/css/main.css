@@ -31,6 +31,11 @@
   --success-soft: #ecfdf3;
   --warning: #93370d;
   --warning-soft: #fffaeb;
+  /* Couleurs de code et de méthodes HTTP (documentation de l'API, app/assets/css/scalar.css). */
+  --code-blue: #175cd3;
+  --code-orange: #b93815;
+  --code-purple: #6941c6;
+  --code-teal: #0e7090;
 }
 
 .dark {
@@ -55,6 +60,10 @@
   --success-soft: #0f2a1d;
   --warning: #fdb022;
   --warning-soft: #2e2410;
+  --code-blue: #84adff;
+  --code-orange: #fd853a;
+  --code-purple: #b692f6;
+  --code-teal: #5fd4d0;
 }
 
 @theme inline {

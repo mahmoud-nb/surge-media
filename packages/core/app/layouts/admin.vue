@@ -3,6 +3,8 @@
  * Mise en page de l'administration. La barre latérale (logo, navigation, préférences,
  * compte) forme le landmark « banner » : colonne fixe sur grand écran ; sur mobile, un
  * bouton « Menu » (aria-expanded) la déplie sous la barre supérieure. Échap la referme.
+ * Le contenu est dans `<main id="main">`, sauf pour une page qui fournit son propre `<main>`
+ * (`definePageMeta({ providesMain: true })`) : un `<div id="main">` garde la cible du lien d'évitement.
  */
 import { Menu, X } from '@lucide/vue'
 
@@ -60,9 +62,9 @@ function closeMenu() {
       </div>
     </header>
 
-    <main id="main" tabindex="-1" class="min-w-0 px-4 py-8 sm:px-8 lg:px-12 lg:py-10">
+    <component :is="route.meta.providesMain ? 'div' : 'main'" id="main" tabindex="-1" class="min-w-0 px-4 py-8 sm:px-8 lg:px-12 lg:py-10">
       <slot />
-    </main>
+    </component>
 
     <!-- Confirmation du mot de passe des actions sensibles (useReauth). -->
     <AdminReauthDialog />

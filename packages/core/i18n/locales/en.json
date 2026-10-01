@@ -115,7 +115,8 @@
       "tokens": "Personal tokens",
       "users": "Users",
       "library": "Library",
-      "audit": "Audit log"
+      "audit": "Audit log",
+      "apiDocs": "API documentation"
     },
     "dashboard": {
       "meta": {
@@ -172,6 +173,9 @@
     },
     "audit": {
       "read": "View the audit log"
+    },
+    "api": {
+      "docs": "Browse and try the API documentation"
     }
   },
   "errors": {
@@ -1208,6 +1212,52 @@
       "FOLDER_DEPTH_EXCEEDED": "Folders cannot be nested more than 8 levels deep.",
       "FOLDER_CYCLE": "A folder cannot be moved into itself or one of its subfolders.",
       "FOLDER_LIMIT_REACHED": "This space has reached the limit of 1,000 folders."
+    }
+  },
+  "apiDocs": {
+    "meta": {
+      "title": "API documentation"
+    },
+    "title": "API documentation",
+    "description": "Interactive reference of the public API v1, generated from the route code: every request can be tried from this page.",
+    "openapi": "OpenAPI specification (JSON)",
+    "loadError": "The documentation settings could not be loaded.",
+    "setup": {
+      "title": "Test settings"
+    },
+    "credential": {
+      "title": "Credential for test requests",
+      "label": "Publishable key injected into the reference",
+      "option": "{project} — {name} ({environment})",
+      "none": "None (enter one in the reference)",
+      "hint": "A publishable key reads the public media of its project, from this page as from your sites.",
+      "empty": "No publishable key available: create one in the API keys of a project you manage, or enter a credential in the reference.",
+      "secretNotice": "Secret keys and personal tokens are rejected from a browser (SECRET_IN_BROWSER): use them from your server or a terminal, with the code samples of the reference. To try a write here, enter a delegated token issued by your server."
+    },
+    "env": {
+      "title": "Environment variables",
+      "description": "To put in the .env file of your application, with the real values of your projects.",
+      "project": "Project",
+      "environment": "Environment",
+      "noProject": "No active project: create a project to get its credentials.",
+      "copy": "Copy the environment variables",
+      "keysLink": "Manage the API keys of this project",
+      "header": "surgeMedia — project \"{project}\", environment {environment}",
+      "headerNoEnvironment": "surgeMedia — project \"{project}\"",
+      "noKeys": "You do not manage the credentials of this project: ask an owner for its keys.",
+      "publishable": "Publishable key \"{name}\": browser, reads public media.",
+      "noPublishable": "No publishable key in this environment.",
+      "secret": "Secret key \"{name}\" ({prefix}…): server only; its value is shown only when it is created.",
+      "noSecret": "No secret key in this environment: create one in the API keys of the project."
+    },
+    "reference": {
+      "title": "Reference",
+      "thirdParty": "Interface provided by Scalar (open-source software), built into surgeMedia: test requests go from your browser to this installation, with no third-party service.",
+      "loading": "Loading the reference…",
+      "error": "The API specification could not be loaded.",
+      "server": "This installation",
+      "publicServer": "Public address (NUXT_SITE_URL)",
+      "codeSample": "Code sample"
     }
   }
 }

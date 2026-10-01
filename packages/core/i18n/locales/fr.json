@@ -115,7 +115,8 @@
       "tokens": "Jetons personnels",
       "users": "Utilisateurs",
       "library": "Bibliothèque",
-      "audit": "Journal d'audit"
+      "audit": "Journal d'audit",
+      "apiDocs": "Documentation de l'API"
     },
     "dashboard": {
       "meta": {
@@ -172,6 +173,9 @@
     },
     "audit": {
       "read": "Consulter le journal d'audit"
+    },
+    "api": {
+      "docs": "Consulter la documentation de l'API et la tester"
     }
   },
   "errors": {
@@ -1208,6 +1212,52 @@
       "FOLDER_DEPTH_EXCEEDED": "Les dossiers ne peuvent pas être imbriqués sur plus de 8 niveaux.",
       "FOLDER_CYCLE": "Un dossier ne peut pas être déplacé dans lui-même ni dans l'un de ses sous-dossiers.",
       "FOLDER_LIMIT_REACHED": "Cet espace a atteint la limite de 1 000 dossiers."
+    }
+  },
+  "apiDocs": {
+    "meta": {
+      "title": "Documentation de l'API"
+    },
+    "title": "Documentation de l'API",
+    "description": "Référence interactive de l'API publique v1, générée depuis le code des routes : chaque requête peut être essayée depuis cette page.",
+    "openapi": "Spécification OpenAPI (JSON)",
+    "loadError": "Les paramètres de la documentation n'ont pas pu être chargés.",
+    "setup": {
+      "title": "Paramètres de test"
+    },
+    "credential": {
+      "title": "Identifiant des requêtes d'essai",
+      "label": "Clé publique injectée dans la référence",
+      "option": "{project} — {name} ({environment})",
+      "none": "Aucune (à saisir dans la référence)",
+      "hint": "Une clé publique lit les médias publics de son projet, depuis cette page comme depuis vos sites.",
+      "empty": "Aucune clé publique disponible : créez-en une dans les clés d'API d'un projet que vous gérez, ou saisissez un identifiant dans la référence.",
+      "secretNotice": "Les clés secrètes et les jetons personnels sont refusés depuis un navigateur (SECRET_IN_BROWSER) : utilisez-les depuis votre serveur ou un terminal, avec les exemples de code de la référence. Pour essayer une écriture ici, saisissez un jeton délégué émis par votre serveur."
+    },
+    "env": {
+      "title": "Variables d'environnement",
+      "description": "À placer dans le fichier .env de votre application, avec les valeurs réelles de vos projets.",
+      "project": "Projet",
+      "environment": "Environnement",
+      "noProject": "Aucun projet actif : créez un projet pour obtenir ses identifiants.",
+      "copy": "Copier les variables d'environnement",
+      "keysLink": "Gérer les clés d'API de ce projet",
+      "header": "surgeMedia — projet « {project} », environnement {environment}",
+      "headerNoEnvironment": "surgeMedia — projet « {project} »",
+      "noKeys": "Vous ne gérez pas les identifiants de ce projet : demandez ses clés à un propriétaire.",
+      "publishable": "Clé publique « {name} » : navigateur, lecture des médias publics.",
+      "noPublishable": "Aucune clé publique dans cet environnement.",
+      "secret": "Clé secrète « {name} » ({prefix}…) : serveur uniquement ; sa valeur n'est affichée qu'à sa création.",
+      "noSecret": "Aucune clé secrète dans cet environnement : créez-en une dans les clés d'API du projet."
+    },
+    "reference": {
+      "title": "Référence",
+      "thirdParty": "Interface fournie par Scalar (logiciel libre), intégrée à surgeMedia : les requêtes d'essai partent de votre navigateur vers cette installation, sans service tiers.",
+      "loading": "Chargement de la référence…",
+      "error": "La spécification de l'API n'a pas pu être chargée.",
+      "server": "Cette installation",
+      "publicServer": "Adresse publique (NUXT_SITE_URL)",
+      "codeSample": "Exemple de code"
     }
   }
 }

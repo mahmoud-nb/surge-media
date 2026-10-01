@@ -1,7 +1,8 @@
 <script setup lang="ts">
 /**
  * Bouton — <UiButton>.
- * Rendu en <button> (type="button" par défaut) ou en lien <NuxtLink> si `to` est fourni.
+ * Rendu en <button> (type="button" par défaut) ou en lien <NuxtLink> si `to` est fourni
+ * (`external` : lien ordinaire, hors routeur — fichier, route serveur).
  * `loading` garde le bouton focalisable (aria-disabled plutôt que disabled) et bloque
  * l'action ; annoncez l'état via une région live du formulaire.
  */
@@ -17,6 +18,7 @@ const props = withDefaults(defineProps<{
   size?: ButtonSize
   type?: 'button' | 'submit' | 'reset'
   to?: RouteLocationRaw
+  external?: boolean
   loading?: boolean
   disabled?: boolean
   class?: HTMLAttributes['class']
@@ -57,7 +59,7 @@ function onClick(event: MouseEvent) {
 </script>
 
 <template>
-  <NuxtLink v-if="to" :to="to" :class="classes">
+  <NuxtLink v-if="to" :to="to" :external="external" :class="classes">
     <slot />
   </NuxtLink>
   <button

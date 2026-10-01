@@ -6,6 +6,40 @@ import { apiMediaLocation, principalProvenance, toMetadataInput, withApiUpload }
 import { createMedia } from '../../../../../lib/media/service'
 import { mediaBaseUrl } from '../../../../../lib/media/urls'
 
+defineRouteMeta({
+  openAPI: {
+    'operationId': 'uploadMedia',
+    'tags': ['media'],
+    'summary': 'Envoyer un média',
+    'description': 'Un fichier par requête (`multipart/form-data`, champ `file`), type détecté d\'après son contenu : JPEG, PNG, WebP, AVIF ou GIF. Visibilité `public` par défaut. Jeton délégué : nombre de fichiers, taille, types, visibilité et dossier selon ses contraintes. En-tête `Location` : URL du média dans l\'API.',
+    'x-scopes': ['media:upload'],
+    'x-credentials': ['secret', 'personal', 'delegated'],
+    'x-errors': [
+      'INVALID_REQUEST',
+      'MULTIPART_REQUIRED',
+      'NO_FILE',
+      'UPLOAD_LIMIT_REACHED',
+      'FOLDER_NOT_FOUND',
+      'FILE_TOO_LARGE',
+      'UNSUPPORTED_TYPE',
+      'UNREADABLE_FILE',
+      'DIMENSIONS_TOO_LARGE',
+      'SERVER_BUSY',
+      'PROJECT_NOT_FOUND',
+      'PROJECT_ARCHIVED',
+      'INSUFFICIENT_SCOPE',
+    ],
+    'requestBody': { $ref: '#/components/requestBodies/MediaUpload' },
+    'responses': { 201: { $ref: '#/components/responses/MediaCreated' } },
+    'x-i18n': {
+      en: {
+        summary: 'Upload a media item',
+        description: 'One file per request (`multipart/form-data`, `file` field), type detected from its contents: JPEG, PNG, WebP, AVIF or GIF. Visibility `public` by default. Delegated token: number of files, size, types, visibility and folder according to its constraints. `Location` header: URL of the media item in the API.',
+      },
+    },
+  },
+})
+
 /**
  * POST /api/v1/projects/:projectId/media — multipart/form-data : `file` (obligatoire), `title`,
  * `altText`, `visibility` (`public` par défaut), `folderId` (dossier du projet ; hors dossier par

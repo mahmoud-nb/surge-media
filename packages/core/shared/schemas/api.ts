@@ -10,6 +10,8 @@ import {
   DELEGATED_MAX_TYPES,
   DELEGATED_SUBJECT_MAX_LENGTH,
   DELEGATED_TOKEN_TTL,
+  OPENAPI_DEFAULT_LANG,
+  OPENAPI_LANGS,
 } from '../utils/api'
 import { ORIGIN_MAX_LENGTH } from '../utils/credentials'
 import { FOLDER_NAME_MAX_LENGTH } from '../utils/folders'
@@ -25,6 +27,15 @@ import { isValidFolderName } from './folders'
  * Valeurs en minuscules, dates ISO 8601, URL absolues ; ni e-mails ni chemins physiques.
  */
 
+/**
+ * Texte de documentation d'un champ (spécification OpenAPI) : français (référence) et traduction
+ * anglaise, appliquée par `GET /api/v1/openapi.json?lang=en` (extension `x-i18n`, retirée du
+ * document servi ; server/lib/api/openapi.ts).
+ */
+function doc(fr: string, en: string) {
+  return { description: fr, 'x-i18n': { en: { description: en } } }
+}
+
 const ID_PATTERN = /^[a-z0-9]{8,64}$/i
 const lower = <T extends readonly string[]>(values: T) => values.map(value => value.toLowerCase()) as [string, ...string[]]
 
@@ -34,7 +45,7 @@ export const API_VISIBILITIES = lower(MEDIA_VISIBILITIES)
 // ─── Requêtes ────────────────────────────────────────────────────────────────
 
 export const apiMediaListQuerySchema = z.object({
-  q: z.string().trim().min(1).max(191).optional().meta({ description: 'Recherche dans le titre, le nom de fichier et le texte alternatif (insensible à la casse et aux accents).' }),
+  q: z.string().trim().min(1).max(191).optional().meta(doc('Recherche dans le titre, le nom de fichier et le texte alternatif (insensible à la casse et aux accents).', 'Searches the title, file name and alternative text (case and accent insensitive).')),
   kind: z.enum(API_MEDIA_KINDS).optional(),
   visibility: z.enum(API_VISIBILITIES).optional(),
   ids: z
@@ -42,16 +53,16 @@ export const apiMediaListQuerySchema = z.object({
     .transform(value => [...new Set(value.split(',').map(id => id.trim()).filter(Boolean))])
     .pipe(z.array(z.string().regex(ID_PATTERN)).min(1).max(API_MAX_IDS))
     .optional()
-    .meta({ description: `Identifiants séparés par des virgules (${API_MAX_IDS} au plus) : renvoie ces médias, dans cet ordre, sans pagination.` }),
+    .meta(doc(`Identifiants séparés par des virgules (${API_MAX_IDS} au plus) : renvoie ces médias, dans cet ordre, sans pagination.`, `Comma-separated ids (${API_MAX_IDS} at most): returns these media, in this order, without pagination.`)),
   folder: z.union([z.literal('root'), z.string().regex(ID_PATTERN)]).optional()
-    .meta({ description: 'Dossier : identifiant, ou `root` pour les médias hors dossier. Absent : tous les médias du projet.' }),
+    .meta(doc('Dossier : identifiant, ou `root` pour les médias hors dossier. Absent : tous les médias du projet.', 'Folder: an id, or `root` for media outside any folder. Absent: every media item of the project.')),
   recursive: z.enum(['true', 'false']).transform(value => value === 'true').optional()
-    .meta({ description: 'Avec `folder` : inclut les médias des sous-dossiers (`root` + `recursive` = tout le projet).' }),
+    .meta(doc('Avec `folder` : inclut les médias des sous-dossiers (`root` + `recursive` = tout le projet).', 'With `folder`: includes media from subfolders (`root` + `recursive` = the whole project).')),
   sort: z.enum(API_MEDIA_SORTS).default('newest'),
   limit: z.coerce.number().int().min(1).max(API_MAX_LIMIT).default(API_DEFAULT_LIMIT),
-  cursor: z.string().min(1).max(512).optional().meta({ description: 'Curseur opaque renvoyé par la page précédente (`nextCursor`).' }),
+  cursor: z.string().min(1).max(512).optional().meta(doc('Curseur opaque renvoyé par la page précédente (`nextCursor`).', 'Opaque cursor returned by the previous page (`nextCursor`).')),
   withTotal: z.enum(['true', 'false']).transform(value => value === 'true').optional()
-    .meta({ description: 'Ajoute `total` (nombre de résultats) à la réponse : requête supplémentaire, à ne demander que si nécessaire.' }),
+    .meta(doc('Ajoute `total` (nombre de résultats) à la réponse : requête supplémentaire, à ne demander que si nécessaire.', 'Adds `total` (number of results) to the response: an extra query, request it only when needed.')),
 })
 export type ApiMediaListQuery = z.output<typeof apiMediaListQuerySchema>
 
@@ -61,11 +72,17 @@ export const apiProjectListQuerySchema = z.object({
 })
 export type ApiProjectListQuery = z.output<typeof apiProjectListQuerySchema>
 
+/** Paramètres de GET /api/v1/openapi.json (langue inconnue : langue par défaut). */
+export const apiOpenApiQuerySchema = z.object({
+  lang: z.enum(OPENAPI_LANGS).default(OPENAPI_DEFAULT_LANG).catch(OPENAPI_DEFAULT_LANG)
+    .meta(doc('Langue des textes de la spécification (français par défaut).', 'Language of the specification texts (French by default).')),
+})
+
 export const apiSignedUrlBodySchema = z.object({
   target: z.enum(API_SIGNED_URL_TARGETS).default('file')
-    .meta({ description: '`file` : l\'original ; `preset` : un dérivé nommé (`preset`) ; `derived` : tout dérivé de la version (une signature pour tout un srcset).' }),
+    .meta(doc('`file` : l\'original ; `preset` : un dérivé nommé (`preset`) ; `derived` : tout dérivé de la version (une signature pour tout un srcset).', '`file`: the original; `preset`: a named derivative (`preset`); `derived`: any derivative of the version (one signature for a whole srcset).')),
   preset: z.enum(MEDIA_PRESETS).optional(),
-  expiresIn: z.number().int().min(60).max(SIGNED_URL_MAX_TTL).default(3600).meta({ description: 'Durée de validité en secondes (60 s à 7 jours).' }),
+  expiresIn: z.number().int().min(60).max(SIGNED_URL_MAX_TTL).default(3600).meta(doc('Durée de validité en secondes (60 s à 7 jours).', 'Validity in seconds (60 s to 7 days).')),
 }).superRefine((body, ctx) => {
   if (body.target === 'preset' && !body.preset) ctx.addIssue({ code: 'custom', path: ['preset'], message: 'Required when target is "preset".' })
 })
@@ -77,10 +94,10 @@ const optionalText = z.string().trim().max(191).transform(value => value || null
 
 const writableFields = {
   title: optionalText.optional(),
-  altText: optionalText.optional().meta({ description: 'Texte alternatif (accessibilité).' }),
+  altText: optionalText.optional().meta(doc('Texte alternatif (accessibilité).', 'Alternative text (accessibility).')),
   visibility: z.enum(API_VISIBILITIES).optional(),
   folderId: z.string().regex(ID_PATTERN).nullable().optional()
-    .meta({ description: 'Dossier du projet (`null` = hors dossier). Imposé par un jeton délégué qui le fixe.' }),
+    .meta(doc('Dossier du projet (`null` = hors dossier). Imposé par un jeton délégué qui le fixe.', 'Project folder (`null` = no folder). Enforced by a delegated token that sets it.')),
 }
 
 /**
@@ -100,8 +117,8 @@ export const apiDuplicateBodySchema = z.strictObject({
       z.strictObject({ library: z.literal(true) }),
     ])
     .optional()
-    .meta({ description: 'Espace de la copie : un projet (`projectId`), ou la bibliothèque de l\'organisation (`library`, jeton personnel qui l\'inclut). Par défaut : le projet du média.' }),
-  folderId: z.string().regex(ID_PATTERN).nullable().optional().meta({ description: 'Dossier de l\'espace cible (par défaut : hors dossier).' }),
+    .meta(doc('Espace de la copie : un projet (`projectId`), ou la bibliothèque de l\'organisation (`library`, jeton personnel qui l\'inclut). Par défaut : le projet du média.', 'Where the copy goes: a project (`projectId`), or the organization library (`library`, with a personal token that includes it). Default: the project of the media item.')),
+  folderId: z.string().regex(ID_PATTERN).nullable().optional().meta(doc('Dossier de l\'espace cible (par défaut : hors dossier).', 'Folder in the target space (default: no folder).')),
 })
 
 /** Types de fichiers acceptés par l'installation (détectés d'après le contenu). */
@@ -110,23 +127,23 @@ const ACCEPTED_TYPES = Object.values(ACCEPTED_MEDIA_TYPES).flatMap(types => Obje
 /** Contraintes d'envoi d'un jeton délégué (champ `upload`). */
 export const apiUploadConstraintsSchema = z.strictObject({
   maxFiles: z.number().int().min(1).max(DELEGATED_MAX_FILES).optional()
-    .meta({ description: 'Nombre de fichiers que le jeton peut envoyer (nouveaux médias et remplacements).' }),
+    .meta(doc('Nombre de fichiers que le jeton peut envoyer (nouveaux médias et remplacements).', 'Number of files the token can upload (new media and replacements).')),
   maxSize: z.number().int().min(1).max(2_147_483_647).optional()
-    .meta({ description: 'Taille maximale d\'un fichier, en octets (bornée par la limite de l\'installation).' }),
+    .meta(doc('Taille maximale d\'un fichier, en octets (bornée par la limite de l\'installation).', 'Maximum file size in bytes (capped by the installation limit).')),
   types: z.array(z.enum(ACCEPTED_TYPES)).min(1).max(DELEGATED_MAX_TYPES).optional()
-    .meta({ description: 'Types MIME acceptés, détectés d\'après le contenu du fichier.' }),
-  visibility: z.enum(API_VISIBILITIES).optional().meta({ description: 'Visibilité imposée aux médias envoyés.' }),
-  folderId: z.string().regex(ID_PATTERN).optional().meta({ description: 'Dossier du projet imposé aux médias envoyés.' }),
+    .meta(doc('Types MIME acceptés, détectés d\'après le contenu du fichier.', 'Accepted MIME types, detected from the file contents.')),
+  visibility: z.enum(API_VISIBILITIES).optional().meta(doc('Visibilité imposée aux médias envoyés.', 'Visibility enforced on uploaded media.')),
+  folderId: z.string().regex(ID_PATTERN).optional().meta(doc('Dossier du projet imposé aux médias envoyés.', 'Project folder enforced on uploaded media.')),
 })
 export type ApiUploadConstraints = z.output<typeof apiUploadConstraintsSchema>
 
 export const apiDelegatedTokenBodySchema = z.strictObject({
   scopes: z.array(z.enum(TOKEN_SCOPES)).min(1).max(TOKEN_SCOPES.length)
-    .meta({ description: 'Portées demandées, toutes détenues par l\'émetteur dans ce projet (aucune lecture d\'office).' }),
+    .meta(doc('Portées demandées, toutes détenues par l\'émetteur dans ce projet (aucune lecture d\'office).', 'Requested scopes, all held by the issuer in this project (no implicit read access).')),
   expiresIn: z.number().int().min(DELEGATED_TOKEN_TTL.min).max(DELEGATED_TOKEN_TTL.max).default(DELEGATED_TOKEN_TTL.default)
-    .meta({ description: 'Durée de validité en secondes (1 à 60 minutes, 15 par défaut), bornée par l\'échéance de l\'émetteur.' }),
+    .meta(doc('Durée de validité en secondes (1 à 60 minutes, 15 par défaut), bornée par l\'échéance de l\'émetteur.', 'Validity in seconds (1 to 60 minutes, 15 by default), capped by the expiry of the issuer.')),
   subject: z.string().trim().min(1).max(DELEGATED_SUBJECT_MAX_LENGTH).regex(/^\P{Cc}+$/u).optional()
-    .meta({ description: 'Identifiant opaque de l\'utilisateur final côté application cliente (provenance et journal d\'audit).' }),
+    .meta(doc('Identifiant opaque de l\'utilisateur final côté application cliente (provenance et journal d\'audit).', 'Opaque id of the end user in the client application (provenance and audit log).')),
   origin: z
     .string()
     .trim()
@@ -141,7 +158,7 @@ export const apiDelegatedTokenBodySchema = z.strictObject({
       return origin
     })
     .optional()
-    .meta({ description: 'Origine exacte du site autorisé à utiliser le jeton (parmi les origines autorisées du projet).' }),
+    .meta(doc('Origine exacte du site autorisé à utiliser le jeton (parmi les origines autorisées du projet).', 'Exact origin of the site allowed to use the token (one of the allowed origins of the project).')),
   upload: apiUploadConstraintsSchema.optional(),
 }).superRefine((body, ctx) => {
   if (body.upload && !body.scopes.some(scope => scope === 'media:upload' || scope === 'media:write')) {
@@ -156,15 +173,15 @@ export type ApiDelegatedTokenBody = z.output<typeof apiDelegatedTokenBodySchema>
  */
 export const delegatedTokenClaimsSchema = z.strictObject({
   v: z.literal(1),
-  jti: z.string().min(8).max(64).meta({ description: 'Identifiant unique du jeton.' }),
-  iss: z.string().regex(ID_PATTERN).meta({ description: 'Identifiant (clé secrète ou jeton personnel) qui a émis le jeton.' }),
+  jti: z.string().min(8).max(64).meta(doc('Identifiant unique du jeton.', 'Unique token id.')),
+  iss: z.string().regex(ID_PATTERN).meta(doc('Identifiant (clé secrète ou jeton personnel) qui a émis le jeton.', 'Credential (secret key or personal token) that issued the token.')),
   project: z.string().regex(ID_PATTERN),
   scopes: z.array(z.enum(TOKEN_SCOPES)).min(1),
   sub: z.string().max(DELEGATED_SUBJECT_MAX_LENGTH).optional(),
   origin: z.string().max(ORIGIN_MAX_LENGTH).optional(),
   upload: apiUploadConstraintsSchema.optional(),
   iat: z.number().int(),
-  exp: z.number().int().meta({ description: 'Échéance (secondes Unix).' }),
+  exp: z.number().int().meta(doc('Échéance (secondes Unix).', 'Expiry (Unix seconds).')),
   kid: z.string().min(1).max(16),
 })
 export type DelegatedTokenClaims = z.output<typeof delegatedTokenClaimsSchema>
@@ -179,17 +196,17 @@ const apiFolderNameSchema = z
 
 export const apiFolderCreateSchema = z.strictObject({
   name: apiFolderNameSchema,
-  parentId: z.string().regex(ID_PATTERN).nullable().optional().meta({ description: 'Dossier parent (absent ou `null` : à la racine du projet).' }),
+  parentId: z.string().regex(ID_PATTERN).nullable().optional().meta(doc('Dossier parent (absent ou `null` : à la racine du projet).', 'Parent folder (absent or `null`: at the project root).')),
 })
 
 export const apiFolderUpdateSchema = z.strictObject({
   name: apiFolderNameSchema.optional(),
-  parentId: z.string().regex(ID_PATTERN).nullable().optional().meta({ description: 'Nouveau parent (`null` : racine ; absent : inchangé).' }),
+  parentId: z.string().regex(ID_PATTERN).nullable().optional().meta(doc('Nouveau parent (`null` : racine ; absent : inchangé).', 'New parent (`null`: root; absent: unchanged).')),
 })
 
 export const apiFolderDeleteQuerySchema = z.strictObject({
   content: z.enum(['parent']).optional()
-    .meta({ description: '`parent` : les sous-dossiers et médias remontent dans le dossier parent avant la suppression (sinon : dossier vide exigé).' }),
+    .meta(doc('`parent` : les sous-dossiers et médias remontent dans le dossier parent avant la suppression (sinon : dossier vide exigé).', '`parent`: subfolders and media move up to the parent folder before deletion (otherwise the folder must be empty).')),
 })
 
 // ─── Réponses ────────────────────────────────────────────────────────────────
@@ -198,23 +215,23 @@ const isoDate = z.iso.datetime({ offset: true })
 
 export const apiMediaSchema = z.object({
   id: z.string(),
-  projectId: z.string().nullable().meta({ description: 'Projet du média ; null = bibliothèque de l\'organisation (copie créée par duplication).' }),
+  projectId: z.string().nullable().meta(doc('Projet du média ; null = bibliothèque de l\'organisation (copie créée par duplication).', 'Project of the media item; null = organization library (copy created by duplication).')),
   kind: z.enum(API_MEDIA_KINDS),
   visibility: z.enum(API_VISIBILITIES),
   title: z.string().nullable(),
   altText: z.string().nullable(),
-  filename: z.string().meta({ description: 'Nom du fichier envoyé (indicatif).' }),
+  filename: z.string().meta(doc('Nom du fichier envoyé (indicatif).', 'Name of the uploaded file (informative).')),
   mimeType: z.string(),
   extension: z.string().nullable(),
-  size: z.number().int().meta({ description: 'Taille en octets.' }),
+  size: z.number().int().meta(doc('Taille en octets.', 'Size in bytes.')),
   width: z.number().int().nullable(),
   height: z.number().int().nullable(),
   duration: z.number().nullable(),
-  version: z.number().int().meta({ description: 'Incrémentée à chaque remplacement du fichier ; fait partie des URL.' }),
+  version: z.number().int().meta(doc('Incrémentée à chaque remplacement du fichier ; fait partie des URL.', 'Incremented each time the file is replaced; part of the URLs.')),
   folderId: z.string().nullable(),
-  url: z.url().meta({ description: 'URL absolue du fichier original ; signée (temporaire) pour un média privé.' }),
-  previewUrl: z.url().nullable().meta({ description: 'URL de l\'aperçu (WebP, 480 px) ; signée pour un média privé.' }),
-  urlExpiresAt: isoDate.nullable().meta({ description: 'Échéance des URL signées ; null pour un média public (URL permanentes).' }),
+  url: z.url().meta(doc('URL absolue du fichier original ; signée (temporaire) pour un média privé.', 'Absolute URL of the original file; signed (temporary) for a private media item.')),
+  previewUrl: z.url().nullable().meta(doc('URL de l\'aperçu (WebP, 480 px) ; signée pour un média privé.', 'Preview URL (WebP, 480 px); signed for a private media item.')),
+  urlExpiresAt: isoDate.nullable().meta(doc('Échéance des URL signées ; null pour un média public (URL permanentes).', 'Expiry of the signed URLs; null for a public media item (permanent URLs).')),
   createdAt: isoDate,
   updatedAt: isoDate,
 })
@@ -222,7 +239,7 @@ export type ApiMedia = z.input<typeof apiMediaSchema>
 
 export const apiFolderSchema = z.object({
   id: z.string(),
-  parentId: z.string().nullable().meta({ description: 'Dossier parent ; `null` à la racine du projet.' }),
+  parentId: z.string().nullable().meta(doc('Dossier parent ; `null` à la racine du projet.', 'Parent folder; `null` at the project root.')),
   name: z.string(),
   createdAt: isoDate,
   updatedAt: isoDate,
@@ -230,7 +247,7 @@ export const apiFolderSchema = z.object({
 export type ApiFolder = z.input<typeof apiFolderSchema>
 
 export const apiFolderListSchema = z.object({
-  items: z.array(apiFolderSchema).meta({ description: 'Tous les dossiers du projet, à plat (arbre par `parentId`), triés par nom.' }),
+  items: z.array(apiFolderSchema).meta(doc('Tous les dossiers du projet, à plat (arbre par `parentId`), triés par nom.', 'Every folder of the project, flat (tree via `parentId`), sorted by name.')),
 })
 
 export const apiMediaListSchema = z.object({
@@ -244,8 +261,8 @@ export const apiProjectSchema = z.object({
   name: z.string(),
   slug: z.string(),
   description: z.string().nullable(),
-  publicListing: z.boolean().meta({ description: 'La clé publique peut lister et chercher les médias publics.' }),
-  scopes: z.array(z.enum(TOKEN_SCOPES)).meta({ description: 'Portées effectives de l\'identifiant utilisé dans ce projet.' }),
+  publicListing: z.boolean().meta(doc('La clé publique peut lister et chercher les médias publics.', 'The publishable key can list and search public media.')),
+  scopes: z.array(z.enum(TOKEN_SCOPES)).meta(doc('Portées effectives de l\'identifiant utilisé dans ce projet.', 'Effective scopes of the credential used in this project.')),
   createdAt: isoDate,
   updatedAt: isoDate,
 })
@@ -260,12 +277,12 @@ const projectRef = z.object({ id: z.string(), name: z.string(), slug: z.string()
 
 export const apiMeSchema = z.object({
   credential: z.object({
-    id: z.string().meta({ description: 'Identifiant de l\'identifiant ; `jti` pour un jeton délégué.' }),
+    id: z.string().meta(doc('Identifiant de l\'identifiant ; `jti` pour un jeton délégué.', 'Credential id; `jti` for a delegated token.')),
     type: z.enum(['personal', 'secret', 'publishable', 'delegated']),
     name: z.string(),
     prefix: z.string(),
     environment: z.string().nullable(),
-    scopes: z.array(z.enum(TOKEN_SCOPES)).meta({ description: 'Portées déclarées (un jeton personnel reste limité aux droits actuels de son propriétaire, un jeton délégué à ceux de son émetteur).' }),
+    scopes: z.array(z.enum(TOKEN_SCOPES)).meta(doc('Portées déclarées (un jeton personnel reste limité aux droits actuels de son propriétaire, un jeton délégué à ceux de son émetteur).', 'Declared scopes (a personal token stays limited to the current rights of its owner, a delegated token to those of its issuer).')),
     expiresAt: isoDate.nullable(),
     createdAt: isoDate,
   }),
@@ -273,27 +290,36 @@ export const apiMeSchema = z.object({
     subject: z.string().nullable(),
     origin: z.string().nullable(),
     upload: apiUploadConstraintsSchema.nullable(),
-  }).nullable().meta({ description: 'Jeton délégué : sujet final, origine et contraintes d\'envoi.' }),
-  user: z.object({ id: z.string(), name: z.string().nullable() }).nullable().meta({ description: 'Propriétaire d\'un jeton personnel.' }),
-  project: projectRef.extend({ archived: z.boolean() }).nullable().meta({ description: 'Projet d\'une clé.' }),
+  }).nullable().meta(doc('Jeton délégué : sujet final, origine et contraintes d\'envoi.', 'Delegated token: end subject, origin and upload constraints.')),
+  user: z.object({ id: z.string(), name: z.string().nullable() }).nullable().meta(doc('Propriétaire d\'un jeton personnel.', 'Owner of a personal token.')),
+  project: projectRef.extend({ archived: z.boolean() }).nullable().meta(doc('Projet d\'une clé.', 'Project of a key.')),
   access: z.object({
     allProjects: z.boolean(),
     library: z.boolean(),
     projects: z.array(projectRef),
-  }).nullable().meta({ description: 'Sélection d\'un jeton personnel.' }),
+  }).nullable().meta(doc('Sélection d\'un jeton personnel.', 'Project selection of a personal token.')),
 })
 export type ApiMe = z.input<typeof apiMeSchema>
 
 export const apiDelegatedTokenSchema = z.object({
-  token: z.string().meta({ description: 'Jeton à transmettre au navigateur, qui l\'envoie en `Authorization: Bearer <token>`.' }),
+  token: z.string().meta(doc('Jeton à transmettre au navigateur, qui l\'envoie en `Authorization: Bearer <token>`.', 'Token to hand over to the browser, which sends it as `Authorization: Bearer <token>`.')),
   expiresAt: isoDate,
   scopes: z.array(z.enum(TOKEN_SCOPES)),
 })
 
 export const apiSignedUrlSchema = z.object({
   url: z.url(),
-  query: z.string().meta({ description: 'Paramètres de signature seuls (`exp`, `kid`, `scope`, `sig`), à ajouter aux URL des dérivés pour `derived` ; vide pour un média public.' }),
+  query: z.string().meta(doc('Paramètres de signature seuls (`exp`, `kid`, `scope`, `sig`), à ajouter aux URL des dérivés pour `derived` ; vide pour un média public.', 'Signature parameters only (`exp`, `kid`, `scope`, `sig`), to append to derivative URLs with `derived`; empty for a public media item.')),
   expiresAt: isoDate.nullable(),
+})
+
+/** Catalogue des codes d'erreur (GET /api/v1/errors). */
+export const apiErrorCatalogSchema = z.object({
+  errors: z.array(z.object({
+    code: z.enum(Object.keys(API_ERRORS) as [string, ...string[]]),
+    status: z.number().int(),
+    title: z.string(),
+  })),
 })
 
 export const apiProblemSchema = z.object({
@@ -304,5 +330,5 @@ export const apiProblemSchema = z.object({
   detail: z.string().optional(),
   instance: z.string(),
   requestId: z.string(),
-  errors: z.array(z.object({ path: z.string(), message: z.string() })).optional().meta({ description: 'Détail des paramètres invalides (INVALID_REQUEST).' }),
+  errors: z.array(z.object({ path: z.string(), message: z.string() })).optional().meta(doc('Détail des paramètres invalides (INVALID_REQUEST).', 'Details of the invalid parameters (INVALID_REQUEST).')),
 })

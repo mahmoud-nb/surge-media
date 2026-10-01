@@ -6,6 +6,34 @@ import { requireFolderInSpace } from '../../../../lib/folders/service'
 import { defineApiHandler, readApiBody, requireApiProject } from '../../../../lib/api/context'
 import { apiProblem } from '../../../../lib/api/problem'
 
+defineRouteMeta({
+  openAPI: {
+    'operationId': 'createDelegatedToken',
+    'tags': ['delegated-tokens'],
+    'summary': 'Émettre un jeton délégué',
+    'description': 'Votre serveur authentifie son utilisateur, puis demande un jeton de quelques minutes pour un composant dans le navigateur : limité à ce projet, aux portées demandées (toutes détenues par l\'émetteur ici) et aux contraintes d\'envoi (`upload`). Échéance bornée par celle de l\'émetteur ; révoquer l\'émetteur invalide ses jetons délégués. La charge du jeton (`DelegatedTokenClaims`) est lisible par le composant.',
+    'x-scopes': ['project:read'],
+    'x-credentials': ['secret', 'personal'],
+    'x-errors': [
+      'INVALID_REQUEST',
+      'CREDENTIAL_NOT_ALLOWED',
+      'ORIGIN_NOT_ALLOWED',
+      'FOLDER_NOT_FOUND',
+      'PROJECT_NOT_FOUND',
+      'PROJECT_ARCHIVED',
+      'INSUFFICIENT_SCOPE',
+    ],
+    'requestBody': { $ref: '#/components/requestBodies/DelegatedTokenRequest' },
+    'responses': { 201: { $ref: '#/components/responses/DelegatedToken' } },
+    'x-i18n': {
+      en: {
+        summary: 'Issue a delegated token',
+        description: 'Your server authenticates its user, then requests a token of a few minutes for an in-browser component: limited to this project, to the requested scopes (all held by the issuer here) and to the upload constraints (`upload`). Its expiry is capped by that of the issuer; revoking the issuer invalidates its delegated tokens. The token payload (`DelegatedTokenClaims`) is readable by the component.',
+      },
+    },
+  },
+})
+
 /**
  * POST /api/v1/projects/:projectId/delegated-tokens — { scopes, expiresIn?, subject?, origin?, upload? }
  * Émet un jeton délégué `sm_dt_…` pour un composant dans le navigateur : le backend du client

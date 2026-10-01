@@ -7,6 +7,33 @@ import { toMetadataInput } from '../../../../../../lib/api/writes'
 import { updateMediaMetadata } from '../../../../../../lib/media/service'
 import { mediaBaseUrl } from '../../../../../../lib/media/urls'
 
+defineRouteMeta({
+  openAPI: {
+    'operationId': 'updateMedia',
+    'tags': ['media'],
+    'summary': 'Modifier un média',
+    'description': 'Champs absents inchangés ; `null` ou texte vide efface le titre ou le texte alternatif ; `folderId: null` sort le média de son dossier. Passer un média en privé vaut pour les nouvelles requêtes (les copies déjà en cache restent valables jusqu\'à leur expiration).',
+    'x-scopes': ['media:write'],
+    'x-credentials': ['secret', 'personal', 'delegated'],
+    'x-errors': [
+      'INVALID_REQUEST',
+      'MEDIA_NOT_FOUND',
+      'FOLDER_NOT_FOUND',
+      'PROJECT_NOT_FOUND',
+      'PROJECT_ARCHIVED',
+      'INSUFFICIENT_SCOPE',
+    ],
+    'requestBody': { $ref: '#/components/requestBodies/MediaUpdate' },
+    'responses': { 200: { $ref: '#/components/responses/Media' } },
+    'x-i18n': {
+      en: {
+        summary: 'Update a media item',
+        description: 'Absent fields stay unchanged; `null` or an empty string clears the title or alternative text; `folderId: null` takes the media item out of its folder. Making a media item private applies to new requests (copies already cached stay valid until they expire).',
+      },
+    },
+  },
+})
+
 /**
  * PATCH /api/v1/projects/:projectId/media/:mediaId — { title?, altText?, visibility?, folderId? }
  * (portée media:write). Champs absents inchangés ; `null` ou texte vide efface le titre / le texte

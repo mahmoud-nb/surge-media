@@ -7,6 +7,33 @@ import { handlerFor } from '../../../../../../lib/media/handlers'
 import { signMediaAccess } from '../../../../../../lib/media/signing'
 import { mediaBaseUrl, mediaPath } from '../../../../../../lib/media/urls'
 
+defineRouteMeta({
+  openAPI: {
+    'operationId': 'createSignedUrl',
+    'tags': ['media'],
+    'summary': 'Lien temporaire vers un média',
+    'description': 'Lien signé (échéance exacte, 60 s à 7 jours ; 1 h au plus avec un jeton délégué) vers l\'original (`file`), un dérivé nommé (`preset`), ou signature valable pour tout dérivé de la version (`derived`). Média public : URL permanente, `expiresAt: null`.',
+    'x-scopes': ['media:read'],
+    'x-credentials': ['secret', 'personal', 'delegated'],
+    'x-errors': [
+      'INVALID_REQUEST',
+      'CREDENTIAL_NOT_ALLOWED',
+      'MEDIA_NOT_FOUND',
+      'PROJECT_NOT_FOUND',
+      'PROJECT_ARCHIVED',
+      'INSUFFICIENT_SCOPE',
+    ],
+    'requestBody': { $ref: '#/components/requestBodies/SignedUrlRequest' },
+    'responses': { 200: { $ref: '#/components/responses/SignedUrl' } },
+    'x-i18n': {
+      en: {
+        summary: 'Temporary link to a media item',
+        description: 'Signed link (exact expiry, 60 s to 7 days; 1 h at most with a delegated token) to the original (`file`), a named derivative (`preset`), or a signature valid for any derivative of the version (`derived`). Public media item: permanent URL, `expiresAt: null`.',
+      },
+    },
+  },
+})
+
 /**
  * POST /api/v1/projects/:projectId/media/:mediaId/signed-url — { target?, preset?, expiresIn? }
  * (portée media:read ; clé secrète, jeton personnel ou jeton délégué — 1 h au plus ; 403

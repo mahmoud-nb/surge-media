@@ -9,6 +9,35 @@ import { duplicateMedia } from '../../../../../../lib/media/service'
 import { mediaBaseUrl } from '../../../../../../lib/media/urls'
 import type { Space } from '../../../../../../utils/access'
 
+defineRouteMeta({
+  openAPI: {
+    'operationId': 'duplicateMedia',
+    'tags': ['media'],
+    'summary': 'Dupliquer un média',
+    'description': 'Copie indépendante (nouvel identifiant, version 1, fichier copié) dans un projet — par défaut celui du média — ou dans la bibliothèque de l\'organisation, éventuellement dans un dossier. `media:read` ici, `media:upload` dans la cible. Clé secrète : son projet seulement ; jeton personnel : tout projet accessible, ou la bibliothèque s\'il l\'inclut.',
+    'x-scopes': ['media:read', 'media:upload'],
+    'x-credentials': ['secret', 'personal'],
+    'x-errors': [
+      'INVALID_REQUEST',
+      'CREDENTIAL_NOT_ALLOWED',
+      'MEDIA_NOT_FOUND',
+      'NOT_FOUND',
+      'FOLDER_NOT_FOUND',
+      'PROJECT_NOT_FOUND',
+      'PROJECT_ARCHIVED',
+      'INSUFFICIENT_SCOPE',
+    ],
+    'requestBody': { $ref: '#/components/requestBodies/MediaDuplicate' },
+    'responses': { 201: { $ref: '#/components/responses/MediaCopy' } },
+    'x-i18n': {
+      en: {
+        summary: 'Duplicate a media item',
+        description: 'Independent copy (new id, version 1, copied file) in a project — by default the one of the media item — or in the organization library, optionally in a folder. `media:read` here, `media:upload` in the target. Secret key: its own project only; personal token: any accessible project, or the library when it includes it.',
+      },
+    },
+  },
+})
+
 /**
  * POST /api/v1/projects/:projectId/media/:mediaId/duplicate — { target?: { projectId } | { library: true }, folderId? }
  * Copie indépendante (nouvel identifiant, version 1, fichier copié dans le stockage, provenance

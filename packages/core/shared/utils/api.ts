@@ -85,3 +85,11 @@ export const DELEGATED_MAX_FILES = 1000
 export const DELEGATED_MAX_TYPES = 20
 /** Liens signés demandés avec un jeton délégué : 1 h au plus (jamais de lien long). */
 export const DELEGATED_SIGNED_URL_MAX_TTL = 3600
+
+/**
+ * Langues de la spécification OpenAPI (`GET /api/v1/openapi.json?lang=`) : le français est la
+ * référence (textes des routes et des schémas), l'anglais une traduction (extension `x-i18n`).
+ */
+export const OPENAPI_LANGS = ['fr', 'en'] as const
+export type OpenApiLang = (typeof OPENAPI_LANGS)[number]
+export const OPENAPI_DEFAULT_LANG: OpenApiLang = 'fr'

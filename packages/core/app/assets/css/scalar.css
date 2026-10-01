@@ -1,0 +1,81 @@
+/*
+ * Thème de la documentation interactive de l'API (Scalar, /admin/api), chargé avec le composant
+ * AdminApiReference seulement. Scalar n'injecte aucun thème (`theme: 'none'`) : toutes ses couleurs
+ * viennent des jetons de main.css, dont les contrastes sont vérifiés par `pnpm a11y:contrast`.
+ *
+ * Scalar pose `light-mode` ou `dark-mode` sur <body> (forcé selon le thème de l'administration) et
+ * y lit ses variables, y compris pour ses fenêtres (client de requêtes) hors du composant.
+ */
+body.light-mode,
+body.dark-mode {
+  /* Scalar colore <body> (couche scalar-base) : on garde le fond de l'administration. */
+  background-color: var(--background);
+
+  --scalar-font: "Inter Variable", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  --scalar-font-code: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
+  --scalar-radius: 6px;
+  --scalar-radius-lg: 8px;
+  --scalar-radius-xl: 12px;
+
+  --scalar-background-1: var(--surface);
+  --scalar-background-2: var(--background);
+  --scalar-background-3: var(--muted);
+  --scalar-background-accent: var(--primary-soft);
+
+  --scalar-color-1: var(--foreground);
+  --scalar-color-2: var(--muted-foreground);
+  --scalar-color-3: var(--muted-foreground);
+  --scalar-color-accent: var(--primary);
+  --scalar-color-disabled: var(--muted-foreground);
+  --scalar-border-color: var(--border);
+
+  --scalar-color-green: var(--success);
+  --scalar-color-red: var(--destructive);
+  --scalar-color-yellow: var(--warning);
+  --scalar-color-blue: var(--code-blue);
+  --scalar-color-orange: var(--code-orange);
+  --scalar-color-purple: var(--code-purple);
+  --scalar-color-query: var(--code-teal);
+
+  --scalar-link-color: var(--primary);
+  --scalar-link-color-hover: var(--primary-hover);
+  --scalar-button-1: var(--primary);
+  --scalar-button-1-hover: var(--primary-hover);
+  --scalar-button-1-color: var(--primary-foreground);
+  --scalar-tooltip-background: var(--foreground);
+  --scalar-tooltip-color: var(--background);
+
+  --scalar-color-alert: var(--warning);
+  --scalar-color-danger: var(--destructive);
+  --scalar-background-alert: var(--warning-soft);
+  --scalar-background-danger: var(--destructive-soft);
+
+  --scalar-sidebar-background-1: var(--surface);
+  --scalar-sidebar-color-1: var(--foreground);
+  --scalar-sidebar-color-2: var(--muted-foreground);
+  --scalar-sidebar-border-color: var(--border);
+  --scalar-sidebar-item-hover-background: var(--muted);
+  --scalar-sidebar-item-hover-color: var(--foreground);
+  --scalar-sidebar-item-active-background: var(--primary-soft);
+  --scalar-sidebar-color-active: var(--primary);
+  --scalar-sidebar-indent-border: var(--border);
+  --scalar-sidebar-indent-border-hover: var(--input);
+  --scalar-sidebar-indent-border-active: var(--primary);
+  --scalar-sidebar-search-background: var(--surface);
+  --scalar-sidebar-search-color: var(--muted-foreground);
+  --scalar-sidebar-search-border-color: var(--input);
+
+  /* Focus visible comme dans le reste de l'administration (≥ 3:1). */
+  --scalar-focus-color: var(--ring);
+}
+
+/* En-tête mobile collant de l'administration (h-14) : décalage des éléments collants de Scalar. */
+.surge-api-reference {
+  --scalar-custom-header-height: 3.5rem;
+}
+
+@media (min-width: 64rem) {
+  .surge-api-reference {
+    --scalar-custom-header-height: 0px;
+  }
+}

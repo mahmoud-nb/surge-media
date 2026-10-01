@@ -71,7 +71,9 @@ model Session {
   /// Dernière saisie du mot de passe (connexion ou confirmation) : actions sensibles (« mode sudo »)
   passwordVerifiedAt DateTime @default(now())
 
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user          User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  /// Jetons de console de la documentation de l'API, supprimés avec la session
+  consoleTokens AccessToken[]
 
   @@index([userId])
   @@index([expiresAt])
@@ -189,6 +191,9 @@ model AccessToken {
   /// Rotation : clé qui remplace celle-ci (l'ancienne reste valable jusqu'à expiresAt)
   replacedById   String?
   createdById    String?
+  /// Jeton de console (documentation de l'API) : jeton personnel lié à une session d'administration,
+  /// utilisable depuis la page de documentation et supprimé avec la session ; null sinon
+  sessionId      String?
   createdAt      DateTime  @default(now())
 
   project       Project?             @relation(fields: [projectId], references: [id], onDelete: Cascade)
@@ -196,6 +201,7 @@ model AccessToken {
   createdBy     User?                @relation("AccessTokenCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
   replacedBy    AccessToken?         @relation("AccessTokenRotation", fields: [replacedById], references: [id], onDelete: SetNull)
   replaces      AccessToken[]        @relation("AccessTokenRotation")
+  session       Session?             @relation(fields: [sessionId], references: [id], onDelete: Cascade)
   projects      AccessTokenProject[]
   /// Médias envoyés par l'API avec cet identifiant (ou un jeton délégué qu'il a émis)
   uploadedMedia Media[]              @relation("MediaUploadedByToken")
@@ -203,6 +209,7 @@ model AccessToken {
   @@index([projectId])
   @@index([userId])
   @@index([replacedById])
+  @@index([sessionId])
 }
 
 /// Sélection de projets d'un jeton personnel (quand il ne couvre pas « tous mes projets »)
