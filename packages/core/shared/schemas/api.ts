@@ -12,9 +12,11 @@ import {
   DELEGATED_TOKEN_TTL,
 } from '../utils/api'
 import { ORIGIN_MAX_LENGTH } from '../utils/credentials'
+import { FOLDER_NAME_MAX_LENGTH } from '../utils/folders'
 import { ACCEPTED_MEDIA_TYPES, ENABLED_MEDIA_KINDS, MEDIA_PRESETS, MEDIA_VISIBILITIES, SIGNED_URL_MAX_TTL } from '../utils/media'
 import { isWildcardOrigin, normalizeOrigin } from '../utils/origins'
 import { TOKEN_SCOPES } from '../utils/permissions'
+import { isValidFolderName } from './folders'
 
 /**
  * Contrat de l'API publique v1 : paramètres acceptés (validation stricte, erreurs 400
@@ -41,6 +43,10 @@ export const apiMediaListQuerySchema = z.object({
     .pipe(z.array(z.string().regex(ID_PATTERN)).min(1).max(API_MAX_IDS))
     .optional()
     .meta({ description: `Identifiants séparés par des virgules (${API_MAX_IDS} au plus) : renvoie ces médias, dans cet ordre, sans pagination.` }),
+  folder: z.union([z.literal('root'), z.string().regex(ID_PATTERN)]).optional()
+    .meta({ description: 'Dossier : identifiant, ou `root` pour les médias hors dossier. Absent : tous les médias du projet.' }),
+  recursive: z.enum(['true', 'false']).transform(value => value === 'true').optional()
+    .meta({ description: 'Avec `folder` : inclut les médias des sous-dossiers (`root` + `recursive` = tout le projet).' }),
   sort: z.enum(API_MEDIA_SORTS).default('newest'),
   limit: z.coerce.number().int().min(1).max(API_MAX_LIMIT).default(API_DEFAULT_LIMIT),
   cursor: z.string().min(1).max(512).optional().meta({ description: 'Curseur opaque renvoyé par la page précédente (`nextCursor`).' }),
@@ -73,6 +79,8 @@ const writableFields = {
   title: optionalText.optional(),
   altText: optionalText.optional().meta({ description: 'Texte alternatif (accessibilité).' }),
   visibility: z.enum(API_VISIBILITIES).optional(),
+  folderId: z.string().regex(ID_PATTERN).nullable().optional()
+    .meta({ description: 'Dossier du projet (`null` = hors dossier). Imposé par un jeton délégué qui le fixe.' }),
 }
 
 /**
@@ -93,6 +101,7 @@ export const apiDuplicateBodySchema = z.strictObject({
     ])
     .optional()
     .meta({ description: 'Espace de la copie : un projet (`projectId`), ou la bibliothèque de l\'organisation (`library`, jeton personnel qui l\'inclut). Par défaut : le projet du média.' }),
+  folderId: z.string().regex(ID_PATTERN).nullable().optional().meta({ description: 'Dossier de l\'espace cible (par défaut : hors dossier).' }),
 })
 
 /** Types de fichiers acceptés par l'installation (détectés d'après le contenu). */
@@ -107,6 +116,7 @@ export const apiUploadConstraintsSchema = z.strictObject({
   types: z.array(z.enum(ACCEPTED_TYPES)).min(1).max(DELEGATED_MAX_TYPES).optional()
     .meta({ description: 'Types MIME acceptés, détectés d\'après le contenu du fichier.' }),
   visibility: z.enum(API_VISIBILITIES).optional().meta({ description: 'Visibilité imposée aux médias envoyés.' }),
+  folderId: z.string().regex(ID_PATTERN).optional().meta({ description: 'Dossier du projet imposé aux médias envoyés.' }),
 })
 export type ApiUploadConstraints = z.output<typeof apiUploadConstraintsSchema>
 
@@ -159,6 +169,29 @@ export const delegatedTokenClaimsSchema = z.strictObject({
 })
 export type DelegatedTokenClaims = z.output<typeof delegatedTokenClaimsSchema>
 
+// ─── Dossiers ────────────────────────────────────────────────────────────────
+
+/** Nom de dossier : 1 à 100 caractères, sans « / », « \\ » ni caractère de contrôle (normalisé NFC, espaces de bord retirés). */
+const apiFolderNameSchema = z
+  .string()
+  .transform(value => value.normalize('NFC').trim())
+  .pipe(z.string().min(1).max(FOLDER_NAME_MAX_LENGTH).refine(isValidFolderName, 'Folder names cannot contain "/", "\\" or control characters, nor be "." or "..".'))
+
+export const apiFolderCreateSchema = z.strictObject({
+  name: apiFolderNameSchema,
+  parentId: z.string().regex(ID_PATTERN).nullable().optional().meta({ description: 'Dossier parent (absent ou `null` : à la racine du projet).' }),
+})
+
+export const apiFolderUpdateSchema = z.strictObject({
+  name: apiFolderNameSchema.optional(),
+  parentId: z.string().regex(ID_PATTERN).nullable().optional().meta({ description: 'Nouveau parent (`null` : racine ; absent : inchangé).' }),
+})
+
+export const apiFolderDeleteQuerySchema = z.strictObject({
+  content: z.enum(['parent']).optional()
+    .meta({ description: '`parent` : les sous-dossiers et médias remontent dans le dossier parent avant la suppression (sinon : dossier vide exigé).' }),
+})
+
 // ─── Réponses ────────────────────────────────────────────────────────────────
 
 const isoDate = z.iso.datetime({ offset: true })
@@ -186,6 +219,19 @@ export const apiMediaSchema = z.object({
   updatedAt: isoDate,
 })
 export type ApiMedia = z.input<typeof apiMediaSchema>
+
+export const apiFolderSchema = z.object({
+  id: z.string(),
+  parentId: z.string().nullable().meta({ description: 'Dossier parent ; `null` à la racine du projet.' }),
+  name: z.string(),
+  createdAt: isoDate,
+  updatedAt: isoDate,
+})
+export type ApiFolder = z.input<typeof apiFolderSchema>
+
+export const apiFolderListSchema = z.object({
+  items: z.array(apiFolderSchema).meta({ description: 'Tous les dossiers du projet, à plat (arbre par `parentId`), triés par nom.' }),
+})
 
 export const apiMediaListSchema = z.object({
   items: z.array(apiMediaSchema),

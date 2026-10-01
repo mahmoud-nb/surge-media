@@ -1,5 +1,6 @@
 import type { H3Event } from 'h3'
 import { API_ERRORS, type ApiErrorCode } from '#shared/utils/api'
+import { FOLDER_MAX_DEPTH, FOLDERS_PER_SPACE_MAX } from '#shared/utils/folders'
 
 /**
  * Erreurs de l'API v1 au format RFC 9457 (« Problem Details », `application/problem+json`) :
@@ -39,8 +40,8 @@ const H3_STATUS_CODES: Partial<Record<number, ApiErrorCode>> = {
   415: 'INVALID_REQUEST',
 }
 
-/** Détail lisible d'une erreur métier des médias (données jointes par `mediaError`). */
-function mediaDetail(code: ApiErrorCode, data: Record<string, unknown>): string | undefined {
+/** Détail lisible d'une erreur métier (données jointes par `mediaError` / `folderError`). */
+function problemDetail(code: ApiErrorCode, data: Record<string, unknown>): string | undefined {
   switch (code) {
     case 'FILE_TOO_LARGE':
       return typeof data.maxSize === 'number' ? `The file exceeds the maximum size of ${data.maxSize} bytes.` : undefined
@@ -52,6 +53,19 @@ function mediaDetail(code: ApiErrorCode, data: Record<string, unknown>): string 
       return 'The new file must be of the same kind as the original.'
     case 'VERSION_CONFLICT':
       return 'The file was replaced by another request in the meantime.'
+    case 'FOLDER_NOT_FOUND':
+      return 'No such folder in this space.'
+    case 'FOLDER_NAME_TAKEN':
+      return 'A sibling folder already has this name (case-insensitive).'
+    case 'FOLDER_NOT_EMPTY':
+      return 'The folder contains media or subfolders: move them first, or delete with ?content=parent.'
+    case 'FOLDER_DEPTH_EXCEEDED':
+      return `Folders can be nested ${FOLDER_MAX_DEPTH} levels deep at most.`
+    case 'FOLDER_CYCLE':
+      return 'A folder cannot be moved into itself or one of its subfolders.'
+    case 'FOLDER_LIMIT_REACHED':
+      return `A space can hold ${FOLDERS_PER_SPACE_MAX} folders at most.`
+
     default:
       return undefined
   }
@@ -67,7 +81,7 @@ export function toProblem(error: unknown): ApiProblem {
     const code = dataCode as ApiErrorCode
     const details = data as Record<string, unknown>
     const headers: Record<string, string> = typeof details.retryAfter === 'number' ? { 'Retry-After': String(details.retryAfter) } : {}
-    return new ApiProblem(code, { detail: mediaDetail(code, details), headers })
+    return new ApiProblem(code, { detail: problemDetail(code, details), headers })
   }
   const status = (error as { statusCode?: number } | null)?.statusCode
   const code = status ? H3_STATUS_CODES[status] : undefined

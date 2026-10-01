@@ -82,7 +82,10 @@ export function useMediaUpload() {
       case 'SERVER_BUSY':
         return t(`media.errors.${data.code}`)
       default:
-        return t('common.unexpectedError')
+        // Dossier de destination supprimé entre-temps, par exemple.
+        return data?.code && (FOLDER_ERROR_CODES as readonly string[]).includes(data.code)
+          ? t(`folders.errors.${data.code}`)
+          : t('common.unexpectedError')
     }
   }
 

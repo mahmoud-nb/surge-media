@@ -2,6 +2,7 @@ import { apiDelegatedTokenBodySchema } from '#shared/schemas/api'
 import { isOriginAllowed } from '#shared/utils/origins'
 import { TOKEN_SCOPES } from '#shared/utils/permissions'
 import { issueDelegatedToken } from '../../../../lib/access/delegated'
+import { requireFolderInSpace } from '../../../../lib/folders/service'
 import { defineApiHandler, readApiBody, requireApiProject } from '../../../../lib/api/context'
 import { apiProblem } from '../../../../lib/api/problem'
 
@@ -15,7 +16,7 @@ import { apiProblem } from '../../../../lib/api/problem'
  * Pas d'inscription au journal d'audit (émission fréquente) : les écritures faites avec le jeton,
  * elles, portent l'émetteur et le sujet. → 201 { token, expiresAt, scopes }
  * 400 INVALID_REQUEST · 403 CREDENTIAL_NOT_ALLOWED / INSUFFICIENT_SCOPE / ORIGIN_NOT_ALLOWED /
- * PROJECT_ARCHIVED · 404 PROJECT_NOT_FOUND.
+ * PROJECT_ARCHIVED · 404 PROJECT_NOT_FOUND / FOLDER_NOT_FOUND (`upload.folderId`).
  */
 export default defineApiHandler(async (event, principal) => {
   if (principal.type !== 'secret' && principal.type !== 'personal') {
@@ -31,6 +32,7 @@ export default defineApiHandler(async (event, principal) => {
   if (body.origin && !isOriginAllowed(body.origin, project.origins)) {
     throw apiProblem('ORIGIN_NOT_ALLOWED', `The origin ${body.origin} is not among the allowed origins of this project.`)
   }
+  if (body.upload?.folderId) await requireFolderInSpace({ type: 'project', id: project.id }, body.upload.folderId)
 
   const now = Math.floor(Date.now() / 1000)
   const issuerExpiry = principal.credential.expiresAt ? Math.floor(principal.credential.expiresAt.getTime() / 1000) : Number.POSITIVE_INFINITY

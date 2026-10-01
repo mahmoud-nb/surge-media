@@ -1,5 +1,6 @@
 import { z } from 'zod'
 import { ENABLED_MEDIA_KINDS, MEDIA_VISIBILITIES, SIGNED_URL_MAX_TTL } from '../utils/media'
+import { folderIdSchema } from './folders'
 
 /** VARCHAR(191) sous MySQL. */
 export const MEDIA_TEXT_MAX_LENGTH = 191
@@ -17,11 +18,12 @@ const optionalText = z
 
 export const visibilitySchema = z.enum(MEDIA_VISIBILITIES, 'validation.required')
 
-/** Métadonnées modifiables (PATCH) ; aussi utilisées à l'upload. */
+/** Métadonnées modifiables (PATCH) ; aussi utilisées à l'upload. `folderId` : dossier de l'espace du média (null = racine). */
 export const mediaMetadataSchema = z.object({
   title: optionalText,
   altText: optionalText,
   visibility: visibilitySchema,
+  folderId: folderIdSchema.nullable(),
 }).partial()
 export type MediaMetadataInput = z.input<typeof mediaMetadataSchema>
 
@@ -38,6 +40,10 @@ export const mediaListQuerySchema = z.object({
   kind: z.enum(ENABLED_MEDIA_KINDS as [string, ...string[]]).optional().catch(undefined),
   visibility: visibilitySchema.optional().catch(undefined),
   status: z.enum(MEDIA_STATUSES).catch('active'),
+  /** Dossier affiché (absent = racine de l'espace) ; ignoré pour la corbeille. */
+  folder: z.string().trim().min(1).max(64).optional().catch(undefined),
+  /** Inclure les sous-dossiers (`recursive=1`). */
+  recursive: z.enum(['1', 'true']).transform(() => true).optional().catch(undefined),
   sort: z.enum(MEDIA_SORTS).catch('newest'),
   page: z.coerce.number().int().min(1).max(10_000).catch(1),
 })
@@ -46,6 +52,8 @@ export type MediaListQuery = z.infer<typeof mediaListQuerySchema>
 /** Espace cible d'une duplication ou d'un déplacement : un projet, ou null = bibliothèque. */
 export const mediaTargetSchema = z.object({
   projectId: z.string('validation.required').trim().min(1).max(64).nullable(),
+  /** Dossier de l'espace cible (absent ou null = racine). */
+  folderId: folderIdSchema.nullable().optional(),
 })
 
 /** Lien temporaire vers un média privé. */

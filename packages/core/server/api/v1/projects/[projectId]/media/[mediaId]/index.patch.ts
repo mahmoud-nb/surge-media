@@ -8,11 +8,12 @@ import { updateMediaMetadata } from '../../../../../../lib/media/service'
 import { mediaBaseUrl } from '../../../../../../lib/media/urls'
 
 /**
- * PATCH /api/v1/projects/:projectId/media/:mediaId — { title?, altText?, visibility? } (portée
- * media:write). Champs absents inchangés ; `null` ou texte vide efface le titre / le texte
- * alternatif. Passer un média en privé vaut pour les nouvelles requêtes (les copies déjà en cache
- * restent valables jusqu'à leur expiration). Changement de visibilité inscrit au journal d'audit.
- * → Media · 400 INVALID_REQUEST · 404 MEDIA_NOT_FOUND.
+ * PATCH /api/v1/projects/:projectId/media/:mediaId — { title?, altText?, visibility?, folderId? }
+ * (portée media:write). Champs absents inchangés ; `null` ou texte vide efface le titre / le texte
+ * alternatif ; `folderId` : dossier du projet, `null` = hors dossier. Passer un média en privé vaut
+ * pour les nouvelles requêtes (les copies déjà en cache restent valables jusqu'à leur expiration).
+ * Changement de visibilité inscrit au journal d'audit.
+ * → Media · 400 INVALID_REQUEST · 404 MEDIA_NOT_FOUND / FOLDER_NOT_FOUND.
  */
 export default defineApiHandler(async (event, principal) => {
   const { project } = await requireApiProject(event, principal, 'media:write')

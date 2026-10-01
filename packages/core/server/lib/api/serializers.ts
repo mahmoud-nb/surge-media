@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto'
-import type { ApiMedia, ApiProject } from '#shared/schemas/api'
+import type { ApiFolder, ApiMedia, ApiProject } from '#shared/schemas/api'
 import { API_LINK_BUCKET, API_LINK_TTL } from '#shared/utils/api'
 import { extensionForMime } from '#shared/utils/media'
 import type { TokenScope } from '#shared/utils/permissions'
@@ -71,6 +71,16 @@ export function toApiProject(project: ApiProjectSource, scopes: readonly TokenSc
     scopes: [...scopes],
     createdAt: project.createdAt.toISOString(),
     updatedAt: project.updatedAt.toISOString(),
+  }
+}
+
+export function toApiFolder(folder: { id: string, parentId: string | null, name: string, createdAt: Date, updatedAt: Date }): ApiFolder {
+  return {
+    id: folder.id,
+    parentId: folder.parentId,
+    name: folder.name,
+    createdAt: folder.createdAt.toISOString(),
+    updatedAt: folder.updatedAt.toISOString(),
   }
 }
 

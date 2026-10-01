@@ -37,7 +37,8 @@
     "slugTaken": "This identifier is already used by another project.",
     "tokenSpaceRequired": "Choose at least one project or the library.",
     "environment": "Use only lowercase unaccented letters, digits and hyphens (e.g. preview-eu).",
-    "origin": "Enter a valid origin: scheme and host, without a path (e.g. https://app.example.com or https://*.example.com)."
+    "origin": "Enter a valid origin: scheme and host, without a path (e.g. https://app.example.com or https://*.example.com).",
+    "folderName": "The name cannot contain slashes or control characters, nor be “.” or “..”."
   },
   "auth": {
     "logout": "Sign out"
@@ -366,7 +367,9 @@
       "emptyFiltered": "No media match these filters.",
       "emptyTrash": "The trash is empty.",
       "loadError": "Unable to load media.",
-      "results": "Results"
+      "results": "Results",
+      "emptyFolder": "No media in this folder.",
+      "emptyFilteredFolder": "No media in this folder matches. Check “Include subfolders” to search subfolders too."
     },
     "filters": {
       "label": "Filter media",
@@ -384,7 +387,8 @@
       "trash": "Trash",
       "apply": "Filter",
       "reset": "Reset",
-      "active": "Media"
+      "active": "Media",
+      "recursive": "Include subfolders"
     },
     "upload": {
       "title": "Upload images",
@@ -436,7 +440,9 @@
       "archivedProject": "This media item's project is archived: it is read-only.",
       "apiUploader": "An application (API)",
       "credential": "API credential",
-      "subject": "Application user"
+      "subject": "Application user",
+      "folder": "Folder",
+      "noFolder": "None (root)"
     },
     "fields": {
       "title": "Title",
@@ -481,15 +487,26 @@
     },
     "organize": {
       "title": "Duplicate or move",
-      "description": "Duplicating creates an independent copy with its own address. Moving changes the media item's space without changing its address.",
+      "description": "Duplicating creates an independent copy with its own address. Moving changes the media item's space or folder without changing its address.",
       "target": "Target space",
       "current": "{space} (current)",
       "duplicate": "Duplicate",
       "move": "Move",
-      "moveDisabled": "Choose another space to move the media item.",
+      "moveDisabled": "Choose another space or folder to move the media item.",
       "duplicated": "Copy created in: {space}.",
       "moved": "Media item moved to: {space}.",
-      "noTargets": "No space allows you to add media."
+      "noTargets": "No space allows you to add media.",
+      "folder": "Target folder"
+    },
+    "selection": {
+      "start": "Select media",
+      "done": "Finish selection",
+      "count": "No media selected | 1 media item selected | {count} media items selected",
+      "item": "Select {name}",
+      "selectPage": "Select all on this page",
+      "target": "File into",
+      "submit": "File",
+      "moved": "No media filed. | 1 media item filed into “{folder}”. | {count} media items filed into “{folder}”."
     }
   },
   "projectRoles": {
@@ -1124,5 +1141,73 @@
     "deletedCredential": "Deleted API credential",
     "delegated": "Delegated token",
     "delegatedSubject": "Delegated token, user {subject}"
+  },
+  "folders": {
+    "title": "Folders",
+    "root": "Root",
+    "breadcrumbLabel": "Location",
+    "listLabel": "Subfolders",
+    "empty": "No subfolders.",
+    "mediaCount": "No media | 1 media item | {count} media items",
+    "missing": {
+      "title": "Folder not found",
+      "description": "This folder was deleted or does not belong to this space.",
+      "back": "Back to the root"
+    },
+    "actions": {
+      "create": "New folder",
+      "rename": "Rename folder",
+      "move": "Move folder",
+      "delete": "Delete folder"
+    },
+    "fields": {
+      "name": "Folder name",
+      "nameHint": "100 characters at most, no slashes. Two sibling folders cannot share a name.",
+      "destination": "Destination"
+    },
+    "create": {
+      "title": "New folder",
+      "descriptionRoot": "The folder will be created at the root.",
+      "descriptionIn": "The folder will be created in “{name}”.",
+      "submit": "Create",
+      "created": "Folder “{name}” created."
+    },
+    "rename": {
+      "title": "Rename folder",
+      "submit": "Rename",
+      "renamed": "Folder renamed: “{name}”."
+    },
+    "move": {
+      "title": "Move folder “{name}”",
+      "description": "The folder moves with all its content. Media addresses do not change.",
+      "currentLocation": "{path} (current location)",
+      "submit": "Move",
+      "moved": "Folder “{name}” moved to “{destination}”."
+    },
+    "delete": {
+      "title": "Delete folder “{name}”?",
+      "emptyDescription": "The folder is empty.",
+      "contentDescription": "Its content ({content}) will be moved to “{parent}” before deletion.",
+      "submit": "Delete",
+      "submitWithContent": "Move content and delete",
+      "deleted": "Folder “{name}” deleted.",
+      "deletedWithContent": "Folder “{name}” deleted; its content is now in “{parent}”."
+    },
+    "counts": {
+      "media": "no media | one media item | {count} media items",
+      "folders": "no subfolders | one subfolder | {count} subfolders"
+    },
+    "upload": {
+      "destinationRoot": "Files will be added at the root.",
+      "destinationFolder": "Files will be added to the folder “{name}”."
+    },
+    "errors": {
+      "FOLDER_NOT_FOUND": "This folder no longer exists: reload the page.",
+      "FOLDER_NAME_TAKEN": "A sibling folder already has this name.",
+      "FOLDER_NOT_EMPTY": "The folder is not empty.",
+      "FOLDER_DEPTH_EXCEEDED": "Folders cannot be nested more than 8 levels deep.",
+      "FOLDER_CYCLE": "A folder cannot be moved into itself or one of its subfolders.",
+      "FOLDER_LIMIT_REACHED": "This space has reached the limit of 1,000 folders."
+    }
   }
 }

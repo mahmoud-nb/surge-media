@@ -3,6 +3,7 @@
  * Vignette de la médiathèque. Toute la carte est cliquable (lien « étiré » sur le titre),
  * mais le lien n'a pour nom que le titre du média ; le focus est rendu sur la carte entière.
  * L'aperçu est décoratif (alt vide) : le titre, juste en dessous, identifie le média.
+ * En mode sélection (`selectable`), une case à cocher passe au-dessus du lien étiré.
  */
 import { Lock } from '@lucide/vue'
 
@@ -18,7 +19,11 @@ const props = defineProps<{
     size: number
     visibility: MediaVisibility
   }
+  /** Affiche une case de sélection (actions groupées). */
+  selectable?: boolean
 }>()
+
+const selected = defineModel<boolean>('selected', { default: false })
 
 const { t, locale } = useI18n()
 const name = computed(() => props.media.title || props.media.originalName)
@@ -30,11 +35,21 @@ const details = computed(() => [
 </script>
 
 <template>
-  <article class="relative flex flex-col overflow-hidden rounded-xl border border-border bg-surface shadow-xs transition-shadow hover:shadow-md has-[a:focus-visible]:outline-2 has-[a:focus-visible]:outline-offset-2 has-[a:focus-visible]:outline-ring">
+  <article
+    :class="cn(
+      'relative flex flex-col overflow-hidden rounded-xl border border-border bg-surface shadow-xs transition-shadow hover:shadow-md has-[a:focus-visible]:outline-2 has-[a:focus-visible]:outline-offset-2 has-[a:focus-visible]:outline-ring',
+      selectable && selected && 'border-primary ring-2 ring-primary',
+    )"
+  >
     <!-- Image en position absolue : un aspect-ratio seul se laisserait étirer par une image haute. -->
     <div class="bg-checker relative aspect-[4/3] overflow-hidden border-b border-border">
       <img v-if="media.previewUrl" :src="media.previewUrl" alt="" loading="lazy" decoding="async" class="absolute inset-0 size-full object-contain">
     </div>
+    <!-- Libellé englobant : toute la pastille (28 px) est cliquable ; le texte est réservé aux lecteurs d'écran. -->
+    <label v-if="selectable" class="absolute top-2 left-2 z-10 flex cursor-pointer items-center rounded-md border border-input bg-surface p-1.5 shadow-xs">
+      <input v-model="selected" type="checkbox" class="size-4 accent-primary">
+      <span class="sr-only">{{ t('media.selection.item', { name }) }}</span>
+    </label>
     <div class="grid gap-1.5 p-3">
       <h3 class="truncate text-sm font-medium text-foreground" :title="name">
         <NuxtLink :to="`/admin/media/${media.id}`" class="after:absolute after:inset-0 focus-visible:outline-none">
