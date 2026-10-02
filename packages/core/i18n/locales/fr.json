@@ -536,6 +536,63 @@
       "saved": "Point d'intérêt enregistré : le média passe à la version {version}.",
       "cleared": "Point d'intérêt effacé : le média passe à la version {version}.",
       "conflict": "Le média vient d'être modifié par ailleurs. Rechargez la page et réessayez."
+    },
+    "generator": {
+      "title": "Générateur d'adresses",
+      "description": "Composez une version transformée de l'image (taille, recadrage, qualité, format), puis copiez son adresse ou un exemple HTML. L'aperçu est calculé à la volée, sans créer de fichier.",
+      "mode": "Transformation",
+      "modes": {
+        "params": {
+          "label": "Paramètres",
+          "description": "Taille, ajustement, ancrage, qualité, fond, rotation, miroir."
+        },
+        "preset": {
+          "label": "Préréglage",
+          "description": "Une transformation enregistrée de l'espace : intégrée, globale ou du projet."
+        }
+      },
+      "preset": "Préréglage",
+      "presetOption": "{name} ({level})",
+      "format": "Format de sortie",
+      "duration": "Validité du lien (média privé)",
+      "resultTitle": "Résultat",
+      "invalid": "Corrigez les champs signalés pour mettre à jour l'aperçu et l'adresse.",
+      "result": "Aperçu : {width} × {height} px, {format}, {size}.",
+      "reduced": "L'image d'origine est plus petite que la taille demandée : le résultat est réduit en gardant le rapport demandé (jamais d'agrandissement).",
+      "previewNote": "Calculé pour cet aperçu sans créer de fichier : le fichier sera généré à la première visite de l'adresse.",
+      "refusedTitle": "Adresse refusée par cet espace",
+      "refused": "Cet espace n'accepte que les préréglages : une adresse avec des paramètres libres serait refusée. Choisissez un préréglage, ou créez-en un avec ces paramètres.",
+      "managePresets": "Gérer les préréglages",
+      "url": "Adresse de l'image",
+      "urlKinds": {
+        "permanent": "Adresse permanente, mise en cache sans limite par les navigateurs et les CDN.",
+        "preset": "Adresse permanente. Le préréglage peut être modifié : l'image suivra sa définition (cache d'une semaine).",
+        "signed": "Adresse signée sans échéance : cet espace exige une signature pour les paramètres libres."
+      },
+      "urlExpiring": "Lien temporaire (média privé) : il expire le {date}.",
+      "snippetsTitle": "Intégrer l'image",
+      "snippetsDescription": "Exemples HTML construits avec les adresses ci-dessus ; vérifiez le texte alternatif.",
+      "snippets": {
+        "img": {
+          "title": "Image simple",
+          "description": "Balise img avec ses dimensions : la page ne se décale pas pendant le chargement.",
+          "copy": "Copier l'exemple Image simple"
+        },
+        "picture": {
+          "title": "Plusieurs formats",
+          "description": "Le navigateur prend le premier format qu'il sait afficher (AVIF, puis WebP), sinon l'image de repli. La même adresse sert pour chaque format, signature comprise.",
+          "copy": "Copier l'exemple Plusieurs formats"
+        },
+        "srcset": {
+          "title": "Écrans haute densité",
+          "description": "Version deux fois plus grande pour les écrans haute résolution (téléphones et ordinateurs récents).",
+          "copy": "Copier l'exemple Écrans haute densité"
+        }
+      },
+      "errors": {
+        "PRESET_NOT_FOUND": "Ce préréglage n'existe plus : rechargez la page.",
+        "INVALID_TRANSFORM": "Cette transformation n'est pas possible sur cette image, ou n'est plus acceptée par le serveur."
+      }
     }
   },
   "projectRoles": {

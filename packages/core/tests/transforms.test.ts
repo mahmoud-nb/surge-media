@@ -2,7 +2,16 @@ import { describe, expect, it } from 'vitest'
 import { parseDeliveryPath, deliveryVariant } from '../server/lib/media/delivery-path'
 import { planTransform, type TransformSource } from '../server/lib/media/transform-plan'
 import { signaturePlan, type SignatureContext, type SignedFile } from '../server/lib/api/signature-plan'
-import { presetFieldsToDefinition, presetFormSchema, presetFormValues, type PresetFormValues } from '../shared/schemas/transforms'
+import {
+  presetFieldsToDefinition,
+  presetFormSchema,
+  presetFormValues,
+  transformFieldsSchema,
+  transformLinksSchema,
+  transformPreviewQuerySchema,
+  type PresetFormValues,
+} from '../shared/schemas/transforms'
+import { htmlAttribute, imageSnippets, withTransformFormat } from '../shared/utils/snippets'
 import {
   BUILTIN_PRESETS,
   focalObjectPosition,
@@ -385,5 +394,63 @@ describe('signature d\'un lien délivré par l\'API', () => {
       expect(signaturePlan(transform, false, context(visibility, 'PRESETS')).type).toBe('refused')
       expect(signaturePlan(transform, true, context(visibility, 'PRESETS')).type).toBe('refused')
     }
+  })
+})
+
+describe('générateur d\'adresses', () => {
+  const fields = { width: '', height: '', fit: 'cover', gravity: 'focal', quality: '', background: '', rotate: '0', flip: '' } as const
+
+  it('champs : tout vide = image entière (full), mêmes bornes que les préréglages', () => {
+    const empty = transformFieldsSchema.safeParse(fields)
+    expect(empty.success && presetFieldsToDefinition(empty.data)).toBe('')
+    const sized = transformFieldsSchema.safeParse({ ...fields, width: '800', height: '450', gravity: 'north' })
+    expect(sized.success && presetFieldsToDefinition(sized.data)).toBe('w_800,h_450,g_north')
+    expect(transformFieldsSchema.safeParse({ ...fields, width: '0' }).success).toBe(false)
+    // Le préréglage, lui, doit changer quelque chose.
+    expect(presetFormSchema.safeParse({ ...fields, name: 'vide', description: '' }).success).toBe(false)
+  })
+
+  it('aperçu et liens : un préréglage ou des paramètres, format webp par défaut', () => {
+    expect(transformPreviewQuerySchema.parse({ transform: 'w_800' })).toEqual({ transform: 'w_800', format: 'webp' })
+    expect(transformPreviewQuerySchema.parse({ transform: '', format: 'avif' })).toEqual({ transform: '', format: 'avif' })
+    expect(transformPreviewQuerySchema.parse({ preset: 'carte' })).toEqual({ preset: 'carte', format: 'webp' })
+    for (const query of [{}, { preset: 'carte', transform: 'w_10' }, { preset: 'Carte' }, { transform: 'w_10', format: 'gif' }]) {
+      expect(transformPreviewQuerySchema.safeParse(query).success, JSON.stringify(query)).toBe(false)
+    }
+    expect(transformLinksSchema.parse({ items: [{ transform: 'w_10' }] })).toEqual({ items: [{ transform: 'w_10', format: 'webp' }], expiresIn: 3600 })
+    expect(transformLinksSchema.safeParse({ items: [] }).success).toBe(false)
+    expect(transformLinksSchema.safeParse({ items: Array.from({ length: 5 }, () => ({ preset: 'preview' })) }).success).toBe(false)
+    expect(transformLinksSchema.safeParse({ items: [{ preset: 'preview' }], expiresIn: 30 }).success).toBe(false)
+  })
+
+  it('extraits HTML : img, picture (AVIF, WebP, repli JPEG), srcset 2x, attributs échappés', () => {
+    const url = 'https://media.example.com/m/abc12345/v2/w_800/affiche.webp?exp=1&kid=k&sig=s'
+    expect(withTransformFormat(url, 'avif')).toBe('https://media.example.com/m/abc12345/v2/w_800/affiche.avif?exp=1&kid=k&sig=s')
+    expect(withTransformFormat('/m/x/v1/full/a.png', 'jpg')).toBe('/m/x/v1/full/a.jpg')
+    expect(htmlAttribute('a "b" & <c>')).toBe('a &quot;b&quot; &amp; &lt;c&gt;')
+
+    const snippets = imageSnippets({
+      url,
+      url2x: url.replace('w_800', 'w_1600'),
+      width: 800,
+      height: 450,
+      alt: 'Plage "été"',
+      formats: ['jpg', 'png', 'webp', 'avif'],
+      format: 'webp',
+    })
+    expect(snippets.map(snippet => snippet.kind)).toEqual(['img', 'picture', 'srcset'])
+    expect(snippets[0]!.code).toBe('<img src="https://media.example.com/m/abc12345/v2/w_800/affiche.webp?exp=1&amp;kid=k&amp;sig=s" width="800" height="450" alt="Plage &quot;été&quot;" loading="lazy">')
+    const picture = snippets[1]!.code.split('\n')
+    expect(picture[1]).toContain('type="image/avif" srcset="https://media.example.com/m/abc12345/v2/w_800/affiche.avif?exp=1&amp;')
+    expect(picture[2]).toContain('type="image/webp"')
+    expect(picture[3]).toContain('affiche.jpg?exp=1')
+    expect(snippets[2]!.code).toContain('/w_800/affiche.webp?exp=1&amp;kid=k&amp;sig=s 1x, https://media.example.com/m/abc12345/v2/w_1600/affiche.webp')
+
+    // Formats restreints : pas de <picture> sans autre source que le repli ; pas de 2x sans variante.
+    const only = imageSnippets({ url: '/m/x/v1/w_10/a.jpg', alt: '', formats: ['jpg'], format: 'jpg' })
+    expect(only.map(snippet => snippet.kind)).toEqual(['img'])
+    expect(only[0]!.code).toBe('<img src="/m/x/v1/w_10/a.jpg" alt="" loading="lazy">')
+    const webpOnly = imageSnippets({ url: '/m/x/v1/w_10/a.webp', alt: '', formats: ['webp', 'avif'], format: 'webp' })
+    expect(webpOnly[1]!.code).toBe('<picture>\n  <source type="image/avif" srcset="/m/x/v1/w_10/a.avif">\n  <img src="/m/x/v1/w_10/a.webp" alt="" loading="lazy">\n</picture>')
   })
 })

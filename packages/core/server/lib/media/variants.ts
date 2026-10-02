@@ -174,6 +174,33 @@ async function renderVariant(
   return { key, mimeType: rendered.mimeType, size: rendered.data.length, etag }
 }
 
+/** Dérivé rendu à la volée (aperçu du générateur d'adresses) : jamais enregistré. */
+export interface TransientRender {
+  data: Buffer
+  mimeType: string
+  width: number
+  height: number
+  /** Opération effective (`size_800x450,q_80.webp`). */
+  operation: string
+}
+
+/**
+ * Rend un dérivé **sans l'enregistrer** ni le compter dans le quota de dérivés de la version :
+ * aperçu de l'administration (architecture phase C, CD11). Passe par la file bornée des traitements
+ * (503 SERVER_BUSY) ; mêmes bornes et même opération effective que la diffusion.
+ */
+export async function renderTransient(media: Media, transformation: Transformation, format: TransformFormat): Promise<TransientRender> {
+  const handler = handlerFor(media.kind)
+  const source = transformSource(media)
+  if (!handler?.transform || !source) throw createError({ statusCode: 400, statusMessage: 'This media item has no derived files.' })
+  const planned = planTransform(transformation, source, format, useTransformSettings().maxDimension)
+  if (!planned.ok) throw mediaError(400, 'INVALID_TRANSFORM', { detail: planned.message })
+  const transform = handler.transform
+  const storage = await useMediaStorage()
+  const rendered = await runProcessing(async () => transform(await storage.getStream(media.storageKey), planned.plan))
+  return { data: rendered.data, mimeType: rendered.mimeType, width: rendered.width, height: rendered.height, operation: planned.plan.key }
+}
+
 /**
  * Pré-génère l'aperçu d'un média qui vient d'être envoyé, remplacé ou dupliqué, sans le faire
  * attendre à l'appelant. Ignorée quand des traitements attendent déjà (la génération se fera à la

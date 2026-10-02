@@ -1,19 +1,22 @@
 import type { ApiSignedUrlBody } from '#shared/schemas/api'
 import { API_DEFAULT_TRANSFORM_FORMAT } from '#shared/utils/api'
-import { parseTransformation, transformationSegment, type TransformPolicy } from '#shared/utils/transforms'
+import { transformationSegment, type TransformPolicy } from '#shared/utils/transforms'
 import type { Media } from '../../generated/prisma/client'
+import { mediaError } from '../media/errors'
 import { signMediaAccess } from '../media/signing'
-import { useTransformSettings } from '../media/transform-settings'
 import { derivedPath, mediaPath } from '../media/urls'
 import { hasDerivedFiles } from '../media/variants'
-import { resolvePreset } from '../transforms/service'
-import { apiProblem } from './problem'
+import { resolveTransformRequest } from '../transforms/service'
 import { signaturePlan, type SignedFile } from './signature-plan'
 
 /**
- * Liens signés délivrés par l'API v1 (`POST …/media/{mediaId}/signed-url` et le lot
- * `POST …/signed-urls`) : l'original, un préréglage du projet, une transformation libre (canonisée),
- * ou le droit « derived » (tout dérivé de la version). Architecture phase C § 5.3 et § 7.
+ * Adresses de médias et de dérivés, signées si nécessaire : liens de l'API v1 (`POST …/media/
+ * {mediaId}/signed-url` et le lot `POST …/signed-urls`) et générateur d'adresses de la fiche média
+ * (`POST /api/admin/media/:id/links`). L'original, un préréglage de l'espace, une transformation libre
+ * (canonisée), ou le droit « derived » (tout dérivé de la version). Architecture phase C § 5.3 et § 7.
+ *
+ * Erreurs métier (`data.code` : INVALID_TRANSFORM, PRESET_NOT_FOUND, TRANSFORM_NOT_ALLOWED ; 400 sans
+ * code pour un média sans dérivés) : l'API v1 les convertit en problèmes RFC 9457 (`toProblem`).
  */
 
 export type SignedUrlRequest = Omit<ApiSignedUrlBody, 'expiresIn'>
@@ -36,30 +39,17 @@ export interface SignedUrlResult {
 
 /**
  * Fichier demandé : format activé, transformation canonisée (vide = préréglage `full`), préréglage
- * de l'espace (intégré, du projet ou global). Problèmes : INVALID_REQUEST (média sans dérivés),
- * INVALID_TRANSFORM, PRESET_NOT_FOUND.
+ * de l'espace (intégré, du projet ou global ; l'aperçu par défaut).
  */
 async function resolveSignedFile(media: Media, request: SignedUrlRequest): Promise<SignedFile> {
   if (request.target === 'file') return { kind: 'file' }
-  if (!hasDerivedFiles(media)) throw apiProblem('INVALID_REQUEST', 'This media item has no derived files (images only).')
+  if (!hasDerivedFiles(media)) throw createError({ statusCode: 400, statusMessage: 'This media item has no derived files (images only).' })
 
-  const settings = useTransformSettings()
   const format = request.format ?? API_DEFAULT_TRANSFORM_FORMAT
-  if (!settings.formats.includes(format)) {
-    throw apiProblem('INVALID_TRANSFORM', `Output format "${format}" is not enabled on this server (${settings.formats.join(', ')}).`)
-  }
-  if (request.transform !== undefined) {
-    const parsed = parseTransformation(request.transform, settings)
-    if (!parsed.ok) throw apiProblem('INVALID_TRANSFORM', parsed.message)
-    // Transformation vide : sa forme canonique est le préréglage intégré `full`.
-    return parsed.canonical === '' ? { kind: 'preset', name: 'full', format } : { kind: 'transform', canonical: parsed.canonical, format }
-  }
-
-  const name = request.preset ?? 'preview'
-  const preset = await resolvePreset(media.projectId, name)
-  if (!preset) throw apiProblem('PRESET_NOT_FOUND', `No preset "${name}" in this project (see GET /projects/{projectId}/presets).`)
-  if (!preset.transformation) throw apiProblem('INVALID_TRANSFORM', preset.error ?? undefined)
-  return { kind: 'preset', name, format }
+  const resolved = await resolveTransformRequest(media.projectId, { preset: request.preset, transform: request.transform, format })
+  if (resolved.kind === 'preset') return { kind: 'preset', name: resolved.name, format }
+  // Transformation vide : sa forme canonique est le préréglage intégré `full`.
+  return resolved.canonical === '' ? { kind: 'preset', name: 'full', format } : { kind: 'transform', canonical: resolved.canonical, format }
 }
 
 /**
@@ -73,7 +63,7 @@ export async function issueSignedUrl(media: Media, request: SignedUrlRequest, op
     policy: options.policy,
     delegated: options.delegated,
   })
-  if (plan.type === 'refused') throw apiProblem('TRANSFORM_NOT_ALLOWED', plan.detail)
+  if (plan.type === 'refused') throw mediaError(403, 'TRANSFORM_NOT_ALLOWED', { detail: plan.detail })
 
   const path = file.kind === 'file'
     ? mediaPath(media)

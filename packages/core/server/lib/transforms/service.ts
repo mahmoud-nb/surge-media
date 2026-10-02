@@ -8,6 +8,7 @@ import {
   type PresetLevel,
   type Transformation,
   type TransformErrorCode,
+  type TransformFormat,
   type TransformPolicy,
 } from '#shared/utils/transforms'
 import type { TransformPreset } from '../../generated/prisma/client'
@@ -155,10 +156,63 @@ export async function describeTransforms(projectId: string | null) {
   }
 }
 
-/** Préréglages utilisables dans un projet (API v1) : intégrés, du projet, globaux non masqués. */
-export async function projectPresets(projectId: string): Promise<PresetSummary[]> {
+/**
+ * Préréglages utilisables dans un espace (API v1, générateur d'adresses) : intégrés, du projet,
+ * globaux non masqués. `projectId` null = bibliothèque (intégrés et globaux).
+ */
+export async function projectPresets(projectId: string | null): Promise<PresetSummary[]> {
   const { presets } = await describeTransforms(projectId)
   return presets.filter(preset => !preset.shadowed)
+}
+
+/** Ce que le générateur d'adresses de la fiche média propose dans un espace (média de cet espace). */
+export async function spaceTransformOptions(projectId: string | null) {
+  const { policy, presets, limits } = await describeTransforms(projectId)
+  return {
+    policy,
+    presets: presets
+      .filter(preset => !preset.shadowed)
+      .map(preset => ({ name: preset.name, transformation: preset.transformation, description: preset.description, level: preset.level })),
+    formats: limits.formats,
+    maxDimension: limits.maxDimension,
+  }
+}
+
+/** Dérivé demandé par son préréglage ou ses paramètres (forme libre), et son format de sortie. */
+export interface TransformRequest {
+  preset?: string
+  transform?: string
+  format: TransformFormat
+}
+
+export type ResolvedTransformRequest =
+  | { kind: 'preset', name: string, transformation: Transformation }
+  /** `canonical` vide : image entière réencodée (préréglage intégré `full`). */
+  | { kind: 'transform', canonical: string, transformation: Transformation }
+
+/**
+ * Transformation d'un dérivé demandé dans un espace : format activé, paramètres analysés avec les
+ * bornes de l'installation, ou préréglage de l'espace. Erreurs métier (`data.code`) : 400
+ * INVALID_TRANSFORM (`param`, `detail`), 404 PRESET_NOT_FOUND — converties en problèmes par l'API v1.
+ */
+export async function resolveTransformRequest(projectId: string | null, request: TransformRequest): Promise<ResolvedTransformRequest> {
+  const settings = useTransformSettings()
+  if (!settings.formats.includes(request.format)) {
+    throw transformError(400, 'INVALID_TRANSFORM', {
+      param: 'format',
+      detail: `Output format "${request.format}" is not enabled on this server (${settings.formats.join(', ')}).`,
+    })
+  }
+  if (request.transform !== undefined) {
+    const parsed = parseTransformation(request.transform, settings)
+    if (!parsed.ok) throw transformError(400, 'INVALID_TRANSFORM', { param: parsed.param, detail: parsed.message })
+    return { kind: 'transform', canonical: parsed.canonical, transformation: parsed.transformation }
+  }
+  const name = request.preset ?? 'preview'
+  const preset = await resolvePreset(projectId, name)
+  if (!preset) throw transformError(404, 'PRESET_NOT_FOUND', { detail: `No preset "${name}" in this space.` })
+  if (!preset.transformation) throw transformError(400, 'INVALID_TRANSFORM', { detail: preset.error })
+  return { kind: 'preset', name, transformation: preset.transformation }
 }
 
 // ─── Écritures ───────────────────────────────────────────────────────────────
