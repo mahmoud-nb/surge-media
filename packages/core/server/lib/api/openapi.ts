@@ -23,7 +23,10 @@ import {
   apiProjectListSchema,
   apiProjectSchema,
   apiSignedUrlBodySchema,
+  apiSignedUrlErrorSchema,
+  apiSignedUrlListSchema,
   apiSignedUrlSchema,
+  apiSignedUrlsBodySchema,
   apiUploadConstraintsSchema,
   delegatedTokenClaimsSchema,
 } from '#shared/schemas/api'
@@ -136,7 +139,29 @@ Les clés secrètes et les jetons personnels sont **refusés depuis un navigateu
 - Chaque réponse porte \`X-Request-Id\` (aussi \`requestId\` des erreurs).
 
 ## Diffusion des médias
-Les champs \`url\` et \`previewUrl\` sont des adresses absolues, utilisables telles quelles (\`<img src>\`) : permanentes et mises en cache pour un média public, signées et temporaires pour un média privé. Un lien signé à la demande s'obtient avec \`POST …/signed-url\`.`
+Les champs \`url\` et \`previewUrl\` sont des adresses absolues, utilisables telles quelles (\`<img src>\`) : permanentes et mises en cache pour un média public, signées et temporaires pour un média privé. Un lien signé à la demande s'obtient avec \`POST …/signed-url\` (ou \`POST …/signed-urls\` pour tout un lot).
+
+## Transformations d'images
+Chaque image se décline par son URL de diffusion, dont \`urlTemplate\` donne le gabarit :
+
+\`/m/<id>/v<version>/<transformation>/<nom>.<format>\`
+
+- \`<format>\` : \`jpg\`, \`png\`, \`webp\` ou \`avif\` (formats activés sur le serveur), toujours donné par l'extension.
+- \`<transformation>\` : un **préréglage** (\`preview\`, \`full\` = image entière réencodée, ceux de \`GET /projects/{projectId}/presets\`) ou des **paramètres** \`clé_valeur\` séparés par des virgules (\`w_800,h_450,q_75\`) :
+
+| Paramètre | Valeurs | Effet |
+| --- | --- | --- |
+| \`w\`, \`h\` | 1 à 4096 | dimensions ; jamais d'agrandissement (réduites en gardant le rapport demandé) |
+| \`fit\` | \`cover\` (défaut), \`contain\`, \`fill\`, \`inside\`, \`outside\` | ajustement à \`w\` × \`h\` |
+| \`g\` | \`focal\` (défaut : point d'intérêt \`focalPoint\`, sinon centre), \`center\`, \`north\`, \`northeast\`… \`northwest\`, \`attention\`, \`entropy\` | ancrage du recadrage \`cover\` |
+| \`q\` | 1 à 100 | qualité (défaut : 80 en JPEG et WebP, 50 en AVIF ; PNG sans perte) |
+| \`dpr\` | 1 à 3, par pas de 0,5 | densité de pixels : multiplie \`w\` et \`h\` |
+| \`r\` | \`90\`, \`180\`, \`270\` | rotation horaire |
+| \`flip\` | \`h\`, \`v\`, \`hv\` | miroir |
+| \`crop\` | \`x-y-largeur-hauteur\` | zone extraite, en pixels de l'image tournée |
+| \`bg\` | \`rrggbb\` | fond de \`contain\` et de la transparence convertie en JPEG |
+
+Une URL non canonique (ordre des paramètres, valeurs par défaut, \`dpr\`, \`jpeg\`) est redirigée (\`301\`) vers sa forme canonique ; une URL valable est mise en cache sans limite (une semaine, puis revalidée, pour un préréglage du projet ou de l'installation, modifiable). Selon la politique du projet (\`transformPolicy\`), les paramètres libres sont acceptés (\`open\`), seulement signés (\`signed\` : \`POST …/signed-url\`, ou signature de \`urlTemplate\` pour un média privé) ou refusés (\`presets\`) ; les préréglages sont toujours servis. Les erreurs de \`/m/\` sont en JSON avec un code dans \`data.code\` : \`INVALID_TRANSFORM\` (400), \`TRANSFORM_NOT_ALLOWED\`, \`MEDIA_FORBIDDEN\`, \`SIGNATURE_INVALID\`, \`SIGNATURE_EXPIRED\` (403), \`TRANSFORM_QUOTA\` (429 : 50 dérivés libres par version, débit de nouvelles générations par adresse IP), \`SERVER_BUSY\` (503).`
 
 const INFO_EN = `Public API of surgeMedia: media, folders and projects, for your applications.
 
@@ -160,7 +185,29 @@ Secret keys and personal tokens are **rejected from a browser** (\`SECRET_IN_BRO
 - Every response carries \`X-Request-Id\` (also the \`requestId\` of errors).
 
 ## Media delivery
-The \`url\` and \`previewUrl\` fields are absolute addresses, usable as is (\`<img src>\`): permanent and cached for a public media item, signed and temporary for a private one. An on-demand signed link comes from \`POST …/signed-url\`.`
+The \`url\` and \`previewUrl\` fields are absolute addresses, usable as is (\`<img src>\`): permanent and cached for a public media item, signed and temporary for a private one. An on-demand signed link comes from \`POST …/signed-url\` (or \`POST …/signed-urls\` for a whole batch).
+
+## Image transformations
+Every image can be derived through its delivery URL, whose template is given by \`urlTemplate\`:
+
+\`/m/<id>/v<version>/<transformation>/<name>.<format>\`
+
+- \`<format>\`: \`jpg\`, \`png\`, \`webp\` or \`avif\` (formats enabled on the server), always given by the extension.
+- \`<transformation>\`: a **preset** (\`preview\`, \`full\` = whole image re-encoded, those of \`GET /projects/{projectId}/presets\`) or comma-separated \`key_value\` **parameters** (\`w_800,h_450,q_75\`):
+
+| Parameter | Values | Effect |
+| --- | --- | --- |
+| \`w\`, \`h\` | 1 to 4096 | dimensions; never enlarged (reduced while keeping the requested ratio) |
+| \`fit\` | \`cover\` (default), \`contain\`, \`fill\`, \`inside\`, \`outside\` | fit into \`w\` × \`h\` |
+| \`g\` | \`focal\` (default: focal point \`focalPoint\`, otherwise center), \`center\`, \`north\`, \`northeast\`… \`northwest\`, \`attention\`, \`entropy\` | anchor of the \`cover\` crop |
+| \`q\` | 1 to 100 | quality (default: 80 for JPEG and WebP, 50 for AVIF; lossless PNG) |
+| \`dpr\` | 1 to 3, in steps of 0.5 | pixel density: multiplies \`w\` and \`h\` |
+| \`r\` | \`90\`, \`180\`, \`270\` | clockwise rotation |
+| \`flip\` | \`h\`, \`v\`, \`hv\` | mirror |
+| \`crop\` | \`x-y-width-height\` | extracted area, in pixels of the rotated image |
+| \`bg\` | \`rrggbb\` | background of \`contain\` and of transparency converted to JPEG |
+
+A non-canonical URL (parameter order, default values, \`dpr\`, \`jpeg\`) is redirected (\`301\`) to its canonical form; a valid URL is cached without limit (one week, then revalidated, for a project or installation preset, which can change). Depending on the project policy (\`transformPolicy\`), free parameters are accepted (\`open\`), signed only (\`signed\`: \`POST …/signed-url\`, or the signature of \`urlTemplate\` for a private media item) or refused (\`presets\`); presets are always served. Errors of \`/m/\` are JSON with a code in \`data.code\`: \`INVALID_TRANSFORM\` (400), \`TRANSFORM_NOT_ALLOWED\`, \`MEDIA_FORBIDDEN\`, \`SIGNATURE_INVALID\`, \`SIGNATURE_EXPIRED\` (403), \`TRANSFORM_QUOTA\` (429: 50 free derivatives per version, rate of new generations per IP address), \`SERVER_BUSY\` (503).`
 
 // ─── Schémas zod → JSON Schema ───────────────────────────────────────────────
 
@@ -252,6 +299,8 @@ function buildComponents() {
   registry.add(apiPresetSchema, { id: 'Preset' })
   registry.add(apiPresetListSchema, { id: 'PresetList' })
   registry.add(apiSignedUrlSchema, { id: 'SignedUrl' })
+  registry.add(apiSignedUrlErrorSchema, { id: 'SignedUrlError' })
+  registry.add(apiSignedUrlListSchema, { id: 'SignedUrlList' })
   registry.add(apiDelegatedTokenSchema, { id: 'DelegatedToken' })
   registry.add(delegatedTokenClaimsSchema, { id: 'DelegatedTokenClaims' })
   registry.add(apiUploadConstraintsSchema, { id: 'UploadConstraints' })
@@ -294,7 +343,8 @@ function buildComponents() {
       FileReplace: multipartBody(false, t('Nouveau fichier.', 'New file.')),
       MediaUpdate: jsonBody(apiMediaUpdateSchema, true, t('Champs à modifier.', 'Fields to update.')),
       MediaDuplicate: jsonBody(apiDuplicateBodySchema, false, t('Destination de la copie (facultative).', 'Destination of the copy (optional).')),
-      SignedUrlRequest: jsonBody(apiSignedUrlBodySchema, false, t('Cible et durée du lien (facultatives).', 'Target and lifetime of the link (optional).')),
+      SignedUrlRequest: jsonBody(apiSignedUrlBodySchema, false, t('Cible, format et durée du lien (facultatifs : original, 1 h).', 'Target, format and lifetime of the link (optional: original, 1 h).')),
+      SignedUrlsRequest: jsonBody(apiSignedUrlsBodySchema, true, t('Liens demandés et durée commune.', 'Requested links and their common lifetime.')),
       DelegatedTokenRequest: jsonBody(apiDelegatedTokenBodySchema, true, t('Portées, durée et contraintes du jeton.', 'Scopes, lifetime and constraints of the token.')),
       FolderCreate: jsonBody(apiFolderCreateSchema, true, t('Nom et parent du dossier.', 'Name and parent of the folder.')),
       FolderUpdate: jsonBody(apiFolderUpdateSchema, true, t('Nouveau nom et/ou nouveau parent.', 'New name and/or new parent.')),
@@ -311,7 +361,8 @@ function buildComponents() {
       Folder: json('Folder', t('Dossier.', 'Folder.')),
       PresetList: json('PresetList', t('Préréglages utilisables dans le projet.', 'Presets usable in the project.'), etag),
       FolderCreated: json('Folder', t('Dossier créé.', 'Folder created.')),
-      SignedUrl: json('SignedUrl', t('Lien signé.', 'Signed link.')),
+      SignedUrl: json('SignedUrl', t('Lien, signé si nécessaire.', 'Link, signed when needed.')),
+      SignedUrlList: json('SignedUrlList', t('Un résultat par lien demandé, dans le même ordre.', 'One result per requested link, in the same order.')),
       DelegatedToken: json('DelegatedToken', t('Jeton délégué (à ne pas mettre en cache).', 'Delegated token (do not cache).')),
       ErrorCatalog: json('ErrorCatalog', t('Codes d\'erreur, statuts et titres.', 'Error codes, statuses and titles.')),
       OpenApiDocument: { ...t('Cette spécification (OpenAPI 3.1).', 'This specification (OpenAPI 3.1).'), content: jsonContent({ type: 'object' }) },

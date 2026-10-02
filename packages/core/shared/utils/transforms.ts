@@ -328,3 +328,44 @@ export function parsePresetDefinition(definition: string, limits: TransformLimit
   if (parsed.canonical === '') return { ok: false, param: null, message: 'A preset must change something (use the built-in "full" preset to convert only).' }
   return parsed
 }
+
+// ─── Point d'intérêt (C3) ────────────────────────────────────────────────────
+
+/**
+ * Point d'intérêt d'un média : fractions (0 à 1) de la largeur et de la hauteur de l'image
+ * orientée, depuis le coin haut gauche. Ancre le recadrage `fit_cover` (gravité `focal`, par défaut).
+ */
+export interface FocalPoint {
+  x: number
+  y: number
+}
+
+/** Précision enregistrée : 4 décimales (moins d'un demi-pixel sur 4096 px). */
+export const FOCAL_POINT_DECIMALS = 4
+
+export function roundFocalCoordinate(value: number): number {
+  const factor = 10 ** FOCAL_POINT_DECIMALS
+  return Math.round(Math.min(1, Math.max(0, value)) * factor) / factor
+}
+
+/** Deux points d'intérêt (ou leur absence) sont-ils identiques à la précision enregistrée ? */
+export function sameFocalPoint(a: FocalPoint | null, b: FocalPoint | null): boolean {
+  if (!a || !b) return a === b
+  return roundFocalCoordinate(a.x) === roundFocalCoordinate(b.x) && roundFocalCoordinate(a.y) === roundFocalCoordinate(b.y)
+}
+
+/**
+ * Recadrage `cover` au rapport `ratio` (largeur / hauteur) d'une image `width` × `height` :
+ * position CSS (`object-position`, fractions 0 à 1) qui reproduit avec `object-fit: cover` la zone
+ * que le serveur conserve autour du point d'intérêt (zone centrée sur le point, bornée à l'image :
+ * server/lib/media/transform-plan.ts). Sans point d'intérêt : le centre. Aperçu de l'interface.
+ */
+export function focalObjectPosition(width: number, height: number, ratio: number, focal: FocalPoint | null): FocalPoint {
+  if (!focal) return { x: 0.5, y: 0.5 }
+  const wider = width / height > ratio
+  const cropWidth = wider ? height * ratio : width
+  const cropHeight = wider ? height : width / ratio
+  const axis = (point: number, size: number, crop: number) =>
+    size - crop <= 0 ? 0.5 : Math.min(Math.max((point * size - crop / 2) / (size - crop), 0), 1)
+  return { x: axis(focal.x, width, cropWidth), y: axis(focal.y, height, cropHeight) }
+}

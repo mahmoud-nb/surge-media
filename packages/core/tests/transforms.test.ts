@@ -1,9 +1,11 @@
 import { describe, expect, it } from 'vitest'
 import { parseDeliveryPath, deliveryVariant } from '../server/lib/media/delivery-path'
 import { planTransform, type TransformSource } from '../server/lib/media/transform-plan'
+import { signaturePlan, type SignatureContext, type SignedFile } from '../server/lib/api/signature-plan'
 import { presetFieldsToDefinition, presetFormSchema, presetFormValues, type PresetFormValues } from '../shared/schemas/transforms'
 import {
   BUILTIN_PRESETS,
+  focalObjectPosition,
   formatTransformation,
   freeTransformAllowed,
   IDENTITY_TRANSFORMATION,
@@ -11,7 +13,10 @@ import {
   parsePresetDefinition,
   parseTransformation,
   parseTransformFormat,
+  roundFocalCoordinate,
+  sameFocalPoint,
   TRANSFORM_FORMATS,
+  TRANSFORM_POLICIES,
   type TransformFormat,
   type Transformation,
   type TransformPolicy,
@@ -309,5 +314,76 @@ describe('formulaire d\'un préréglage', () => {
     const values = presetFormValues(parsed.transformation, 'bandeau', 'Bandeau')
     expect(values).toMatchObject({ name: 'bandeau', width: '640', height: '360', fit: 'fill', quality: '60', rotate: '180' })
     expect(definition(values)).toBe('r_180,w_640,h_360,fit_fill,q_60')
+  })
+})
+
+describe('point d\'intérêt', () => {
+  it('arrondit à 4 décimales dans [0, 1] et compare à cette précision', () => {
+    expect(roundFocalCoordinate(0.123456)).toBe(0.1235)
+    expect([roundFocalCoordinate(-0.2), roundFocalCoordinate(1.4)]).toEqual([0, 1])
+    expect(sameFocalPoint({ x: 0.5, y: 0.25 }, { x: 0.50001, y: 0.25 })).toBe(true)
+    expect(sameFocalPoint({ x: 0.5, y: 0.25 }, { x: 0.5002, y: 0.25 })).toBe(false)
+    expect([sameFocalPoint(null, null), sameFocalPoint(null, { x: 0.5, y: 0.5 })]).toEqual([true, false])
+  })
+
+  it('l\'aperçu de l\'interface reproduit le recadrage du serveur', () => {
+    const cases: [number, number, number, { x: number, y: number }][] = [
+      [1200, 800, 1, { x: 0.1, y: 0.5 }],
+      [1200, 800, 1, { x: 0.7, y: 0.5 }],
+      [1200, 800, 16 / 9, { x: 0.5, y: 0.05 }],
+      [1200, 800, 16 / 9, { x: 0.3, y: 0.62 }],
+      [800, 1200, 16 / 9, { x: 0.5, y: 0.8 }],
+      [800, 1200, 1, { x: 0.9, y: 0.35 }],
+    ]
+    for (const [width, height, ratio, focal] of cases) {
+      const outWidth = 400
+      const outHeight = Math.round(outWidth / ratio)
+      const result = planTransform(transformation(`w_${outWidth},h_${outHeight}`), { width, height, hasAlpha: false, focal }, 'webp', 4096)
+      if (!result.ok) throw new Error(result.message)
+      const extract = result.plan.extract!
+      const position = focalObjectPosition(width, height, outWidth / outHeight, focal)
+      // object-position p : la zone visible commence à (taille − zone) × p.
+      const left = (width - extract.width) * position.x
+      const top = (height - extract.height) * position.y
+      expect(Math.abs(left - extract.x), JSON.stringify({ width, height, ratio, focal })).toBeLessThanOrEqual(1)
+      expect(Math.abs(top - extract.y), JSON.stringify({ width, height, ratio, focal })).toBeLessThanOrEqual(1)
+    }
+    expect(focalObjectPosition(1200, 800, 1, null)).toEqual({ x: 0.5, y: 0.5 })
+  })
+})
+
+describe('signature d\'un lien délivré par l\'API', () => {
+  const transform: SignedFile = { kind: 'transform', canonical: 'w_800,h_450', format: 'webp' }
+  const preset: SignedFile = { kind: 'preset', name: 'carte', format: 'avif' }
+  const file: SignedFile = { kind: 'file' }
+  const context = (visibility: SignatureContext['visibility'], policy: TransformPolicy, delegated = false): SignatureContext => ({ visibility, policy, delegated })
+
+  it('média privé : toujours à échéance (cible exacte, ou droit « derived »)', () => {
+    expect(signaturePlan(file, false, context('PRIVATE', 'OPEN'))).toEqual({ type: 'expiring', access: { variant: 'original' } })
+    expect(signaturePlan(preset, false, context('PRIVATE', 'PRESETS'))).toEqual({ type: 'expiring', access: { variant: 'carte' } })
+    expect(signaturePlan(transform, false, context('PRIVATE', 'SIGNED'))).toEqual({ type: 'expiring', access: { variant: 't:w_800,h_450' } })
+    expect(signaturePlan(preset, true, context('PRIVATE', 'OPEN'))).toEqual({ type: 'expiring', access: { scope: 'derived' } })
+  })
+
+  it('média public : signature seulement pour un paramètre libre en politique « signed »', () => {
+    for (const policy of TRANSFORM_POLICIES) {
+      expect(signaturePlan(file, false, context('PUBLIC', policy))).toEqual({ type: 'none' })
+      expect(signaturePlan(preset, false, context('PUBLIC', policy))).toEqual({ type: 'none' })
+    }
+    expect(signaturePlan(transform, false, context('PUBLIC', 'OPEN'))).toEqual({ type: 'none' })
+    expect(signaturePlan(transform, false, context('PUBLIC', 'SIGNED'))).toEqual({ type: 'permanent', access: { variant: 't:w_800,h_450' } })
+    // Jeton délégué : jamais de lien permanent.
+    expect(signaturePlan(transform, false, context('PUBLIC', 'SIGNED', true))).toEqual({ type: 'expiring', access: { variant: 't:w_800,h_450' } })
+    // Droit « derived » : à échéance en politique « signed », inutile sinon.
+    expect(signaturePlan(preset, true, context('PUBLIC', 'SIGNED'))).toEqual({ type: 'expiring', access: { scope: 'derived' } })
+    expect(signaturePlan(preset, true, context('PUBLIC', 'OPEN'))).toEqual({ type: 'none' })
+    expect(signaturePlan(preset, true, context('PUBLIC', 'PRESETS'))).toEqual({ type: 'none' })
+  })
+
+  it('politique « presets » : paramètres libres refusés, quelle que soit la signature', () => {
+    for (const visibility of ['PUBLIC', 'PRIVATE'] as const) {
+      expect(signaturePlan(transform, false, context(visibility, 'PRESETS')).type).toBe('refused')
+      expect(signaturePlan(transform, true, context(visibility, 'PRESETS')).type).toBe('refused')
+    }
   })
 })

@@ -1,0 +1,3 @@
+-- AlterTable
+ALTER TABLE `Media` ADD COLUMN `focalX` DOUBLE NULL,
+    ADD COLUMN `focalY` DOUBLE NULL;

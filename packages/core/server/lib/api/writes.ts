@@ -36,6 +36,7 @@ export function toMetadataInput(fields: ApiMediaUpdate, imposed: { visibility?: 
     ...(fields.altText === undefined ? {} : { altText: fields.altText }),
     ...(visibility ? { visibility: visibility.toUpperCase() as MediaVisibility } : {}),
     ...(folderId === undefined ? {} : { folderId }),
+    ...(fields.focalPoint === undefined ? {} : { focalPoint: fields.focalPoint }),
   }
 }
 

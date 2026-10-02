@@ -3,6 +3,7 @@ import type { MediaListQuery, MediaMetadataInput } from '#shared/schemas/media'
 import { MEDIA_PAGE_SIZE } from '#shared/schemas/media'
 import { ACCEPTED_MEDIA_TYPES, extensionForMime, mediaKindForMime, type MediaKind } from '#shared/utils/media'
 import { mediaSearchColumns, normalizeSearchText } from '#shared/utils/search'
+import { sameFocalPoint } from '#shared/utils/transforms'
 import type { AccessToken, Media, Prisma } from '../../generated/prisma/client'
 import type { Space } from '../../utils/access'
 import { folderWhere, requireFolderInSpace } from '../folders/service'
@@ -15,7 +16,7 @@ import { sniffMimeType } from './sniff'
 import { runProcessing } from './processing'
 import type { ReceivedUpload } from './upload'
 import { adminMediaPaths } from './urls'
-import { pregenerateVariants } from './variants'
+import { hasDerivedFiles, mediaFocalPoint, pregenerateVariants } from './variants'
 
 /**
  * Logique métier des médias. Indépendante du stockage physique (MediaStorage) et du genre
@@ -29,7 +30,8 @@ import { pregenerateVariants } from './variants'
  * Toute écriture passe par `mediaChanged` (cache de diffusion invalidé, révision de l'espace
  * incrémentée pour les ETag de l'API) et tient à jour les colonnes de recherche normalisées. Les
  * analyses de fichiers passent par la file bornée des traitements ; l'aperçu d'un nouveau fichier
- * est pré-généré en tâche de fond.
+ * est pré-généré en tâche de fond. La version (dans toutes les URL) change avec le fichier et avec
+ * le point d'intérêt : un cache ne sert jamais un fichier ou un recadrage périmé.
  */
 
 const MEDIA_INCLUDE = {
@@ -85,6 +87,8 @@ export function toMediaSummary(media: MediaWithUploader) {
     height: media.height,
     duration: media.duration,
     version: media.version,
+    /** Point d'intérêt (fractions 0 à 1 de l'image orientée), null = centre. */
+    focalPoint: mediaFocalPoint(media),
     /** Chemins de diffusion ; signés (droit « admin ») pour un média privé ou dans la corbeille. */
     url: paths.url,
     previewUrl: paths.previewUrl,
@@ -276,21 +280,51 @@ export async function replaceMediaFile(media: Media, upload: ReceivedUpload, opt
   }
 
   // Ancien fichier et dérivés de l'ancienne version.
-  await prisma.mediaVariant.deleteMany({ where: { mediaId: media.id, transformation: { startsWith: `v${media.version}/` } } })
+  await deleteVersionVariants(media)
   await storage.delete(media.storageKey)
-  await storage.deletePrefix(`${variantPrefix(media.id)}v${media.version}-`)
   await mediaChanged([media.id], spaceOfMedia(media))
   const replaced = await findMediaOrFail(media.id)
   pregenerateVariants(replaced)
   return replaced
 }
 
-export async function updateMediaMetadata(media: Media, input: MediaMetadataInput): Promise<MediaWithUploader> {
-  if (input.folderId) await requireFolderInSpace(spaceOfMedia(media), input.folderId)
-  const data: Prisma.MediaUncheckedUpdateInput = { ...input }
-  if (input.title !== undefined) data.searchTitle = input.title ? normalizeSearchText(input.title) : null
-  if (input.altText !== undefined) data.searchAlt = input.altText ? normalizeSearchText(input.altText) : null
+/** Dérivés d'une version qui n'est plus servie (lignes puis fichiers) : ses URL redirigent vers la nouvelle. */
+async function deleteVersionVariants(media: Pick<Media, 'id' | 'version'>): Promise<void> {
   const prisma = await usePrisma()
+  await prisma.mediaVariant.deleteMany({ where: { mediaId: media.id, transformation: { startsWith: `v${media.version}/` } } })
+  const storage = await useMediaStorage()
+  await storage.deletePrefix(`${variantPrefix(media.id)}v${media.version}-`)
+}
+
+/**
+ * Métadonnées éditoriales (titre, texte alternatif, visibilité, dossier) et point d'intérêt. Un
+ * point d'intérêt modifié crée une **nouvelle version** (architecture phase C, CD8) : toutes les
+ * URL changent (les anciennes redirigent), les dérivés de l'ancienne version sont supprimés et
+ * régénérés à la demande. Mise à jour conditionnée à la version lue (409 si concurrente).
+ */
+export async function updateMediaMetadata(media: Media, input: MediaMetadataInput): Promise<MediaWithUploader> {
+  const { focalPoint, ...fields } = input
+  if (fields.folderId) await requireFolderInSpace(spaceOfMedia(media), fields.folderId)
+  const data: Prisma.MediaUncheckedUpdateManyInput = { ...fields }
+  if (fields.title !== undefined) data.searchTitle = fields.title ? normalizeSearchText(fields.title) : null
+  if (fields.altText !== undefined) data.searchAlt = fields.altText ? normalizeSearchText(fields.altText) : null
+  const prisma = await usePrisma()
+
+  if (focalPoint !== undefined && !sameFocalPoint(focalPoint, mediaFocalPoint(media))) {
+    if (!hasDerivedFiles(media)) throw createError({ statusCode: 400, statusMessage: 'Only images have a focal point.' })
+    if (media.deletedAt) throw mediaError(409, 'IN_TRASH')
+    const { count } = await prisma.media.updateMany({
+      where: { id: media.id, version: media.version },
+      data: { ...data, focalX: focalPoint?.x ?? null, focalY: focalPoint?.y ?? null, version: { increment: 1 } },
+    })
+    if (count !== 1) throw mediaError(409, 'VERSION_CONFLICT')
+    await deleteVersionVariants(media)
+    await mediaChanged([media.id], spaceOfMedia(media))
+    const updated = await findMediaOrFail(media.id)
+    pregenerateVariants(updated)
+    return updated
+  }
+
   const updated = await prisma.media.update({ where: { id: media.id }, data, include: MEDIA_INCLUDE })
   await mediaChanged([media.id], spaceOfMedia(media))
   return updated
@@ -344,7 +378,8 @@ export async function deleteStoredFiles(items: Pick<Media, 'id' | 'storageKey'>[
 /**
  * Copie indépendante d'un média dans un espace (le même ou un autre) et l'un de ses dossiers
  * (racine par défaut) : nouvel identifiant, version 1, fichier copié dans le stockage, métadonnées
- * reprises, provenance conservée. Les dérivés ne sont pas copiés : l'aperçu est pré-généré.
+ * reprises (point d'intérêt compris), provenance conservée. Les dérivés ne sont pas copiés :
+ * l'aperçu est pré-généré.
  */
 export async function duplicateMedia(media: Media, target: Space, provenance: MediaProvenance, folderId: string | null = null): Promise<MediaWithUploader> {
   if (media.deletedAt) throw mediaError(409, 'IN_TRASH')
@@ -370,6 +405,8 @@ export async function duplicateMedia(media: Media, target: Space, provenance: Me
         duration: media.duration,
         title: media.title,
         altText: media.altText,
+        focalX: media.focalX,
+        focalY: media.focalY,
         ...mediaSearchColumns(media),
         // Json? : null s'omet (Prisma exige sinon une valeur spéciale, importée à l'exécution).
         ...(media.metadata === null ? {} : { metadata: media.metadata as Prisma.InputJsonValue }),

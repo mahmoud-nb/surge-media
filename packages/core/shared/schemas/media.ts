@@ -1,5 +1,6 @@
 import { z } from 'zod'
 import { ENABLED_MEDIA_KINDS, MEDIA_VISIBILITIES, SIGNED_URL_MAX_TTL } from '../utils/media'
+import { roundFocalCoordinate } from '../utils/transforms'
 import { folderIdSchema } from './folders'
 
 /** VARCHAR(191) sous MySQL. */
@@ -18,12 +19,24 @@ const optionalText = z
 
 export const visibilitySchema = z.enum(MEDIA_VISIBILITIES, 'validation.required')
 
-/** Métadonnées modifiables (PATCH) ; aussi utilisées à l'upload. `folderId` : dossier de l'espace du média (null = racine). */
+/**
+ * Point d'intérêt d'une image : fractions (0 à 1) de la largeur et de la hauteur de l'image orientée,
+ * depuis le coin haut gauche, arrondies à 4 décimales. Partagé avec l'API v1.
+ */
+export const focalPointSchema = z
+  .strictObject({ x: z.number().min(0).max(1), y: z.number().min(0).max(1) })
+  .transform(point => ({ x: roundFocalCoordinate(point.x), y: roundFocalCoordinate(point.y) }))
+
+/**
+ * Métadonnées modifiables (PATCH) ; aussi utilisées à l'upload. `folderId` : dossier de l'espace du
+ * média (null = racine). `focalPoint` (images, null efface) : sa modification crée une version.
+ */
 export const mediaMetadataSchema = z.object({
   title: optionalText,
   altText: optionalText,
   visibility: visibilitySchema,
   folderId: folderIdSchema.nullable(),
+  focalPoint: focalPointSchema.nullable(),
 }).partial()
 export type MediaMetadataInput = z.input<typeof mediaMetadataSchema>
 

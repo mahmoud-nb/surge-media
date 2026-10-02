@@ -65,9 +65,12 @@ function problemDetail(code: ApiErrorCode, data: Record<string, unknown>): strin
       return 'A folder cannot be moved into itself or one of its subfolders.'
     case 'FOLDER_LIMIT_REACHED':
       return `A space can hold ${FOLDERS_PER_SPACE_MAX} folders at most.`
+    case 'PRESET_NOT_FOUND':
+      return 'No such preset in this project (see GET /projects/{projectId}/presets).'
 
     default:
-      return undefined
+      // Détail fourni par l'erreur métier elle-même (transformations : paramètre fautif, politique).
+      return typeof data.detail === 'string' ? data.detail : undefined
   }
 }
 

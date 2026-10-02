@@ -12,7 +12,7 @@ defineRouteMeta({
     'operationId': 'updateMedia',
     'tags': ['media'],
     'summary': 'Modifier un média',
-    'description': 'Champs absents inchangés ; `null` ou texte vide efface le titre ou le texte alternatif ; `folderId: null` sort le média de son dossier. Passer un média en privé vaut pour les nouvelles requêtes (les copies déjà en cache restent valables jusqu\'à leur expiration).',
+    'description': 'Champs absents inchangés ; `null` ou texte vide efface le titre ou le texte alternatif ; `folderId: null` sort le média de son dossier. Passer un média en privé vaut pour les nouvelles requêtes (les copies déjà en cache restent valables jusqu\'à leur expiration). Changer le point d\'intérêt (`focalPoint`, images) crée une nouvelle version : toutes les URL changent, les anciennes redirigent.',
     'x-scopes': ['media:write'],
     'x-credentials': ['secret', 'personal', 'delegated'],
     'x-errors': [
@@ -22,25 +22,27 @@ defineRouteMeta({
       'PROJECT_NOT_FOUND',
       'PROJECT_ARCHIVED',
       'INSUFFICIENT_SCOPE',
+      'VERSION_CONFLICT',
     ],
     'requestBody': { $ref: '#/components/requestBodies/MediaUpdate' },
     'responses': { 200: { $ref: '#/components/responses/Media' } },
     'x-i18n': {
       en: {
         summary: 'Update a media item',
-        description: 'Absent fields stay unchanged; `null` or an empty string clears the title or alternative text; `folderId: null` takes the media item out of its folder. Making a media item private applies to new requests (copies already cached stay valid until they expire).',
+        description: 'Absent fields stay unchanged; `null` or an empty string clears the title or alternative text; `folderId: null` takes the media item out of its folder. Making a media item private applies to new requests (copies already cached stay valid until they expire). Changing the focal point (`focalPoint`, images) creates a new version: every URL changes, old ones redirect.',
       },
     },
   },
 })
 
 /**
- * PATCH /api/v1/projects/:projectId/media/:mediaId — { title?, altText?, visibility?, folderId? }
- * (portée media:write). Champs absents inchangés ; `null` ou texte vide efface le titre / le texte
- * alternatif ; `folderId` : dossier du projet, `null` = hors dossier. Passer un média en privé vaut
- * pour les nouvelles requêtes (les copies déjà en cache restent valables jusqu'à leur expiration).
+ * PATCH /api/v1/projects/:projectId/media/:mediaId — { title?, altText?, visibility?, folderId?,
+ * focalPoint? } (portée media:write). Champs absents inchangés ; `null` ou texte vide efface le
+ * titre / le texte alternatif ; `folderId` : dossier du projet, `null` = hors dossier. Passer un
+ * média en privé vaut pour les nouvelles requêtes (les copies déjà en cache restent valables jusqu'à
+ * leur expiration). `focalPoint` (images, `null` efface) : nouvelle version (phase C, CD8).
  * Changement de visibilité inscrit au journal d'audit.
- * → Media · 400 INVALID_REQUEST · 404 MEDIA_NOT_FOUND / FOLDER_NOT_FOUND.
+ * → Media · 400 INVALID_REQUEST · 404 MEDIA_NOT_FOUND / FOLDER_NOT_FOUND · 409 VERSION_CONFLICT.
  */
 export default defineApiHandler(async (event, principal) => {
   const { project } = await requireApiProject(event, principal, 'media:write')

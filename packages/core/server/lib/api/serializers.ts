@@ -5,9 +5,9 @@ import { extensionForMime } from '#shared/utils/media'
 import type { TokenScope } from '#shared/utils/permissions'
 import type { TransformPolicy } from '#shared/utils/transforms'
 import type { Media } from '../../generated/prisma/client'
-import { handlerFor } from '../media/handlers'
-import { alignedExpiry, signMediaAccess } from '../media/signing'
-import { mediaPath } from '../media/urls'
+import { alignedExpiry, signMediaAccess, type SignedAccess } from '../media/signing'
+import { derivedPathTemplate, mediaPath } from '../media/urls'
+import { hasDerivedFiles, mediaFocalPoint } from '../media/variants'
 import type { PresetSummary } from '../transforms/service'
 
 /**
@@ -22,13 +22,14 @@ export function apiLinkExpiry(nowMs = Date.now()): number {
 }
 
 /**
- * Média v1 : URL permanentes pour un média public ; pour un média privé, URL signées (fichier et
- * aperçu) valables jusqu'à `expires`, identiques pendant chaque quart d'heure.
+ * Média v1 : URL permanentes pour un média public ; pour un média privé, URL signées (fichier,
+ * aperçu, et gabarit des dérivés avec le droit « derived ») valables jusqu'à `expires`, identiques
+ * pendant chaque quart d'heure.
  */
 export function toApiMedia(media: Media, base: string, expires: number): ApiMedia {
   const signed = media.visibility === 'PRIVATE'
-  const signature = (variant: 'original' | 'preview') => (signed ? `?${signMediaAccess(media, { variant }, expires)}` : '')
-  const hasPreview = Boolean(handlerFor(media.kind)?.transform)
+  const signature = (access: SignedAccess) => (signed ? `?${signMediaAccess(media, access, expires)}` : '')
+  const hasPreview = hasDerivedFiles(media)
   return {
     id: media.id,
     projectId: media.projectId,
@@ -45,8 +46,10 @@ export function toApiMedia(media: Media, base: string, expires: number): ApiMedi
     duration: media.duration,
     version: media.version,
     folderId: media.folderId,
-    url: `${base}${mediaPath(media)}${signature('original')}`,
-    previewUrl: hasPreview ? `${base}${mediaPath(media, 'preview')}${signature('preview')}` : null,
+    url: `${base}${mediaPath(media)}${signature({ variant: 'original' })}`,
+    previewUrl: hasPreview ? `${base}${mediaPath(media, 'preview')}${signature({ variant: 'preview' })}` : null,
+    urlTemplate: hasPreview ? `${base}${derivedPathTemplate(media)}${signature({ scope: 'derived' })}` : null,
+    focalPoint: mediaFocalPoint(media),
     urlExpiresAt: signed ? new Date(expires * 1000).toISOString() : null,
     createdAt: media.createdAt.toISOString(),
     updatedAt: media.updatedAt.toISOString(),

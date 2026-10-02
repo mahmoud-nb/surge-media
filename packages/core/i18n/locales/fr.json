@@ -463,7 +463,7 @@
     },
     "links": {
       "title": "Adresse du fichier",
-      "publicDescription": "Adresse permanente à utiliser dans vos sites et applications. Elle change si le fichier est remplacé.",
+      "publicDescription": "Adresse permanente à utiliser dans vos sites et applications. Elle change si le fichier est remplacé ou si son point d'intérêt change.",
       "publicUrl": "Adresse publique",
       "privateDescription": "Ce média est privé : générez un lien temporaire pour le partager ou l'afficher hors de l'administration.",
       "duration": "Durée de validité",
@@ -517,6 +517,25 @@
       "target": "Ranger dans",
       "submit": "Ranger",
       "moved": "Aucun média rangé. | 1 média rangé dans « {folder} ». | {count} médias rangés dans « {folder} »."
+    },
+    "focal": {
+      "title": "Point d'intérêt",
+      "description": "Le point d'intérêt reste dans le cadre quand une image transformée est recadrée (ajustement « Remplir et recadrer », ancrage « Point d'intérêt »). Sans point d'intérêt, les recadrages sont centrés.",
+      "pickHint": "Cliquez sur l'image pour placer le point, ou réglez les deux curseurs.",
+      "x": "Position horizontale (depuis la gauche)",
+      "y": "Position verticale (depuis le haut)",
+      "current": "Point d'intérêt : {x} depuis la gauche, {y} depuis le haut.",
+      "none": "Aucun point d'intérêt : les recadrages sont centrés.",
+      "previewsTitle": "Aperçu des recadrages",
+      "square": "Carré (1:1)",
+      "wide": "Paysage (16:9)",
+      "versionNote": "L'enregistrement crée une nouvelle version : les adresses du média changent (les anciennes redirigent vers les nouvelles) et les images transformées sont régénérées.",
+      "clear": "Effacer le point",
+      "save": "Enregistrer le point d'intérêt",
+      "unchanged": "Aucune modification à enregistrer.",
+      "saved": "Point d'intérêt enregistré : le média passe à la version {version}.",
+      "cleared": "Point d'intérêt effacé : le média passe à la version {version}.",
+      "conflict": "Le média vient d'être modifié par ailleurs. Rechargez la page et réessayez."
     }
   },
   "projectRoles": {
