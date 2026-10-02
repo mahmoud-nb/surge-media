@@ -433,7 +433,7 @@ manquante **403** (`PROJECT_ARCHIVED` si c'est l'archivage du projet qui la reti
 | `GET /api/admin/media?project=&q=&kind=&visibility=&status=active\|trash&sort=&page=` | `media:read` | médias d'un espace (`project` absent = bibliothèque), 24 par page, + espace et portées de l'utilisateur |
 | `POST /api/admin/media?project=` | `media:upload` | multipart `file` (+ `title`, `altText`, `visibility`) → 201 |
 | `GET /api/admin/media/:id` | `media:read` | métadonnées complètes, adresse publique absolue, espace et portées |
-| `PATCH /api/admin/media/:id` | `media:write` | `{ title?, altText?, visibility? }` |
+| `PATCH /api/admin/media/:id` | `media:write` | `{ title?, altText?, visibility?, folderId?, focalPoint? }` (point d'intérêt : nouvelle version, § 8.3) |
 | `PUT /api/admin/media/:id/file` | `media:write` | remplacement du fichier (mêmes contrôles que l'envoi) |
 | `DELETE /api/admin/media/:id` | `media:delete` | corbeille · `?permanent=true` : suppression définitive (409 `NOT_IN_TRASH` sinon) |
 | `POST /api/admin/media/:id/restore` | `media:delete` | sortie de la corbeille |
@@ -443,6 +443,7 @@ manquante **403** (`PROJECT_ARCHIVED` si c'est l'archivage du projet qui la reti
 | `GET /api/admin/spaces?scope=media:upload` | session | espaces où l'utilisateur a la portée (cibles de duplication / déplacement) |
 | Dossiers et rangement | `media:read` / `media:write` | § 9.11 (`folder`, `recursive` et `folderId` sur les routes ci-dessus) |
 | Politique des transformations, préréglages | `project:read` / `project:settings` ; installation : `settings:manage` | § 8.2 |
+| Générateur d'adresses : aperçu, adresses | `media:read` | § 8.4 (`/api/admin/media/:id/transform`, `/api/admin/media/:id/links`) |
 
 Codes d'erreur (`data.code`, `shared/utils/media.ts`) : `NO_FILE`, `MULTIPART_REQUIRED` (400),
 `FILE_TOO_LARGE` (413), `UNSUPPORTED_TYPE` (415), `UNREADABLE_FILE`, `DIMENSIONS_TOO_LARGE`,
@@ -462,7 +463,8 @@ Codes d'erreur (`data.code`, `shared/utils/media.ts`) : `NO_FILE`, `MULTIPART_RE
   sous-dossiers »), grille, sélection pour ranger plusieurs médias, corbeille.
 - `/admin/media/:id` : fiche d'un média (aperçu, informations dont l'espace et la provenance — compte,
   identifiant d'API, utilisateur de l'application pour un envoi par jeton délégué —, titre, texte alternatif,
-  visibilité, **point d'intérêt** d'une image (§ 8.3), adresse publique ou lien temporaire, remplacement,
+  visibilité, **point d'intérêt** et **générateur d'adresses** d'une image (§ 8.3, § 8.4), adresse publique ou
+  lien temporaire, remplacement,
   **dupliquer ou déplacer** vers un espace et un dossier, corbeille).
 - `/admin/projects/:id/transforms` : onglet **Transformations** d'un projet (politique, préréglages,
   limites du serveur) ; `/admin/settings` : **Réglages** de l'installation (ADMIN : politique de la
@@ -652,6 +654,32 @@ curl -X POST -H "Authorization: Bearer $SURGE_MEDIA_SECRET_KEY" -H "Content-Type
   "https://media.example.com/api/v1/projects/<projectId>/signed-urls"
 ```
 
+
+### 8.4 Générateur d'adresses (fiche média)
+
+La fiche d'une image (`/admin/media/:id`) propose un **générateur d'adresses** : on choisit un préréglage de
+l'espace ou des paramètres (largeur, hauteur, ajustement, ancrage, qualité, fond, rotation, miroir — les
+mêmes champs que le dialogue des préréglages) et un format ; l'interface affiche :
+
+- un **aperçu** rendu à la volée par l'administration, avec les dimensions, le format et le poids réels du
+  résultat (et un avertissement quand l'image d'origine est trop petite : jamais d'agrandissement).
+  L'aperçu **n'est jamais enregistré** et ne compte pas dans le quota de dérivés ; le fichier sera généré à
+  la première visite de l'adresse ;
+- l'**adresse** à copier, construite comme celles de l'API (§ 8.3) avec la politique de l'espace : permanente,
+  signée sans échéance (paramètres libres d'un média public en politique `SIGNED`), ou lien temporaire
+  (média privé : validité 1 h, 24 h ou 7 jours) ; en politique `PRESETS`, des paramètres libres sont
+  refusés (lien vers les préréglages de l'espace) ;
+- des **extraits HTML** : `<img>` avec ses dimensions, `<picture>` (sources AVIF et WebP, repli JPEG) et
+  `srcset` 1x/2x pour les écrans haute densité (paramètres avec une dimension que l'image dépasse).
+
+L'aperçu et l'adresse se mettent à jour après une courte pause de saisie. Droit nécessaire : `media:read`
+dans l'espace du média (tout membre du projet) ; pas de générateur dans la corbeille.
+
+| Endpoint (administration) | Portée | Rôle |
+| --- | --- | --- |
+| `GET /api/admin/media/:id` | `media:read` | + `transforms` (image) : politique de l'espace, préréglages utilisables, formats, dimension maximale |
+| `GET /api/admin/media/:id/transform?preset=\|transform=&format=` | `media:read` | aperçu (image) ; en-têtes `X-Transform-Width`, `X-Transform-Height`, `X-Transform-Operation` · 400 `INVALID_TRANSFORM` (`data.param`) · 404 `PRESET_NOT_FOUND` · 409 `IN_TRASH` · 503 `SERVER_BUSY` |
+| `POST /api/admin/media/:id/links` | `media:read` | `{ items: [{ preset? \| transform?, format }] (1 à 4), expiresIn? }` → `{ items: [{ url, query, expiresAt } \| { error: { code, param?, detail? } }] }` · 409 `IN_TRASH` |
 
 ## 9. Authentification et rôles
 
@@ -2053,4 +2081,45 @@ largeur de téléphone sans défilement horizontal.
 ```bash
 pnpm install          # aucune nouvelle dépendance
 pnpm db:migrate       # migration c3_focal_point
+```
+
+### Étape 14 — 2026-10-02 — Phase C4 : générateur d'adresses
+
+**Cadre** : dernière sous-étape de la phase C (architecture validée, `.claude/architecture-phase-c.md`) :
+composer une image transformée depuis sa fiche, la voir, copier son adresse et des exemples d'intégration.
+**La phase C est terminée.**
+
+**Ajouté**
+- Route d'aperçu `GET /api/admin/media/:id/transform` : rendu à la volée dans la file des traitements, jamais
+  enregistré ni compté dans le quota ; dimensions et opération effective en en-têtes.
+- Route `POST /api/admin/media/:id/links` : adresses construites comme les liens de l'API (politique de
+  l'espace, bibliothèque comprise ; signature permanente ou à échéance selon le cas ; erreur par lien).
+- Options du générateur dans la fiche (`transforms`) ; résolution commune « préréglage ou paramètres »
+  (`resolveTransformRequest`) pour l'aperçu, les adresses et l'API v1.
+- Fiche média : section **Générateur d'adresses** (`AdminUrlGenerator`) ; champs de transformation partagés
+  avec le dialogue des préréglages (`AdminTransformFields`) ; extraits HTML (`shared/utils/snippets.ts`).
+- Tests : champs, requêtes d'aperçu et de liens, extraits HTML (échappement, ordre des formats, 2x)
+  (179 tests Vitest au total).
+
+**Vérifié** : typecheck, 179 tests Vitest, i18n (1015 clés), contrastes, migrations (`--check`), build de
+production ; **39 scénarios HTTP** sur la build (options de la fiche, aperçu dans chaque format, préréglages,
+non-agrandissement, aucun dérivé enregistré, erreurs avec le champ fautif, droits par rôle, adresses dans les
+trois politiques et dans la bibliothèque, lien privé à échéance servi, erreurs par lien, corbeille) ; C1 à C3
+et B1 à B5 rejoués sans régression (le contrôle du débit des envois de B4 tient maintenant compte des jetons
+regagnés pendant la boucle : 62 envois acceptés en 2,7 s, conformément au limiteur) ; interface avec de
+vrais clics et au clavier (paramètres, champ invalide, préréglage, format, validité d'un lien privé,
+politique « préréglages seulement », mise à jour après un nouveau point d'intérêt ; bouton de copie : le
+navigateur de test refuse le presse-papiers, le message d'échec est bien annoncé) ; dialogue des
+préréglages revérifié avec les champs partagés ; axe-core : 0 violation en fr/en × clair/sombre ; largeur
+de téléphone sans défilement horizontal.
+
+**Limites connues**
+- Le générateur ne propose ni zone de recadrage (`crop`) ni densité (`dpr`) : l'API les accepte.
+- Pas d'aperçu dans le dialogue d'un préréglage (aucun média de référence).
+- Chaque aperçu est recalculé (seul le navigateur le garde 5 minutes) : sur une très grande image, il
+  occupe un traitement à chaque changement de réglage (file bornée, § 8).
+
+**Après `git pull`**
+```bash
+pnpm install          # aucune nouvelle dépendance, aucune migration
 ```

@@ -1,8 +1,23 @@
 # Phase C — Transformations d'images à la demande
 
-> **Statut : VALIDÉE (2026-10-01) — toutes les décisions CD1 à CD12 acceptées par l'utilisateur.**
+> **Statut : VALIDÉE (2026-10-01) — toutes les décisions CD1 à CD12 acceptées par l'utilisateur. PHASE TERMINÉE (2026-10-02).**
 > Avancement : **C1 faite** (`setup.md` étape 11, `.claude/project-context.md` § 9.16), **C2 faite** (étape 12,
-> § 9.17), **C3 faite** (étape 13, § 9.18). Suite : C4 (générateur d'URL).
+> § 9.17), **C3 faite** (étape 13, § 9.18), **C4 faite** (étape 14, § 9.19).
+>
+> Écarts et précisions de C4 (générateur d'URL) :
+> - Aperçu : `GET /api/admin/media/:id/transform?preset=|transform=&format=` (`media:read`), rendu dans la file des traitements,
+>   jamais enregistré ni compté, **sans politique** (l'adresse, elle, la respecte) ; en-têtes `X-Transform-Width`, `-Height`,
+>   `-Operation` (opération effective : réduction sans agrandissement visible dans l'interface) ; 409 `IN_TRASH`.
+> - Adresses : `POST /api/admin/media/:id/links` (1 à 4 dérivés, `expiresIn` pour un média privé), même logique que les liens de
+>   l'API (`issueSignedUrl`, politique de l'espace, bibliothèque comprise), erreurs par lien (`code`, `param`, `detail`).
+>   `resolveTransformRequest` (service des transformations) est désormais commun à l'aperçu, aux adresses et à l'API (erreurs
+>   métier `data.code`, converties en problèmes RFC 9457 par l'API).
+> - Options du générateur dans `GET /api/admin/media/:id` (`transforms` : politique, préréglages utilisables, formats, borne).
+> - Interface : préréglage ou paramètres structurés (champs partagés avec le dialogue des préréglages : `AdminTransformFields` ;
+>   ni `crop` ni `dpr` dans les champs), format, validité du lien pour un média privé ; mise à jour après 400 ms de pause, requête
+>   précédente annulée. Extraits : `<img>`, `<picture>` (AVIF, WebP, repli JPEG sinon PNG), `srcset` 1x/2x (`dpr_2`, seulement
+>   si l'image dépasse la taille demandée) ; attributs échappés (`&amp;` des signatures) — module pur `shared/utils/snippets.ts`.
+> - Pas d'aperçu dans le dialogue d'un préréglage (pas de média de référence) : piste.
 >
 > Écarts et précisions de C3 (API et point d'intérêt) :
 > - `signed-url` : cibles `file | preset | transform | derived` ; `preset` = tout préréglage de l'espace (404 `PRESET_NOT_FOUND`) ;

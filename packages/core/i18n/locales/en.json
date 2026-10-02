@@ -536,6 +536,63 @@
       "saved": "Focal point saved: the media item is now at version {version}.",
       "cleared": "Focal point cleared: the media item is now at version {version}.",
       "conflict": "The media item was just changed elsewhere. Reload the page and try again."
+    },
+    "generator": {
+      "title": "URL builder",
+      "description": "Compose a transformed version of the image (size, crop, quality, format), then copy its address or an HTML example. The preview is computed on the fly, without creating a file.",
+      "mode": "Transformation",
+      "modes": {
+        "params": {
+          "label": "Parameters",
+          "description": "Size, fit, anchor, quality, background, rotation, mirror."
+        },
+        "preset": {
+          "label": "Preset",
+          "description": "A transformation saved for the space: built-in, global or project."
+        }
+      },
+      "preset": "Preset",
+      "presetOption": "{name} ({level})",
+      "format": "Output format",
+      "duration": "Link validity (private media item)",
+      "resultTitle": "Result",
+      "invalid": "Fix the highlighted fields to update the preview and the address.",
+      "result": "Preview: {width} × {height} px, {format}, {size}.",
+      "reduced": "The original image is smaller than the requested size: the result is reduced while keeping the requested ratio (never enlarged).",
+      "previewNote": "Computed for this preview without creating a file: the file is generated on the first visit of the address.",
+      "refusedTitle": "Address refused by this space",
+      "refused": "This space only accepts presets: an address with free parameters would be refused. Choose a preset, or create one with these parameters.",
+      "managePresets": "Manage presets",
+      "url": "Image address",
+      "urlKinds": {
+        "permanent": "Permanent address, cached without limit by browsers and CDNs.",
+        "preset": "Permanent address. The preset can be changed: the image will follow its definition (one-week cache).",
+        "signed": "Signed address without expiry: this space requires a signature for free parameters."
+      },
+      "urlExpiring": "Temporary link (private media item): it expires on {date}.",
+      "snippetsTitle": "Embed the image",
+      "snippetsDescription": "HTML examples built with the addresses above; check the alternative text.",
+      "snippets": {
+        "img": {
+          "title": "Simple image",
+          "description": "An img tag with its dimensions: the page does not shift while it loads.",
+          "copy": "Copy the Simple image example"
+        },
+        "picture": {
+          "title": "Several formats",
+          "description": "The browser takes the first format it can display (AVIF, then WebP), otherwise the fallback image. The same address works for every format, signature included.",
+          "copy": "Copy the Several formats example"
+        },
+        "srcset": {
+          "title": "High-density screens",
+          "description": "A version twice as large for high-resolution screens (recent phones and computers).",
+          "copy": "Copy the High-density screens example"
+        }
+      },
+      "errors": {
+        "PRESET_NOT_FOUND": "This preset no longer exists: reload the page.",
+        "INVALID_TRANSFORM": "This transformation is not possible on this image, or is no longer accepted by the server."
+      }
     }
   },
   "projectRoles": {

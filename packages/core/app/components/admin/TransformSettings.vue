@@ -16,12 +16,8 @@ import {
   parseTransformation,
   PRESET_DESCRIPTION_MAX_LENGTH,
   TRANSFORM_ERROR_CODES,
-  TRANSFORM_FITS,
-  TRANSFORM_FLIPS,
-  TRANSFORM_GRAVITIES,
   TRANSFORM_MAX_DIMENSION,
   TRANSFORM_POLICIES,
-  TRANSFORM_ROTATIONS,
   type TransformPolicy,
 } from '#shared/utils/transforms'
 
@@ -111,11 +107,6 @@ const editOpen = ref(false)
 const editing = ref<Preset | null>(null)
 const editError = ref<string>()
 const savingPreset = ref(false)
-
-const fitOptions = computed(() => TRANSFORM_FITS.map(value => ({ value, label: t(`transforms.fit.${value}`) })))
-const gravityOptions = computed(() => TRANSFORM_GRAVITIES.map(value => ({ value, label: t(`transforms.gravity.${value}`) })))
-const rotateOptions = computed(() => TRANSFORM_ROTATIONS.map(value => ({ value: String(value) as PresetFormValues['rotate'], label: t(`transforms.rotate.${value}`) })))
-const flipOptions = computed(() => (['', ...TRANSFORM_FLIPS] as const).map(value => ({ value, label: t(`transforms.flip.${value || 'none'}`) })))
 
 /** Forme canonique des champs saisis (affichée, non annoncée), ou null s'ils sont invalides. */
 const definition = computed(() => {
@@ -405,32 +396,7 @@ function duration(seconds: number): string {
         <UiFormField v-slot="field" :id="FIELD_IDS.description" :label="t('transforms.presets.fields.description')" :error="message('description')">
           <UiInput v-bind="field" v-model="form.description" name="description" autocomplete="off" :maxlength="PRESET_DESCRIPTION_MAX_LENGTH" @input="clear('description')" />
         </UiFormField>
-        <div class="grid gap-4 sm:grid-cols-2">
-          <UiFormField v-slot="field" :id="FIELD_IDS.width" :label="t('transforms.presets.fields.width')" :hint="t('transforms.presets.fields.sizeHint', { max: data.limits.maxDimension })" :error="message('width')">
-            <UiInput v-bind="field" v-model="form.width" name="width" inputmode="numeric" autocomplete="off" @input="clear('width')" />
-          </UiFormField>
-          <UiFormField v-slot="field" :id="FIELD_IDS.height" :label="t('transforms.presets.fields.height')" :hint="t('transforms.presets.fields.sizeHint', { max: data.limits.maxDimension })" :error="message('height')">
-            <UiInput v-bind="field" v-model="form.height" name="height" inputmode="numeric" autocomplete="off" @input="clear('height')" />
-          </UiFormField>
-          <UiFormField v-slot="field" :id="FIELD_IDS.fit" :label="t('transforms.presets.fields.fit')" :hint="t('transforms.presets.fields.fitHint')" :error="message('fit')">
-            <UiSelect v-bind="field" v-model="form.fit" :options="fitOptions" name="fit" />
-          </UiFormField>
-          <UiFormField v-slot="field" :id="FIELD_IDS.gravity" :label="t('transforms.presets.fields.gravity')" :hint="t('transforms.presets.fields.gravityHint')" :error="message('gravity')">
-            <UiSelect v-bind="field" v-model="form.gravity" :options="gravityOptions" name="gravity" />
-          </UiFormField>
-          <UiFormField v-slot="field" :id="FIELD_IDS.quality" :label="t('transforms.presets.fields.quality')" :hint="t('transforms.presets.fields.qualityHint')" :error="message('quality')">
-            <UiInput v-bind="field" v-model="form.quality" name="quality" inputmode="numeric" autocomplete="off" @input="clear('quality')" />
-          </UiFormField>
-          <UiFormField v-slot="field" :id="FIELD_IDS.background" :label="t('transforms.presets.fields.background')" :hint="t('transforms.presets.fields.backgroundHint')" :error="message('background')">
-            <UiInput v-bind="field" v-model="form.background" name="background" autocomplete="off" spellcheck="false" maxlength="7" @input="clear('background')" />
-          </UiFormField>
-          <UiFormField v-slot="field" :id="FIELD_IDS.rotate" :label="t('transforms.presets.fields.rotate')" :error="message('rotate')">
-            <UiSelect v-bind="field" v-model="form.rotate" :options="rotateOptions" name="rotate" />
-          </UiFormField>
-          <UiFormField v-slot="field" :id="FIELD_IDS.flip" :label="t('transforms.presets.fields.flip')" :error="message('flip')">
-            <UiSelect v-bind="field" v-model="form.flip" :options="flipOptions" name="flip" />
-          </UiFormField>
-        </div>
+        <AdminTransformFields v-model="form" :ids="FIELD_IDS" :max-dimension="data.limits.maxDimension" :error="message" @edit="clear" />
         <p class="text-sm text-muted-foreground">
           {{ t('transforms.presets.parameters') }}
           <code class="font-mono text-xs break-all text-foreground">{{ definition ?? '—' }}</code>

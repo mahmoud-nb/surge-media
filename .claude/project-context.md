@@ -5,8 +5,8 @@
 > français, avec le « Journal des étapes »). En cas de divergence, **le code fait foi**, puis
 > `setup.md`, puis ce fichier.
 >
-> **État décrit** : commit `91894f7` (C2 + retrait de `AccessToken.sessionId`) + sous-étape **C3** (2026-10-02, non commitée
-> au moment de la rédaction : vérifier `git log`). Étapes terminées : 1 (monorepo, core, base), 2 (UI, auth, rôles),
+> **État décrit** : commit `b6deda4` (C3) + sous-étape **C4** (2026-10-02, non commitée au moment de la rédaction : vérifier
+> `git log`). Étapes terminées : 1 (monorepo, core, base), 2 (UI, auth, rôles),
 > 3 (utilisateurs), 4 (médias, phase A), 5 = **B1** (projets, espaces, autorisations), 6 = **B2**
 > (identifiants d'API, origines, mode sudo, journal d'audit), 7 = **B3** (API publique v1 en lecture),
 > 8 = **B4** (API v1 en écriture, jetons délégués `sm_dt_`, file bornée des traitements, pré-génération),
@@ -14,10 +14,10 @@
 > interactive de l'API** (OpenAPI généré depuis `defineRouteMeta`, page `/admin/api` avec Scalar, § 9.15),
 > 11 = **C1** (transformations d'images à la demande : moteur et diffusion par `/m/`, § 9.16), 12 = **C2** (politique des
 > transformations, préréglages, page « Réglages », § 9.17), 13 = **C3** (API : `urlTemplate`, `focalPoint`, liens signés de
-> transformation unitaires et par lot ; point d'intérêt dans la fiche média, § 9.18). **La phase B est terminée.**
-> **Phase C** (transformations) : architecture **validée** le 2026-10-01 (`.claude/architecture-phase-c.md`, décisions CD1 à CD12,
-> écarts en tête). **Prochaine étape** : **C4** — générateur d'URL sur la fiche média (aperçu rendu à la volée par une route
-> d'administration, non conservé ni compté ; extraits `srcset` / `<picture>`), sans migration. Architecture de la phase B :
+> transformation unitaires et par lot ; point d'intérêt dans la fiche média, § 9.18), 14 = **C4** (générateur d'adresses de la
+> fiche média : aperçu à la volée non enregistré, adresses signées si nécessaire, extraits HTML, § 9.19). **Les phases B et C sont
+> terminées** (`.claude/architecture-phase-c.md` : décisions CD1 à CD12, écarts en tête). **Prochaine étape** : à proposer et faire
+> valider — `@surge-media/client` + composants (Vue d'abord), ou phase D (vidéos et documents). Architecture de la phase B :
 > `.claude/architecture-phase-b.md` (en-tête = écarts B1 à B5).
 >
 > Les éléments marqués **[À CONFIRMER]** sont des hypothèses ou des points non validés par
@@ -133,7 +133,9 @@ Couches serveur :
   **MediaBrowser** (médias d'un espace : envoi si portée, filtres URL, grille, corbeille ; prop `projectId?`), **ProjectHeader** (retour, h1, badges,
   onglets Aperçu/Médias/Membres + Clés d'API/Origines si `project:credentials` — prop `scopes` ; `aria-current="true"` sur une sous-page ; alerte archivé),
   **FolderActions** (B5 : nouveau dossier, renommer, déplacer, supprimer), **TransformSettings** (C2 : politique, préréglages, limites),
-  **FocalPointEditor** (C3 : point d'intérêt de la fiche média, clic + curseurs, aperçus 1:1 / 16:9), **ReauthDialog** (dans `layouts/admin.vue`), **SecretPanel** (valeur affichée une fois, focus sur le titre, `defineExpose({ focus })`),
+  **FocalPointEditor** (C3 : point d'intérêt de la fiche média, clic + curseurs, aperçus 1:1 / 16:9), **UrlGenerator** (C4 : générateur
+  d'adresses de la fiche média), **TransformFields** (C4 : champs structurés d'une transformation, partagés avec le dialogue des
+  préréglages), **ReauthDialog** (dans `layouts/admin.vue`), **SecretPanel** (valeur affichée une fois, focus sur le titre, `defineExpose({ focus })`),
   **ScopeList**, **TokenStatusBadge** (prop `kind: key|token` pour l'accord en français). `UpcomingSection` supprimé en B2.
 - `pages/` : `index` (accueil), `login`, `password/[token]`, `admin/index` (tableau de bord), `admin/users/{index,new,[id]}`,
   `admin/media/{index (bibliothèque),[id]}`, `admin/projects/{index,new}`, `admin/projects/[id]/{index (aperçu, réglages, archivage, suppression),media,members}`,
@@ -171,7 +173,8 @@ Couches serveur :
   étape 10 : **`api/docs.ts`** (`docsProjects`), `api/openapi.ts` réécrit (§ 9.15), `server/types/nitro-handlers-meta.d.ts` ;
   C1 : **`media/{delivery-path,transform-plan,transform-settings}.ts`** (chemins et opération effective purs, bornes), plugin
   `server/plugins/variant-keys.ts` (§ 9.16) ; C2 : **`transforms/service.ts`** (politique, préréglages, § 9.17), `server/utils/transforms.ts` ;
-  C3 : **`api/{signature-plan,signed-urls}.ts`** (liens signés de l'API, § 9.18). Les nouveaux modules **importent explicitement** les utilitaires de
+  C3 : **`api/{signature-plan,signed-urls}.ts`** (liens signés de l'API, § 9.18 ; réutilisés par l'administration en C4) ; C4 : routes
+  `api/admin/media/[id]/{transform.get,links.post}.ts` (§ 9.19). Les nouveaux modules **importent explicitement** les utilitaires de
   `#shared/utils/*` (un auto-import non injecté a causé un `ReferenceError` en production, voir § 18).
   Les **types** exportés de `server/utils` (ex. `Space`) s'importent explicitement (`import type { Space } from '../../utils/access'`).
 
@@ -182,7 +185,8 @@ Couches serveur :
   TOKEN_SCOPES, TOKEN_BASE_SCOPES, TOKEN_OPTIONAL_SCOPES, tokenScopes) — auto-importé, **pur** (testé).
 - `utils/folders.ts` (B5 : règles pures de l'arborescence, § 9.14), `schemas/folders.ts`.
 - `utils/transforms.ts` (C1 : grammaire et forme canonique des transformations, préréglages intégrés, § 9.16 ; C2 : politiques et
-  préréglages, § 9.17 ; C3 : point d'intérêt, `focalObjectPosition`, § 9.18) — auto-importé, **pur** (testé) ; `schemas/transforms.ts` (C2).
+  préréglages, § 9.17 ; C3 : point d'intérêt, `focalObjectPosition`, § 9.18) — auto-importé, **pur** (testé) ; `schemas/transforms.ts` (C2 ;
+  C4 : `transformFieldsSchema`, `transformPreviewQuerySchema`, `transformLinksSchema`) ; `utils/snippets.ts` (C4 : extraits HTML, pur, testé).
 - `utils/projects.ts` (longueurs, `PROJECT_SLUG_PATTERN`, `PROJECT_STATUSES`, `PROJECT_MEDIA_ON_DELETE`, `slugify`, `PROJECT_ERROR_CODES`) — auto-importé.
 - `utils/credentials.ts` (`TOKEN_TYPES`, `PROJECT_KEY_TYPES`, `TOKEN_PREFIXES`, `KEY_ENVIRONMENTS`, `ENVIRONMENT_PATTERN`, durées, `ROTATION_OVERLAPS`,
   `tokenStatus`, `MAX_ALLOWED_ORIGINS`, `CREDENTIAL_ERROR_CODES`), `utils/origins.ts` (`normalizeOrigin`, `isWildcardOrigin`, `isOriginAllowed` — purs, testés),
@@ -876,6 +880,37 @@ Référence d'exploitation : `setup.md` § 8.3. Migration `c3_focal_point`. Éca
   stylés en `<style scoped>` (piste bordée `--input`, poignée `--primary`). i18n `media.focal.*`.
 - `TransformSettings.vue` : `$api<TransformsState>(…)` (TS2321 apparu avec la nouvelle route Nitro).
 
+### 9.19 Générateur d'adresses de la fiche média (phase C, C4)
+
+Référence d'exploitation : `setup.md` § 8.4. Aucune migration. Écarts : en-tête de `architecture-phase-c.md`.
+
+- **Résolution commune** : `resolveTransformRequest(projectId | null, { preset?, transform?, format })` (`transforms/service.ts`) → `{ kind:
+  'preset', name, transformation } | { kind: 'transform', canonical, transformation }` ; erreurs métier `transformError` (400
+  `INVALID_TRANSFORM` avec `param` et `detail`, dont `param: 'format'` pour un format non activé ; 404 `PRESET_NOT_FOUND`). Utilisée par
+  l'aperçu, les adresses et l'API v1 : `signed-urls.ts` lève maintenant des erreurs métier (`mediaError(403, 'TRANSFORM_NOT_ALLOWED')`,
+  400 sans code pour un média sans dérivés) que l'API convertit par `toProblem` (`problemDetail` : `PRESET_NOT_FOUND` reprend `data.detail`).
+- **Options** : `spaceTransformOptions(projectId | null)` (politique, préréglages non masqués `{ name, transformation, description, level }`,
+  formats, `maxDimension`) dans `GET /api/admin/media/:id` → `transforms` (images ; null sinon). `projectPresets` accepte null (bibliothèque).
+- **Aperçu** : `GET /api/admin/media/:id/transform` (`transformPreviewQuerySchema` : `preset` **ou** `transform`, `format` webp par
+  défaut) → `renderTransient(media, transformation, format)` (`variants.ts` : `planTransform` + `handler.transform` dans `runProcessing`,
+  **aucun** `MediaVariant`, aucun quota) ; `Cache-Control: private, max-age=300`, nosniff, CSP sandbox, `X-Transform-Width|Height|Operation` ;
+  sans politique ; 409 `IN_TRASH` ; `Retry-After` sur 503.
+- **Adresses** : `POST /api/admin/media/:id/links` (`transformLinksSchema` : 1 à `TRANSFORM_LINKS_MAX` = 4, `expiresIn` 60 s–7 j, défaut 1 h)
+  → `issueSignedUrl` avec `spaceTransformPolicy(media.projectId)`, `delegated: false`, base `mediaBaseUrl` ; erreur par lien
+  `{ error: { code, param?, detail? } }` (toute erreur sans `data.code` remonte) ; 400 sans dérivés ; 409 `IN_TRASH`.
+- **Interface** : `AdminUrlGenerator` (`mediaId`, `version`, `width`, `height`, `altText`, `visibility`, `options`, `projectId`) sous le
+  point d'intérêt (images hors corbeille) : `UiRadioCards` Paramètres / Préréglage (préréglage par défaut en politique PRESETS),
+  `AdminTransformFields` (validation immédiate sans déplacer le focus : `transformFieldsSchema` + borne du serveur ; largeur par défaut
+  min(800, largeur)), format, validité pour un média privé ; `schedule()` 400 ms, `AbortController` ; aperçu par `fetch` → blob →
+  `URL.createObjectURL` (révoqué), légende `role=status` (« Aperçu : 800 × 450 px, WebP, 24 ko. »), note de réduction ; adresse
+  (`UiCopyField`) et sa nature (permanente, préréglage modifiable, signée sans échéance, lien temporaire avec date) ; refus en PRESETS
+  avec lien vers l'onglet Transformations (ou Réglages avec `settings:manage`) ; adresse et alertes masquées tant qu'un champ est
+  invalide ; extraits `imageSnippets` (`shared/utils/snippets.ts` : `htmlAttribute`, `withTransformFormat`) avec `UiCopyButton` (libellés
+  « Copier l'exemple … »), blocs `<pre>` à retour à la ligne (pas de zone défilante à rendre focalisable). 2x : `transform + ',dpr_2'`
+  seulement si l'image (orientée, rotation comprise) dépasse la dimension demandée. i18n `media.generator.*`.
+- `AdminTransformFields` (`v-model` = objet de champs, `ids`, `maxDimension`, `error(field)`, événement `edit`) remplace les 8 champs du
+  dialogue des préréglages (`AdminTransformSettings` : `:error="message" @edit="clear"`).
+
 ## 10. Référence des API
 
 Format d'erreur (h3) : `{ statusCode, statusMessage, message, data? }` ; **codes métier dans `data.code`** (lus côté client par
@@ -902,7 +937,9 @@ Format d'erreur (h3) : `{ statusCode, statusMessage, message, data? }` ; **codes
 | GET `/api/admin/spaces` | session | `?scope=` (défaut `media:upload`) | `{ spaces: ({ type: 'library' } \| { type: 'project', id, name })[] }` |
 | GET `/api/admin/media` | `media:read` (espace) | `?project&folder&recursive=1&q&kind&visibility&status=active\|trash&sort=newest\|oldest\|name\|size&page` | `{ items: MediaSummary[], total, page, pageSize: 24, space, projectRole, scopes }` · 404 |
 | POST `/api/admin/media` | `media:upload` (espace) | `?project` + multipart `file` + `title?`, `altText?`, `visibility?` | 201 `{ media: MediaDetail }` · 400/403/404/413/415/422 |
-| GET `/api/admin/media/:id` | `media:read` | — | `{ media: MediaDetail, publicUrl (absolue \| null), space, projectRole, scopes }` (corbeille comprise) · 404 |
+| GET `/api/admin/media/:id` | `media:read` | — | `{ media: MediaDetail, publicUrl (absolue \| null), transforms (image : { policy, presets, formats, maxDimension } \| null), space, projectRole, scopes }` (corbeille comprise) · 404 |
+| GET `/api/admin/media/:id/transform` | `media:read` | `?preset=\|transform=&format=` | image (non enregistrée) + `X-Transform-Width\|Height\|Operation` · 400 `INVALID_TRANSFORM` (`param`) · 404 `PRESET_NOT_FOUND` · 409 `IN_TRASH` · 503 |
+| POST `/api/admin/media/:id/links` | `media:read` | `{ items: [{ preset? \| transform?, format }] (1–4), expiresIn? }` | `{ items: [{ url, query, expiresAt } \| { error: { code, param?, detail? } }] }` · 409 `IN_TRASH` |
 | PATCH `/api/admin/media/:id` | `media:write` | `{ title?, altText?, visibility?, folderId?, focalPoint? }` | `{ media }` · `focalPoint` modifié : version + 1, 409 `VERSION_CONFLICT` / `IN_TRASH`, 400 hors images |
 | PUT `/api/admin/media/:id/file` | `media:write` | multipart `file` | `{ media }` · 409 `VERSION_CONFLICT` · 415/422 |
 | DELETE `/api/admin/media/:id[?permanent=true]` | `media:delete` | — | 204 · 409 `NOT_IN_TRASH` |
@@ -1114,6 +1151,7 @@ Contrats de données :
 | AVIF effort 2 (C1) | mesuré (photo de 3000 px) : 0,5 s au lieu de 2,1 s (effort 4), fichier ~30 % plus lourd, toujours plus léger que WebP |
 | Préréglages modifiables (cache 7 j revalidé) ; politique par espace sur les seuls paramètres libres ; bibliothèque réglée par l'installation (`Setting`) (C2) | CD7, CD10, CD12 ; un préréglage se corrige sans changer d'URL ; jamais de site cassé par un changement de politique |
 | Point d'intérêt = nouvelle version ; liens signés décidés par une fonction pure (`signaturePlan`) ; jeton délégué jamais permanent ; lot à erreurs par lien (C3) | CD6, CD8 ; caches toujours cohérents ; un jeton de navigateur ne fabrique pas de lien durable ; une page de `srcset` en un appel même si un lien échoue |
+| Générateur : aperçu rendu à la volée par l'administration (sans politique ni quota) ; adresses par la même logique que l'API (C4) | CD11 ; aucun dérivé orphelin créé en tâtonnant ; une seule source de vérité pour les adresses et leur signature |
 | Reprise des anciens aperçus au démarrage (plugin), pas en migration (C1) | aucune migration en C1 ; l'identifiant dépend des dimensions (calcul applicatif, pas SQL) ; fichiers conservés |
 | Journal d'audit sans clés étrangères + écran ADMIN (`audit:read`) (B2) | les entrées survivent aux suppressions ; pas d'écran de journal par projet pour les propriétaires (piste) |
 | SVG exclu, originaux servis tels quels | SVG peut porter du script ; copie sans EXIF par les dérivés (`full`, C1) |
@@ -1157,6 +1195,8 @@ Contrats de données :
   supprimés) ; conservé au remplacement, copié à la duplication. Liens de l'API : transformation refusée en `PRESETS` ; signature
   permanente seulement pour une transformation d'un média public en `SIGNED` demandée par une clé secrète ou un jeton personnel ; lot
   ≤ 100 liens, une échéance.
+- Générateur (C4) : `media:read` dans l'espace ; aperçu jamais enregistré ni compté, hors politique ; adresses soumises à la politique
+  de l'espace (bibliothèque : réglage de l'installation) ; 4 liens au plus par appel ; rien dans la corbeille.
 - Actions sensibles (sudo) : clé secrète (création, rotation), jeton personnel (création), membres (ajout, rôle, retrait d'autrui) ;
   jamais pour une action qui retire des droits (révoquer, quitter).
 
@@ -1237,8 +1277,9 @@ Contrats de données :
   (`$api<TransformsState>(…)`). À refaire ailleurs si l'erreur réapparaît après une nouvelle route.
 - Scénarios de recadrage : vérifier un pixel **hors de la zone d'un recadrage centré** (bande rouge de 150 px sur 1200 : un recadrage
   carré centré commence à 200 px) ; une première version du script se trompait de zone.
-- Contrôle B4 « envois : 429 au-delà de 60 par minute » **sensible au temps** (le seau se remplit d'un jeton par seconde : 62
-  acceptés quand le serveur est chargé) : repasser `b4-api-test.mjs` seul avant de conclure à une régression.
+- Contrôle B4 « envois : 429 au-delà de 60 par minute » : le seau se remplit **d'un jeton par seconde pendant la boucle** (mesuré en C4 :
+  62 envois acceptés en 2,7 s, ~44 ms par envoi). La borne fixe (≤ 61) échouait sur un poste chargé ; le script calcule maintenant la
+  tolérance (60 + secondes écoulées).
 - Interface du point d'intérêt : un message affiché **au-dessus** des boutons déplaçait ceux-ci quand il disparaissait (clic suivant
   dans le vide) → messages d'état placés sous les boutons d'action.
 - **Scénarios rejoués à la suite** : `b3-api-test.mjs` déclenche volontairement le limiteur d'échecs d'authentification par IP → toutes
@@ -1311,10 +1352,14 @@ Contrats de données :
 - Tests d'API faits jusqu'ici avec des scripts Node temporaires (fetch + FormData + cookie), rejoués en dev **et** en prod ;
   S3 testé contre `s3rver` (faux S3 local, `pnpm dlx s3rver@3.7.1 --port 4568 --configure-bucket surge-media`).
 - Interface : navigateur intégré (pilotage par JS quand le panneau ne s'affiche pas), audits axe injectés depuis jsDelivr.
-- Automatisé dans le dépôt depuis B1 : tests unitaires Vitest des modules purs (176 tests depuis C3 : `tests/{permissions,signing,projects,credentials,api,openapi,delegated,processing,folders,transforms,image-transform}.test.ts` ;
+- Automatisé dans le dépôt depuis B1 : tests unitaires Vitest des modules purs (179 tests depuis C4 : `tests/{permissions,signing,projects,credentials,api,openapi,delegated,processing,folders,transforms,image-transform}.test.ts` ;
   `image-transform` exécute le vrai pipeline sharp). Le reste (API, interface, axe) reste manuel
   (piste : tests d'intégration API + Playwright + @axe-core/playwright).
 - Viewport du navigateur intégré : 1024 px (DPR 1,25) ; les mises en page à 5 colonnes doivent attendre `xl`.
+- C4 : `c4-test.mjs` (39 contrôles : options de la fiche, aperçu dans chaque format et par préréglage, non-agrandissement,
+  aucun `MediaVariant` créé, erreurs avec `param`, droits (EDITOR, non-membre, sans session), adresses dans les trois politiques et dans la
+  bibliothèque — réglage rétabli —, lien privé servi, erreurs par lien, corbeille) ; interface : `c3-ui-account.mjs` + `c3-ui-fixture.mjs` ;
+  C1 à C3 et B1 à B5 rejoués.
 - C3 : `c3-test.mjs` (81 contrôles : contrat `Media` public/privé, gabarit rempli, point d'intérêt — pixel d'une bande rouge pour le
   recadrage, 302 des anciennes URL, dérivés supprimés, arrondi, même point, null, validation, corbeille, duplication —, liens unitaires dans
   les trois politiques avec chaque identifiant, signature permanente et cache immuable, autre format avec la même signature, lot avec
@@ -1356,7 +1401,8 @@ et portées, projets et membres, duplication/déplacement, diffusion sans cookie
 (documentation interactive de l'API) ; **C1** (transformations à la demande : grammaire, forme canonique, opération effective, diffusion,
 garde-fous, signatures de transformation et permanentes) ; **C2** (politique des transformations, préréglages globaux et de projet,
 page « Réglages », onglet « Transformations », API v1 `presets`) ; **C3** (`urlTemplate`, `focalPoint` et nouvelle version, liens signés
-de transformation et de préréglage, lot `signed-urls`, OpenAPI, point d'intérêt dans la fiche média).
+de transformation et de préréglage, lot `signed-urls`, OpenAPI, point d'intérêt dans la fiche média) ; **C4** (générateur d'adresses :
+aperçu à la volée, adresses signées si nécessaire, extraits HTML). **Phase C terminée.**
 
 **Section vide** : aucune (la section « à venir » des jetons a été remplacée en B2).
 
@@ -1368,11 +1414,12 @@ de transformation et de préréglage, lot `signed-urls`, OpenAPI, point d'intér
 - **B3 (faite)** : voir § 9.12 et `setup.md` étape 7.
 - **B4 (faite)** : voir § 9.13 et `setup.md` étape 8.
 - **B5 (faite)** : voir § 9.14 et `setup.md` étape 9.
-- **Phase C (validée, en cours)** : `.claude/architecture-phase-c.md`. **C1 (faite)** : § 9.16 et `setup.md` étape 11. **C2 (faite)** :
-  § 9.17 et `setup.md` étape 12. **C3 (faite)** : § 9.18 et `setup.md` étape 13. **C4 (prochaine)** : générateur d'URL sur la fiche
-  média (préréglage ou paramètres, format, aperçu rendu à la volée par `GET /api/admin/media/:id/transform` — non conservé ni compté —,
-  URL à copier, extraits `srcset` / `<picture>`).
-- Puis `@surge-media/client` + composants (Vue d'abord) ; **Phase D** : vidéos et documents (gestionnaires, signatures, Range).
+- **Phase C (terminée)** : `.claude/architecture-phase-c.md`. C1 : § 9.16 et `setup.md` étape 11 ; C2 : § 9.17, étape 12 ; C3 : § 9.18,
+  étape 13 ; C4 : § 9.19, étape 14.
+- **Suite (à proposer et faire valider avant de commencer)** : `@surge-media/client` + composants (Vue d'abord) ; **Phase D** : vidéos et
+  documents (gestionnaires, signatures, Range).
+- Pistes C4 : zone de recadrage (`crop`) et densité dans le générateur (sélection à la souris + champs), aperçu dans le dialogue d'un
+  préréglage (avec un média de référence), `srcset` en largeurs (`w`) avec `sizes`, cache serveur des aperçus.
 - Pistes C3 : point d'intérêt proposé automatiquement (`attention`), journal des changements de point d'intérêt, signature locale par
   le SDK (clé dédiée par projet), `urlTemplate` signé pour un média public en politique `signed` (aujourd'hui : lien signé à la demande).
 - Pistes C2 : aperçu du rendu dans le dialogue d'un préréglage (avec C4), purge des dérivés d'un préréglage modifié ou supprimé,
