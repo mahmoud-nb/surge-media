@@ -13,6 +13,8 @@ export interface TransformSettings {
   maxVariants: number
   /** Nouvelles générations libres non signées par IP et par minute (0 = sans limite). */
   rateLimit: number
+  /** Durée de cache (secondes) des URL d'un préréglage global ou de projet (modifiable, donc pas `immutable`). */
+  presetMaxAge: number
 }
 
 let settings: TransformSettings | undefined
@@ -36,6 +38,7 @@ export function useTransformSettings(): TransformSettings {
       formats: formats.length > 0 ? [...new Set(formats)] : TRANSFORM_FORMATS,
       maxVariants: positiveInteger(config.maxVariants, 50),
       rateLimit: Number.isInteger(rateLimit) && rateLimit >= 0 ? rateLimit : 60,
+      presetMaxAge: positiveInteger(config.presetMaxAge, 604_800),
     }
   }
   return settings

@@ -112,6 +112,18 @@ function details(item: Item): string | null {
       return t(`audit.details.passwordLink.${data.purpose === 'RESET' ? 'reset' : 'invitation'}`)
     case 'user.sessions_revoked':
       return t('audit.details.sessions', { count: Number(data.count ?? 0) }, Number(data.count ?? 0))
+    case 'preset.created':
+    case 'preset.deleted':
+      return data.transformation ? t('audit.details.transformation', { value: text(data.transformation) }) : null
+    case 'preset.updated':
+      return t('audit.details.fields', { fields: Object.keys(change).map(field => t(`audit.fields.${field}`)).join(', ') })
+    case 'settings.updated':
+      return change.libraryPolicy
+        ? t('audit.details.libraryPolicy', {
+            from: t(`transforms.policy.options.${text(change.libraryPolicy.from)}.label`),
+            to: t(`transforms.policy.options.${text(change.libraryPolicy.to)}.label`),
+          })
+        : null
     default:
       return null
   }

@@ -28,6 +28,7 @@ const sections = computed(() => {
     { to: base, label: t('projects.nav.overview') },
     { to: `${base}/media`, label: t('projects.nav.media') },
     { to: `${base}/members`, label: t('projects.nav.members') },
+    { to: `${base}/transforms`, label: t('projects.nav.transforms') },
   ]
   if (props.scopes.includes('project:credentials')) {
     items.push(

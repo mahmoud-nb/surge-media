@@ -1,14 +1,25 @@
+import { freeTransformAllowed } from '#shared/utils/transforms'
+import type { Media } from '../../generated/prisma/client'
+import { createTokenBucketLimiter } from '../../lib/api/rate-limit'
 import { findDeliveryMedia } from '../../lib/media/cache'
-import { authorizeDelivery, cacheControl, contentDisposition, generationRateLimited, parseDeliveryPath } from '../../lib/media/delivery'
+import {
+  authorizeDelivery,
+  cacheControl,
+  contentDisposition,
+  generationRateLimited,
+  parseDeliveryPath,
+  transformGrant,
+  type DeliveryAccess,
+} from '../../lib/media/delivery'
 import { derivedSegment, type DeliveryTarget } from '../../lib/media/delivery-path'
 import { mediaError } from '../../lib/media/errors'
 import { BUSY_RETRY_AFTER } from '../../lib/media/processing'
 import { resolveRange } from '../../lib/media/range'
 import { useTransformSettings } from '../../lib/media/transform-settings'
 import { derivedPath, mediaPath } from '../../lib/media/urls'
-import { builtinPresetTransformation, resolveDeliverable, type DerivedRequest } from '../../lib/media/variants'
-import { createTokenBucketLimiter } from '../../lib/api/rate-limit'
+import { resolveDeliverable, type DerivedRequest } from '../../lib/media/variants'
 import { useMediaStorage } from '../../lib/storage'
+import { resolvePreset, spaceTransformPolicy } from '../../lib/transforms/service'
 
 /** Débit de nouvelles générations libres non signées, par IP (architecture phase C § 6). */
 const generations = createTokenBucketLimiter()
@@ -16,10 +27,12 @@ const generations = createTokenBucketLimiter()
 /**
  * GET|HEAD /m/<id>/v<version>/[<préréglage>|<paramètres>/]<nom> — diffusion d'un média.
  *
- * Original, préréglage (`preview`, `full`) ou transformation libre (`w_800,h_600,q_75`), format de
- * sortie donné par l'extension (phase C). Une transformation non canonique est redirigée (301) vers
- * sa forme canonique ; invalide → 400 INVALID_TRANSFORM. Dérivés générés une fois puis conservés ;
- * nouveaux dérivés libres soumis au quota par version et au débit par IP (429 TRANSFORM_QUOTA).
+ * Original, préréglage (intégré `preview`/`full`, du projet ou global) ou transformation libre
+ * (`w_800,h_600,q_75`), format de sortie donné par l'extension (phase C). Une transformation non
+ * canonique est redirigée (301) vers sa forme canonique ; invalide → 400 INVALID_TRANSFORM ;
+ * refusée par la politique de l'espace → 403 TRANSFORM_NOT_ALLOWED. Dérivés générés une fois puis
+ * conservés ; nouveaux dérivés libres soumis au quota par version et au débit par IP (429
+ * TRANSFORM_QUOTA). Préréglage global ou de projet : cache limité (modifiable), revalidé par l'ETag.
  *
  * Public : mis en cache sans limite (l'URL change à chaque remplacement). Privé : lien signé
  * (?exp=&kid=&sig=) ou identifiant d'API (`Authorization: Bearer`), jamais par cookie. Le chemin
@@ -69,7 +82,7 @@ export default defineEventHandler(async (event) => {
   }
 
   const access = await authorizeDelivery(event, media, target)
-  const request = derivedRequest(target, () => {
+  const { request, mutable } = await derivedRequest(media, target, access, () => {
     if (!generationRateLimited(access) || settings.rateLimit === 0) return
     const result = generations.take(`gen:${getRequestIP(event) ?? 'unknown'}`, settings.rateLimit)
     if (!result.allowed) {
@@ -91,7 +104,7 @@ export default defineEventHandler(async (event) => {
   setResponseHeaders(event, {
     'Content-Type': object.mimeType,
     'ETag': etag,
-    'Cache-Control': cacheControl(access),
+    'Cache-Control': cacheControl(access, mutable ? settings.presetMaxAge : undefined),
     'Accept-Ranges': 'bytes',
     'X-Content-Type-Options': 'nosniff',
     'Content-Security-Policy': 'default-src \'none\'; sandbox',
@@ -142,13 +155,35 @@ export default defineEventHandler(async (event) => {
   return sendStream(event, await storage.getStream(object.key))
 })
 
-/** Fichier demandé : l'original, un préréglage (404 s'il est inconnu) ou des paramètres libres. */
-function derivedRequest(target: DeliveryTarget, beforeGenerate: () => void): 'original' | DerivedRequest {
-  if (target.kind === 'original') return 'original'
-  if (target.kind === 'transform') return { transformation: target.transformation, format: target.format, free: true, beforeGenerate }
-  const transformation = builtinPresetTransformation(target.preset)
-  if (!transformation) throw createError({ statusCode: 404, statusMessage: 'Not Found' })
-  return { transformation, format: target.format, free: false }
+/**
+ * Fichier demandé : l'original, un préréglage de l'espace (intégré, du projet ou global ; 404 s'il
+ * est inconnu) ou des paramètres libres, soumis à la politique de l'espace (403
+ * TRANSFORM_NOT_ALLOWED). `mutable` : préréglage modifiable (cache limité, revalidé).
+ */
+async function derivedRequest(
+  media: Media,
+  target: DeliveryTarget,
+  access: DeliveryAccess,
+  beforeGenerate: () => void,
+): Promise<{ request: 'original' | DerivedRequest, mutable: boolean }> {
+  if (target.kind === 'original') return { request: 'original', mutable: false }
+
+  if (target.kind === 'transform') {
+    const policy = await spaceTransformPolicy(media.projectId)
+    if (!freeTransformAllowed(policy, transformGrant(access))) {
+      throw mediaError(403, 'TRANSFORM_NOT_ALLOWED', {
+        detail: policy === 'PRESETS'
+          ? 'This space only serves presets: use a preset name instead of parameters.'
+          : 'Free transformations in this space require a signed URL (or an API credential).',
+      })
+    }
+    return { request: { transformation: target.transformation, format: target.format, free: true, beforeGenerate }, mutable: false }
+  }
+
+  const preset = await resolvePreset(media.projectId, target.preset)
+  if (!preset) throw createError({ statusCode: 404, statusMessage: 'Not Found' })
+  if (!preset.transformation) throw mediaError(400, 'INVALID_TRANSFORM', { detail: preset.error })
+  return { request: { transformation: preset.transformation, format: target.format, free: false }, mutable: preset.level !== 'builtin' }
 }
 
 /** Nom de fichier de l'URL (encodé) → texte, pour Content-Disposition. */

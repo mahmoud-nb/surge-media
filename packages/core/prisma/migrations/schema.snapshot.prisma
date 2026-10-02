@@ -71,9 +71,7 @@ model Session {
   /// Dernière saisie du mot de passe (connexion ou confirmation) : actions sensibles (« mode sudo »)
   passwordVerifiedAt DateTime @default(now())
 
-  user          User          @relation(fields: [userId], references: [id], onDelete: Cascade)
-  /// Jetons de console de la documentation de l'API, supprimés avec la session
-  consoleTokens AccessToken[]
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId])
   @@index([expiresAt])
@@ -115,28 +113,66 @@ enum ProjectRole {
 
 /// Application cliente (et ses environnements) : ses médias, dossiers, membres, jetons et origines
 model Project {
-  id            String    @id @default(cuid())
-  name          String
+  id              String          @id @default(cuid())
+  name            String
   /// Identifiant lisible (minuscules, chiffres, tirets), unique dans l'installation
-  slug          String    @unique
-  description   String?
+  slug            String          @unique
+  description     String?
   /// Projet archivé : lecture seule, clés d'API refusées ; étape préalable à la suppression
-  archivedAt    DateTime?
+  archivedAt      DateTime?
   /// Liste publique : la clé publique peut lister et chercher les médias publics (sinon : lecture par identifiants)
-  publicListing Boolean   @default(false)
-  createdById   String?
-  createdAt     DateTime  @default(now())
-  updatedAt     DateTime  @updatedAt
+  publicListing   Boolean         @default(false)
+  /// Transformations libres de ses médias par URL (/m/…) : ouvertes, signées, ou préréglages seulement
+  transformPolicy TransformPolicy @default(OPEN)
+  createdById     String?
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
 
-  createdBy      User?                @relation("ProjectCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
-  members        ProjectMember[]
-  media          Media[]
-  folders        Folder[]
+  createdBy        User?                @relation("ProjectCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
+  members          ProjectMember[]
+  media            Media[]
+  folders          Folder[]
   /// Clés d'API du projet (publiques et secrètes)
-  accessTokens   AccessToken[]
+  accessTokens     AccessToken[]
   /// Jetons personnels limités à une sélection de projets qui inclut celui-ci
-  tokenGrants    AccessTokenProject[]
-  allowedOrigins AllowedOrigin[]
+  tokenGrants      AccessTokenProject[]
+  allowedOrigins   AllowedOrigin[]
+  /// Préréglages de transformation propres au projet
+  transformPresets TransformPreset[]
+}
+
+/// Politique des transformations libres (paramètres dans l'URL) d'un espace ; les préréglages sont
+/// toujours servis. La bibliothèque suit le réglage de l'installation (Setting « transforms.libraryPolicy »).
+enum TransformPolicy {
+  OPEN // paramètres libres acceptés, dans les bornes et quotas de l'installation
+  SIGNED // paramètres libres seulement avec une URL signée (ou un identifiant d'API)
+  PRESETS // préréglages seulement
+}
+
+/// Préréglage de transformation (/m/<id>/v<n>/<nom>/<fichier>.<format>) : global (projectId null) ou
+/// propre à un projet, qui peut masquer un global du même nom. Unicité des noms par niveau : application.
+model TransformPreset {
+  id             String   @id @default(cuid())
+  /// Projet du préréglage ; null = préréglage global (toute l'installation, bibliothèque comprise)
+  projectId      String?
+  /// ^[a-z][a-z0-9-]{0,31}$, hors noms réservés (shared/utils/transforms.ts)
+  name           String
+  /// Transformation canonique, sans format (ex. « w_800,h_450,q_70 »)
+  transformation String
+  description    String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  project Project? @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@index([projectId])
+}
+
+/// Réglage de l'installation (clé-valeur), ex. « transforms.libraryPolicy »
+model Setting {
+  key       String   @id
+  value     Json
+  updatedAt DateTime @updatedAt
 }
 
 /// Membre d'un projet (les ADMIN accèdent à tous les projets sans en être membres)
@@ -191,9 +227,6 @@ model AccessToken {
   /// Rotation : clé qui remplace celle-ci (l'ancienne reste valable jusqu'à expiresAt)
   replacedById   String?
   createdById    String?
-  /// Jeton de console (documentation de l'API) : jeton personnel lié à une session d'administration,
-  /// utilisable depuis la page de documentation et supprimé avec la session ; null sinon
-  sessionId      String?
   createdAt      DateTime  @default(now())
 
   project       Project?             @relation(fields: [projectId], references: [id], onDelete: Cascade)
@@ -201,7 +234,6 @@ model AccessToken {
   createdBy     User?                @relation("AccessTokenCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
   replacedBy    AccessToken?         @relation("AccessTokenRotation", fields: [replacedById], references: [id], onDelete: SetNull)
   replaces      AccessToken[]        @relation("AccessTokenRotation")
-  session       Session?             @relation(fields: [sessionId], references: [id], onDelete: Cascade)
   projects      AccessTokenProject[]
   /// Médias envoyés par l'API avec cet identifiant (ou un jeton délégué qu'il a émis)
   uploadedMedia Media[]              @relation("MediaUploadedByToken")
@@ -209,7 +241,6 @@ model AccessToken {
   @@index([projectId])
   @@index([userId])
   @@index([replacedById])
-  @@index([sessionId])
 }
 
 /// Sélection de projets d'un jeton personnel (quand il ne couvre pas « tous mes projets »)

@@ -29,10 +29,14 @@ export const AUDIT_ACTIONS = [
   'user.deleted',
   'user.password_link',
   'user.sessions_revoked',
+  'preset.created',
+  'preset.updated',
+  'preset.deleted',
+  'settings.updated',
 ] as const
 export type AuditAction = (typeof AUDIT_ACTIONS)[number]
 
-export const AUDIT_CATEGORIES = ['project', 'member', 'key', 'token', 'origin', 'media', 'user'] as const
+export const AUDIT_CATEGORIES = ['project', 'member', 'key', 'token', 'origin', 'media', 'user', 'preset', 'settings'] as const
 export type AuditCategory = (typeof AUDIT_CATEGORIES)[number]
 
 export function auditCategory(action: string): AuditCategory | null {

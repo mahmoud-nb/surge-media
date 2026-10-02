@@ -22,9 +22,10 @@ export const PERMISSIONS = [
   'projects:create', // créer des projets (le créateur en devient propriétaire)
   'projects:all', // accès à tous les projets comme propriétaire, sans en être membre
   'tokens:personal', // jetons d'accès personnels
-  'api:docs', // documentation interactive de l'API et jeton de console (requêtes de test)
+  'api:docs', // documentation interactive de l'API (requêtes de test avec une clé publique)
   'users:manage', // comptes et rôles de plateforme
   'audit:read', // journal d'audit de toute l'installation
+  'settings:manage', // réglages de l'installation : politique de la bibliothèque, préréglages globaux
 ] as const
 export type Permission = (typeof PERMISSIONS)[number]
 

@@ -15,6 +15,8 @@ import {
   apiMediaUpdateSchema,
   apiMediaUploadFieldsSchema,
   apiMeSchema,
+  apiPresetListSchema,
+  apiPresetSchema,
   apiOpenApiQuerySchema,
   apiProblemSchema,
   apiProjectListQuerySchema,
@@ -107,6 +109,7 @@ const TAGS = [
   texts({ 'name': 'projects', 'x-displayName': 'Projets', 'description': 'Projets accessibles à l\'identifiant.' }, { 'x-displayName': 'Projects', 'description': 'Projects the credential can access.' }),
   texts({ 'name': 'media', 'x-displayName': 'Médias', 'description': 'Liste, recherche, envoi, modification et diffusion des médias d\'un projet.' }, { 'x-displayName': 'Media', 'description': 'List, search, upload, update and deliver the media of a project.' }),
   texts({ 'name': 'folders', 'x-displayName': 'Dossiers', 'description': 'Arborescence des dossiers d\'un projet.' }, { 'x-displayName': 'Folders', 'description': 'Folder tree of a project.' }),
+  texts({ 'name': 'transformations', 'x-displayName': 'Transformations', 'description': 'Préréglages et politique des transformations d\'images par URL de diffusion.' }, { 'x-displayName': 'Transformations', 'description': 'Presets and policy of image transformations through delivery URLs.' }),
   texts({ 'name': 'delegated-tokens', 'x-displayName': 'Jetons délégués', 'description': 'Jetons de quelques minutes pour les composants dans le navigateur, émis par votre serveur.' }, { 'x-displayName': 'Delegated tokens', 'description': 'Short-lived tokens for in-browser components, issued by your server.' }),
   texts({ 'name': 'reference', 'x-displayName': 'Référence', 'description': 'Documents publics : catalogue des erreurs et cette spécification.' }, { 'x-displayName': 'Reference', 'description': 'Public documents: error catalog and this specification.' }),
 ]
@@ -246,6 +249,8 @@ function buildComponents() {
   registry.add(apiProjectSchema, { id: 'Project' })
   registry.add(apiProjectListSchema, { id: 'ProjectList' })
   registry.add(apiMeSchema, { id: 'Me' })
+  registry.add(apiPresetSchema, { id: 'Preset' })
+  registry.add(apiPresetListSchema, { id: 'PresetList' })
   registry.add(apiSignedUrlSchema, { id: 'SignedUrl' })
   registry.add(apiDelegatedTokenSchema, { id: 'DelegatedToken' })
   registry.add(delegatedTokenClaimsSchema, { id: 'DelegatedTokenClaims' })
@@ -304,6 +309,7 @@ function buildComponents() {
       MediaCopy: json('Media', t('Copie créée (en-tête `Location` si elle est dans un projet).', 'Copy created (`Location` header when it is in a project).'), { ...etag, Location: ref('headers', 'Location') }),
       FolderList: json('FolderList', t('Dossiers du projet.', 'Folders of the project.'), etag),
       Folder: json('Folder', t('Dossier.', 'Folder.')),
+      PresetList: json('PresetList', t('Préréglages utilisables dans le projet.', 'Presets usable in the project.'), etag),
       FolderCreated: json('Folder', t('Dossier créé.', 'Folder created.')),
       SignedUrl: json('SignedUrl', t('Lien signé.', 'Signed link.')),
       DelegatedToken: json('DelegatedToken', t('Jeton délégué (à ne pas mettre en cache).', 'Delegated token (do not cache).')),
