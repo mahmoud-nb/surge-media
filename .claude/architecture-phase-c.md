@@ -2,7 +2,28 @@
 
 > **Statut : VALIDÉE (2026-10-01) — toutes les décisions CD1 à CD12 acceptées par l'utilisateur.**
 > Avancement : **C1 faite** (`setup.md` étape 11, `.claude/project-context.md` § 9.16), **C2 faite** (étape 12,
-> § 9.17). Suite : C3.
+> § 9.17), **C3 faite** (étape 13, § 9.18). Suite : C4 (générateur d'URL).
+>
+> Écarts et précisions de C3 (API et point d'intérêt) :
+> - `signed-url` : cibles `file | preset | transform | derived` ; `preset` = tout préréglage de l'espace (404 `PRESET_NOT_FOUND`) ;
+>   `transform` canonisée par le serveur (ordre libre, `dpr` replié, vide → `full`) ; `format` (`webp` par défaut, formats activés) ;
+>   `derived` : l'URL renvoyée est celle du préréglage ou de la transformation demandés (aperçu par défaut). Corps strict ; combinaisons
+>   incohérentes (format avec l'original, `preset` et `transform` ensemble…) → 400.
+> - Signature délivrée (fonction pure `signaturePlan`) : média privé → à échéance ; public → aucune, sauf transformation libre en
+>   `signed` → **permanente** ; **jeton délégué : à échéance, jamais permanente** (« jamais de lien long ») ; `derived` d'un média public
+>   en `signed` → à échéance ; politique `presets` → 403 `TRANSFORM_NOT_ALLOWED` pour une transformation (l'URL ne serait jamais servie).
+> - Lot `signed-urls` : `{ items: [{ url, query, expiresAt } | { error: { code, detail? } }] }` (même forme que l'unitaire), une échéance
+>   pour tout le lot ; codes par lien : `INVALID_REQUEST`, `MEDIA_NOT_FOUND`, `PRESET_NOT_FOUND`, `INVALID_TRANSFORM`,
+>   `TRANSFORM_NOT_ALLOWED` ; une forme invalide fait échouer tout le lot (400, `errors[].path` = `items.N.champ`).
+> - `urlTemplate` : média privé → signature `derived` alignée sur `urlExpiresAt` ; public → sans signature (en `signed`, les paramètres
+>   libres passent par un lien signé).
+> - Point d'intérêt : 4 décimales ; même point → aucune nouvelle version ; images seulement (400) ; corbeille → 409 `IN_TRASH` ; conflit →
+>   409 `VERSION_CONFLICT` ; dérivés de l'ancienne version supprimés ; **conservé au remplacement du fichier** (comme le titre), **repris à la
+>   duplication** ; non journalisé (comme le remplacement).
+> - OpenAPI : la grammaire de `/m/` est une section « Transformations d'images » de la description générale (pas d'opération `/m/`) ;
+>   codes `INVALID_TRANSFORM`, `TRANSFORM_NOT_ALLOWED`, `PRESET_NOT_FOUND`, `TRANSFORM_QUOTA` au catalogue `API_ERRORS`.
+> - Interface : section « Point d'intérêt » de la fiche média (clic, curseurs, aperçus 1:1 et 16:9 calculés comme le serveur par
+>   `focalObjectPosition`, testée contre `planTransform`) ; boutons jamais désactivés (le focus resterait sur un bouton inactif).
 >
 > Écarts et précisions de C2 (politique et préréglages) :
 > - Définition d'un préréglage : ni zone `crop` (pixels propres à une image), ni transformation vide (utiliser `full`) ;

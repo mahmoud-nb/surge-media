@@ -1,0 +1,3 @@
+-- AlterTable
+ALTER TABLE "Media" ADD COLUMN     "focalX" DOUBLE PRECISION,
+ADD COLUMN     "focalY" DOUBLE PRECISION;

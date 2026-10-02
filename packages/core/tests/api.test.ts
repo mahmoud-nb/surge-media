@@ -14,6 +14,7 @@ import {
   apiMediaUpdateSchema,
   apiMediaUploadFieldsSchema,
   apiSignedUrlBodySchema,
+  apiSignedUrlsBodySchema,
 } from '../shared/schemas/api'
 import { API_ERRORS } from '../shared/utils/api'
 import { credentialScopes, MEDIA_SCOPES, spaceScopes, type Scope } from '../shared/utils/permissions'
@@ -172,7 +173,7 @@ describe('contrat Media v1', () => {
   const media = {
     id: 'cmmedia0001', projectId: 'p1', folderId: null, kind: 'IMAGE', visibility: 'PUBLIC', storageKey: 'originals/2026/09/x.jpg',
     version: 3, originalName: 'Affiche été.jpg', mimeType: 'image/jpeg', size: 1234, checksum: 'a'.repeat(64), width: 800, height: 600,
-    duration: null, title: 'Affiche été', altText: 'Plage', searchTitle: null, searchName: '', searchAlt: null, metadata: null,
+    duration: null, title: 'Affiche été', altText: 'Plage', searchTitle: null, searchName: '', searchAlt: null, metadata: null, focalX: null, focalY: null,
     uploadedById: null, duplicatedFromId: null, createdAt: new Date('2026-09-29T10:00:00Z'), updatedAt: new Date('2026-09-29T11:00:00Z'), deletedAt: null,
   } as const
 
@@ -187,9 +188,15 @@ describe('contrat Media v1', () => {
       extension: 'jpg',
       url: 'https://media.example.com/m/cmmedia0001/v3/affiche-ete.jpg',
       previewUrl: 'https://media.example.com/m/cmmedia0001/v3/preview/affiche-ete.webp',
+      urlTemplate: 'https://media.example.com/m/cmmedia0001/v3/{transform}/affiche-ete.{format}',
+      focalPoint: null,
       urlExpiresAt: null,
     })
     expect(JSON.stringify(result)).not.toContain('originals/')
+    expect(toApiMedia({ ...media, focalX: 0.25, focalY: 0.6 } as never, 'https://media.example.com', 0).focalPoint).toEqual({ x: 0.25, y: 0.6 })
+    // Hors images : ni aperçu ni gabarit.
+    const pdf = toApiMedia({ ...media, kind: 'DOCUMENT', mimeType: 'application/pdf' } as never, 'https://media.example.com', 0)
+    expect([pdf.previewUrl, pdf.urlTemplate]).toEqual([null, null])
   })
 
   it('média privé : URL signées vérifiables jusqu\'à l\'échéance', () => {
@@ -203,6 +210,13 @@ describe('contrat Media v1', () => {
     expect(checkSignature(['secret-de-test'], { mediaId: media.id, version: 3, variant: 'preview' }, preview, 1_900_000_000).status).toBe('valid')
     // La signature de l'aperçu n'ouvre pas l'original.
     expect(checkSignature(['secret-de-test'], { mediaId: media.id, version: 3, variant: 'original' }, preview, 1_900_000_000).status).toBe('invalid')
+    // Gabarit : droit « derived », valable pour toute transformation, jamais pour l'original.
+    const template = result.urlTemplate!
+    expect(template.startsWith('https://media.example.com/m/cmmedia0001/v3/{transform}/affiche-ete.{format}?')).toBe(true)
+    const derived = Object.fromEntries(new URLSearchParams(template.split('?')[1]))
+    expect(derived.scope).toBe('derived')
+    expect(checkSignature(['secret-de-test'], { mediaId: media.id, version: 3, variant: 't:w_800,h_450' }, derived, 1_900_000_000).status).toBe('valid')
+    expect(checkSignature(['secret-de-test'], { mediaId: media.id, version: 3, variant: 'original' }, derived, 1_900_000_000).status).toBe('invalid')
   })
 })
 
@@ -229,6 +243,14 @@ describe('paramètres de l\'API', () => {
     // Visibilité imposée par un jeton délégué : prioritaire sur le champ envoyé.
     expect(toMetadataInput({ visibility: 'public' }, { visibility: 'private' })).toEqual({ visibility: 'PRIVATE' })
     expect(toMetadataInput({})).toEqual({})
+    // Point d'intérêt : arrondi à 4 décimales, null efface ; bornes et champs stricts.
+    expect(apiMediaUpdateSchema.parse({ focalPoint: { x: 0.123456, y: 1 } })).toEqual({ focalPoint: { x: 0.1235, y: 1 } })
+    expect(apiMediaUpdateSchema.parse({ focalPoint: null })).toEqual({ focalPoint: null })
+    for (const focalPoint of [{ x: 1.2, y: 0 }, { x: -0.1, y: 0.5 }, { x: 0.5 }, { x: 0.5, y: 0.5, z: 0 }, [0.5, 0.5], '0.5,0.5']) {
+      expect(apiMediaUpdateSchema.safeParse({ focalPoint }).success, JSON.stringify(focalPoint)).toBe(false)
+    }
+    expect(toMetadataInput({ focalPoint: { x: 0.5, y: 0.25 } })).toEqual({ focalPoint: { x: 0.5, y: 0.25 } })
+    expect(toMetadataInput({ focalPoint: null })).toEqual({ focalPoint: null })
     // Dossier : null = hors dossier ; imposé par un jeton délégué.
     expect(toMetadataInput({ folderId: null })).toEqual({ folderId: null })
     expect(toMetadataInput({ folderId: 'cmfolder0001' }, { folderId: 'cmfolder0002' })).toEqual({ folderId: 'cmfolder0002' })
@@ -243,12 +265,40 @@ describe('paramètres de l\'API', () => {
     }
   })
 
-  it('lien signé : cible, préréglage exigé, durée bornée', () => {
+  it('lien signé : cible, préréglage ou transformation selon la cible, format, durée bornée', () => {
     expect(apiSignedUrlBodySchema.parse({})).toEqual({ target: 'file', expiresIn: 3600 })
     expect(apiSignedUrlBodySchema.safeParse({ target: 'preset' }).success).toBe(false)
-    expect(apiSignedUrlBodySchema.parse({ target: 'preset', preset: 'preview' }).preset).toBe('preview')
+    expect(apiSignedUrlBodySchema.parse({ target: 'preset', preset: 'carte-produit' }).preset).toBe('carte-produit')
     expect(apiSignedUrlBodySchema.safeParse({ expiresIn: 30 }).success).toBe(false)
     expect(apiSignedUrlBodySchema.safeParse({ target: 'transform' }).success).toBe(false)
+    expect(apiSignedUrlBodySchema.parse({ target: 'transform', transform: 'h_450,w_800', format: 'avif' }))
+      .toEqual({ target: 'transform', transform: 'h_450,w_800', format: 'avif', expiresIn: 3600 })
+    // Transformation vide admise (forme canonique : préréglage « full »).
+    expect(apiSignedUrlBodySchema.safeParse({ target: 'transform', transform: '' }).success).toBe(true)
+    expect(apiSignedUrlBodySchema.parse({ target: 'derived', transform: 'w_400' }).transform).toBe('w_400')
+    const invalid = [
+      { preset: 'preview' }, // préréglage avec l'original
+      { format: 'webp' },
+      { target: 'preset', preset: 'Preview' },
+      { target: 'preset', preset: 'preview', transform: 'w_10' },
+      { target: 'transform', transform: 'w_10', preset: 'preview' },
+      { target: 'derived', preset: 'preview', transform: 'w_10' },
+      { target: 'transform', transform: 'w_10', format: 'jpeg' },
+      { target: 'transform', transform: 'w_10', format: 'gif' },
+      { target: 'transform', transform: 'x'.repeat(201) },
+      { target: 'file', expiresIn: 3600, extra: true },
+    ]
+    for (const body of invalid) expect(apiSignedUrlBodySchema.safeParse(body).success, JSON.stringify(body)).toBe(false)
+  })
+
+  it('liens par lot : 1 à 100, chaque lien validé à sa place', () => {
+    expect(apiSignedUrlsBodySchema.parse({ items: [{ mediaId: 'cmmedia0001' }] })).toEqual({ items: [{ mediaId: 'cmmedia0001', target: 'file' }], expiresIn: 3600 })
+    expect(apiSignedUrlsBodySchema.safeParse({ items: [] }).success).toBe(false)
+    expect(apiSignedUrlsBodySchema.safeParse({ items: Array.from({ length: 101 }, () => ({ mediaId: 'cmmedia0001' })) }).success).toBe(false)
+    const result = apiSignedUrlsBodySchema.safeParse({ items: [{ mediaId: 'cmmedia0001' }, { mediaId: 'cmmedia0002', target: 'preset' }] })
+    expect(result.success).toBe(false)
+    expect(result.error?.issues.map(issue => issue.path.join('.'))).toEqual(['items.1.preset'])
+    expect(apiSignedUrlsBodySchema.safeParse({ items: [{ mediaId: '../x' }] }).success).toBe(false)
   })
 })
 
@@ -289,6 +339,10 @@ describe('problèmes RFC 9457', () => {
     const busy = toProblem({ statusCode: 503, data: { code: 'SERVER_BUSY', retryAfter: 5 } })
     expect([busy.status, busy.options.headers]).toEqual([503, { 'Retry-After': '5' }])
     expect(toProblem({ statusCode: 409, data: { code: 'VERSION_CONFLICT' } }).status).toBe(409)
+    // Détail porté par l'erreur métier (transformations).
+    const invalidTransform = toProblem({ statusCode: 400, data: { code: 'INVALID_TRANSFORM', detail: 'w expects an integer from 1 to 4096.' } })
+    expect([invalidTransform.code, invalidTransform.options.detail]).toEqual(['INVALID_TRANSFORM', 'w expects an integer from 1 to 4096.'])
+    expect(toProblem({ statusCode: 429, data: { code: 'TRANSFORM_QUOTA', retryAfter: 12 } }).options.headers).toEqual({ 'Retry-After': '12' })
     // Code métier inconnu du catalogue : repli sur le statut HTTP.
     expect(toProblem({ statusCode: 400, data: { code: 'SOMETHING_ELSE' } }).code).toBe('INVALID_REQUEST')
   })

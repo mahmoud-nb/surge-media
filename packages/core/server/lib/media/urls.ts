@@ -1,10 +1,10 @@
 import type { H3Event } from 'h3'
-import { extensionForMime, type MediaPreset } from '#shared/utils/media'
+import { extensionForMime } from '#shared/utils/media'
 import type { TransformFormat } from '#shared/utils/transforms'
 import { alignedExpiry, signMediaAccess } from './signing'
 
-/** Préréglages exposés aux applications (shared/utils/media.ts) ; `preview` est servi en WebP. */
-export type MediaVariantName = MediaPreset
+/** Dérivé désigné par son seul nom : l'aperçu (préréglage intégré), servi en WebP. */
+export type MediaVariantName = 'preview'
 
 /** Aperçus de l'administration : liens valables 1 h, échéance alignée sur le quart d'heure. */
 const ADMIN_LINK_TTL = 3600
@@ -48,6 +48,14 @@ export function mediaPath(media: UrlSource, variant?: MediaVariantName): string 
  */
 export function derivedPath(media: UrlSource, segment: string, format: TransformFormat): string {
   return `/m/${media.id}/v${media.version}/${segment}/${urlSlug(media.title || media.originalName)}.${format}`
+}
+
+/**
+ * Gabarit des chemins de dérivés (API, `urlTemplate`) : `{transform}` = préréglage ou paramètres,
+ * `{format}` = format de sortie, à remplacer par l'application.
+ */
+export function derivedPathTemplate(media: UrlSource): string {
+  return `/m/${media.id}/v${media.version}/{transform}/${urlSlug(media.title || media.originalName)}.{format}`
 }
 
 /** Lien de partage d'un fichier précis, valable exactement `ttlSeconds` secondes. */

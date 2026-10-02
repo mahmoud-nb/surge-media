@@ -78,7 +78,7 @@ surge-media/
       │  ├─ lib/access/    identifiants d'API : format (CRC), résolution, jetons délégués, identité de l'appelant
       │  ├─ lib/credentials/  clés de projet et jetons personnels (création, rotation, révocation)
       │  ├─ lib/audit/     lecture du journal d'audit
-      │  ├─ lib/api/       API v1 : contexte (Bearer, débit), erreurs RFC 9457, requêtes, écritures, contrats, OpenAPI
+      │  ├─ lib/api/       API v1 : contexte (Bearer, débit), erreurs RFC 9457, requêtes, écritures, contrats, liens signés, OpenAPI
       │  ├─ lib/cache/     cache mémoire (LRU) et compteurs de révision
       │  ├─ middleware/    api-v1.ts (CORS, identité, débit), csrf.ts
       │  ├─ plugins/       base, sessions, rappels d'amorçage, indexation de la recherche, purge des compteurs
@@ -266,8 +266,8 @@ Le fichier `packages/core/.env` est créé par `pnpm db:init` à partir de `.env
 | `TransformPreset` | préréglage de transformation : global (`projectId` vide) ou d'un projet ; nom unique par niveau (application), paramètres canoniques sans format (§ 8.2) |
 | `Setting` | réglage de l'installation (clé-valeur JSON), ex. `transforms.libraryPolicy` |
 | `Folder` | dossier d'un espace (projet, ou bibliothèque si `projectId` est vide) et son parent ; nom unique parmi les voisins (casse ignorée, contrôlé par l'application), 8 niveaux, 1 000 par espace (§ 9.11) |
-| `Media` | fichier original, dans **un seul espace** (`projectId` vide = bibliothèque) : genre, visibilité publique/privée, clé de stockage opaque, version (incrémentée à chaque remplacement), dimensions, empreinte, alt, corbeille, média d'origine s'il est une copie ; colonnes de recherche normalisées (`searchTitle`, `searchName`, `searchAlt`) ; provenance API (`uploadedByTokenId`, sujet final `uploadSubject`) |
-| `MediaVariant` | dérivé généré à la demande puis conservé (v1 : aperçu ; bientôt crop, resize, format, qualité) |
+| `Media` | fichier original, dans **un seul espace** (`projectId` vide = bibliothèque) : genre, visibilité publique/privée, clé de stockage opaque, version (incrémentée à chaque remplacement et changement de point d'intérêt), dimensions, empreinte, alt, point d'intérêt (`focalX`, `focalY`, § 8.3), corbeille, média d'origine s'il est une copie ; colonnes de recherche normalisées (`searchTitle`, `searchName`, `searchAlt`) ; provenance API (`uploadedByTokenId`, sujet final `uploadSubject`) |
+| `MediaVariant` | dérivé généré à la demande puis conservé : `v<n>/<opération effective>.<format>` (préréglage ou paramètres, § 8.1) |
 
 **Règles de portabilité** (le schéma doit fonctionner sur SQLite, PostgreSQL et MySQL) :
 pas d'attribut natif `@db.*`, pas de liste scalaire (`String[]`), chaînes limitées à 191 caractères
@@ -462,8 +462,8 @@ Codes d'erreur (`data.code`, `shared/utils/media.ts`) : `NO_FILE`, `MULTIPART_RE
   sous-dossiers »), grille, sélection pour ranger plusieurs médias, corbeille.
 - `/admin/media/:id` : fiche d'un média (aperçu, informations dont l'espace et la provenance — compte,
   identifiant d'API, utilisateur de l'application pour un envoi par jeton délégué —, titre, texte alternatif,
-  visibilité, adresse publique ou lien temporaire, remplacement, **dupliquer ou déplacer** vers un espace
-  et un dossier, corbeille).
+  visibilité, **point d'intérêt** d'une image (§ 8.3), adresse publique ou lien temporaire, remplacement,
+  **dupliquer ou déplacer** vers un espace et un dossier, corbeille).
 - `/admin/projects/:id/transforms` : onglet **Transformations** d'un projet (politique, préréglages,
   limites du serveur) ; `/admin/settings` : **Réglages** de l'installation (ADMIN : politique de la
   bibliothèque, préréglages globaux) — § 8.2.
@@ -506,7 +506,7 @@ Toute image se transforme par son URL de diffusion (architecture : `.claude/arch
 | `w`, `h` | 1 à 4096 (`NUXT_MEDIA_TRANSFORM_MAX_DIMENSION`) | — | dimensions cibles |
 | `dpr` | 1 à 3, pas de 0,5 | 1 | multiplie `w` et `h` (dans la borne), puis disparaît de l'URL |
 | `fit` | `cover`, `contain`, `fill`, `inside`, `outside` | `cover` | avec `w` **et** `h` seulement ; une seule dimension : réduction proportionnelle |
-| `g` | `center`, `north` … `northwest`, `attention`, `entropy`, `focal` | `focal` | ancrage de `fit_cover` ; `focal` = point d'intérêt du média (sous-étape C3), centre à défaut |
+| `g` | `center`, `north` … `northwest`, `attention`, `entropy`, `focal` | `focal` | ancrage de `fit_cover` ; `focal` = point d'intérêt du média (§ 8.3), centre à défaut |
 | `q` | 1 à 100 | JPEG 80, WebP 80, AVIF 50 | qualité ; PNG sans perte, sauf `q_` (palette) |
 | `bg` | `rrggbb` | transparent, blanc en JPEG | fond de `fit_contain` et de la transparence convertie en JPEG |
 
@@ -585,6 +585,72 @@ préréglages sont servis quelle que soit la politique.
 | `POST /api/admin/presets?project=` | idem | `{ name, transformation, description? }` → 201 · 400 `INVALID_TRANSFORM` (`data.param`) · 409 `PRESET_NAME_TAKEN` / `PRESET_LIMIT_REACHED` |
 | `PATCH` / `DELETE /api/admin/presets/:id` | idem, selon le niveau du préréglage | `{ name?, transformation?, description? }` · 204 · 404 `PRESET_NOT_FOUND` |
 
+### 8.3 Point d'intérêt et liens de l'API
+
+**Point d'intérêt** d'une image : le point qui doit rester dans le cadre quand une transformation recadre
+(`fit_cover` avec l'ancrage `focal`, celui par défaut). Le recadrage garde la plus grande zone au rapport
+demandé, **centrée sur le point** et bornée à l'image ; sans point, il est centré ; un ancrage explicite
+(`g_north`, `g_center`…) l'ignore.
+
+- Valeur : `{ x, y }`, fractions (0 à 1) de la largeur et de la hauteur de l'image orientée depuis le coin
+  haut gauche, arrondies à 4 décimales (`Media.focalX`, `focalY`) ; `null` = aucun.
+- Réglage : fiche du média (section **Point d'intérêt** : clic sur l'image ou deux curseurs au clavier, aperçu
+  des recadrages carré et 16:9), `PATCH /api/admin/media/:id` ou API v1 `PATCH …/media/:mediaId` avec
+  `{ "focalPoint": { "x": 0.3, "y": 0.4 } }` (ou `null`). Images seulement.
+- **Le changer crée une nouvelle version** du média, comme un remplacement : toutes ses URL changent (les
+  anciennes redirigent en 302, transformation comprise), les dérivés de l'ancienne version sont supprimés et
+  régénérés à la demande : aucun cache ne sert un recadrage périmé. Le même point (à 4 décimales près) ne
+  change rien. 409 `VERSION_CONFLICT` si le média a changé entre-temps, 409 `IN_TRASH` dans la corbeille.
+- Conservé au remplacement du fichier (comme le titre et le texte alternatif), repris par la duplication.
+
+**Contrat `Media` de l'API v1** : `focalPoint` et `urlTemplate`, gabarit des URL de dérivés à compléter par
+l'application :
+
+```text
+https://media.example.com/m/<id>/v3/{transform}/affiche-ete.{format}
+  {transform} : préréglage (preview, full, ceux du projet) ou paramètres (w_800,h_450)
+  {format}    : jpg, png, webp ou avif
+```
+
+Pour un média privé, le gabarit porte une signature `derived` (tout dérivé de la version) valable jusqu'à
+`urlExpiresAt` ; `null` hors images.
+
+**Liens à la demande** : `POST /api/v1/projects/:projectId/media/:mediaId/signed-url` (un lien) et
+`POST /api/v1/projects/:projectId/signed-urls` (lot de 100 liens au plus, par exemple tout un `srcset`).
+
+| Cible (`target`) | Champs | URL renvoyée |
+| --- | --- | --- |
+| `file` (défaut) | — | l'original |
+| `preset` | `preset` (intégré, du projet ou global), `format` (`webp` par défaut) | `…/<préréglage>/<nom>.<format>` |
+| `transform` | `transform` (paramètres dans n'importe quel ordre), `format` | forme canonique (`h_450,w_800` → `w_800,h_450`, `dpr` replié ; vide → `full`) |
+| `derived` | `preset` ou `transform` facultatif (aperçu par défaut) | ce dérivé ; la signature (`query`) vaut pour **tout** dérivé de la version |
+
+Signature délivrée selon le média et la politique du projet (§ 8.2) :
+
+| | Média privé | Média public |
+| --- | --- | --- |
+| `file`, `preset` | à échéance (`expiresIn`, 60 s à 7 jours) | aucune (URL permanente) |
+| `transform` | à échéance ; refusée en `PRESETS` | `OPEN` : aucune ; `SIGNED` : **permanente** (sans `exp`, cache immuable), à échéance pour un jeton délégué ; `PRESETS` : 403 `TRANSFORM_NOT_ALLOWED` |
+| `derived` | à échéance | `SIGNED` : à échéance ; sinon aucune |
+
+- La signature d'une transformation couvre tous les formats : la même `query` sert aux sources AVIF, WebP et
+  JPEG d'un `<picture>`.
+- Erreurs : 400 `INVALID_TRANSFORM` (paramètre fautif dans `detail`, format non activé), 404
+  `PRESET_NOT_FOUND`, 403 `TRANSFORM_NOT_ALLOWED`, 400 `INVALID_REQUEST` (combinaison incohérente : format avec
+  l'original, `preset` et `transform` ensemble, champ inconnu). Dans un lot, un lien impossible reçoit
+  `{ "error": { "code", "detail" } }` à sa place, les autres sont délivrés ; une seule échéance pour le lot.
+- Clé publique : 403 `CREDENTIAL_NOT_ALLOWED` ; jeton délégué : 1 h au plus, jamais de lien permanent.
+- La spécification OpenAPI décrit ces routes et, dans sa description générale, la grammaire de `/m/`
+  (paramètres, cache, politique, erreurs) ; le catalogue `GET /api/v1/errors` contient les codes
+  `INVALID_TRANSFORM`, `TRANSFORM_NOT_ALLOWED`, `PRESET_NOT_FOUND` et `TRANSFORM_QUOTA`.
+
+Exemple (serveur du client, une page entière) :
+
+```bash
+curl -X POST -H "Authorization: Bearer $SURGE_MEDIA_SECRET_KEY" -H "Content-Type: application/json" \
+  -d '{"items":[{"mediaId":"<id>","target":"transform","transform":"w_400","format":"avif"},{"mediaId":"<id>","target":"transform","transform":"w_800","format":"avif"}],"expiresIn":3600}' \
+  "https://media.example.com/api/v1/projects/<projectId>/signed-urls"
+```
 
 
 ## 9. Authentification et rôles
@@ -870,7 +936,7 @@ L'onglet « Clés d'API » d'un projet affiche son adresse et le lien vers la sp
   `RateLimit` (brouillon IETF) et `Retry-After`.
 - **Représentations** : valeurs en minuscules, dates ISO, URL **absolues** ; un média privé reçoit
   des URL signées (~1 h, échéance alignée sur le quart d'heure, `urlExpiresAt`) ; ni e-mail, ni clé
-  de stockage, ni empreinte.
+  de stockage, ni empreinte. Une image a aussi `urlTemplate` (gabarit des dérivés) et `focalPoint` (§ 8.3).
 - **Cache HTTP** : `Cache-Control: private, no-cache` + `ETag` faible → `If-None-Match` → 304. L'ETag
   d'une liste combine la **révision de l'espace** (table `CacheRevision`, incrémentée par toute
   écriture de médias), la requête, l'audience (clé publique ou non) et la tranche des URL signées :
@@ -884,7 +950,8 @@ L'onglet « Clés d'API » d'un projet affiche son adresse et le lien vers la sp
 | `GET /api/v1/projects/:projectId/presets` | `media:read` (toute clé, y compris publique) | préréglages utilisables : intégrés, du projet, globaux non masqués (`{ items: [{ name, transformation, description, level }] }`), ETag → 304 |
 | `GET /api/v1/projects/:projectId/media` | `media:read` | `?q&kind&visibility&ids&sort&limit&cursor&withTotal` → `{ items, nextCursor, total? }` |
 | `GET /api/v1/projects/:projectId/media/:mediaId` | `media:read` | un média actif (clé publique : public seulement) |
-| `POST /api/v1/projects/:projectId/media/:mediaId/signed-url` | `media:read` (clé secrète, jeton personnel ; jeton délégué : 1 h au plus) | `{ target: 'file' \| 'preset' \| 'derived', preset?, expiresIn? }` → `{ url, query, expiresAt }` |
+| `POST /api/v1/projects/:projectId/media/:mediaId/signed-url` | `media:read` (clé secrète, jeton personnel ; jeton délégué : 1 h au plus) | `{ target: 'file' \| 'preset' \| 'transform' \| 'derived', preset?, transform?, format?, expiresIn? }` → `{ url, query, expiresAt }` (§ 8.3) |
+| `POST /api/v1/projects/:projectId/signed-urls` | idem | lot : `{ items: [{ mediaId, target?, preset?, transform?, format? }] (100 au plus), expiresIn? }` → `{ items: [{ url, query, expiresAt } \| { error }] }` (§ 8.3) |
 | Écritures et jetons délégués | — | § 9.10 |
 | Dossiers | — | § 9.11 |
 
@@ -918,7 +985,7 @@ caches invalidés, aperçu pré-généré). Toutes exigent la portée indiquée 
 | Endpoint | Portée | Identifiants | Rôle |
 | --- | --- | --- | --- |
 | `POST /api/v1/projects/:projectId/media` | `media:upload` | clé secrète, jeton personnel, jeton délégué | multipart : `file` + `title?`, `altText?`, `visibility?` (`public` par défaut), `folderId?` → 201 `Media` + `Location` |
-| `PATCH /api/v1/projects/:projectId/media/:mediaId` | `media:write` | idem | `{ title?, altText?, visibility?, folderId? }` (`null` ou texte vide efface) → `Media` |
+| `PATCH /api/v1/projects/:projectId/media/:mediaId` | `media:write` | idem | `{ title?, altText?, visibility?, folderId?, focalPoint? }` (`null` ou texte vide efface ; `focalPoint` : nouvelle version, § 8.3) → `Media` |
 | `PUT /api/v1/projects/:projectId/media/:mediaId/file` | `media:write` | idem | multipart `file` : nouveau fichier, version + 1 (nouvelles URL) → `Media` |
 | `DELETE /api/v1/projects/:projectId/media/:mediaId` | `media:delete` | idem | corbeille → 204 (restauration et suppression définitive : administration) |
 | `POST /api/v1/projects/:projectId/media/:mediaId/duplicate` | `media:read` ici + `media:upload` dans la cible | clé secrète (son projet), jeton personnel | `{ target?: { projectId } \| { library: true }, folderId? }` (défaut : le projet du média, hors dossier) → 201 `Media` (`projectId` null = bibliothèque) |
@@ -1941,4 +2008,49 @@ délégué** de quelques minutes émis par l'administration (compatible avec `SE
 **Après `git pull`**
 ```bash
 pnpm db:migrate       # migration drop_api_console
+```
+
+### Étape 13 — 2026-10-02 — Phase C3 : API des transformations et point d'intérêt
+
+**Cadre** : troisième sous-étape de la phase C (architecture validée, `.claude/architecture-phase-c.md`) :
+les applications reçoivent de quoi construire leurs URL de dérivés (gabarit, liens signés unitaires et par
+lot) et chaque image peut avoir un point d'intérêt.
+
+**Ajouté**
+- Migration `c3_focal_point` (3 fournisseurs) : `Media.focalX`, `Media.focalY`.
+- Point d'intérêt : utilisé par le recadrage `focal` ; le changer crée une nouvelle version (URL nouvelles,
+  anciennes redirigées, dérivés de l'ancienne version supprimés) ; conservé au remplacement, repris à la
+  duplication ; `PATCH` de l'administration et de l'API v1.
+- API v1 : `urlTemplate` et `focalPoint` dans le contrat `Media` ; `signed-url` étendu (cibles `preset` pour
+  tout préréglage, `transform` canonisée, `format`, signatures permanentes en politique `signed`) ; nouvelle
+  route `POST /projects/:projectId/signed-urls` (lot de 100, erreurs par lien) ; codes `INVALID_TRANSFORM`,
+  `TRANSFORM_NOT_ALLOWED`, `PRESET_NOT_FOUND`, `TRANSFORM_QUOTA` au catalogue ; OpenAPI : opération du lot et
+  section « Transformations d'images » (grammaire de `/m/`).
+- `server/lib/api/signature-plan.ts` (décision de signature, pure et testée) et `signed-urls.ts`.
+- Fiche média : section **Point d'intérêt** (`AdminFocalPointEditor` : clic sur l'image, curseurs au clavier,
+  aperçus 1:1 et 16:9 calculés comme le serveur).
+- Tests : point d'intérêt (arrondi, aperçu de l'interface comparé au recadrage du serveur), décisions de
+  signature, schémas des liens unitaires et par lot, contrat `Media` (176 tests Vitest au total).
+
+**Vérifié** : typecheck, 176 tests Vitest, i18n (978 clés), contrastes, migrations (`--check`), build de production ;
+**81 scénarios HTTP** sur la build (gabarit public et privé rempli, recadrage vérifié au pixel avant et après
+le point, redirections et suppression des anciens dérivés, arrondi, même point, effacement, validation,
+corbeille, duplication, liens dans les trois politiques avec chaque identifiant, signature permanente et cache
+immuable, même signature pour un autre format, lot avec erreurs par lien et 100 liens, OpenAPI et catalogue) ;
+C1 (66), C2 (58) et B1 à B5 rejoués sans régression (le contrôle du débit des envois de B4,
+sensible au temps, est repassé seul) ; interface avec de vrais clics et au clavier (clic sur
+l'image, curseurs, effacer, enregistrer : nouvelle version) ; axe-core : 0 violation en fr/en × clair/sombre ;
+largeur de téléphone sans défilement horizontal.
+
+**Limites connues**
+- Changer le point d'intérêt jette tous les dérivés de la version, même ceux qu'il n'affecte pas (régénérés à
+  la demande).
+- Pas de journal des changements de point d'intérêt (comme les remplacements de fichier).
+- En politique `signed`, `urlTemplate` d'un média public n'est pas signé : les paramètres libres passent par
+  `signed-url` / `signed-urls`.
+
+**Après `git pull`**
+```bash
+pnpm install          # aucune nouvelle dépendance
+pnpm db:migrate       # migration c3_focal_point
 ```

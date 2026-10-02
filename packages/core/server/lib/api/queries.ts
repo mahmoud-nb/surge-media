@@ -117,6 +117,13 @@ export async function findApiMedia(projectId: string, id: string, publicOnly: bo
   return media
 }
 
+/** Médias actifs d'un projet parmi `ids` (lot de liens signés), par identifiant ; les autres sont absents. */
+export async function findApiMediaByIds(projectId: string, ids: readonly string[]): Promise<Map<string, Media>> {
+  const prisma = await usePrisma()
+  const items = await prisma.media.findMany({ where: { id: { in: [...new Set(ids)] }, projectId, deletedAt: null } })
+  return new Map(items.map(media => [media.id, media]))
+}
+
 // ─── Projets ─────────────────────────────────────────────────────────────────
 
 export interface ProjectPage {

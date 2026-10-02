@@ -127,6 +127,12 @@ async function generateLink() {
   }
 }
 
+/** Nouveau point d'intérêt = nouvelle version : adresses rechargées, lien temporaire périmé. */
+async function onFocalSaved() {
+  await refresh()
+  link.value = null
+}
+
 // ─── Remplacement, corbeille ─────────────────────────────────────────────────
 
 const replaceStatus = ref<StatusMessage | null>(null)
@@ -513,6 +519,18 @@ const pageFlash = flash.consume()
               </div>
             </form>
           </section>
+
+          <!-- Point d'intérêt (images) : sa modification crée une nouvelle version. -->
+          <AdminFocalPointEditor
+            v-if="!inTrash && media.previewUrl && media.width && media.height"
+            :media-id="media.id"
+            :src="media.previewUrl"
+            :width="media.width"
+            :height="media.height"
+            :focal-point="media.focalPoint"
+            :can-edit="canWrite"
+            @saved="onFocalSaved"
+          />
 
           <!-- Liens -->
           <section v-if="!inTrash" aria-labelledby="links-title" class="rounded-xl border border-border bg-surface p-6 shadow-xs">

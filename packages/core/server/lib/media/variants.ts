@@ -2,6 +2,7 @@ import { createHash } from 'node:crypto'
 import { Readable } from 'node:stream'
 import {
   BUILTIN_PRESETS,
+  type FocalPoint,
   parseTransformation,
   TRANSFORM_MIME_TYPES,
   type TransformFormat,
@@ -67,11 +68,16 @@ export function hasDerivedFiles(media: Pick<Media, 'kind'>): boolean {
   return Boolean(handlerFor(media.kind)?.transform)
 }
 
-/** Source d'une transformation : dimensions orientées, transparence (point d'intérêt : phase C3). */
+/** Point d'intérêt enregistré (fractions 0 à 1 de l'image orientée), ou null. */
+export function mediaFocalPoint(media: Pick<Media, 'focalX' | 'focalY'>): FocalPoint | null {
+  return media.focalX === null || media.focalY === null ? null : { x: media.focalX, y: media.focalY }
+}
+
+/** Source d'une transformation : dimensions orientées, transparence, point d'intérêt. */
 export function transformSource(media: Media): TransformSource | null {
   if (!media.width || !media.height) return null
   const metadata = media.metadata as { hasAlpha?: unknown } | null
-  return { width: media.width, height: media.height, hasAlpha: metadata?.hasAlpha === true, focal: null }
+  return { width: media.width, height: media.height, hasAlpha: metadata?.hasAlpha === true, focal: mediaFocalPoint(media) }
 }
 
 /** Fichier à servir : l'original, ou un dérivé généré à la première demande puis conservé. */

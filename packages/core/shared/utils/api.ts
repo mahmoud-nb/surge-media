@@ -9,6 +9,7 @@
 export const API_ERRORS = {
   INVALID_REQUEST: { status: 400, title: 'Invalid request' },
   INVALID_CURSOR: { status: 400, title: 'Invalid cursor' },
+  INVALID_TRANSFORM: { status: 400, title: 'Invalid transformation' },
   MULTIPART_REQUIRED: { status: 400, title: 'Multipart body required' },
   NO_FILE: { status: 400, title: 'No file' },
   TOKEN_MISSING: { status: 401, title: 'Missing credential' },
@@ -22,10 +23,12 @@ export const API_ERRORS = {
   PROJECT_ARCHIVED: { status: 403, title: 'Project archived' },
   LISTING_DISABLED: { status: 403, title: 'Public listing disabled' },
   UPLOAD_LIMIT_REACHED: { status: 403, title: 'Upload limit reached' },
+  TRANSFORM_NOT_ALLOWED: { status: 403, title: 'Transformation not allowed' },
   NOT_FOUND: { status: 404, title: 'Not found' },
   PROJECT_NOT_FOUND: { status: 404, title: 'Project not found' },
   MEDIA_NOT_FOUND: { status: 404, title: 'Media not found' },
   FOLDER_NOT_FOUND: { status: 404, title: 'Folder not found' },
+  PRESET_NOT_FOUND: { status: 404, title: 'Preset not found' },
   METHOD_NOT_ALLOWED: { status: 405, title: 'Method not allowed' },
   VERSION_CONFLICT: { status: 409, title: 'Version conflict' },
   FOLDER_NAME_TAKEN: { status: 409, title: 'Folder name already used' },
@@ -39,6 +42,7 @@ export const API_ERRORS = {
   FOLDER_DEPTH_EXCEEDED: { status: 422, title: 'Folder depth exceeded' },
   FOLDER_CYCLE: { status: 422, title: 'Folder cycle' },
   RATE_LIMITED: { status: 429, title: 'Too many requests' },
+  TRANSFORM_QUOTA: { status: 429, title: 'Transformation quota reached' },
   INTERNAL_ERROR: { status: 500, title: 'Internal server error' },
   SERVER_BUSY: { status: 503, title: 'Server busy' },
 } as const satisfies Record<string, { status: number, title: string }>
@@ -64,8 +68,18 @@ export const API_MAX_IDS = 100
 export const API_LINK_TTL = 3600
 export const API_LINK_BUCKET = 900
 
-/** Cibles d'un lien signé demandé à l'API (phase C : `transform`). */
-export const API_SIGNED_URL_TARGETS = ['file', 'preset', 'derived'] as const
+/**
+ * Cibles d'un lien signé demandé à l'API : l'original (`file`), un préréglage, une transformation
+ * libre, ou tout dérivé de la version (`derived`, une signature pour tout un srcset).
+ */
+export const API_SIGNED_URL_TARGETS = ['file', 'preset', 'transform', 'derived'] as const
+export type ApiSignedUrlTarget = (typeof API_SIGNED_URL_TARGETS)[number]
+
+/** Liens signés demandés en un appel (`POST /projects/{projectId}/signed-urls`) : une page entière de srcset. */
+export const API_SIGNED_URLS_MAX = 100
+
+/** Format de sortie par défaut d'un dérivé demandé à l'API (comme l'aperçu). */
+export const API_DEFAULT_TRANSFORM_FORMAT = 'webp'
 
 /**
  * Jetons délégués (`sm_dt_<charge>.<signature>`) : émis par une clé secrète ou un jeton personnel

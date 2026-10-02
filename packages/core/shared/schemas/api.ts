@@ -4,8 +4,10 @@ import {
   API_ERRORS,
   API_MAX_IDS,
   API_MAX_LIMIT,
+  API_DEFAULT_TRANSFORM_FORMAT,
   API_MEDIA_SORTS,
   API_SIGNED_URL_TARGETS,
+  API_SIGNED_URLS_MAX,
   DELEGATED_MAX_FILES,
   DELEGATED_MAX_TYPES,
   DELEGATED_SUBJECT_MAX_LENGTH,
@@ -15,10 +17,12 @@ import {
 } from '../utils/api'
 import { ORIGIN_MAX_LENGTH } from '../utils/credentials'
 import { FOLDER_NAME_MAX_LENGTH } from '../utils/folders'
-import { ACCEPTED_MEDIA_TYPES, ENABLED_MEDIA_KINDS, MEDIA_PRESETS, MEDIA_VISIBILITIES, SIGNED_URL_MAX_TTL } from '../utils/media'
+import { ACCEPTED_MEDIA_TYPES, ENABLED_MEDIA_KINDS, MEDIA_VISIBILITIES, SIGNED_URL_MAX_TTL } from '../utils/media'
 import { isWildcardOrigin, normalizeOrigin } from '../utils/origins'
 import { TOKEN_SCOPES } from '../utils/permissions'
+import { PRESET_NAME_PATTERN, TRANSFORM_FORMATS, TRANSFORM_SEGMENT_MAX_LENGTH } from '../utils/transforms'
 import { isValidFolderName } from './folders'
+import { focalPointSchema } from './media'
 
 /**
  * Contrat de l'API publique v1 : paramètres acceptés (validation stricte, erreurs 400
@@ -78,14 +82,62 @@ export const apiOpenApiQuerySchema = z.object({
     .meta(doc('Langue des textes de la spécification (français par défaut).', 'Language of the specification texts (French by default).')),
 })
 
-export const apiSignedUrlBodySchema = z.object({
-  target: z.enum(API_SIGNED_URL_TARGETS).default('file')
-    .meta(doc('`file` : l\'original ; `preset` : un dérivé nommé (`preset`) ; `derived` : tout dérivé de la version (une signature pour tout un srcset).', '`file`: the original; `preset`: a named derivative (`preset`); `derived`: any derivative of the version (one signature for a whole srcset).')),
-  preset: z.enum(MEDIA_PRESETS).optional(),
-  expiresIn: z.number().int().min(60).max(SIGNED_URL_MAX_TTL).default(3600).meta(doc('Durée de validité en secondes (60 s à 7 jours).', 'Validity in seconds (60 s to 7 days).')),
-}).superRefine((body, ctx) => {
-  if (body.target === 'preset' && !body.preset) ctx.addIssue({ code: 'custom', path: ['preset'], message: 'Required when target is "preset".' })
+/** Fichier visé par un lien signé (unitaire ou par lot). */
+const signedUrlTargetShape = {
+  target: z.enum(API_SIGNED_URL_TARGETS).default('file').meta(doc(
+    '`file` : l\'original ; `preset` : un préréglage utilisable dans le projet ; `transform` : une transformation libre ; `derived` : signature valable pour tout dérivé de la version (une pour tout un srcset), l\'URL renvoyée étant celle de `preset` ou `transform` (l\'aperçu par défaut).',
+    '`file`: the original; `preset`: a preset usable in the project; `transform`: a free transformation; `derived`: a signature valid for any derivative of the version (one for a whole srcset), the returned URL being that of `preset` or `transform` (the preview by default).',
+  )),
+  preset: z.string().regex(PRESET_NAME_PATTERN).optional()
+    .meta(doc('Nom du préréglage (`GET …/presets`), avec la cible `preset` ou `derived`.', 'Preset name (`GET …/presets`), with target `preset` or `derived`.')),
+  transform: z.string().max(TRANSFORM_SEGMENT_MAX_LENGTH).optional().meta(doc(
+    'Paramètres `clé_valeur` séparés par des virgules (`w_800,h_450,q_75`), dans n\'importe quel ordre, avec la cible `transform` ou `derived` : l\'URL renvoyée porte leur forme canonique. Transformation invalide : `INVALID_TRANSFORM`.',
+    'Comma-separated `key_value` parameters (`w_800,h_450,q_75`), in any order, with target `transform` or `derived`: the returned URL carries their canonical form. Invalid transformation: `INVALID_TRANSFORM`.',
+  )),
+  format: z.enum(TRANSFORM_FORMATS).optional().meta(doc(
+    `Format de sortie d'un dérivé (\`${API_DEFAULT_TRANSFORM_FORMAT}\` par défaut), parmi ceux activés sur le serveur.`,
+    `Output format of a derivative (\`${API_DEFAULT_TRANSFORM_FORMAT}\` by default), among those enabled on the server.`,
+  )),
+}
+
+/** Combinaisons cohérentes : `preset` et `transform` selon la cible, jamais ensemble ; rien de plus pour l'original. */
+function refineSignedUrlTarget(body: { target: string, preset?: string, transform?: string, format?: string }, ctx: z.RefinementCtx) {
+  const issue = (path: string, message: string) => ctx.addIssue({ code: 'custom', path: [path], message })
+  if (body.target === 'file') {
+    for (const key of ['preset', 'transform', 'format'] as const) {
+      if (body[key] !== undefined) issue(key, 'Only for derivatives: not allowed when target is "file".')
+    }
+    return
+  }
+  if (body.target === 'preset' && body.preset === undefined) issue('preset', 'Required when target is "preset".')
+  if (body.target === 'transform' && body.transform === undefined) issue('transform', 'Required when target is "transform".')
+  if (body.preset !== undefined && body.transform !== undefined) issue('transform', 'Give either preset or transform, not both.')
+  else if (body.target === 'preset' && body.transform !== undefined) issue('transform', 'Not allowed when target is "preset".')
+  else if (body.target === 'transform' && body.preset !== undefined) issue('preset', 'Not allowed when target is "transform".')
+}
+
+const signedUrlExpiresIn = z.number().int().min(60).max(SIGNED_URL_MAX_TTL).default(3600).meta(doc(
+  'Durée de validité en secondes (60 s à 7 jours ; 1 h au plus avec un jeton délégué). Sans effet sur une URL permanente.',
+  'Validity in seconds (60 s to 7 days; 1 h at most with a delegated token). No effect on a permanent URL.',
+))
+
+export const apiSignedUrlBodySchema = z
+  .strictObject({ ...signedUrlTargetShape, expiresIn: signedUrlExpiresIn })
+  .superRefine(refineSignedUrlTarget)
+export type ApiSignedUrlBody = z.output<typeof apiSignedUrlBodySchema>
+
+export const apiSignedUrlsBodySchema = z.strictObject({
+  items: z
+    .array(z.strictObject({ mediaId: z.string().regex(ID_PATTERN), ...signedUrlTargetShape }).superRefine(refineSignedUrlTarget))
+    .min(1)
+    .max(API_SIGNED_URLS_MAX)
+    .meta(doc(
+      `Liens demandés (${API_SIGNED_URLS_MAX} au plus) ; un même média peut figurer plusieurs fois.`,
+      `Requested links (${API_SIGNED_URLS_MAX} at most); the same media item may appear several times.`,
+    )),
+  expiresIn: signedUrlExpiresIn,
 })
+export type ApiSignedUrlsBody = z.output<typeof apiSignedUrlsBodySchema>
 
 // ─── Écritures ───────────────────────────────────────────────────────────────
 
@@ -106,8 +158,17 @@ const writableFields = {
  */
 export const apiMediaUploadFieldsSchema = z.strictObject(writableFields)
 
-/** PATCH d'un média : champs absents inchangés, `null` ou texte vide efface le titre / le texte alternatif. */
-export const apiMediaUpdateSchema = z.strictObject(writableFields)
+/**
+ * PATCH d'un média : champs absents inchangés, `null` ou texte vide efface le titre / le texte
+ * alternatif ; `focalPoint` (images) crée une nouvelle version.
+ */
+export const apiMediaUpdateSchema = z.strictObject({
+  ...writableFields,
+  focalPoint: focalPointSchema.nullable().optional().meta(doc(
+    'Point d\'intérêt d\'une image : `{ x, y }`, fractions (0 à 1) de la largeur et de la hauteur depuis le coin haut gauche, arrondies à 4 décimales ; `null` l\'efface (centre). Le modifier **incrémente la version** : toutes les URL du média changent (les anciennes redirigent vers les nouvelles) et les dérivés sont régénérés à la demande.',
+    'Focal point of an image: `{ x, y }`, fractions (0 to 1) of the width and height from the top left corner, rounded to 4 decimals; `null` clears it (center). Changing it **increments the version**: every URL of the media item changes (old ones redirect to the new ones) and derivatives are generated again on demand.',
+  )),
+})
 export type ApiMediaUpdate = z.output<typeof apiMediaUpdateSchema>
 
 export const apiDuplicateBodySchema = z.strictObject({
@@ -227,10 +288,18 @@ export const apiMediaSchema = z.object({
   width: z.number().int().nullable(),
   height: z.number().int().nullable(),
   duration: z.number().nullable(),
-  version: z.number().int().meta(doc('Incrémentée à chaque remplacement du fichier ; fait partie des URL.', 'Incremented each time the file is replaced; part of the URLs.')),
+  version: z.number().int().meta(doc('Incrémentée à chaque remplacement du fichier ou changement du point d\'intérêt ; fait partie des URL.', 'Incremented each time the file is replaced or the focal point changes; part of the URLs.')),
   folderId: z.string().nullable(),
   url: z.url().meta(doc('URL absolue du fichier original ; signée (temporaire) pour un média privé.', 'Absolute URL of the original file; signed (temporary) for a private media item.')),
   previewUrl: z.url().nullable().meta(doc('URL de l\'aperçu (WebP, 480 px) ; signée pour un média privé.', 'Preview URL (WebP, 480 px); signed for a private media item.')),
+  urlTemplate: z.string().nullable().meta(doc(
+    'Gabarit des URL de dérivés d\'une image : remplacer `{transform}` par un préréglage (`preview`, `full`, ceux de `GET …/presets`) ou des paramètres (`w_800,h_450`), et `{format}` par `jpg`, `png`, `webp` ou `avif`. Média privé : porte une signature valable pour tout dérivé jusqu\'à `urlExpiresAt`. Média public d\'un projet en politique `signed` : paramètres libres seulement par un lien signé (`POST …/signed-url`). `null` hors images.',
+    'Template of the derivative URLs of an image: replace `{transform}` with a preset (`preview`, `full`, those of `GET …/presets`) or parameters (`w_800,h_450`), and `{format}` with `jpg`, `png`, `webp` or `avif`. Private media item: carries a signature valid for any derivative until `urlExpiresAt`. Public media item of a project with the `signed` policy: free parameters through a signed link only (`POST …/signed-url`). `null` for non-images.',
+  )),
+  focalPoint: z.object({ x: z.number(), y: z.number() }).nullable().meta(doc(
+    'Point d\'intérêt (fractions 0 à 1 de la largeur et de la hauteur, depuis le coin haut gauche) : centre des recadrages `fit_cover` ; `null` = centre de l\'image.',
+    'Focal point (fractions 0 to 1 of the width and height, from the top left corner): center of `fit_cover` crops; `null` = center of the image.',
+  )),
   urlExpiresAt: isoDate.nullable().meta(doc('Échéance des URL signées ; null pour un média public (URL permanentes).', 'Expiry of the signed URLs; null for a public media item (permanent URLs).')),
   createdAt: isoDate,
   updatedAt: isoDate,
@@ -323,8 +392,28 @@ export const apiDelegatedTokenSchema = z.object({
 
 export const apiSignedUrlSchema = z.object({
   url: z.url(),
-  query: z.string().meta(doc('Paramètres de signature seuls (`exp`, `kid`, `scope`, `sig`), à ajouter aux URL des dérivés pour `derived` ; vide pour un média public.', 'Signature parameters only (`exp`, `kid`, `scope`, `sig`), to append to derivative URLs with `derived`; empty for a public media item.')),
-  expiresAt: isoDate.nullable(),
+  query: z.string().meta(doc(
+    'Paramètres de signature seuls (`exp`, `kid`, `scope`, `sig`), à ajouter aux URL des dérivés pour `derived` ; vide quand l\'URL n\'a pas besoin de signature.',
+    'Signature parameters only (`exp`, `kid`, `scope`, `sig`), to append to derivative URLs with `derived`; empty when the URL needs no signature.',
+  )),
+  expiresAt: isoDate.nullable().meta(doc('Échéance du lien ; `null` : URL permanente.', 'Expiry of the link; `null`: permanent URL.')),
+})
+
+/** Codes d'erreur possibles pour un lien d'un lot (les autres liens du lot restent délivrés). */
+export const API_SIGNED_URL_ITEM_ERRORS = ['INVALID_REQUEST', 'MEDIA_NOT_FOUND', 'PRESET_NOT_FOUND', 'INVALID_TRANSFORM', 'TRANSFORM_NOT_ALLOWED'] as const
+
+export const apiSignedUrlErrorSchema = z.object({
+  error: z.object({
+    code: z.enum(API_SIGNED_URL_ITEM_ERRORS),
+    detail: z.string().optional(),
+  }),
+})
+
+export const apiSignedUrlListSchema = z.object({
+  items: z.array(z.union([apiSignedUrlSchema, apiSignedUrlErrorSchema])).meta(doc(
+    'Un résultat par lien demandé, dans le même ordre : le lien, ou `error` (code du catalogue et détail) sans faire échouer les autres.',
+    'One result per requested link, in the same order: the link, or `error` (catalog code and detail) without failing the others.',
+  )),
 })
 
 /** Catalogue des codes d'erreur (GET /api/v1/errors). */

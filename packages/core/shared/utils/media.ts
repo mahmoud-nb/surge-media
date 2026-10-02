@@ -38,13 +38,6 @@ export function extensionForMime(mimeType: string): string | undefined {
   return kind ? ACCEPTED_MEDIA_TYPES[kind]?.[mimeType] : undefined
 }
 
-/**
- * Préréglages qu'une application peut demander par l'API (lien signé `preset`). Tous les
- * préréglages et les transformations libres (`w_800,h_600…`) : shared/utils/transforms.ts.
- */
-export const MEDIA_PRESETS = ['preview'] as const
-export type MediaPreset = (typeof MEDIA_PRESETS)[number]
-
 /** Durées proposées pour les liens temporaires vers un média privé (secondes). */
 export const SIGNED_URL_DURATIONS = [3600, 86_400, 604_800] as const
 export const SIGNED_URL_MAX_TTL = 604_800

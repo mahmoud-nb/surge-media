@@ -463,7 +463,7 @@
     },
     "links": {
       "title": "File address",
-      "publicDescription": "Permanent address to use in your websites and applications. It changes if the file is replaced.",
+      "publicDescription": "Permanent address to use in your websites and applications. It changes if the file is replaced or its focal point changes.",
       "publicUrl": "Public address",
       "privateDescription": "This media item is private: generate a temporary link to share it or display it outside the administration.",
       "duration": "Validity",
@@ -517,6 +517,25 @@
       "target": "File into",
       "submit": "File",
       "moved": "No media filed. | 1 media item filed into “{folder}”. | {count} media items filed into “{folder}”."
+    },
+    "focal": {
+      "title": "Focal point",
+      "description": "The focal point stays in the frame when a transformed image is cropped (“Fill and crop” fit, “Focal point” anchor). Without a focal point, crops are centered.",
+      "pickHint": "Click the image to place the point, or set both sliders.",
+      "x": "Horizontal position (from the left)",
+      "y": "Vertical position (from the top)",
+      "current": "Focal point: {x} from the left, {y} from the top.",
+      "none": "No focal point: crops are centered.",
+      "previewsTitle": "Crop preview",
+      "square": "Square (1:1)",
+      "wide": "Landscape (16:9)",
+      "versionNote": "Saving creates a new version: the addresses of the media item change (old ones redirect to the new ones) and transformed images are generated again.",
+      "clear": "Clear the point",
+      "save": "Save the focal point",
+      "unchanged": "Nothing to save.",
+      "saved": "Focal point saved: the media item is now at version {version}.",
+      "cleared": "Focal point cleared: the media item is now at version {version}.",
+      "conflict": "The media item was just changed elsewhere. Reload the page and try again."
     }
   },
   "projectRoles": {

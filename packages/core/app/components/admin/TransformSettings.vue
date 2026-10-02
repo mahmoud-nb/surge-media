@@ -40,7 +40,9 @@ const ids = { policy: useId(), presets: useId(), limits: useId() }
 const { data, error, refresh } = await useApiFetch('/api/admin/transforms', {
   query: computed(() => ({ project: props.projectId })),
 })
-type Preset = NonNullable<typeof data.value>['presets'][number]
+/** Réponse de GET|PATCH /api/admin/transforms (typée une fois : le typage des routes Nitro sature sinon). */
+type TransformsState = NonNullable<typeof data.value>
+type Preset = TransformsState['presets'][number]
 
 const level = computed(() => (props.projectId ? 'project' : 'installation'))
 const editableLevel = computed(() => (props.projectId ? 'project' : 'global'))
@@ -72,7 +74,7 @@ async function savePolicy() {
   policyStatus.value = null
   savingPolicy.value = true
   try {
-    data.value = await $api('/api/admin/transforms', { method: 'PATCH', query: { project: props.projectId }, body: { policy: policy.value } })
+    data.value = await $api<TransformsState>('/api/admin/transforms', { method: 'PATCH', query: { project: props.projectId }, body: { policy: policy.value } })
     policyStatus.value = { variant: 'success', message: t('transforms.policy.saved', { policy: t(`transforms.policy.options.${policy.value}.label`) }) }
   }
   catch (error) {
