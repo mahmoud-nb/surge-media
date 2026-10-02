@@ -270,3 +270,61 @@ export function formatTransformation(t: Transformation): string {
 export function transformationSegment(canonical: string): string {
   return canonical === '' ? 'full' : canonical
 }
+
+// ─── Politique et préréglages (C2) ───────────────────────────────────────────
+
+/**
+ * Politique des transformations libres d'un espace (projet : `Project.transformPolicy` ;
+ * bibliothèque : réglage de l'installation). Les préréglages sont servis dans tous les cas.
+ */
+export const TRANSFORM_POLICIES = ['OPEN', 'SIGNED', 'PRESETS'] as const
+export type TransformPolicy = (typeof TRANSFORM_POLICIES)[number]
+
+/**
+ * Droit présenté pour une transformation libre : aucun (URL publique), signature exacte (`t:…`,
+ * éventuellement permanente), droit élargi `derived`, lien de l'administration (`admin`),
+ * identifiant d'API (`Authorization: Bearer`).
+ */
+export type TransformGrant = 'none' | 'exact' | 'derived' | 'admin' | 'credential'
+
+/**
+ * Une transformation libre est-elle permise ? `OPEN` : toujours (dans les bornes) ; `SIGNED` : avec
+ * une signature ou un identifiant d'API ; `PRESETS` : jamais, sauf pour l'administration.
+ */
+export function freeTransformAllowed(policy: TransformPolicy, grant: TransformGrant): boolean {
+  if (grant === 'admin' || policy === 'OPEN') return true
+  return policy === 'SIGNED' && grant !== 'none'
+}
+
+/** Préréglages au plus par niveau (global, chaque projet). */
+export const PRESETS_PER_LEVEL_MAX = 100
+export const PRESET_DESCRIPTION_MAX_LENGTH = 200
+
+/** Niveau d'un préréglage : intégré (code), global (installation), propre au projet. */
+export const PRESET_LEVELS = ['builtin', 'global', 'project'] as const
+export type PresetLevel = (typeof PRESET_LEVELS)[number]
+
+/** Codes d'erreur des préréglages et des transformations (`data.code`), traduits par l'interface. */
+export const TRANSFORM_ERROR_CODES = [
+  'PRESET_NOT_FOUND', // 404
+  'PRESET_NAME_TAKEN', // 409 : nom déjà utilisé à ce niveau
+  'PRESET_LIMIT_REACHED', // 409 : PRESETS_PER_LEVEL_MAX atteint
+  'INVALID_TRANSFORM', // 400 : définition invalide (`data.param`, `data.detail`)
+] as const
+export type TransformErrorCode = (typeof TRANSFORM_ERROR_CODES)[number]
+
+export function isReservedPresetName(name: string): boolean {
+  return RESERVED_PRESET_NAMES.includes(name)
+}
+
+/**
+ * Définition d'un préréglage : transformation canonique sans format, qui change quelque chose et
+ * ne dépend pas d'une image précise (pas de zone `crop`, exprimée en pixels d'une image donnée).
+ */
+export function parsePresetDefinition(definition: string, limits: TransformLimits = { maxDimension: TRANSFORM_MAX_DIMENSION }): TransformParseResult {
+  const parsed = parseTransformation(definition.trim(), limits)
+  if (!parsed.ok) return parsed
+  if (parsed.transformation.crop) return { ok: false, param: 'crop', message: 'A preset cannot crop a fixed area (crop depends on each image).' }
+  if (parsed.canonical === '') return { ok: false, param: null, message: 'A preset must change something (use the built-in "full" preset to convert only).' }
+  return parsed
+}

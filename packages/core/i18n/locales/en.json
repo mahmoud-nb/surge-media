@@ -38,7 +38,12 @@
     "tokenSpaceRequired": "Choose at least one project or the library.",
     "environment": "Use only lowercase unaccented letters, digits and hyphens (e.g. preview-eu).",
     "origin": "Enter a valid origin: scheme and host, without a path (e.g. https://app.example.com or https://*.example.com).",
-    "folderName": "The name cannot contain slashes or control characters, nor be “.” or “..”."
+    "folderName": "The name cannot contain slashes or control characters, nor be “.” or “..”.",
+    "presetName": "Use lowercase unaccented letters, digits and hyphens, starting with a letter (e.g. card, hero-large).",
+    "presetNameReserved": "This name is reserved for built-in presets (preview, full, original).",
+    "presetEmpty": "Set at least one transformation: size, quality, background colour, rotation or mirror.",
+    "integerRange": "Enter a whole number from {min} to {max}.",
+    "color": "Enter a 6-digit hexadecimal colour, for example ffffff."
   },
   "auth": {
     "logout": "Sign out"
@@ -116,7 +121,8 @@
       "users": "Users",
       "library": "Library",
       "audit": "Audit log",
-      "apiDocs": "API documentation"
+      "apiDocs": "API documentation",
+      "settings": "Settings"
     },
     "dashboard": {
       "meta": {
@@ -591,7 +597,8 @@
       "media": "Media",
       "members": "Members",
       "keys": "API keys",
-      "origins": "Allowed origins"
+      "origins": "Allowed origins",
+      "transforms": "Transformations"
     },
     "header": {
       "yourRole": "Your role: {role}"
@@ -1061,7 +1068,9 @@
       "token": "Personal tokens",
       "origin": "Allowed origins",
       "media": "Media",
-      "user": "Accounts"
+      "user": "Accounts",
+      "preset": "Presets",
+      "settings": "Settings"
     },
     "loadError": "Unable to load the audit log.",
     "results": "Log entries",
@@ -1117,6 +1126,14 @@
         "deleted": "Account deleted",
         "password_link": "Password link issued",
         "sessions_revoked": "Sessions closed"
+      },
+      "preset": {
+        "created": "Preset created",
+        "updated": "Preset updated",
+        "deleted": "Preset deleted"
+      },
+      "settings": {
+        "updated": "Settings updated"
       }
     },
     "details": {
@@ -1133,13 +1150,17 @@
         "invitation": "Invitation",
         "reset": "Reset"
       },
-      "sessions": "No session closed | One session closed | {count} sessions closed"
+      "sessions": "No session closed | One session closed | {count} sessions closed",
+      "transformation": "Parameters: {value}",
+      "libraryPolicy": "Library: {from} → {to}"
     },
     "fields": {
       "name": "name",
       "slug": "identifier",
       "description": "description",
-      "publicListing": "public listing"
+      "publicListing": "public listing",
+      "transformPolicy": "transformation policy",
+      "transformation": "parameters"
     },
     "via": "Through the API — {credential}",
     "deletedCredential": "Deleted API credential",
@@ -1258,6 +1279,161 @@
       "server": "This installation",
       "publicServer": "Public address (NUXT_SITE_URL)",
       "codeSample": "Code sample"
+    }
+  },
+  "settings": {
+    "meta": {
+      "title": "Settings"
+    },
+    "title": "Settings",
+    "description": "Settings shared by the whole installation.",
+    "transforms": {
+      "title": "Image transformations",
+      "description": "Free transformations of library media, presets shared by every project and server limits."
+    }
+  },
+  "transforms": {
+    "meta": {
+      "projectTitle": "Transformations — {name}"
+    },
+    "projectDescription": "Project images are transformed through their delivery address: size, crop, format, quality. Choose what is allowed and define reusable presets.",
+    "loadError": "Unable to load the transformation settings.",
+    "policy": {
+      "title": "Free transformations",
+      "description": {
+        "project": "A free transformation describes the result in the image address (e.g. w_800,h_450,q_70). Presets are always served.",
+        "installation": "A free transformation describes the result in the image address (e.g. w_800,h_450,q_70). This setting applies to library media; each project has its own. Presets are always served."
+      },
+      "legend": {
+        "project": "Free transformations of project media",
+        "installation": "Free transformations of library media"
+      },
+      "options": {
+        "OPEN": {
+          "label": "Open",
+          "description": "Any transformation, within the server limits (size, number of variants, rate). Handy for a public site building its responsive images."
+        },
+        "SIGNED": {
+          "label": "Signed",
+          "description": "Free parameters require an address signed by your server or an API credential. Presets stay open."
+        },
+        "PRESETS": {
+          "label": "Presets only",
+          "description": "Only presets are served: you control exactly which files are generated."
+        }
+      },
+      "readOnly": "Only project owners can change this setting.",
+      "saved": "Policy saved: {policy}."
+    },
+    "presets": {
+      "title": "Presets",
+      "usage": "A preset is used by its name in an image address: {url}. The format is given by the extension (jpg, png, webp, avif).",
+      "urlName": "name",
+      "urlFile": "file",
+      "add": "New preset",
+      "create": "Create preset",
+      "createTitle": "New preset",
+      "editTitle": "Edit preset “{name}”",
+      "dialogDescription": "Fields left empty keep the original image. An image is never enlarged.",
+      "edit": "Edit",
+      "editLabel": "Edit preset {name}",
+      "delete": "Delete",
+      "deleteLabel": "Delete preset {name}",
+      "deleteTitle": "Delete preset “{name}”?",
+      "deleteDescription": "Addresses using it will no longer serve an image (404 error).",
+      "deleteRevealsGlobal": "Addresses using it will serve the global preset with the same name again.",
+      "created": "Preset “{name}” created.",
+      "updated": "Preset “{name}” saved.",
+      "deleted": "Preset “{name}” deleted.",
+      "levels": {
+        "builtin": "Built-in",
+        "global": "Global",
+        "project": "Project"
+      },
+      "shadowed": "Hidden by the project",
+      "parameters": "Parameters:",
+      "fullDescription": "Whole image, re-encoded in the requested format.",
+      "builtin": {
+        "preview": "Admin preview (480 px at most).",
+        "full": "Format conversion only, without metadata (EXIF, GPS)."
+      },
+      "empty": {
+        "project": "No project preset yet.",
+        "installation": "No global preset yet."
+      },
+      "fields": {
+        "name": "Name",
+        "nameHint": "Lowercase letters, digits and hyphens; it appears in image addresses.",
+        "renameHint": "Renaming changes the address of the images using it.",
+        "description": "Description",
+        "width": "Width (px)",
+        "height": "Height (px)",
+        "sizeHint": "1 to {max}; empty = proportional.",
+        "fit": "Fit",
+        "fitHint": "Used when both width and height are set.",
+        "gravity": "Crop anchor",
+        "gravityHint": "Used with “Fill and crop”.",
+        "quality": "Quality",
+        "qualityHint": "1 to 100; empty = default quality of the format.",
+        "background": "Background colour",
+        "backgroundHint": "Hexadecimal, e.g. ffffff: “Contain” bars and transparency in JPEG.",
+        "rotate": "Rotation",
+        "flip": "Mirror"
+      }
+    },
+    "fit": {
+      "cover": "Fill and crop",
+      "contain": "Contain (with bars)",
+      "fill": "Stretch",
+      "inside": "Fit inside the frame",
+      "outside": "Cover the frame without cropping"
+    },
+    "gravity": {
+      "focal": "Focal point (centre by default)",
+      "center": "Centre",
+      "north": "Top",
+      "northeast": "Top right",
+      "east": "Right",
+      "southeast": "Bottom right",
+      "south": "Bottom",
+      "southwest": "Bottom left",
+      "west": "Left",
+      "northwest": "Top left",
+      "attention": "Most striking area",
+      "entropy": "Most detailed area"
+    },
+    "rotate": {
+      "0": "None",
+      "90": "90° clockwise",
+      "180": "180°",
+      "270": "270° clockwise"
+    },
+    "flip": {
+      "none": "None",
+      "h": "Horizontal",
+      "v": "Vertical",
+      "hv": "Horizontal and vertical"
+    },
+    "limits": {
+      "title": "Server limits",
+      "description": "Set by the server NUXT_MEDIA_TRANSFORM_* environment variables.",
+      "maxDimension": "Maximum size",
+      "pixels": "{max} px per side",
+      "formats": "Output formats",
+      "maxVariants": "Variants per media version",
+      "rateLimit": "New unsigned free transformations",
+      "perMinute": "{count} per minute and per address",
+      "unlimited": "Unlimited",
+      "presetCache": "Preset cache",
+      "days": "{count} day | {count} days",
+      "hours": "{count} hour | {count} hours",
+      "seconds": "{count} second | {count} seconds"
+    },
+    "errors": {
+      "PRESET_NOT_FOUND": "This preset no longer exists.",
+      "PRESET_NAME_TAKEN": "A preset already has this name at this level.",
+      "PRESET_LIMIT_REACHED": "Maximum number of presets reached ({max}).",
+      "INVALID_TRANSFORM": "The server does not accept this value."
     }
   }
 }

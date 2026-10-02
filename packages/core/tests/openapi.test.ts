@@ -72,6 +72,7 @@ describe('spécification OpenAPI générée depuis les routes', () => {
       'POST /projects/{projectId}/media/{mediaId}/duplicate',
       'PUT /projects/{projectId}/media/{mediaId}/file',
       'POST /projects/{projectId}/media/{mediaId}/signed-url',
+      'GET /projects/{projectId}/presets',
     ])
   })
 
@@ -84,8 +85,8 @@ describe('spécification OpenAPI générée depuis les routes', () => {
     expect(upload.required).toEqual(['file'])
     expect(Object.keys(upload.properties)).toEqual(['file', 'title', 'altText', 'visibility', 'folderId'])
     expect(Object.keys(fr.components.schemas).sort()).toEqual([
-      'DelegatedToken', 'DelegatedTokenClaims', 'ErrorCatalog', 'Folder', 'FolderList', 'Me', 'Media', 'MediaList', 'Problem', 'Project',
-      'ProjectList', 'SignedUrl', 'UploadConstraints',
+      'DelegatedToken', 'DelegatedTokenClaims', 'ErrorCatalog', 'Folder', 'FolderList', 'Me', 'Media', 'MediaList', 'Preset', 'PresetList', 'Problem',
+      'Project', 'ProjectList', 'SignedUrl', 'UploadConstraints',
     ])
   })
 

@@ -48,7 +48,7 @@ const features = computed(() => FEATURES.map(feature => ({
         <figcaption class="border-b border-border px-4 py-3 text-sm font-medium text-muted-foreground">
           {{ t('landing.example.caption') }}
         </figcaption>
-        <pre class="overflow-x-auto p-4 text-sm leading-relaxed text-foreground" tabindex="0"><code><span class="font-semibold text-primary">GET</span> /media/9f2c4e/<span class="font-semibold">c_fill,w_800,h_600,f_webp,q_80</span>/photo.jpg
+        <pre class="overflow-x-auto p-4 text-sm leading-relaxed text-foreground" tabindex="0"><code><span class="font-semibold text-primary">GET</span> /m/cm9f2c4e7a/v1/<span class="font-semibold">w_800,h_600,q_80</span>/photo.webp
 
 <span class="text-muted-foreground">{{ t('landing.example.response') }}</span></code></pre>
       </figure>

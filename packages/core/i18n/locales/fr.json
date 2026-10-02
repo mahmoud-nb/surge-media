@@ -38,7 +38,12 @@
     "tokenSpaceRequired": "Choisissez au moins un projet ou la bibliothèque.",
     "environment": "Utilisez uniquement des lettres minuscules non accentuées, des chiffres et des tirets (ex. preview-eu).",
     "origin": "Saisissez une origine valide : schéma et hôte, sans chemin (ex. https://app.example.com ou https://*.example.com).",
-    "folderName": "Le nom ne peut contenir ni barre oblique ni caractère de contrôle, ni valoir « . » ou « .. »."
+    "folderName": "Le nom ne peut contenir ni barre oblique ni caractère de contrôle, ni valoir « . » ou « .. ».",
+    "presetName": "Utilisez des lettres minuscules non accentuées, des chiffres et des tirets, en commençant par une lettre (ex. carte, hero-large).",
+    "presetNameReserved": "Ce nom est réservé aux préréglages intégrés (preview, full, original).",
+    "presetEmpty": "Indiquez au moins une transformation : taille, qualité, couleur de fond, rotation ou miroir.",
+    "integerRange": "Saisissez un nombre entier de {min} à {max}.",
+    "color": "Saisissez une couleur hexadécimale à 6 chiffres, par exemple ffffff."
   },
   "auth": {
     "logout": "Se déconnecter"
@@ -116,7 +121,8 @@
       "users": "Utilisateurs",
       "library": "Bibliothèque",
       "audit": "Journal d'audit",
-      "apiDocs": "Documentation de l'API"
+      "apiDocs": "Documentation de l'API",
+      "settings": "Réglages"
     },
     "dashboard": {
       "meta": {
@@ -591,7 +597,8 @@
       "media": "Médias",
       "members": "Membres",
       "keys": "Clés d'API",
-      "origins": "Origines autorisées"
+      "origins": "Origines autorisées",
+      "transforms": "Transformations"
     },
     "header": {
       "yourRole": "Votre rôle : {role}"
@@ -1061,7 +1068,9 @@
       "token": "Jetons personnels",
       "origin": "Origines autorisées",
       "media": "Médias",
-      "user": "Comptes"
+      "user": "Comptes",
+      "preset": "Préréglages",
+      "settings": "Réglages"
     },
     "loadError": "Impossible de charger le journal d'audit.",
     "results": "Entrées du journal",
@@ -1117,6 +1126,14 @@
         "deleted": "Compte supprimé",
         "password_link": "Lien de mot de passe émis",
         "sessions_revoked": "Sessions fermées"
+      },
+      "preset": {
+        "created": "Préréglage créé",
+        "updated": "Préréglage modifié",
+        "deleted": "Préréglage supprimé"
+      },
+      "settings": {
+        "updated": "Réglages modifiés"
       }
     },
     "details": {
@@ -1133,13 +1150,17 @@
         "invitation": "Invitation",
         "reset": "Réinitialisation"
       },
-      "sessions": "Aucune session fermée | Une session fermée | {count} sessions fermées"
+      "sessions": "Aucune session fermée | Une session fermée | {count} sessions fermées",
+      "transformation": "Paramètres : {value}",
+      "libraryPolicy": "Bibliothèque : {from} → {to}"
     },
     "fields": {
       "name": "nom",
       "slug": "identifiant",
       "description": "description",
-      "publicListing": "liste publique"
+      "publicListing": "liste publique",
+      "transformPolicy": "politique des transformations",
+      "transformation": "paramètres"
     },
     "via": "Par l'API — {credential}",
     "deletedCredential": "Identifiant d'API supprimé",
@@ -1258,6 +1279,161 @@
       "server": "Cette installation",
       "publicServer": "Adresse publique (NUXT_SITE_URL)",
       "codeSample": "Exemple de code"
+    }
+  },
+  "settings": {
+    "meta": {
+      "title": "Réglages"
+    },
+    "title": "Réglages",
+    "description": "Réglages communs à toute l'installation.",
+    "transforms": {
+      "title": "Transformations d'images",
+      "description": "Transformations libres des médias de la bibliothèque, préréglages communs à tous les projets et limites du serveur."
+    }
+  },
+  "transforms": {
+    "meta": {
+      "projectTitle": "Transformations — {name}"
+    },
+    "projectDescription": "Les images du projet se transforment par leur adresse de diffusion : taille, recadrage, format, qualité. Choisissez ce qui est permis et définissez des préréglages réutilisables.",
+    "loadError": "Impossible de charger les réglages des transformations.",
+    "policy": {
+      "title": "Transformations libres",
+      "description": {
+        "project": "Une transformation libre décrit le résultat dans l'adresse de l'image (ex. w_800,h_450,q_70). Les préréglages, eux, sont toujours servis.",
+        "installation": "Une transformation libre décrit le résultat dans l'adresse de l'image (ex. w_800,h_450,q_70). Ce réglage vaut pour les médias de la bibliothèque ; chaque projet a le sien. Les préréglages sont toujours servis."
+      },
+      "legend": {
+        "project": "Transformations libres des médias du projet",
+        "installation": "Transformations libres des médias de la bibliothèque"
+      },
+      "options": {
+        "OPEN": {
+          "label": "Ouvertes",
+          "description": "Toute transformation, dans les limites du serveur (taille, nombre de variantes, débit). Pratique pour un site public qui construit ses images adaptatives."
+        },
+        "SIGNED": {
+          "label": "Signées",
+          "description": "Les paramètres libres exigent une adresse signée par votre serveur ou un identifiant d'API. Les préréglages restent ouverts."
+        },
+        "PRESETS": {
+          "label": "Préréglages seulement",
+          "description": "Seuls les préréglages sont servis : vous maîtrisez exactement les fichiers générés."
+        }
+      },
+      "readOnly": "Seuls les propriétaires du projet peuvent modifier ce réglage.",
+      "saved": "Politique enregistrée : {policy}."
+    },
+    "presets": {
+      "title": "Préréglages",
+      "usage": "Un préréglage s'utilise par son nom dans l'adresse d'une image : {url}. Le format est donné par l'extension (jpg, png, webp, avif).",
+      "urlName": "nom",
+      "urlFile": "fichier",
+      "add": "Nouveau préréglage",
+      "create": "Créer le préréglage",
+      "createTitle": "Nouveau préréglage",
+      "editTitle": "Modifier le préréglage « {name} »",
+      "dialogDescription": "Les champs laissés vides conservent l'image d'origine. Une image n'est jamais agrandie.",
+      "edit": "Modifier",
+      "editLabel": "Modifier le préréglage {name}",
+      "delete": "Supprimer",
+      "deleteLabel": "Supprimer le préréglage {name}",
+      "deleteTitle": "Supprimer le préréglage « {name} » ?",
+      "deleteDescription": "Les adresses qui l'utilisent ne serviront plus d'image (erreur 404).",
+      "deleteRevealsGlobal": "Les adresses qui l'utilisent serviront de nouveau le préréglage global du même nom.",
+      "created": "Préréglage « {name} » créé.",
+      "updated": "Préréglage « {name} » enregistré.",
+      "deleted": "Préréglage « {name} » supprimé.",
+      "levels": {
+        "builtin": "Intégré",
+        "global": "Global",
+        "project": "Projet"
+      },
+      "shadowed": "Masqué par le projet",
+      "parameters": "Paramètres :",
+      "fullDescription": "Image entière, réencodée dans le format demandé.",
+      "builtin": {
+        "preview": "Aperçu de l'administration (480 px au plus).",
+        "full": "Conversion de format seule, sans métadonnées (EXIF, GPS)."
+      },
+      "empty": {
+        "project": "Aucun préréglage propre au projet pour l'instant.",
+        "installation": "Aucun préréglage global pour l'instant."
+      },
+      "fields": {
+        "name": "Nom",
+        "nameHint": "Lettres minuscules, chiffres et tirets ; il apparaît dans l'adresse des images.",
+        "renameHint": "Renommer change l'adresse des images qui l'utilisent.",
+        "description": "Description",
+        "width": "Largeur (px)",
+        "height": "Hauteur (px)",
+        "sizeHint": "1 à {max} ; vide = proportionnelle.",
+        "fit": "Ajustement",
+        "fitHint": "Utilisé quand la largeur et la hauteur sont indiquées.",
+        "gravity": "Ancrage du recadrage",
+        "gravityHint": "Utilisé avec « Remplir et recadrer ».",
+        "quality": "Qualité",
+        "qualityHint": "1 à 100 ; vide = qualité par défaut du format.",
+        "background": "Couleur de fond",
+        "backgroundHint": "Hexadécimal, ex. ffffff : bandes de « Contenir » et transparence en JPEG.",
+        "rotate": "Rotation",
+        "flip": "Miroir"
+      }
+    },
+    "fit": {
+      "cover": "Remplir et recadrer",
+      "contain": "Contenir (avec bandes)",
+      "fill": "Étirer",
+      "inside": "Tenir dans le cadre",
+      "outside": "Couvrir le cadre sans recadrer"
+    },
+    "gravity": {
+      "focal": "Point d'intérêt (centre par défaut)",
+      "center": "Centre",
+      "north": "Haut",
+      "northeast": "Haut à droite",
+      "east": "Droite",
+      "southeast": "Bas à droite",
+      "south": "Bas",
+      "southwest": "Bas à gauche",
+      "west": "Gauche",
+      "northwest": "Haut à gauche",
+      "attention": "Zone la plus remarquable",
+      "entropy": "Zone la plus détaillée"
+    },
+    "rotate": {
+      "0": "Aucune",
+      "90": "90° dans le sens horaire",
+      "180": "180°",
+      "270": "270° dans le sens horaire"
+    },
+    "flip": {
+      "none": "Aucun",
+      "h": "Horizontal",
+      "v": "Vertical",
+      "hv": "Horizontal et vertical"
+    },
+    "limits": {
+      "title": "Limites du serveur",
+      "description": "Fixées par les variables d'environnement NUXT_MEDIA_TRANSFORM_* du serveur.",
+      "maxDimension": "Taille maximale",
+      "pixels": "{max} px de côté",
+      "formats": "Formats de sortie",
+      "maxVariants": "Variantes par version d'un média",
+      "rateLimit": "Nouvelles transformations libres non signées",
+      "perMinute": "{count} par minute et par adresse",
+      "unlimited": "Sans limite",
+      "presetCache": "Cache des préréglages",
+      "days": "{count} jour | {count} jours",
+      "hours": "{count} heure | {count} heures",
+      "seconds": "{count} seconde | {count} secondes"
+    },
+    "errors": {
+      "PRESET_NOT_FOUND": "Ce préréglage n'existe plus.",
+      "PRESET_NAME_TAKEN": "Un préréglage porte déjà ce nom à ce niveau.",
+      "PRESET_LIMIT_REACHED": "Nombre maximal de préréglages atteint ({max}).",
+      "INVALID_TRANSFORM": "Cette valeur n'est pas acceptée par le serveur."
     }
   }
 }

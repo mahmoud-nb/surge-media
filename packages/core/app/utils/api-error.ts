@@ -5,13 +5,15 @@ export interface ApiErrorInfo {
   code?: string
   /** En-tête Retry-After, en secondes (réponses 429). */
   retryAfter?: number
+  /** Précisions de l'erreur (`data`, ex. `param` d'une transformation refusée). */
+  details?: Record<string, unknown>
 }
 
-/** Extrait statut, code métier et Retry-After d'une erreur $fetch (FetchError). */
+/** Extrait statut, code métier, précisions et Retry-After d'une erreur $fetch (FetchError). */
 export function apiError(error: unknown): ApiErrorInfo {
   const { statusCode, data, response } = (error ?? {}) as {
     statusCode?: number
-    data?: { data?: { code?: unknown } }
+    data?: { data?: Record<string, unknown> }
     response?: Response
   }
   const code = data?.data?.code
@@ -20,5 +22,6 @@ export function apiError(error: unknown): ApiErrorInfo {
     status: statusCode,
     code: typeof code === 'string' ? code : undefined,
     retryAfter: Number.isFinite(retryAfter) && retryAfter > 0 ? retryAfter : undefined,
+    details: data?.data,
   }
 }

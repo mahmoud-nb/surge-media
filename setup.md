@@ -74,6 +74,7 @@ surge-media/
       │  │                 file bornée des traitements
       │  ├─ lib/projects/  projets, membres, origines autorisées
       │  ├─ lib/folders/   dossiers d'un espace : arbre (cache par révision), écritures, filtre des listes
+      │  ├─ lib/transforms/ politique des transformations, préréglages globaux et de projet
       │  ├─ lib/access/    identifiants d'API : format (CRC), résolution, jetons délégués, identité de l'appelant
       │  ├─ lib/credentials/  clés de projet et jetons personnels (création, rotation, révocation)
       │  ├─ lib/audit/     lecture du journal d'audit
@@ -244,6 +245,7 @@ Le fichier `packages/core/.env` est créé par `pnpm db:init` à partir de `.env
 | `NUXT_MEDIA_TRANSFORM_MAX_DIMENSION` | `4096` | largeur et hauteur maximales d'une image transformée (§ 8.1) |
 | `NUXT_MEDIA_TRANSFORM_FORMATS` | `jpg,png,webp,avif` | formats de sortie activés |
 | `NUXT_MEDIA_TRANSFORM_MAX_VARIANTS` | `50` | dérivés par version de média ; au-delà, plus de nouveaux paramètres libres (429 `TRANSFORM_QUOTA`) |
+| `NUXT_MEDIA_TRANSFORM_PRESET_MAX_AGE` | `604800` (7 jours) | cache des URL d'un préréglage global ou de projet (modifiable, donc revalidé) ; préréglages intégrés : 1 an, immuable |
 | `NUXT_MEDIA_TRANSFORM_RATE_LIMIT` | `60` | nouvelles transformations libres non signées par IP et par minute ; `0` = sans limite (à relever derrière un CDN) |
 
 ### 6.4 Modèle de données (`prisma/schema.prisma`)
@@ -261,6 +263,8 @@ Le fichier `packages/core/.env` est créé par `pnpm db:init` à partir de `.env
 | `AuditEvent` | journal d'audit des actions sensibles (sans clés étrangères : survit aux suppressions ; libellé lisible dans `data.label`) |
 | `DelegatedTokenUsage` | envois consommés par un jeton délégué limité en nombre de fichiers (`jti`, compteur, échéance) ; purgé après échéance |
 | `CacheRevision` | compteur de révision par espace (`project:<id>`, `library`), incrémenté par toute écriture de médias : ETag des listes de l'API |
+| `TransformPreset` | préréglage de transformation : global (`projectId` vide) ou d'un projet ; nom unique par niveau (application), paramètres canoniques sans format (§ 8.2) |
+| `Setting` | réglage de l'installation (clé-valeur JSON), ex. `transforms.libraryPolicy` |
 | `Folder` | dossier d'un espace (projet, ou bibliothèque si `projectId` est vide) et son parent ; nom unique parmi les voisins (casse ignorée, contrôlé par l'application), 8 niveaux, 1 000 par espace (§ 9.11) |
 | `Media` | fichier original, dans **un seul espace** (`projectId` vide = bibliothèque) : genre, visibilité publique/privée, clé de stockage opaque, version (incrémentée à chaque remplacement), dimensions, empreinte, alt, corbeille, média d'origine s'il est une copie ; colonnes de recherche normalisées (`searchTitle`, `searchName`, `searchAlt`) ; provenance API (`uploadedByTokenId`, sujet final `uploadSubject`) |
 | `MediaVariant` | dérivé généré à la demande puis conservé (v1 : aperçu ; bientôt crop, resize, format, qualité) |
@@ -438,12 +442,14 @@ manquante **403** (`PROJECT_ARCHIVED` si c'est l'archivage du projet qui la reti
 | `POST /api/admin/media/:id/move` | `media:delete` + `media:upload` dans la cible | `{ projectId \| null }` → même média, même adresse, autre espace |
 | `GET /api/admin/spaces?scope=media:upload` | session | espaces où l'utilisateur a la portée (cibles de duplication / déplacement) |
 | Dossiers et rangement | `media:read` / `media:write` | § 9.11 (`folder`, `recursive` et `folderId` sur les routes ci-dessus) |
+| Politique des transformations, préréglages | `project:read` / `project:settings` ; installation : `settings:manage` | § 8.2 |
 
 Codes d'erreur (`data.code`, `shared/utils/media.ts`) : `NO_FILE`, `MULTIPART_REQUIRED` (400),
 `FILE_TOO_LARGE` (413), `UNSUPPORTED_TYPE` (415), `UNREADABLE_FILE`, `DIMENSIONS_TOO_LARGE`,
 `KIND_MISMATCH` (422), `VERSION_CONFLICT`, `NOT_IN_TRASH`, `IN_TRASH` (409), `MEDIA_FORBIDDEN`,
 `SIGNATURE_INVALID`, `SIGNATURE_EXPIRED` (403), `SERVER_BUSY` (503), `INVALID_TRANSFORM` (400) et
-`TRANSFORM_QUOTA` (429) sur `/m/` ; dossiers (`shared/utils/folders.ts`) :
+`TRANSFORM_QUOTA` (429), `TRANSFORM_NOT_ALLOWED` (403) sur `/m/` ; préréglages : `PRESET_NOT_FOUND` (404),
+`PRESET_NAME_TAKEN`, `PRESET_LIMIT_REACHED` (409), `INVALID_TRANSFORM` (400) ; dossiers (`shared/utils/folders.ts`) :
 `FOLDER_NOT_FOUND` (404), `FOLDER_NAME_TAKEN`, `FOLDER_NOT_EMPTY`, `FOLDER_LIMIT_REACHED` (409),
 `FOLDER_DEPTH_EXCEEDED`, `FOLDER_CYCLE` (422).
 
@@ -458,6 +464,9 @@ Codes d'erreur (`data.code`, `shared/utils/media.ts`) : `NO_FILE`, `MULTIPART_RE
   identifiant d'API, utilisateur de l'application pour un envoi par jeton délégué —, titre, texte alternatif,
   visibilité, adresse publique ou lien temporaire, remplacement, **dupliquer ou déplacer** vers un espace
   et un dossier, corbeille).
+- `/admin/projects/:id/transforms` : onglet **Transformations** d'un projet (politique, préréglages,
+  limites du serveur) ; `/admin/settings` : **Réglages** de l'installation (ADMIN : politique de la
+  bibliothèque, préréglages globaux) — § 8.2.
   Sans droit d'écriture (ou projet archivé), la fiche passe en lecture seule.
 
 ## 8. Traitement d'images (sharp)
@@ -485,8 +494,8 @@ Toute image se transforme par son URL de diffusion (architecture : `.claude/arch
 
 - **Le format de sortie est l'extension** : `jpg`, `png`, `webp`, `avif` (`NUXT_MEDIA_TRANSFORM_FORMATS`) ;
   `jpeg` est redirigé vers `jpg`. GIF et images animées en sortie : pas encore (première image seulement).
-- Un segment sans `_` est un **préréglage** (`preview`, `full` ; préréglages globaux et de projet : sous-étape
-  C2), un segment avec `_` une liste de **paramètres** `clé_valeur` séparés par des virgules.
+- Un segment sans `_` est un **préréglage** (`preview`, `full`, ou préréglage global ou du projet :
+  § 8.2), un segment avec `_` une liste de **paramètres** `clé_valeur` séparés par des virgules.
 - Toute sortie est **sans métadonnées** (EXIF, GPS, profil : conversion en sRVB), orientation EXIF appliquée.
 
 | Paramètre | Valeurs | Défaut | Effet |
@@ -531,9 +540,51 @@ s'applique au droit élargi `derived`). **Derrière un CDN**, toutes les requêt
 adresses : relever `NUXT_MEDIA_TRANSFORM_RATE_LIMIT` ou le mettre à 0.
 
 Au démarrage, les aperçus générés avant les transformations sont repris sous leur nouvel identifiant
-(fichier conservé, rien n'est régénéré). Politique des transformations par projet (`open`, `signed`,
-`presets`) et préréglages personnalisés : sous-étape C2 — d'ici là, tout espace accepte les paramètres
-libres dans les bornes ci-dessus.
+(fichier conservé, rien n'est régénéré). Ce que chaque espace accepte (paramètres libres ou
+préréglages seulement) : § 8.2.
+
+### 8.2 Politique des transformations et préréglages
+
+**Politique** d'un espace : ce que les **paramètres libres** de l'URL ont le droit de faire. Les
+préréglages sont servis quelle que soit la politique.
+
+| Politique | Paramètres libres (`w_800,h_450…`) | Usage |
+| --- | --- | --- |
+| `OPEN` (défaut) | acceptés, dans les bornes du § 8.1 | site public qui construit ses `srcset` côté client |
+| `SIGNED` | seulement avec une URL signée (exacte, permanente pour un média public, ou droit `derived`) ou un identifiant d'API ; sinon 403 `TRANSFORM_NOT_ALLOWED` | installation exposée à fort trafic |
+| `PRESETS` | refusés (403 `TRANSFORM_NOT_ALLOWED`), sauf pour les liens de l'administration | contrôle exact des fichiers générés |
+
+- Projet : `Project.transformPolicy`, réglée dans l'onglet **Transformations** du projet (`project:settings`,
+  propriétaires ; lecture pour tout membre). Bibliothèque : réglage de l'installation
+  (`Setting` « `transforms.libraryPolicy` »), page **Réglages** (`/admin/settings`, permission
+  `settings:manage` : ADMIN).
+- **Préréglages**, par ordre de priorité dans un espace :
+  1. **intégrés** (`preview`, `full`, non modifiables ; `original` est aussi réservé) ;
+  2. **du projet** (onglet Transformations, `project:settings`) ;
+  3. **globaux** (page Réglages, ADMIN) : utilisables dans la bibliothèque et dans tous les projets,
+     sauf quand un préréglage du projet porte le même nom (il le **masque**).
+- Un préréglage = un nom (`^[a-z][a-z0-9-]{0,31}$`) + des paramètres enregistrés sous forme canonique,
+  **sans format** (l'extension de l'URL le choisit) ni zone fixe (`crop`, propre à chaque image), et
+  une description facultative. 100 préréglages au plus par niveau ; noms uniques par niveau (contrôlés
+  par l'application). L'interface les saisit par champs (largeur, hauteur, ajustement, ancrage, qualité,
+  fond, rotation, miroir) et affiche les paramètres produits.
+- **Modifier un préréglage change le contenu de ses URL** : nouveau fichier généré à la demande ; les
+  URL d'un préréglage global ou de projet sont donc mises en cache `public, max-age=604800`
+  (`NUXT_MEDIA_TRANSFORM_PRESET_MAX_AGE`) et revalidées par l'ETag, au lieu d'`immutable` (les
+  préréglages intégrés, eux, restent immuables). Le supprimer : ses URL répondent 404 (ou servent de
+  nouveau le préréglage global qu'il masquait).
+- Créations, modifications et suppressions de préréglages, changements de politique : **journal
+  d'audit** (`preset.*`, `project.updated` › `transformPolicy`, `settings.updated` › `libraryPolicy`).
+- API v1 : `GET /api/v1/projects/:projectId/presets` (toute clé, y compris publique ; ETag → 304) et
+  `transformPolicy` dans le contrat `Project` (§ 9.9).
+
+| Endpoint (administration) | Droit | Rôle |
+| --- | --- | --- |
+| `GET /api/admin/transforms?project=` | `project:read` ; sans `project` : `settings:manage` | `{ level, policy, presets, limits, canEdit }` (préréglages intégrés, globaux avec `shadowed`, du projet) |
+| `PATCH /api/admin/transforms?project=` | `project:settings` ; sans `project` : `settings:manage` | `{ policy: OPEN \| SIGNED \| PRESETS }` |
+| `POST /api/admin/presets?project=` | idem | `{ name, transformation, description? }` → 201 · 400 `INVALID_TRANSFORM` (`data.param`) · 409 `PRESET_NAME_TAKEN` / `PRESET_LIMIT_REACHED` |
+| `PATCH` / `DELETE /api/admin/presets/:id` | idem, selon le niveau du préréglage | `{ name?, transformation?, description? }` · 204 · 404 `PRESET_NOT_FOUND` |
+
 
 
 ## 9. Authentification et rôles
@@ -550,13 +601,15 @@ sur la bibliothèque ; le **rôle de projet** (`ProjectMember.role`) donne les d
 **plafonnés** par le rôle de plateforme. Un rôle n'est qu'un ensemble de **portées** : les
 identifiants d'API (§ 9.6) utilisent le même vocabulaire.
 
-| Rôle de plateforme | Bibliothèque (`library:manage`) | Projets | `projects:create` | `tokens:personal` | `api:docs` | `users:manage` | `audit:read` |
-| --- | :---: | --- | :---: | :---: | :---: | :---: | :---: |
-| `ADMIN` | ✓ | **tous** (`projects:all`), comme propriétaire | ✓ | ✓ | ✓ | ✓ | ✓ |
-| `DEVELOPER` | ✓ | ceux dont il est membre ; rôle de projet jusqu'à `OWNER` | ✓ | ✓ | ✓ | | |
-| `EDITOR` | ✓ | ceux dont il est membre ; rôle de projet `EDITOR` au plus | | | | | |
+| Rôle de plateforme | Bibliothèque (`library:manage`) | Projets | `projects:create` | `tokens:personal` | `api:docs` | `users:manage` | `audit:read` | `settings:manage` |
+| --- | :---: | --- | :---: | :---: | :---: | :---: | :---: | :---: |
+| `ADMIN` | ✓ | **tous** (`projects:all`), comme propriétaire | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
+| `DEVELOPER` | ✓ | ceux dont il est membre ; rôle de projet jusqu'à `OWNER` | ✓ | ✓ | ✓ | | | |
+| `EDITOR` | ✓ | ceux dont il est membre ; rôle de projet `EDITOR` au plus | | | | | | |
 
-`api:docs` : documentation interactive de l'API (§ 9.12).
+`api:docs` : documentation interactive de l'API (§ 9.12). `settings:manage` : réglages de
+l'installation (`/admin/settings` : politique des transformations de la bibliothèque, préréglages
+globaux, § 8.2).
 
 | Rôle de projet | Portées |
 | --- | --- |
@@ -827,7 +880,8 @@ L'onglet « Clés d'API » d'un projet affiche son adresse et le lien vers la sp
 | --- | --- | --- |
 | `GET /api/v1/me` | — | identifiant utilisé : type, nom, préfixe, environnement, portées, échéance ; propriétaire, projet ou sélection |
 | `GET /api/v1/projects?limit&cursor` | `project:read` | projets actifs accessibles, avec les portées effectives |
-| `GET /api/v1/projects/:projectId` | `project:read` | projet (dont `publicListing`) |
+| `GET /api/v1/projects/:projectId` | `project:read` | projet (dont `publicListing` et `transformPolicy` : `open` \| `signed` \| `presets`, § 8.2) |
+| `GET /api/v1/projects/:projectId/presets` | `media:read` (toute clé, y compris publique) | préréglages utilisables : intégrés, du projet, globaux non masqués (`{ items: [{ name, transformation, description, level }] }`), ETag → 304 |
 | `GET /api/v1/projects/:projectId/media` | `media:read` | `?q&kind&visibility&ids&sort&limit&cursor&withTotal` → `{ items, nextCursor, total? }` |
 | `GET /api/v1/projects/:projectId/media/:mediaId` | `media:read` | un média actif (clé publique : public seulement) |
 | `POST /api/v1/projects/:projectId/media/:mediaId/signed-url` | `media:read` (clé secrète, jeton personnel ; jeton délégué : 1 h au plus) | `{ target: 'file' \| 'preset' \| 'derived', preset?, expiresIn? }` → `{ url, query, expiresAt }` |
@@ -1206,6 +1260,7 @@ pnpm start                          # node --env-file-if-exists=.env .output/ser
 | Dossiers : arbre chargé en entier (mis en cache par révision), filtre récursif par liste d'identifiants, sans colonne de chemin | portable sur les 3 bases, pas de limite de 191 caractères sur un chemin, un déplacement de dossier ne réécrit aucune ligne de média ; unicité des noms contrôlée par l'application (les bases traitent différemment `NULL` dans les index uniques) |
 | Jetons délégués signés (HMAC, charge lisible), sans état | aucun secret durable dans un navigateur ; vérification sans base ; révoquer l'émetteur suffit ; seul `maxFiles` utilise un compteur en base |
 | Transformations : forme canonique syntaxique (indépendante du média et du format) + opération effective calculée selon l'image | une URL par résultat (301 sinon), une signature pour toutes les sources d'un `<picture>`, un fichier pour les demandes équivalentes ; non-agrandissement calculé par nous (sharp ignore le rapport demandé quand il refuse d'agrandir) |
+| Préréglages modifiables, cache de 7 jours revalidé (CD7) ; politique par espace appliquée aux seuls paramètres libres | un préréglage se corrige sans changer d'URL ; les préréglages restent toujours servis (aucun site cassé par un changement de politique) ; la bibliothèque suit un réglage de l'installation (modèle `Setting` réutilisable) |
 | AVIF : effort d'encodage 2 (sur 9) | mesuré sur une photo de 3000 px : 0,5 s au lieu de 2,1 s (effort 4), fichier ~30 % plus lourd mais toujours plus léger que le WebP |
 | File bornée des traitements + pré-génération des aperçus | un pic d'envois ou d'aperçus ne sature ni la mémoire ni le processeur (503 + `Retry-After`) ; premier affichage sans attente |
 | **Scalar** (`@scalar/api-reference`) **1.72.3** épinglé exactement, composant Vue embarqué | documentation interactive dans l'administration : interface reconnue, langues fr/en intégrées, client de requêtes ; épinglé car l'API de configuration évolue vite (agent IA, télémétrie, repères à revérifier à chaque mise à jour) ; embarqué plutôt que chargé d'un CDN (aucun script tiers dans une page authentifiée) |
@@ -1264,6 +1319,9 @@ pnpm start                          # node --env-file-if-exists=.env .output/ser
 | Une URL de transformation redirige (301) | elle n'est pas sous forme canonique (ordre des paramètres, valeur par défaut, `jpeg`, `dpr`) : utiliser l'URL de destination (§ 8.1) |
 | 400 `INVALID_TRANSFORM` sur `/m/` | paramètre inconnu, répété ou hors bornes, zone hors de l'image (après rotation), format non activé : voir `data.detail` |
 | 429 `TRANSFORM_QUOTA` | 50 dérivés pour cette version (réutiliser des tailles existantes ou un préréglage), ou trop de nouvelles transformations depuis une adresse (derrière un CDN : relever `NUXT_MEDIA_TRANSFORM_RATE_LIMIT` ou le mettre à 0) |
+| 403 `TRANSFORM_NOT_ALLOWED` sur `/m/` | la politique de l'espace refuse les paramètres libres : utiliser un préréglage, une URL signée (politique `SIGNED`), ou changer la politique (onglet Transformations du projet, ou Réglages pour la bibliothèque) |
+| Un préréglage modifié montre encore l'ancien rendu | le navigateur ou le CDN garde l'URL jusqu'à `NUXT_MEDIA_TRANSFORM_PRESET_MAX_AGE` (7 jours) : vider le cache, ou purger le CDN |
+| 400 `INVALID_TRANSFORM` sur un préréglage qui fonctionnait | sa définition dépasse une borne abaissée depuis (`NUXT_MEDIA_TRANSFORM_MAX_DIMENSION`, formats) : modifier le préréglage |
 | Image transformée plus petite que demandée | jamais d'agrandissement : la sortie est réduite en gardant le rapport demandé, et bornée à 4096 px |
 | 503 `SERVER_BUSY` à l'envoi ou sur un aperçu | file des traitements pleine : réessayer après `Retry-After` ; en production, ajuster `NUXT_MEDIA_PROCESSING_*` (§ 8) |
 | Image privée cassée dans une page externe après un changement de secret | lien signé avec l'ancien secret : déclarer celui-ci dans `NUXT_MEDIA_PREVIOUS_SIGNING_SECRET` pendant 7 jours |
@@ -1730,17 +1788,17 @@ lecteurs d'écran réels.
 **Limites connues**
 - Les clés secrètes et jetons personnels ne peuvent pas être pré-injectés (valeurs jamais relisibles,
   refusées depuis un navigateur) : la clé injectée est une clé publique (lecture des médias publics).
-  Un « jeton de console » lié à la session a été étudié (voir ci-dessous) puis écarté en attendant une
-  décision, car il assouplit le garde-fou `SECRET_IN_BROWSER`.
+  Un « jeton de console » lié à la session a été étudié puis écarté, car il assouplit le garde-fou
+  `SECRET_IN_BROWSER` (voir « Maintenance — 2026-10-02 »).
 - Fenêtre « Tester la requête » de Scalar : écarts d'accessibilité dans le code de Scalar (§ 10.3).
 - Deux titres `h1` sur la page (le titre de la page et celui de la spécification, rendu par Scalar
   dans son repère `main`).
 - L'API d'administration (`/api/admin/**`, cookie de session) n'est pas documentée : interne à
   l'interface, hors contrat public ; la diffusion `/m/…` est décrite dans l'introduction de la
   spécification, pas comme opération.
-- **En attente de décision** : migration `20261001154517_api_console` (colonne `AccessToken.sessionId`,
-  inutilisée par le code), préparée pour le jeton de console. Si l'option est écartée, la retirer
-  avant le commit (et de la base de développement).
+- Migration `20261001154517_api_console` (colonne `AccessToken.sessionId`, jamais utilisée par le code),
+  préparée pour le jeton de console : **colonne retirée le 2026-10-02** par la migration
+  `drop_api_console` (voir « Maintenance — 2026-10-02 »).
 
 **Après `git pull`**
 ```bash
@@ -1805,4 +1863,82 @@ de C2).
 ```bash
 pnpm install          # aucune nouvelle dépendance
 pnpm db:migrate       # aucune migration
+```
+
+### Étape 12 — 2026-10-01 — Phase C2 : politique des transformations et préréglages
+
+**Cadre** : deuxième sous-étape de la phase C (architecture validée, `.claude/architecture-phase-c.md`) :
+politique des transformations libres par espace, préréglages globaux et de projet, page « Réglages »
+de l'installation, onglet « Transformations » des projets.
+
+**Ajouté**
+- Migration `c2_transforms` (3 fournisseurs) : `Project.transformPolicy` (`OPEN` par défaut),
+  modèles `TransformPreset` (`projectId` null = global, cascade avec le projet) et `Setting`
+  (clé-valeur, ex. `transforms.libraryPolicy`).
+- `shared/utils/transforms.ts` : politiques, `freeTransformAllowed`, `parsePresetDefinition` (ni `crop`,
+  ni transformation vide), codes `TRANSFORM_ERROR_CODES`, niveaux et limites des préréglages ;
+  `shared/schemas/transforms.ts` (politique, préréglage, formulaire par champs → forme canonique).
+- `server/lib/transforms/service.ts` : politique de la bibliothèque et préréglages globaux (cache
+  60 s), état des projets étendu (politique, préréglages), résolution intégré → projet → global,
+  écritures en transaction (homonymes, limite de 100), invalidation des caches ; `server/utils/
+  transforms.ts` (droits par niveau).
+- Diffusion : politique appliquée aux paramètres libres (403 `TRANSFORM_NOT_ALLOWED`), préréglages
+  globaux et de projet, cache `public, max-age=604800` revalidé pour un préréglage modifiable
+  (`NUXT_MEDIA_TRANSFORM_PRESET_MAX_AGE`).
+- Administration : routes `transforms` et `presets` ; permission `settings:manage` (ADMIN) ; page
+  « Réglages » (barre latérale) ; onglet « Transformations » des projets ; composant
+  `AdminTransformSettings` (politique, préréglages avec dialogues, limites du serveur) ; journal
+  d'audit (catégories « Préréglages » et « Réglages », détails).
+- API v1 : `GET /api/v1/projects/:projectId/presets` (étiquette « Transformations » de la
+  spécification), `transformPolicy` dans le contrat `Project`.
+- Page d'accueil : exemple d'URL de transformation aligné sur la vraie grammaire.
+- Tests : décisions de politique, définitions de préréglages, formulaire (170 tests Vitest au total).
+
+**Vérifié** : typecheck, 170 tests Vitest, i18n (961 clés), contrastes, migrations (`--check`), build
+de production ; **58 scénarios HTTP** sur la build (droits par rôle et par niveau, validation des
+préréglages, priorité projet → global, masquage, modification et renommage visibles sous la même URL,
+suppression, politiques `SIGNED` et `PRESETS` avec chaque type de signature, bibliothèque, API v1 avec
+une clé publique, ETag, OpenAPI, journal) ; C1 (66) et B1 à B5 rejoués sans régression ; interface
+avec de vrais clics (politique, création avec erreurs de champ, nom déjà pris, modification avec
+borne dépassée, préréglage global masqué, suppression avec focus sur la liste, journal) ; axe-core :
+0 violation en fr/en × clair/sombre sur l'onglet et la page Réglages, dialogues compris (avec erreurs) ;
+largeur de téléphone sans défilement horizontal.
+
+**Limites connues**
+- Unicité des noms de préréglages contrôlée par l'application (deux créations simultanées du même nom
+  peuvent passer, comme pour les dossiers).
+- Les fichiers générés par un préréglage modifié ou supprimé restent jusqu'au prochain remplacement du
+  média (purge des dérivés inutilisés : plus tard).
+- Pas encore d'aperçu du rendu dans le dialogue d'un préréglage (générateur d'URL : C4).
+
+**Après `git pull`**
+```bash
+pnpm install          # aucune nouvelle dépendance
+pnpm db:migrate       # migration c2_transforms
+```
+
+### Maintenance — 2026-10-02 — Retrait de la colonne inutilisée `AccessToken.sessionId`
+
+**Cadre** : décision en suspens depuis l'étape 10. Le « jeton de console » (jeton personnel lié à la
+session, admis dans le navigateur) a été écarté : il assouplissait le garde-fou `SECRET_IN_BROWSER`
+(aucun secret durable dans un navigateur, architecture phase B § 4.7). Sa colonne, jamais utilisée par
+le code, est retirée.
+
+**Fait**
+- Migration `drop_api_console` (3 fournisseurs) : suppression de la clé étrangère, de l'index et de la
+  colonne `AccessToken.sessionId` ; relation `Session.consoleTokens` retirée du schéma. La migration
+  `api_console`, déjà publiée, est **conservée** dans l'historique (une base qui l'a appliquée reste
+  cohérente) : l'historique ne fait qu'avancer.
+- Base de développement : sauvegarde préalable, migration appliquée, données intactes (contrôle
+  d'intégrité et des clés étrangères de SQLite).
+
+**Vérifié** : migrations (`--check`), typecheck, tests Vitest, build de production, scénarios B2
+(identifiants d'API) et B3 (API v1 en lecture) rejoués.
+
+**Piste** (sans colonne nouvelle) : requêtes d'essai authentifiées dans `/admin/api` par un **jeton
+délégué** de quelques minutes émis par l'administration (compatible avec `SECRET_IN_BROWSER`).
+
+**Après `git pull`**
+```bash
+pnpm db:migrate       # migration drop_api_console
 ```

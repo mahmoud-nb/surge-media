@@ -1,5 +1,6 @@
 import type { H3Event } from 'h3'
 import type { TokenScope } from '#shared/utils/permissions'
+import type { TransformGrant } from '#shared/utils/transforms'
 import type { Media } from '../../generated/prisma/client'
 import { touchCredential } from '../access/credentials'
 import { browserGuard, principalLibraryScopes, principalProjectScopes, resolvePrincipal } from '../access/principal'
@@ -87,22 +88,32 @@ async function authorizeCredential(event: H3Event, authorization: string, media:
   if (!principal.delegated) touchCredential(principal.credential, getRequestIP(event))
 }
 
+/** Droit présenté pour une transformation libre (politique de l'espace : shared/utils/transforms.ts). */
+export function transformGrant(access: DeliveryAccess): TransformGrant {
+  if (access.mode === 'public') return access.signed ? 'exact' : 'none'
+  if (access.mode === 'signed') return access.scope ?? 'exact'
+  return 'credential'
+}
+
 /**
  * Une nouvelle génération libre est-elle soumise au débit par IP ? Non si l'appelant a été
  * authentifié (identifiant d'API) ou si l'URL a été signée pour cette cible précise (par le serveur
  * de l'application ou l'administration) ; oui sans signature ou avec le droit élargi « derived ».
  */
 export function generationRateLimited(access: DeliveryAccess): boolean {
-  if (access.mode === 'public') return !access.signed
-  if (access.mode === 'signed') return access.scope === 'derived'
-  return false
+  const grant = transformGrant(access)
+  return grant === 'none' || grant === 'derived'
 }
 
-/** Cache HTTP selon le mode d'accès. */
-export function cacheControl(access: DeliveryAccess): string {
+/**
+ * Cache HTTP selon le mode d'accès. `mutableMaxAge` : fichier public dont le contenu peut changer
+ * sous la même URL (préréglage global ou de projet, modifiable) → mis en cache pour cette durée,
+ * puis revalidé (ETag), au lieu d'`immutable`.
+ */
+export function cacheControl(access: DeliveryAccess, mutableMaxAge?: number): string {
   switch (access.mode) {
-    // URL versionnée : son contenu ne change jamais.
-    case 'public': return 'public, max-age=31536000, immutable'
+    // URL versionnée : son contenu ne change jamais (sauf préréglage modifiable).
+    case 'public': return mutableMaxAge ? `public, max-age=${mutableMaxAge}` : 'public, max-age=31536000, immutable'
     // Lien signé : jamais au-delà de son échéance, et pas dans les caches partagés.
     case 'signed': return `private, max-age=${Math.max(0, Math.min(access.expires - Math.floor(Date.now() / 1000), 3600))}`
     // Identifiant d'API : réponse propre à l'appelant, toujours revalidée (ETag).

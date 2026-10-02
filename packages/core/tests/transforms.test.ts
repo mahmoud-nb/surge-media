@@ -1,15 +1,20 @@
 import { describe, expect, it } from 'vitest'
 import { parseDeliveryPath, deliveryVariant } from '../server/lib/media/delivery-path'
 import { planTransform, type TransformSource } from '../server/lib/media/transform-plan'
+import { presetFieldsToDefinition, presetFormSchema, presetFormValues, type PresetFormValues } from '../shared/schemas/transforms'
 import {
   BUILTIN_PRESETS,
   formatTransformation,
+  freeTransformAllowed,
   IDENTITY_TRANSFORMATION,
+  isReservedPresetName,
+  parsePresetDefinition,
   parseTransformation,
   parseTransformFormat,
   TRANSFORM_FORMATS,
   type TransformFormat,
   type Transformation,
+  type TransformPolicy,
 } from '../shared/utils/transforms'
 
 function canonical(segment: string): string {
@@ -243,5 +248,66 @@ describe('opération effective', () => {
     expect(plan('').key).toBe('q_80.webp')
     expect(plan('', 'png').key).toBe('full.png')
     expect(planTransform(IDENTITY_TRANSFORMATION, photo, 'avif', 4096)).toMatchObject({ ok: true, plan: { key: 'q_50.avif' } })
+  })
+})
+
+describe('politique et préréglages (C2)', () => {
+  it('décide des transformations libres selon la politique et le droit présenté', () => {
+    const grants = ['none', 'exact', 'derived', 'admin', 'credential'] as const
+    const allowed = (policy: TransformPolicy) => grants.filter(grant => freeTransformAllowed(policy, grant))
+    expect(allowed('OPEN')).toEqual([...grants])
+    expect(allowed('SIGNED')).toEqual(['exact', 'derived', 'admin', 'credential'])
+    expect(allowed('PRESETS')).toEqual(['admin'])
+  })
+
+  it('vérifie la définition d\'un préréglage', () => {
+    expect(parsePresetDefinition(' q_70,w_800 ')).toMatchObject({ ok: true, canonical: 'w_800,q_70' })
+    expect(parsePresetDefinition('crop_0-0-10-10,w_100')).toMatchObject({ ok: false, param: 'crop' })
+    expect(parsePresetDefinition('r_0')).toMatchObject({ ok: false, param: null })
+    expect(parsePresetDefinition('w_5000')).toMatchObject({ ok: false, param: 'w' })
+    expect(parsePresetDefinition('w_2000', { maxDimension: 1000 })).toMatchObject({ ok: false, param: 'w' })
+  })
+
+  it('réserve les noms intégrés', () => {
+    for (const name of ['preview', 'full', 'original']) expect(isReservedPresetName(name)).toBe(true)
+    expect(isReservedPresetName('thumb')).toBe(false)
+  })
+})
+
+describe('formulaire d\'un préréglage', () => {
+  const base: PresetFormValues = { name: 'carte', description: '', width: '', height: '', fit: 'cover', gravity: 'focal', quality: '', background: '', rotate: '0', flip: '' }
+  const definition = (values: Partial<PresetFormValues>) => {
+    const result = presetFormSchema.safeParse({ ...base, ...values })
+    if (!result.success) throw new Error(result.error.issues.map(issue => issue.message).join())
+    return presetFieldsToDefinition(result.data)
+  }
+  const issues = (values: Partial<PresetFormValues>) => {
+    const result = presetFormSchema.safeParse({ ...base, ...values })
+    return result.success ? [] : result.error.issues.map(issue => `${issue.path.join('.')}:${issue.message}`)
+  }
+
+  it('produit la forme canonique', () => {
+    expect(definition({ width: '800', height: '450', gravity: 'north', quality: '70' })).toBe('w_800,h_450,g_north,q_70')
+    expect(definition({ width: '800', fit: 'contain', gravity: 'north' })).toBe('w_800')
+    expect(definition({ width: '300', height: '300', fit: 'contain', background: '#FFAA00' })).toBe('w_300,h_300,fit_contain,bg_ffaa00')
+    expect(definition({ rotate: '90', flip: 'h' })).toBe('r_90,flip_h')
+  })
+
+  it('refuse un préréglage vide, des bornes ou un nom invalides', () => {
+    expect(issues({})).toEqual(['width:validation.presetEmpty'])
+    expect(issues({ width: '0' })).toEqual(['width:validation.integerRange'])
+    expect(issues({ width: '4097' })).toEqual(['width:validation.integerRange'])
+    expect(issues({ width: '10', quality: '101' })).toEqual(['quality:validation.integerRange'])
+    expect(issues({ width: '10', background: 'fff' })).toEqual(['background:validation.color'])
+    expect(issues({ width: '10', name: 'Carte' })).toEqual(['name:validation.presetName'])
+    expect(issues({ width: '10', name: 'preview' })).toEqual(['name:validation.presetNameReserved'])
+  })
+
+  it('reprend une transformation enregistrée', () => {
+    const parsed = parseTransformation('r_180,w_640,h_360,fit_fill,q_60')
+    if (!parsed.ok) throw new Error(parsed.message)
+    const values = presetFormValues(parsed.transformation, 'bandeau', 'Bandeau')
+    expect(values).toMatchObject({ name: 'bandeau', width: '640', height: '360', fit: 'fill', quality: '60', rotate: '180' })
+    expect(definition(values)).toBe('r_180,w_640,h_360,fit_fill,q_60')
   })
 })

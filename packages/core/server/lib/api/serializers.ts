@@ -1,12 +1,14 @@
 import { createHash } from 'node:crypto'
-import type { ApiFolder, ApiMedia, ApiProject } from '#shared/schemas/api'
+import type { ApiFolder, ApiMedia, ApiPreset, ApiProject } from '#shared/schemas/api'
 import { API_LINK_BUCKET, API_LINK_TTL } from '#shared/utils/api'
 import { extensionForMime } from '#shared/utils/media'
 import type { TokenScope } from '#shared/utils/permissions'
+import type { TransformPolicy } from '#shared/utils/transforms'
 import type { Media } from '../../generated/prisma/client'
 import { handlerFor } from '../media/handlers'
 import { alignedExpiry, signMediaAccess } from '../media/signing'
 import { mediaPath } from '../media/urls'
+import type { PresetSummary } from '../transforms/service'
 
 /**
  * Représentations publiques de l'API v1 (contrat : shared/schemas/api.ts) et ETag. Indépendantes de
@@ -57,6 +59,7 @@ export interface ApiProjectSource {
   slug: string
   description: string | null
   publicListing: boolean
+  transformPolicy: TransformPolicy
   createdAt: Date
   updatedAt: Date
 }
@@ -68,10 +71,15 @@ export function toApiProject(project: ApiProjectSource, scopes: readonly TokenSc
     slug: project.slug,
     description: project.description,
     publicListing: project.publicListing,
+    transformPolicy: project.transformPolicy.toLowerCase() as ApiProject['transformPolicy'],
     scopes: [...scopes],
     createdAt: project.createdAt.toISOString(),
     updatedAt: project.updatedAt.toISOString(),
   }
+}
+
+export function toApiPreset(preset: PresetSummary): ApiPreset {
+  return { name: preset.name, transformation: preset.transformation, description: preset.description, level: preset.level }
 }
 
 export function toApiFolder(folder: { id: string, parentId: string | null, name: string, createdAt: Date, updatedAt: Date }): ApiFolder {

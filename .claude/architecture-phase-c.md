@@ -1,7 +1,23 @@
 # Phase C — Transformations d'images à la demande
 
 > **Statut : VALIDÉE (2026-10-01) — toutes les décisions CD1 à CD12 acceptées par l'utilisateur.**
-> Avancement : **C1 faite** (`setup.md` étape 11, `.claude/project-context.md` § 9.16). Suite : C2.
+> Avancement : **C1 faite** (`setup.md` étape 11, `.claude/project-context.md` § 9.16), **C2 faite** (étape 12,
+> § 9.17). Suite : C3.
+>
+> Écarts et précisions de C2 (politique et préréglages) :
+> - Définition d'un préréglage : ni zone `crop` (pixels propres à une image), ni transformation vide (utiliser `full`) ;
+>   `original` réservé en plus de `preview` et `full`. 400 `INVALID_TRANSFORM` avec `data.param` (champ en erreur dans l'interface).
+> - Routes d'administration : `GET|PATCH /api/admin/transforms?project=` (politique + préréglages + limites ; sans `project` =
+>   installation) et `POST /api/admin/presets?project=`, `PATCH|DELETE /api/admin/presets/:id`. Codes `PRESET_NOT_FOUND`,
+>   `PRESET_NAME_TAKEN`, `PRESET_LIMIT_REACHED`.
+> - Politique : en `SIGNED`, le droit élargi `derived` et un identifiant d'API comptent comme signature ; en `PRESETS`, tout est
+>   refusé pour les paramètres libres (signature exacte, `derived`, identifiant d'API) sauf `scope=admin`.
+> - L'onglet « Transformations » est visible de tout membre (lecture) ; modification avec `project:settings` (propriétaires).
+> - API v1 `GET …/presets` : `{ items: [{ name, transformation, description, level }] }`, globaux masqués exclus ; la politique est
+>   dans le contrat `Project` (`transformPolicy`). Étiquette OpenAPI « Transformations ».
+> - Journal : `preset.created|updated|deleted`, `project.updated` (`transformPolicy`), `settings.updated` (`libraryPolicy`) ;
+>   catégories « Préréglages » et « Réglages ».
+> - Pas d'aperçu du rendu dans le dialogue d'un préréglage (prévu avec le générateur d'URL, C4).
 >
 > Écarts et précisions de C1 (moteur et diffusion) :
 > - **Ordre canonique = ordre d'exécution** : `r, flip, crop, w, h, fit, g, q, bg` (et non `crop, r, flip…` comme au § 3.1) : une

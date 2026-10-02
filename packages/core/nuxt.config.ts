@@ -91,6 +91,7 @@ export default defineNuxtConfig({
         formats: 'jpg,png,webp,avif', // formats de sortie activés — _FORMATS
         maxVariants: 50, // dérivés par version de média, au-delà : plus de paramètres libres nouveaux — _MAX_VARIANTS
         rateLimit: 60, // nouvelles générations libres non signées par IP et par minute, 0 = sans limite — _RATE_LIMIT
+        presetMaxAge: 604800, // cache (s) des URL d'un préréglage global ou de projet, modifiable — _PRESET_MAX_AGE
       },
       storage: {
         driver: 'local', // local | s3 — NUXT_MEDIA_STORAGE_DRIVER

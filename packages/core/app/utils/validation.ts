@@ -18,6 +18,8 @@ export function fieldErrors<T extends Record<string, unknown>>(error: z.ZodError
     const params: FieldError['params'] = {}
     if (issue.code === 'too_big') params.max = Number(issue.maximum)
     if (issue.code === 'too_small') params.min = Number(issue.minimum)
+    // Contrôle personnalisé (refine) : paramètres du message passés par `params`.
+    if (issue.code === 'custom' && issue.params) Object.assign(params, issue.params)
     errors[field] = { key: issue.message, params }
   }
   return errors

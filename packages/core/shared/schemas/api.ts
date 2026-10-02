@@ -262,11 +262,25 @@ export const apiProjectSchema = z.object({
   slug: z.string(),
   description: z.string().nullable(),
   publicListing: z.boolean().meta(doc('La clé publique peut lister et chercher les médias publics.', 'The publishable key can list and search public media.')),
+  transformPolicy: z.enum(['open', 'signed', 'presets']).meta(doc(
+    'Transformations libres par URL (`/m/<id>/v<n>/w_800,h_450/<nom>.webp`) : `open` acceptées dans les bornes du serveur, `signed` seulement signées, `presets` interdites (préréglages seulement). Les préréglages sont toujours servis.',
+    'Free transformations by URL (`/m/<id>/v<n>/w_800,h_450/<name>.webp`): `open` accepted within the server bounds, `signed` signed only, `presets` refused (presets only). Presets are always served.',
+  )),
   scopes: z.array(z.enum(TOKEN_SCOPES)).meta(doc('Portées effectives de l\'identifiant utilisé dans ce projet.', 'Effective scopes of the credential used in this project.')),
   createdAt: isoDate,
   updatedAt: isoDate,
 })
 export type ApiProject = z.input<typeof apiProjectSchema>
+
+export const apiPresetSchema = z.object({
+  name: z.string().meta(doc('Nom à placer dans l\'URL : `/m/<id>/v<n>/<nom>/<fichier>.<format>`.', 'Name to put in the URL: `/m/<id>/v<n>/<name>/<file>.<format>`.')),
+  transformation: z.string().meta(doc('Paramètres appliqués, forme canonique sans format (vide pour `full`).', 'Applied parameters, canonical form without format (empty for `full`).')),
+  description: z.string().nullable(),
+  level: z.enum(['builtin', 'global', 'project']).meta(doc('Intégré au serveur, commun à l\'installation, ou propre au projet (qui masque un global du même nom).', 'Built into the server, shared by the installation, or specific to the project (which hides a global one with the same name).')),
+})
+export type ApiPreset = z.input<typeof apiPresetSchema>
+
+export const apiPresetListSchema = z.object({ items: z.array(apiPresetSchema) })
 
 export const apiProjectListSchema = z.object({
   items: z.array(apiProjectSchema),
