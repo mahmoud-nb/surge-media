@@ -1,20 +1,29 @@
 <script setup lang="ts">
 /**
- * Générateur d'adresses d'une image (fiche média, phase C4) : préréglage de l'espace ou paramètres,
- * format, aperçu rendu à la volée par l'administration (jamais enregistré ni compté dans le quota de
- * dérivés), adresse à copier — signée quand l'espace ou la visibilité l'exige — et extraits HTML
- * (<img>, <picture>, srcset 2x). Les requêtes partent après une courte pause de saisie ; une nouvelle
- * demande annule la précédente. Architecture : .claude/architecture-phase-c.md § 10.
+ * Générateur d'adresses d'une image (fiche média, phase C4) : préréglage de l'espace ou paramètres
+ * (taille et densité, cadrage et zone de recadrage, rendu, orientation), format, aperçu rendu à la
+ * volée par l'administration (jamais enregistré ni compté dans le quota de dérivés), adresse à copier —
+ * signée quand l'espace ou la visibilité l'exige — et extraits HTML (<img>, <picture>, srcset 1x/2x/3x).
+ * Les requêtes partent après une courte pause de saisie ; une nouvelle demande annule la précédente.
+ * Architecture : .claude/architecture-phase-c.md § 10.
  */
 import { LoaderCircle } from '@lucide/vue'
 import {
+  CROP_FIELDS,
+  cropParameter,
+  EMPTY_CROP,
+  parseCropFields,
   presetFieldsToDefinition,
+  rotatedSize,
+  TRANSFORM_DENSITIES,
   transformFieldsSchema,
+  type CropField,
+  type CropFieldValues,
   type TransformField,
   type TransformFieldValues,
 } from '#shared/schemas/transforms'
 import { imageSnippets } from '#shared/utils/snippets'
-import type { PresetLevel, TransformFormat, TransformPolicy } from '#shared/utils/transforms'
+import { parseTransformation, type PresetLevel, type TransformFormat, type TransformPolicy } from '#shared/utils/transforms'
 
 interface GeneratorOptions {
   policy: TransformPolicy
@@ -27,6 +36,8 @@ const props = defineProps<{
   mediaId: string
   /** Version courante : une nouvelle version (point d'intérêt, fichier) change les adresses et l'aperçu. */
   version: number
+  /** Aperçu de l'image orientée (sélection de la zone de recadrage). */
+  src: string
   width: number
   height: number
   altText: string | null
@@ -43,6 +54,8 @@ const uid = useId()
 
 const FORMAT_NAMES: Record<TransformFormat, string> = { jpg: 'JPEG', png: 'PNG', webp: 'WebP', avif: 'AVIF' }
 const DURATION_KEYS: Record<(typeof SIGNED_URL_DURATIONS)[number], string> = { 3600: 'hour', 86400: 'day', 604800: 'week' }
+/** Densités du srcset proposé (1x en premier). */
+const SRCSET_DENSITIES = [1, 2, 3] as const
 
 // ─── Réglages ────────────────────────────────────────────────────────────────
 
@@ -71,6 +84,8 @@ const FIELD_IDS: Record<TransformField, string> = {
   rotate: `${uid}-rotate`,
   flip: `${uid}-flip`,
 }
+const CROP_IDS = Object.fromEntries(CROP_FIELDS.map(field => [field, `${uid}-crop-${field}`])) as Record<CropField, string>
+
 const fields = reactive<TransformFieldValues>({
   width: String(Math.min(800, props.width)),
   height: '',
@@ -81,6 +96,15 @@ const fields = reactive<TransformFieldValues>({
   rotate: '0',
   flip: '',
 })
+const crop = ref<CropFieldValues>({ ...EMPTY_CROP })
+
+const densityId = `${uid}-density`
+const density = ref('1')
+const densityOptions = computed(() => TRANSFORM_DENSITIES.map(value => ({
+  value: String(value),
+  label: t(`media.generator.densities.x${String(value).replace('.', '_')}`),
+})))
+
 const parsedFields = computed(() => transformFieldsSchema.safeParse(fields))
 /** Erreurs des champs (contrôle immédiat, sans déplacer le focus) : schéma partagé + borne du serveur. */
 const fieldErrorMap = computed<Partial<Record<TransformField, FieldError>>>(() => {
@@ -99,9 +123,17 @@ function fieldError(field: TransformField): string | undefined {
   return error ? t(error.key, error.params) : undefined
 }
 
+/** Dimensions de l'image tournée : repère de la zone de recadrage. */
+const rotated = computed(() => rotatedSize(props.width, props.height, fields.rotate))
+const cropCheck = computed(() => parseCropFields(crop.value, rotated.value))
+function cropError(field: CropField): string | undefined {
+  const error = cropCheck.value.errors[field]
+  return error ? t(error.key, error.params) : undefined
+}
+
 const formatId = `${uid}-format`
 const format = ref<TransformFormat>(props.options.formats.includes('webp') ? 'webp' : props.options.formats[0] ?? 'webp')
-const formatOptions = computed(() => props.options.formats.map(value => ({ value, label: FORMAT_NAMES[value] })))
+const formatOptions = computed(() => props.options.formats.map(value => ({ value, label: t(`media.generator.formats.${value}.label`) })))
 
 const durationId = `${uid}-duration`
 const duration = ref(String(SIGNED_URL_DURATIONS[0]))
@@ -111,25 +143,54 @@ const durationOptions = computed(() => SIGNED_URL_DURATIONS.map(seconds => ({ va
 
 type Target = { preset: string } | { transform: string }
 
-/** Préréglage choisi, ou paramètres sous forme canonique ; null tant qu'un champ est invalide. */
-const target = computed<Target | null>(() => {
-  if (mode.value === 'preset') return presetName.value ? { preset: presetName.value } : null
+/** Paramètres saisis (taille, cadrage, zone, rendu, orientation), sans densité ; null si un champ est invalide. */
+const definition = computed<string | null>(() => {
   const parsed = parsedFields.value
-  if (!parsed.success || Object.keys(fieldErrorMap.value).length > 0) return null
-  return { transform: presetFieldsToDefinition(parsed.data) }
+  const zone = cropCheck.value
+  if (!parsed.success || Object.keys(fieldErrorMap.value).length > 0 || Object.keys(zone.errors).length > 0) return null
+  return [presetFieldsToDefinition(parsed.data), zone.region ? cropParameter(zone.region) : ''].filter(Boolean).join(',')
 })
 
-/** Densité 2x (écrans haute résolution) : paramètres avec une dimension que l'image dépasse. */
-const target2x = computed<Target | null>(() => {
-  const value = target.value
+/** Largeur ou hauteur demandée : la densité les multiplie (sans elles, elle n'a pas d'effet). */
+const sized = computed(() => parsedFields.value.success && (parsedFields.value.data.width !== null || parsedFields.value.data.height !== null))
+
+/** Forme canonique des paramètres à une densité (`dpr` replié dans les dimensions, comme le serveur). */
+function atDensity(value: number): string | null {
+  if (definition.value === null) return null
+  const raw = value === 1 || !sized.value ? definition.value : [definition.value, `dpr_${value}`].filter(Boolean).join(',')
+  const parsed = parseTransformation(raw, { maxDimension: props.options.maxDimension })
+  return parsed.ok ? parsed.canonical : null
+}
+
+const densityValue = computed(() => Number(density.value) || 1)
+
+/** Préréglage choisi, ou paramètres canoniques à la densité choisie ; null tant qu'un champ est invalide. */
+const target = computed<Target | null>(() => {
+  if (mode.value === 'preset') return presetName.value ? { preset: presetName.value } : null
+  const transform = atDensity(densityValue.value)
+  return transform === null ? null : { transform }
+})
+
+/**
+ * Densités du srcset : 1x, puis 2x et 3x quand l'image (ou la zone gardée) peut grandir d'au moins une
+ * demi-densité de plus — sinon le serveur rendrait presque le même fichier (jamais d'agrandissement).
+ * Marge = facteur d'agrandissement possible avant d'atteindre la taille de la source : la dimension la
+ * plus contrainte limite un cadre (largeur **et** hauteur), sauf « Contenir », qui s'arrête à la plus large.
+ */
+const srcsetTargets = computed<{ density: number, transform: string }[]>(() => {
   const parsed = parsedFields.value
-  if (!value || !('transform' in value) || !parsed.success) return null
-  const quarter = parsed.data.rotate === '90' || parsed.data.rotate === '270'
-  const sourceWidth = quarter ? props.height : props.width
-  const sourceHeight = quarter ? props.width : props.height
-  const { width, height } = parsed.data
-  const larger = (width !== null && sourceWidth > width) || (height !== null && sourceHeight > height)
-  return larger ? { transform: `${value.transform},dpr_2` } : null
+  if (mode.value !== 'params' || !parsed.success || !sized.value) return []
+  const source = cropCheck.value.region ?? rotated.value
+  const { width, height, fit } = parsed.data
+  const ratios = [width === null ? null : source.width / width, height === null ? null : source.height / height].filter(ratio => ratio !== null)
+  const headroom = width !== null && height !== null && fit === 'contain' ? Math.max(...ratios) : Math.min(...ratios)
+  const list: { density: number, transform: string }[] = []
+  for (const value of SRCSET_DENSITIES) {
+    const useful = value === 1 || headroom >= value - 0.5
+    const transform = useful ? atDensity(value) : null
+    if (transform !== null) list.push({ density: value, transform })
+  }
+  return list.length >= 2 ? list : []
 })
 
 // ─── Aperçu et adresses ──────────────────────────────────────────────────────
@@ -150,9 +211,17 @@ type LinkResult = Link | { error: { code: string | null, detail?: string } }
 const preview = ref<Preview | null>(null)
 const previewError = ref<string>()
 const link = ref<Link | null>(null)
-const link2x = ref<Link | null>(null)
+const densityLinks = ref<{ density: number, url: string }[]>([])
 const linkError = ref<{ code: string | null } | null>(null)
 const loading = ref(false)
+/** Demande de l'aperçu affiché : taille d'affichage voulue et densité (calcul de la taille d'affichage). */
+interface PreviewRequest {
+  width: number | null
+  height: number | null
+  fit: string
+  density: number
+}
+const previewRequest = ref<PreviewRequest | null>(null)
 let controller: AbortController | null = null
 let timer: ReturnType<typeof setTimeout> | undefined
 
@@ -186,17 +255,25 @@ async function loadPreview(request: Target, signal: AbortSignal): Promise<void> 
   previewError.value = undefined
 }
 
-async function loadLinks(request: Target, double: Target | null, signal: AbortSignal): Promise<void> {
-  const items = [request, ...(double ? [double] : [])].map(item => ({ ...item, format: format.value }))
+/** Adresses de l'aperçu et des densités du srcset, en un appel (transformations identiques fusionnées). */
+async function loadLinks(request: Target, densities: { density: number, transform: string }[], signal: AbortSignal): Promise<void> {
+  const transforms = [...new Set(densities.map(item => item.transform))]
+  const items = [request, ...transforms.filter(transform => !('transform' in request) || transform !== request.transform).map(transform => ({ transform }))]
   const result = await $api<{ items: LinkResult[] }>(`/api/admin/media/${props.mediaId}/links`, {
     method: 'POST',
-    body: { items, expiresIn: Number(duration.value) },
+    body: { items: items.map(item => ({ ...item, format: format.value })), expiresIn: Number(duration.value) },
     signal,
   })
-  const [main, second] = result.items
+  const urls = new Map<string, string>()
+  items.forEach((item, index) => {
+    const value = result.items[index]
+    if ('transform' in item && value && 'url' in value) urls.set(item.transform, value.url)
+  })
+  const [main] = result.items
   link.value = main && 'url' in main ? main : null
   linkError.value = main && 'error' in main ? main.error : null
-  link2x.value = second && 'url' in second ? second : null
+  const resolved = densities.map(item => ({ density: item.density, url: urls.get(item.transform) }))
+  densityLinks.value = resolved.every(item => item.url) ? resolved as { density: number, url: string }[] : []
 }
 
 async function refresh() {
@@ -209,13 +286,19 @@ async function refresh() {
   const current = new AbortController()
   controller = current
   loading.value = true
+  const parsed = parsedFields.value
+  const requested: PreviewRequest | null = 'transform' in request && sized.value && parsed.success
+    ? { width: parsed.data.width, height: parsed.data.height, fit: parsed.data.fit, density: densityValue.value }
+    : null
   try {
     await Promise.all([
-      loadPreview(request, current.signal),
-      loadLinks(request, target2x.value, current.signal).catch((error: unknown) => {
+      loadPreview(request, current.signal).then(() => {
+        previewRequest.value = requested
+      }),
+      loadLinks(request, srcsetTargets.value, current.signal).catch((error: unknown) => {
         if (current.signal.aborted) throw error
         link.value = null
-        link2x.value = null
+        densityLinks.value = []
         linkError.value = { code: apiError(error).code ?? null }
       }),
     ])
@@ -236,7 +319,7 @@ function schedule() {
   timer = setTimeout(refresh, 400)
 }
 
-watch([target, target2x, format, duration, () => props.version], schedule, { deep: true })
+watch([target, srcsetTargets, format, duration, () => props.version], schedule, { deep: true })
 onMounted(refresh)
 onBeforeUnmount(() => {
   clearTimeout(timer)
@@ -248,14 +331,33 @@ onBeforeUnmount(() => {
 
 const stale = computed(() => target.value === null)
 
+/**
+ * Taille d'affichage (pixels CSS) et densité réellement atteinte. À 1x : les dimensions du fichier.
+ * Au-delà : la taille demandée, tant que le fichier l'atteint — la densité réelle est alors comprise
+ * entre 1 et la densité demandée (source trop petite pour l'atteindre : jamais d'agrandissement).
+ */
+const displaySize = computed(() => {
+  const result = preview.value
+  if (!result) return null
+  const request = previewRequest.value
+  if (!request || request.density === 1) return { width: result.width, height: result.height, density: 1 }
+  const ratios = [request.width ? result.width / request.width : null, request.height ? result.height / request.height : null]
+    .filter((ratio): ratio is number => ratio !== null)
+  // La dimension qui atteint le cadre donne l'échelle (« Couvrir sans recadrer » : la plus petite).
+  const scale = request.fit === 'outside' && ratios.length === 2 ? Math.min(...ratios) : Math.max(...ratios)
+  const density = Math.min(request.density, Math.max(1, scale))
+  return { width: Math.round(result.width / density), height: Math.round(result.height / density), density }
+})
+const densityFormat = computed(() => new Intl.NumberFormat(locale.value, { maximumFractionDigits: 1 }))
+
 /** Résultat réduit faute d'image assez grande (jamais d'agrandissement). */
 const reduced = computed(() => {
   const parsed = parsedFields.value
-  const result = preview.value
-  if (mode.value !== 'params' || !parsed.success || !result) return false
+  const size = displaySize.value
+  if (mode.value !== 'params' || !parsed.success || !size) return false
   const { width, height, fit } = parsed.data
   if (width !== null && height !== null && (fit === 'inside' || fit === 'outside')) return false
-  return (width !== null && result.width < width) || (height !== null && result.height < height)
+  return (width !== null && size.width < width) || (height !== null && size.height < height)
 })
 
 const caption = computed(() => {
@@ -291,12 +393,12 @@ const snippets = computed(() => {
   if (!main || stale.value) return []
   return imageSnippets({
     url: main.url,
-    url2x: link2x.value?.url,
-    width: preview.value?.width,
-    height: preview.value?.height,
+    width: displaySize.value?.width,
+    height: displaySize.value?.height,
     alt: props.altText ?? '',
     formats: props.options.formats,
     format: format.value,
+    densities: densityLinks.value,
   })
 })
 </script>
@@ -310,11 +412,11 @@ const snippets = computed(() => {
       {{ t('media.generator.description') }}
     </p>
 
-    <div class="mt-5 grid gap-5">
+    <div class="mt-5 grid gap-6">
       <UiRadioCards v-model="mode" :legend="t('media.generator.mode')" :options="modeOptions" :columns="2" />
 
       <div v-if="mode === 'preset'" class="grid gap-1.5">
-        <UiFormField v-slot="field" :id="`${uid}-preset`" :label="t('media.generator.preset')">
+        <UiFormField v-slot="field" :id="`${uid}-preset`" :label="t('media.generator.preset')" :hint="t('media.generator.presetHint')">
           <UiSelect v-bind="field" v-model="presetName" :options="presetOptions" name="preset" />
         </UiFormField>
         <p v-if="selectedPreset" class="text-sm text-muted-foreground">
@@ -330,18 +432,40 @@ const snippets = computed(() => {
           </template>
         </p>
       </div>
-      <AdminTransformFields v-else v-model="fields" :ids="FIELD_IDS" :max-dimension="options.maxDimension" :error="fieldError" />
+      <AdminTransformFields v-else v-model="fields" :ids="FIELD_IDS" :max-dimension="options.maxDimension" :error="fieldError" :format="format">
+        <template #size>
+          <UiFormField v-slot="field" :id="densityId" :label="t('media.generator.density')" :hint="sized ? t('media.generator.densityHint') : t('media.generator.densityUnused')">
+            <UiSelect v-bind="field" v-model="density" :options="densityOptions" name="density" />
+          </UiFormField>
+        </template>
+        <template #area>
+          <AdminCropSelector
+            v-model="crop"
+            :src="src"
+            :width="width"
+            :height="height"
+            :rotate="fields.rotate"
+            :flip="fields.flip"
+            :ids="CROP_IDS"
+            :region="cropCheck.region"
+            :error="cropError"
+          />
+        </template>
+      </AdminTransformFields>
 
-      <div class="grid gap-4 sm:grid-cols-2">
-        <div class="grid gap-1.5">
-          <label :for="formatId" class="text-sm font-medium text-foreground">{{ t('media.generator.format') }}</label>
-          <UiSelect :id="formatId" v-model="format" :options="formatOptions" name="format" />
+      <fieldset class="grid gap-4">
+        <legend class="mb-3 text-sm font-semibold text-foreground">
+          {{ t('media.generator.output') }}
+        </legend>
+        <div class="grid gap-4 sm:grid-cols-2">
+          <UiFormField v-slot="field" :id="formatId" :label="t('media.generator.format')" :hint="t(`media.generator.formats.${format}.hint`)">
+            <UiSelect v-bind="field" v-model="format" :options="formatOptions" name="format" />
+          </UiFormField>
+          <UiFormField v-if="visibility === 'PRIVATE'" v-slot="field" :id="durationId" :label="t('media.generator.duration')" :hint="t('media.generator.durationHint')">
+            <UiSelect v-bind="field" v-model="duration" :options="durationOptions" name="duration" />
+          </UiFormField>
         </div>
-        <div v-if="visibility === 'PRIVATE'" class="grid gap-1.5">
-          <label :for="durationId" class="text-sm font-medium text-foreground">{{ t('media.generator.duration') }}</label>
-          <UiSelect :id="durationId" v-model="duration" :options="durationOptions" name="duration" />
-        </div>
-      </div>
+      </fieldset>
 
       <!-- Résultat : aperçu (non enregistré) et adresse. -->
       <div class="grid gap-4 border-t border-border pt-5">
@@ -359,6 +483,9 @@ const snippets = computed(() => {
           </div>
           <figcaption class="grid gap-0.5 text-sm">
             <span role="status" class="text-foreground">{{ loading ? '' : caption }}</span>
+            <span v-if="!loading && displaySize && previewRequest && previewRequest.density !== 1" class="text-foreground">
+              {{ t('media.generator.displaySize', { width: displaySize.width, height: displaySize.height, density: densityFormat.format(displaySize.density) }) }}
+            </span>
             <span v-if="reduced && !loading" class="text-muted-foreground">{{ t('media.generator.reduced') }}</span>
             <span class="text-muted-foreground">{{ t('media.generator.previewNote') }}</span>
           </figcaption>

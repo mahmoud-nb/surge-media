@@ -534,9 +534,10 @@ const pageFlash = flash.consume()
 
           <!-- Générateur d'adresses (images) : aperçu à la volée, adresse signée si nécessaire, extraits HTML. -->
           <AdminUrlGenerator
-            v-if="!inTrash && data?.transforms && media.width && media.height"
+            v-if="!inTrash && data?.transforms && media.previewUrl && media.width && media.height"
             :media-id="media.id"
             :version="media.version"
+            :src="media.previewUrl"
             :width="media.width"
             :height="media.height"
             :alt-text="media.altText"

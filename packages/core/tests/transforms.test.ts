@@ -9,6 +9,12 @@ import {
   transformFieldsSchema,
   transformLinksSchema,
   transformPreviewQuerySchema,
+  cropFieldValues,
+  cropParameter,
+  EMPTY_CROP,
+  parseCropFields,
+  rotatedSize,
+  TRANSFORM_DENSITIES,
   type PresetFormValues,
 } from '../shared/schemas/transforms'
 import { htmlAttribute, imageSnippets, withTransformFormat } from '../shared/utils/snippets'
@@ -423,7 +429,7 @@ describe('générateur d\'adresses', () => {
     expect(transformLinksSchema.safeParse({ items: [{ preset: 'preview' }], expiresIn: 30 }).success).toBe(false)
   })
 
-  it('extraits HTML : img, picture (AVIF, WebP, repli JPEG), srcset 2x, attributs échappés', () => {
+  it('extraits HTML : img, picture (AVIF, WebP, repli JPEG), srcset par densité, attributs échappés', () => {
     const url = 'https://media.example.com/m/abc12345/v2/w_800/affiche.webp?exp=1&kid=k&sig=s'
     expect(withTransformFormat(url, 'avif')).toBe('https://media.example.com/m/abc12345/v2/w_800/affiche.avif?exp=1&kid=k&sig=s')
     expect(withTransformFormat('/m/x/v1/full/a.png', 'jpg')).toBe('/m/x/v1/full/a.jpg')
@@ -431,7 +437,7 @@ describe('générateur d\'adresses', () => {
 
     const snippets = imageSnippets({
       url,
-      url2x: url.replace('w_800', 'w_1600'),
+      densities: [{ density: 1, url }, { density: 2, url: url.replace('w_800', 'w_1600') }, { density: 3, url: url.replace('w_800', 'w_2400') }],
       width: 800,
       height: 450,
       alt: 'Plage "été"',
@@ -445,6 +451,11 @@ describe('générateur d\'adresses', () => {
     expect(picture[2]).toContain('type="image/webp"')
     expect(picture[3]).toContain('affiche.jpg?exp=1')
     expect(snippets[2]!.code).toContain('/w_800/affiche.webp?exp=1&amp;kid=k&amp;sig=s 1x, https://media.example.com/m/abc12345/v2/w_1600/affiche.webp')
+    expect(snippets[2]!.code).toContain('/w_2400/affiche.webp?exp=1&amp;kid=k&amp;sig=s 3x"')
+    // Densité fractionnaire écrite avec un point (syntaxe HTML) ; une seule densité : pas de srcset.
+    expect(imageSnippets({ url: '/a.webp', alt: '', formats: ['webp'], format: 'webp', densities: [{ density: 1, url: '/a.webp' }, { density: 1.5, url: '/b.webp' }] })[1]!.code)
+      .toContain('srcset="/a.webp 1x, /b.webp 1.5x"')
+    expect(imageSnippets({ url: '/a.webp', alt: '', formats: ['webp'], format: 'webp', densities: [{ density: 1, url: '/a.webp' }] })).toHaveLength(1)
 
     // Formats restreints : pas de <picture> sans autre source que le repli ; pas de 2x sans variante.
     const only = imageSnippets({ url: '/m/x/v1/w_10/a.jpg', alt: '', formats: ['jpg'], format: 'jpg' })
@@ -452,5 +463,47 @@ describe('générateur d\'adresses', () => {
     expect(only[0]!.code).toBe('<img src="/m/x/v1/w_10/a.jpg" alt="" loading="lazy">')
     const webpOnly = imageSnippets({ url: '/m/x/v1/w_10/a.webp', alt: '', formats: ['webp', 'avif'], format: 'webp' })
     expect(webpOnly[1]!.code).toBe('<picture>\n  <source type="image/avif" srcset="/m/x/v1/w_10/a.avif">\n  <img src="/m/x/v1/w_10/a.webp" alt="" loading="lazy">\n</picture>')
+  })
+})
+
+describe('zone de recadrage et densité du générateur', () => {
+  const image = { width: 1200, height: 800 }
+  const fields = (x: string, y: string, width: string, height: string) => ({ x, y, width, height })
+
+  it('dimensions de travail : un quart de tour les échange', () => {
+    expect(rotatedSize(1200, 800, '0')).toEqual({ width: 1200, height: 800 })
+    expect(rotatedSize(1200, 800, '90')).toEqual({ width: 800, height: 1200 })
+    expect(rotatedSize(1200, 800, 270)).toEqual({ width: 800, height: 1200 })
+    expect(rotatedSize(1200, 800, '180')).toEqual({ width: 1200, height: 800 })
+  })
+
+  it('zone : tout vide = aucune zone ; valeurs complètes dans l\'image', () => {
+    expect(parseCropFields({ ...EMPTY_CROP }, image)).toEqual({ region: null, errors: {} })
+    expect(parseCropFields(fields(' 100', '50 ', '400', '300'), image)).toEqual({ region: { x: 100, y: 50, width: 400, height: 300 }, errors: {} })
+    expect(parseCropFields(fields('0', '0', '1200', '800'), image).region).toEqual({ x: 0, y: 0, width: 1200, height: 800 })
+  })
+
+  it('zone : saisie incomplète, hors bornes, ou qui dépasse de l\'image', () => {
+    const keys = (check: ReturnType<typeof parseCropFields>) => Object.fromEntries(Object.entries(check.errors).map(([field, error]) => [field, error!.key]))
+    expect(keys(parseCropFields(fields('10', '', '100', ''), image))).toEqual({ y: 'validation.cropIncomplete', height: 'validation.cropIncomplete' })
+    expect(keys(parseCropFields(fields('1200', '0', '0', 'x'), image))).toEqual({ x: 'validation.integerRange', width: 'validation.integerRange', height: 'validation.integerRange' })
+    const outside = parseCropFields(fields('1000', '700', '300', '200'), image)
+    expect(outside.region).toBeNull()
+    expect(outside.errors).toEqual({
+      width: { key: 'validation.cropOutside', params: { max: 200 } },
+      height: { key: 'validation.cropOutside', params: { max: 100 } },
+    })
+    // Après un quart de tour, la même zone ne tient plus.
+    expect(parseCropFields(fields('900', '0', '200', '100'), rotatedSize(1200, 800, '90')).errors.x?.key).toBe('validation.integerRange')
+  })
+
+  it('paramètres : zone et densité repliées dans la forme canonique du serveur', () => {
+    const region = { x: 100, y: 50, width: 400, height: 300 }
+    expect(cropParameter(region)).toBe('crop_100-50-400-300')
+    expect(cropFieldValues(region)).toEqual({ x: '100', y: '50', width: '400', height: '300' })
+    expect(cropFieldValues(null)).toEqual(EMPTY_CROP)
+    expect(canonical(`w_200,${cropParameter(region)},dpr_2`)).toBe('crop_100-50-400-300,w_400')
+    expect(canonical('w_300,h_200,dpr_1.5')).toBe('w_450,h_300')
+    for (const density of TRANSFORM_DENSITIES) expect(parseTransformation(`w_100,dpr_${density}`).ok).toBe(true)
   })
 })

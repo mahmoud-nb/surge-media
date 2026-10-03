@@ -43,7 +43,9 @@
     "presetNameReserved": "Ce nom est réservé aux préréglages intégrés (preview, full, original).",
     "presetEmpty": "Indiquez au moins une transformation : taille, qualité, couleur de fond, rotation ou miroir.",
     "integerRange": "Saisissez un nombre entier de {min} à {max}.",
-    "color": "Saisissez une couleur hexadécimale à 6 chiffres, par exemple ffffff."
+    "color": "Saisissez une couleur hexadécimale à 6 chiffres, par exemple ffffff.",
+    "cropIncomplete": "Indiquez les quatre valeurs de la zone, ou videz-les toutes.",
+    "cropOutside": "La zone dépasse de l'image : {max} px au plus ici."
   },
   "auth": {
     "logout": "Se déconnecter"
@@ -544,7 +546,7 @@
       "modes": {
         "params": {
           "label": "Paramètres",
-          "description": "Taille, ajustement, ancrage, qualité, fond, rotation, miroir."
+          "description": "Taille, densité, cadrage, zone, qualité, fond, rotation, miroir."
         },
         "preset": {
           "label": "Préréglage",
@@ -585,13 +587,60 @@
         },
         "srcset": {
           "title": "Écrans haute densité",
-          "description": "Version deux fois plus grande pour les écrans haute résolution (téléphones et ordinateurs récents).",
+          "description": "Versions 1x, 2x (et 3x si l'image le permet) : le navigateur choisit selon la résolution de l'écran.",
           "copy": "Copier l'exemple Écrans haute densité"
         }
       },
       "errors": {
         "PRESET_NOT_FOUND": "Ce préréglage n'existe plus : rechargez la page.",
         "INVALID_TRANSFORM": "Cette transformation n'est pas possible sur cette image, ou n'est plus acceptée par le serveur."
+      },
+      "presetHint": "Préréglages utilisables dans cet espace : intégrés, globaux et propres au projet.",
+      "density": "Densité de pixels",
+      "densityHint": "Multiplie la largeur et la hauteur pour les écrans haute résolution ; l'image s'affiche à la taille demandée.",
+      "densityUnused": "Sans largeur ni hauteur, la densité n'a pas d'effet.",
+      "densities": {
+        "x1": "1x (standard)",
+        "x1_5": "1,5x",
+        "x2": "2x (écrans haute résolution)",
+        "x2_5": "2,5x",
+        "x3": "3x"
+      },
+      "displaySize": "Affichée en {width} × {height} px : densité réelle {density}x.",
+      "output": "Sortie",
+      "formats": {
+        "webp": {
+          "label": "WebP — recommandé",
+          "hint": "Bon compromis entre poids et qualité, lu par tous les navigateurs actuels."
+        },
+        "avif": {
+          "label": "AVIF — le plus léger",
+          "hint": "Fichiers les plus légers ; un peu plus long à générer à la première visite."
+        },
+        "jpg": {
+          "label": "JPEG — compatibilité maximale",
+          "hint": "Lu partout, y compris par d'anciens logiciels ; pas de transparence (fond blanc par défaut)."
+        },
+        "png": {
+          "label": "PNG — sans perte",
+          "hint": "Qualité parfaite et transparence ; fichiers plus lourds (logos, captures d'écran)."
+        }
+      },
+      "durationHint": "Le média est privé : l'adresse est signée et cesse de fonctionner à l'échéance.",
+      "crop": {
+        "title": "Zone de recadrage (facultative)",
+        "description": "Gardez une partie seulement de l'image, avant sa mise à la taille : cliquez sur deux coins opposés de la zone, ou saisissez sa position et sa taille en pixels (image de {width} × {height} px, rotation comprise).",
+        "firstCorner": "Premier coin placé en ({x}, {y}) : cliquez sur le coin opposé.",
+        "current": "Zone gardée : {width} × {height} px à partir de ({x}, {y}).",
+        "none": "Aucune zone : toute l'image est utilisée.",
+        "cleared": "Zone effacée : toute l'image est utilisée.",
+        "clear": "Effacer la zone",
+        "fields": {
+          "x": "Depuis la gauche (px)",
+          "y": "Depuis le haut (px)",
+          "width": "Largeur de la zone (px)",
+          "height": "Hauteur de la zone (px)"
+        }
       }
     }
   },
@@ -1444,17 +1493,17 @@
         "description": "Description",
         "width": "Largeur (px)",
         "height": "Hauteur (px)",
-        "sizeHint": "1 à {max} ; vide = proportionnelle.",
         "fit": "Ajustement",
-        "fitHint": "Utilisé quand la largeur et la hauteur sont indiquées.",
         "gravity": "Ancrage du recadrage",
-        "gravityHint": "Utilisé avec « Remplir et recadrer ».",
         "quality": "Qualité",
-        "qualityHint": "1 à 100 ; vide = qualité par défaut du format.",
         "background": "Couleur de fond",
-        "backgroundHint": "Hexadécimal, ex. ffffff : bandes de « Contenir » et transparence en JPEG.",
+        "backgroundHint": "Six chiffres hexadécimaux (ffffff = blanc). Colore les bandes de « Contenir » et remplace la transparence en JPEG ; vide = transparent, ou blanc en JPEG.",
         "rotate": "Rotation",
-        "flip": "Miroir"
+        "flip": "Miroir",
+        "widthHint": "Vide : déduite de la hauteur, proportions gardées. {max} px au plus.",
+        "heightHint": "Vide : déduite de la largeur, proportions gardées. {max} px au plus.",
+        "backgroundPlaceholder": "ffffff",
+        "flipHint": "Appliqué après la rotation."
       }
     },
     "fit": {
@@ -1510,6 +1559,33 @@
       "PRESET_NAME_TAKEN": "Un préréglage porte déjà ce nom à ce niveau.",
       "PRESET_LIMIT_REACHED": "Nombre maximal de préréglages atteint ({max}).",
       "INVALID_TRANSFORM": "Cette valeur n'est pas acceptée par le serveur."
+    },
+    "fieldGroups": {
+      "size": "Taille",
+      "sizeHelp": "Laissez les deux champs vides pour garder la taille d'origine. L'image n'est jamais agrandie.",
+      "framing": "Cadrage",
+      "framingUnavailable": "Indiquez une largeur et une hauteur pour choisir comment l'image remplit ce cadre.",
+      "rendering": "Rendu",
+      "orientation": "Orientation"
+    },
+    "fitHelp": {
+      "cover": "L'image remplit tout le cadre ; ce qui dépasse est coupé autour de l'ancrage.",
+      "contain": "L'image entière tient dans le cadre ; les bandes vides prennent la couleur de fond.",
+      "fill": "L'image est étirée aux dimensions exactes, sans garder ses proportions.",
+      "inside": "L'image entière tient dans le cadre, sans bandes : le résultat peut être plus petit que le cadre sur un côté.",
+      "outside": "L'image couvre tout le cadre sans être coupée : le résultat peut dépasser le cadre sur un côté."
+    },
+    "gravityHelp": {
+      "focal": "Le point d'intérêt de l'image reste dans le cadre (le centre s'il n'est pas défini).",
+      "center": "Le centre de l'image reste dans le cadre.",
+      "attention": "La zone la plus remarquable (contrastes, couleurs vives), détectée automatiquement.",
+      "entropy": "La zone la plus détaillée, détectée automatiquement.",
+      "edge": "Le recadrage garde cette partie de l'image : {position}."
+    },
+    "qualityHelp": {
+      "format": "1 à 100. Vide : qualité par défaut pour {format} ({quality}). Plus bas = fichier plus léger.",
+      "png": "PNG : sans perte si vide ; une qualité (1 à 100) réduit la palette de couleurs pour un fichier plus léger.",
+      "any": "1 à 100. Vide : qualité par défaut du format (80 en JPEG et WebP, 50 en AVIF ; PNG sans perte)."
     }
   }
 }

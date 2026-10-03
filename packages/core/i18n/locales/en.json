@@ -43,7 +43,9 @@
     "presetNameReserved": "This name is reserved for built-in presets (preview, full, original).",
     "presetEmpty": "Set at least one transformation: size, quality, background colour, rotation or mirror.",
     "integerRange": "Enter a whole number from {min} to {max}.",
-    "color": "Enter a 6-digit hexadecimal colour, for example ffffff."
+    "color": "Enter a 6-digit hexadecimal colour, for example ffffff.",
+    "cropIncomplete": "Enter all four values of the area, or clear them all.",
+    "cropOutside": "The area goes beyond the image: {max} px at most here."
   },
   "auth": {
     "logout": "Sign out"
@@ -544,7 +546,7 @@
       "modes": {
         "params": {
           "label": "Parameters",
-          "description": "Size, fit, anchor, quality, background, rotation, mirror."
+          "description": "Size, density, framing, area, quality, background, rotation, mirror."
         },
         "preset": {
           "label": "Preset",
@@ -585,13 +587,60 @@
         },
         "srcset": {
           "title": "High-density screens",
-          "description": "A version twice as large for high-resolution screens (recent phones and computers).",
+          "description": "1x, 2x (and 3x when the image allows it) versions: the browser picks one according to the screen resolution.",
           "copy": "Copy the High-density screens example"
         }
       },
       "errors": {
         "PRESET_NOT_FOUND": "This preset no longer exists: reload the page.",
         "INVALID_TRANSFORM": "This transformation is not possible on this image, or is no longer accepted by the server."
+      },
+      "presetHint": "Presets usable in this space: built-in, global and project ones.",
+      "density": "Pixel density",
+      "densityHint": "Multiplies the width and height for high-resolution screens; the image displays at the requested size.",
+      "densityUnused": "Without a width or height, the density has no effect.",
+      "densities": {
+        "x1": "1x (standard)",
+        "x1_5": "1.5x",
+        "x2": "2x (high-resolution screens)",
+        "x2_5": "2.5x",
+        "x3": "3x"
+      },
+      "displaySize": "Displayed at {width} × {height} px: actual density {density}x.",
+      "output": "Output",
+      "formats": {
+        "webp": {
+          "label": "WebP — recommended",
+          "hint": "A good balance between weight and quality, read by every current browser."
+        },
+        "avif": {
+          "label": "AVIF — the lightest",
+          "hint": "The lightest files; slightly longer to generate on the first visit."
+        },
+        "jpg": {
+          "label": "JPEG — maximum compatibility",
+          "hint": "Read everywhere, including old software; no transparency (white background by default)."
+        },
+        "png": {
+          "label": "PNG — lossless",
+          "hint": "Perfect quality and transparency; heavier files (logos, screenshots)."
+        }
+      },
+      "durationHint": "The media item is private: the address is signed and stops working when it expires.",
+      "crop": {
+        "title": "Crop area (optional)",
+        "description": "Keep only part of the image, before it is resized: click two opposite corners of the area, or enter its position and size in pixels (image of {width} × {height} px, rotation included).",
+        "firstCorner": "First corner placed at ({x}, {y}): click the opposite corner.",
+        "current": "Kept area: {width} × {height} px from ({x}, {y}).",
+        "none": "No area: the whole image is used.",
+        "cleared": "Area cleared: the whole image is used.",
+        "clear": "Clear the area",
+        "fields": {
+          "x": "From the left (px)",
+          "y": "From the top (px)",
+          "width": "Area width (px)",
+          "height": "Area height (px)"
+        }
       }
     }
   },
@@ -1444,17 +1493,17 @@
         "description": "Description",
         "width": "Width (px)",
         "height": "Height (px)",
-        "sizeHint": "1 to {max}; empty = proportional.",
         "fit": "Fit",
-        "fitHint": "Used when both width and height are set.",
         "gravity": "Crop anchor",
-        "gravityHint": "Used with “Fill and crop”.",
         "quality": "Quality",
-        "qualityHint": "1 to 100; empty = default quality of the format.",
         "background": "Background colour",
-        "backgroundHint": "Hexadecimal, e.g. ffffff: “Contain” bars and transparency in JPEG.",
+        "backgroundHint": "Six hexadecimal digits (ffffff = white). Colours the “Contain” bars and replaces transparency in JPEG; empty = transparent, or white in JPEG.",
         "rotate": "Rotation",
-        "flip": "Mirror"
+        "flip": "Mirror",
+        "widthHint": "Empty: derived from the height, proportions kept. {max} px at most.",
+        "heightHint": "Empty: derived from the width, proportions kept. {max} px at most.",
+        "backgroundPlaceholder": "ffffff",
+        "flipHint": "Applied after the rotation."
       }
     },
     "fit": {
@@ -1510,6 +1559,33 @@
       "PRESET_NAME_TAKEN": "A preset already has this name at this level.",
       "PRESET_LIMIT_REACHED": "Maximum number of presets reached ({max}).",
       "INVALID_TRANSFORM": "The server does not accept this value."
+    },
+    "fieldGroups": {
+      "size": "Size",
+      "sizeHelp": "Leave both fields empty to keep the original size. The image is never enlarged.",
+      "framing": "Framing",
+      "framingUnavailable": "Enter a width and a height to choose how the image fills that frame.",
+      "rendering": "Rendering",
+      "orientation": "Orientation"
+    },
+    "fitHelp": {
+      "cover": "The image fills the whole frame; what goes beyond is cut around the anchor.",
+      "contain": "The whole image fits in the frame; the empty bars take the background colour.",
+      "fill": "The image is stretched to the exact dimensions, without keeping its proportions.",
+      "inside": "The whole image fits in the frame, without bars: the result may be smaller than the frame on one side.",
+      "outside": "The image covers the whole frame without being cut: the result may exceed the frame on one side."
+    },
+    "gravityHelp": {
+      "focal": "The focal point of the image stays in the frame (the center when none is set).",
+      "center": "The center of the image stays in the frame.",
+      "attention": "The most striking area (contrast, vivid colours), detected automatically.",
+      "entropy": "The most detailed area, detected automatically.",
+      "edge": "The crop keeps this part of the image: {position}."
+    },
+    "qualityHelp": {
+      "format": "1 to 100. Empty: default quality for {format} ({quality}). Lower = lighter file.",
+      "png": "PNG: lossless when empty; a quality (1 to 100) reduces the colour palette for a lighter file.",
+      "any": "1 to 100. Empty: default quality of the format (80 for JPEG and WebP, 50 for AVIF; lossless PNG)."
     }
   }
 }

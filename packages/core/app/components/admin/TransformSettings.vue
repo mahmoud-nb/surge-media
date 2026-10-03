@@ -10,6 +10,7 @@ import {
   presetFieldsToDefinition,
   presetFormSchema,
   presetFormValues,
+  transformFieldsSchema,
   type PresetFormValues,
 } from '#shared/schemas/transforms'
 import {
@@ -108,10 +109,10 @@ const editing = ref<Preset | null>(null)
 const editError = ref<string>()
 const savingPreset = ref(false)
 
-/** Forme canonique des champs saisis (affichée, non annoncée), ou null s'ils sont invalides. */
+/** Forme canonique des champs de transformation (affichée dès la saisie, sans attendre le nom), ou null. */
 const definition = computed(() => {
-  const result = presetFormSchema.safeParse(form)
-  return result.success ? presetFieldsToDefinition(result.data) : null
+  const result = transformFieldsSchema.safeParse(form)
+  return result.success ? presetFieldsToDefinition(result.data) || null : null
 })
 
 function openCreate() {
