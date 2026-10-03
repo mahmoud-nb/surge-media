@@ -5,8 +5,8 @@
 > français, avec le « Journal des étapes »). En cas de divergence, **le code fait foi**, puis
 > `setup.md`, puis ce fichier.
 >
-> **État décrit** : commit `b6deda4` (C3) + sous-étape **C4** (2026-10-02, non commitée au moment de la rédaction : vérifier
-> `git log`). Étapes terminées : 1 (monorepo, core, base), 2 (UI, auth, rôles),
+> **État décrit** : commit `15d7d3c` (C4) + complément du générateur (zone de recadrage, densité, formulaires ; 2026-10-03, non
+> commité au moment de la rédaction : vérifier `git log`). Étapes terminées : 1 (monorepo, core, base), 2 (UI, auth, rôles),
 > 3 (utilisateurs), 4 (médias, phase A), 5 = **B1** (projets, espaces, autorisations), 6 = **B2**
 > (identifiants d'API, origines, mode sudo, journal d'audit), 7 = **B3** (API publique v1 en lecture),
 > 8 = **B4** (API v1 en écriture, jetons délégués `sm_dt_`, file bornée des traitements, pré-génération),
@@ -134,7 +134,7 @@ Couches serveur :
   onglets Aperçu/Médias/Membres + Clés d'API/Origines si `project:credentials` — prop `scopes` ; `aria-current="true"` sur une sous-page ; alerte archivé),
   **FolderActions** (B5 : nouveau dossier, renommer, déplacer, supprimer), **TransformSettings** (C2 : politique, préréglages, limites),
   **FocalPointEditor** (C3 : point d'intérêt de la fiche média, clic + curseurs, aperçus 1:1 / 16:9), **UrlGenerator** (C4 : générateur
-  d'adresses de la fiche média), **TransformFields** (C4 : champs structurés d'une transformation, partagés avec le dialogue des
+  d'adresses de la fiche média), **CropSelector** (zone de recadrage du générateur), **TransformFields** (C4 : champs structurés d'une transformation, partagés avec le dialogue des
   préréglages), **ReauthDialog** (dans `layouts/admin.vue`), **SecretPanel** (valeur affichée une fois, focus sur le titre, `defineExpose({ focus })`),
   **ScopeList**, **TokenStatusBadge** (prop `kind: key|token` pour l'accord en français). `UpcomingSection` supprimé en B2.
 - `pages/` : `index` (accueil), `login`, `password/[token]`, `admin/index` (tableau de bord), `admin/users/{index,new,[id]}`,
@@ -908,8 +908,20 @@ Référence d'exploitation : `setup.md` § 8.4. Aucune migration. Écarts : en-t
   invalide ; extraits `imageSnippets` (`shared/utils/snippets.ts` : `htmlAttribute`, `withTransformFormat`) avec `UiCopyButton` (libellés
   « Copier l'exemple … »), blocs `<pre>` à retour à la ligne (pas de zone défilante à rendre focalisable). 2x : `transform + ',dpr_2'`
   seulement si l'image (orientée, rotation comprise) dépasse la dimension demandée. i18n `media.generator.*`.
-- `AdminTransformFields` (`v-model` = objet de champs, `ids`, `maxDimension`, `error(field)`, événement `edit`) remplace les 8 champs du
-  dialogue des préréglages (`AdminTransformSettings` : `:error="message" @edit="clear"`).
+- `AdminTransformFields` (`v-model` = objet de champs, `ids`, `maxDimension`, `error(field)`, `format?`, événement `edit` ; emplacements
+  `size` et `area`) remplace les 8 champs du dialogue des préréglages (`AdminTransformSettings` : `:error="message" @edit="clear"`).
+- **Complément du 2026-10-03** (étape 15 de `setup.md`) : groupes `<fieldset>` Taille / Cadrage / Rendu / Orientation (+ Sortie dans le
+  générateur) ; ajustement affiché seulement avec largeur **et** hauteur, ancrage seulement en `cover` ; aides dynamiques
+  `transforms.fitHelp.*`, `gravityHelp.*`, `qualityHelp.*` (qualité par défaut du format choisi) ; pastille de couleur de fond ; formats
+  décrits (`media.generator.formats.*.label|hint`). **Densité** : `TRANSFORM_DENSITIES` [1, 1.5, 2, 2.5, 3], `atDensity(d)` = paramètres +
+  `dpr_d` canonisés par `parseTransformation` (client) ; `srcsetTargets` 1x/2x/3x quand la marge (rapport source / demandé, dimension la
+  plus contrainte, la plus large en `contain`) ≥ densité − 0,5 ; liens fusionnés (≤ 4) ; `displaySize` = taille demandée et **densité
+  réelle** = min(densité, max(1, échelle)), à 1x les dimensions du fichier. **Zone** : `AdminCropSelector` (`src`, `width`, `height`,
+  `rotate`, `flip`, `ids`, `region`, `error`) : cadre au rapport de l'image tournée, image en `translate(-50%,-50%) scale(±1,±1)
+  rotate(r)` (dimensions échangées au quart de tour), deux clics → zone (≥ 1 px), surbrillance par ombre portée, `<fieldset>` imbriqué
+  (légende `float-left` sous la bordure), annonce `role=status` des seules actions à la souris ; `parseCropFields(values, bounds)`
+  (`validation.cropIncomplete`, `integerRange`, `cropOutside` avec `max`), `rotatedSize`, `cropParameter`. `imageSnippets({ …, densities })`
+  (srcset dès deux densités, `1.5x` avec un point). Dialogue des préréglages : paramètres affichés d'après `transformFieldsSchema`.
 
 ## 10. Référence des API
 
@@ -1287,7 +1299,7 @@ Contrats de données :
   maintenant les lignes commentées de `.env` (regex `^#? *NAME=`).
 - **Rebuild** : arrêter d'abord le serveur `core-start-3100` (il verrouille `argon2…node` dans `.output` → `EPERM unlink`), puis le relancer ;
   il s'arrête aussi pendant une pause de l'agent (relancer avant de rejouer des scénarios).
-- **Build de production bloquée sur ce poste (étape 10)** — **plus constaté le 2026-10-01 en C1** (la build démarre) : Smart App Control bloquait la **copie** de `argon2.win32-x64-msvc.node` dans
+- **Build de production bloquée sur ce poste (étape 10)** — absente du 2026-10-01 au 2026-10-02, **de nouveau constatée le 2026-10-03** (la build se termine, le démarrage échoue ; mon serveur de dev lancé alors sur 3000 car celui de l'utilisateur ne tournait pas, arrêté ensuite) : Smart App Control bloquait la **copie** de `argon2.win32-x64-msvc.node` dans
   `.output/server/node_modules` (l'original de `node_modules`, identique, reste autorisé) → `pnpm start` échoue au démarrage. Ne pas contourner
   (lien physique, désactivation) : laisser l'utilisateur débloquer ; tester sur le `pnpm dev` de l'utilisateur (port 3000) sans l'arrêter, et
   vérifier la build statiquement (`grep operationId .output/server/chunks`).
@@ -1295,8 +1307,9 @@ Contrats de données :
   `vite.optimizeDeps.include: ['@scalar/api-reference']`. Scalar écrit le hash d'URL (`#tag/…`) et y revient au rechargement.
 - **Bootstrap admin** : variables `NUXT_BOOTSTRAP_ADMIN_*` **commentées** dans `.env` depuis le 2026-10-01 (le compte ADMIN existe) ; les
   scripts de test lisent les lignes commentées (regex `^#?\s*NAME=`), sans jamais afficher la valeur.
-- Médias de l'utilisateur à préserver : une photo (« granola », envoyée le 26/09) désormais dans la bibliothèque, et un compte EDITOR
-  existant : ne jamais les supprimer dans les nettoyages de tests.
+- Médias de l'utilisateur à préserver : une photo (« granola », envoyée le 26/09) désormais dans la bibliothèque, une image
+  « landscape.jpg » (bibliothèque, envoyée le 2026-10-02 au soir, point d'intérêt, version 3) et ses deux entrées d'audit
+  `media.visibility_changed`, et un compte EDITOR existant : ne jamais les supprimer dans les nettoyages de tests.
 - Pas d'outil de copie entre stockages, pas de nettoyage des fichiers orphelins ni des liens de mot de passe utilisés.
 - Originaux diffusés avec leurs EXIF (GPS possible).
 - Tests automatisés limités aux modules purs (Vitest, depuis B1) : API et interface vérifiées par scripts ad hoc et audits
@@ -1352,10 +1365,13 @@ Contrats de données :
 - Tests d'API faits jusqu'ici avec des scripts Node temporaires (fetch + FormData + cookie), rejoués en dev **et** en prod ;
   S3 testé contre `s3rver` (faux S3 local, `pnpm dlx s3rver@3.7.1 --port 4568 --configure-bucket surge-media`).
 - Interface : navigateur intégré (pilotage par JS quand le panneau ne s'affiche pas), audits axe injectés depuis jsDelivr.
-- Automatisé dans le dépôt depuis B1 : tests unitaires Vitest des modules purs (179 tests depuis C4 : `tests/{permissions,signing,projects,credentials,api,openapi,delegated,processing,folders,transforms,image-transform}.test.ts` ;
+- Automatisé dans le dépôt depuis B1 : tests unitaires Vitest des modules purs (183 tests depuis le complément de C4 : `tests/{permissions,signing,projects,credentials,api,openapi,delegated,processing,folders,transforms,image-transform}.test.ts` ;
   `image-transform` exécute le vrai pipeline sharp). Le reste (API, interface, axe) reste manuel
   (piste : tests d'intégration API + Playwright + @axe-core/playwright).
 - Viewport du navigateur intégré : 1024 px (DPR 1,25) ; les mises en page à 5 colonnes doivent attendre `xl`.
+- Complément C4 (2026-10-03) : `c4-test.mjs` porté à 45 contrôles (zone, densité, zone hors image, image tournée, adresses 1x/2x/3x),
+  rejoué sur `pnpm dev` (`node c4-test.mjs http://localhost:3000`) ; scripts d'interface paramétrables (`BASE=http://localhost:3000`) ;
+  axe en dev : exclure `nuxt-devtools-frame` et `.nuxt-devtools-label` (violation `region` de l'outil Nuxt, absente en production).
 - C4 : `c4-test.mjs` (39 contrôles : options de la fiche, aperçu dans chaque format et par préréglage, non-agrandissement,
   aucun `MediaVariant` créé, erreurs avec `param`, droits (EDITOR, non-membre, sans session), adresses dans les trois politiques et dans la
   bibliothèque — réglage rétabli —, lien privé servi, erreurs par lien, corbeille) ; interface : `c3-ui-account.mjs` + `c3-ui-fixture.mjs` ;
@@ -1418,8 +1434,8 @@ aperçu à la volée, adresses signées si nécessaire, extraits HTML). **Phase 
   étape 13 ; C4 : § 9.19, étape 14.
 - **Suite (à proposer et faire valider avant de commencer)** : `@surge-media/client` + composants (Vue d'abord) ; **Phase D** : vidéos et
   documents (gestionnaires, signatures, Range).
-- Pistes C4 : zone de recadrage (`crop`) et densité dans le générateur (sélection à la souris + champs), aperçu dans le dialogue d'un
-  préréglage (avec un média de référence), `srcset` en largeurs (`w`) avec `sizes`, cache serveur des aperçus.
+- Pistes C4 : aperçu dans le dialogue d'un préréglage (avec un média de référence), `srcset` en largeurs (`w`) avec `sizes`, cache
+  serveur des aperçus, poignées de redimensionnement de la zone au clavier (aujourd'hui : champs).
 - Pistes C3 : point d'intérêt proposé automatiquement (`attention`), journal des changements de point d'intérêt, signature locale par
   le SDK (clé dédiée par projet), `urlTemplate` signé pour un média public en politique `signed` (aujourd'hui : lien signé à la demande).
 - Pistes C2 : aperçu du rendu dans le dialogue d'un préréglage (avec C4), purge des dérivés d'un préréglage modifié ou supprimé,

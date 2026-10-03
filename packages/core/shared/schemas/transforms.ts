@@ -11,10 +11,12 @@ import {
   TRANSFORM_FORMATS,
   TRANSFORM_GRAVITIES,
   TRANSFORM_MAX_DIMENSION,
+  TRANSFORM_MAX_DPR,
   TRANSFORM_POLICIES,
   TRANSFORM_ROTATIONS,
   TRANSFORM_SEGMENT_MAX_LENGTH,
   type Transformation,
+  type TransformRegion,
 } from '../utils/transforms'
 
 /**
@@ -146,7 +148,7 @@ export function presetFormValues(t: Transformation, name = '', description = '')
 
 // ─── Générateur d'adresses de la fiche média (C4) ────────────────────────────
 
-/** Liens demandés en un appel par le générateur (taille d'affichage, densité 2x…). */
+/** Liens demandés en un appel par le générateur : l'adresse et les densités 1x, 2x, 3x du srcset. */
 export const TRANSFORM_LINKS_MAX = 4
 
 /** Dérivé visé : un préréglage de l'espace **ou** des paramètres (forme libre, vide = `full`), et le format. */
@@ -168,3 +170,82 @@ export const transformLinksSchema = z.object({
   /** Échéance des liens à échéance (média privé) ; sans effet sur une adresse permanente. */
   expiresIn: z.number().int().min(60).max(SIGNED_URL_MAX_TTL).default(3600),
 })
+
+// ─── Zone de recadrage et densité (générateur d'adresses) ────────────────────
+
+/** Densités de pixels proposées (`dpr` : multiplie largeur et hauteur, replié par la forme canonique). */
+export const TRANSFORM_DENSITIES = [1, 1.5, 2, 2.5, 3] as const satisfies readonly number[]
+if (Math.max(...TRANSFORM_DENSITIES) > TRANSFORM_MAX_DPR) throw new Error('TRANSFORM_DENSITIES au-delà de TRANSFORM_MAX_DPR')
+
+export const CROP_FIELDS = ['x', 'y', 'width', 'height'] as const
+export type CropField = (typeof CROP_FIELDS)[number]
+/** Zone saisie : position et taille en pixels de l'image orientée puis tournée ('' = absent). */
+export type CropFieldValues = Record<CropField, string>
+export const EMPTY_CROP: Readonly<CropFieldValues> = Object.freeze({ x: '', y: '', width: '', height: '' })
+
+/** Erreur d'un champ : clé i18n et paramètres (même forme que `fieldErrors` côté interface). */
+export interface CropFieldError {
+  key: string
+  params: Record<string, number>
+}
+
+export interface CropCheck {
+  /** Zone valable, ou null (aucune zone, ou saisie à corriger). */
+  region: TransformRegion | null
+  errors: Partial<Record<CropField, CropFieldError>>
+}
+
+/** Dimensions de l'image après une rotation (un quart de tour les échange). */
+export function rotatedSize(width: number, height: number, rotate: string | number): { width: number, height: number } {
+  const quarter = Number(rotate) === 90 || Number(rotate) === 270
+  return quarter ? { width: height, height: width } : { width, height }
+}
+
+/**
+ * Zone de recadrage saisie, vérifiée dans `bounds` (image orientée puis tournée) : tout vide = aucune
+ * zone ; sinon les quatre entiers sont exigés et la zone doit tenir dans l'image (fonction pure, testée).
+ */
+export function parseCropFields(values: CropFieldValues, bounds: { width: number, height: number }): CropCheck {
+  const raw = Object.fromEntries(CROP_FIELDS.map(field => [field, values[field].trim()])) as CropFieldValues
+  if (CROP_FIELDS.every(field => raw[field] === '')) return { region: null, errors: {} }
+
+  const limits: Record<CropField, { min: number, max: number }> = {
+    x: { min: 0, max: bounds.width - 1 },
+    y: { min: 0, max: bounds.height - 1 },
+    width: { min: 1, max: bounds.width },
+    height: { min: 1, max: bounds.height },
+  }
+  const errors: CropCheck['errors'] = {}
+  const numbers: Partial<Record<CropField, number>> = {}
+  for (const field of CROP_FIELDS) {
+    const { min, max } = limits[field]
+    if (raw[field] === '') errors[field] = { key: 'validation.cropIncomplete', params: {} }
+    else if (!/^\d{1,6}$/.test(raw[field]) || Number(raw[field]) < min || Number(raw[field]) > max) {
+      errors[field] = { key: 'validation.integerRange', params: { min, max } }
+    }
+    else numbers[field] = Number(raw[field])
+  }
+  const { x, y, width, height } = numbers
+  if (x !== undefined && width !== undefined && x + width > bounds.width) {
+    errors.width = { key: 'validation.cropOutside', params: { max: bounds.width - x } }
+  }
+  if (y !== undefined && height !== undefined && y + height > bounds.height) {
+    errors.height = { key: 'validation.cropOutside', params: { max: bounds.height - y } }
+  }
+  if (Object.keys(errors).length > 0 || x === undefined || y === undefined || width === undefined || height === undefined) {
+    return { region: null, errors }
+  }
+  return { region: { x, y, width, height }, errors }
+}
+
+/** Zone → paramètre `crop_x-y-largeur-hauteur`. */
+export function cropParameter(region: TransformRegion): string {
+  return `crop_${region.x}-${region.y}-${region.width}-${region.height}`
+}
+
+/** Zone → champs du formulaire. */
+export function cropFieldValues(region: TransformRegion | null): CropFieldValues {
+  return region
+    ? { x: String(region.x), y: String(region.y), width: String(region.width), height: String(region.height) }
+    : { ...EMPTY_CROP }
+}

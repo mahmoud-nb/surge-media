@@ -658,8 +658,21 @@ curl -X POST -H "Authorization: Bearer $SURGE_MEDIA_SECRET_KEY" -H "Content-Type
 ### 8.4 Générateur d'adresses (fiche média)
 
 La fiche d'une image (`/admin/media/:id`) propose un **générateur d'adresses** : on choisit un préréglage de
-l'espace ou des paramètres (largeur, hauteur, ajustement, ancrage, qualité, fond, rotation, miroir — les
-mêmes champs que le dialogue des préréglages) et un format ; l'interface affiche :
+l'espace ou des paramètres, regroupés par thème — **Taille** (largeur, hauteur, densité de pixels 1x à 3x),
+**Cadrage** (ajustement et ancrage, affichés quand largeur et hauteur sont indiquées ; **zone de recadrage**),
+**Rendu** (qualité, couleur de fond), **Orientation** (rotation, miroir) — puis un format de sortie. Chaque
+aide décrit l'effet du choix courant (mode d'ajustement, ancrage, qualité par défaut du format…). Les champs
+de taille, de cadrage, de rendu et d'orientation sont ceux du dialogue des préréglages.
+
+- **Zone de recadrage** (`crop`) : cliquer sur deux coins opposés de l'image (pas de glisser-déposer) ou
+  saisir sa position et sa taille en pixels ; l'image est montrée avec la rotation et le miroir choisis (la
+  zone s'entend dans l'image tournée), le reste est assombri. Une zone qui dépasse est signalée sur le champ.
+- **Densité** (`dpr`) : multiplie largeur et hauteur ; l'adresse porte les dimensions multipliées (forme
+  canonique) et l'extrait `<img>` garde la taille d'affichage demandée. Si l'image (ou la zone) est trop
+  petite pour atteindre la densité, l'aperçu indique la **densité réelle** (ex. « 800 × 300 px : densité
+  réelle 1,2x »).
+
+L'interface affiche :
 
 - un **aperçu** rendu à la volée par l'administration, avec les dimensions, le format et le poids réels du
   résultat (et un avertissement quand l'image d'origine est trop petite : jamais d'agrandissement).
@@ -669,8 +682,9 @@ mêmes champs que le dialogue des préréglages) et un format ; l'interface affi
   signée sans échéance (paramètres libres d'un média public en politique `SIGNED`), ou lien temporaire
   (média privé : validité 1 h, 24 h ou 7 jours) ; en politique `PRESETS`, des paramètres libres sont
   refusés (lien vers les préréglages de l'espace) ;
-- des **extraits HTML** : `<img>` avec ses dimensions, `<picture>` (sources AVIF et WebP, repli JPEG) et
-  `srcset` 1x/2x pour les écrans haute densité (paramètres avec une dimension que l'image dépasse).
+- des **extraits HTML** : `<img>` avec sa taille d'affichage, `<picture>` (sources AVIF et WebP, repli JPEG)
+  et `srcset` 1x/2x/3x pour les écrans haute densité (chaque densité seulement si l'image, ou la zone,
+  permet d'en approcher d'au moins une demi-densité : sinon le serveur rendrait presque le même fichier).
 
 L'aperçu et l'adresse se mettent à jour après une courte pause de saisie. Droit nécessaire : `media:read`
 dans l'espace du média (tout membre du projet) ; pas de générateur dans la corbeille.
@@ -1369,7 +1383,7 @@ pnpm start                          # node --env-file-if-exists=.env .output/ser
 | --- | --- |
 | `ERR_PNPM_IGNORED_BUILDS` | pnpm 12 bloque les scripts d'installation : `pnpm approve-builds <paquet>` (la liste autorisée est dans `pnpm-workspace.yaml` › `allowBuilds`) |
 | Avertissement *unmet peer @nuxt/schema ^4* (via `@nuxt/cli`) | sans effet : la CLI Nuxt est partagée entre Nuxt 3 et 4 |
-| `pnpm start` : *Cannot find native binding* … *An Application Control policy has blocked this file* (`.output/server/node_modules/@node-rs/argon2-win32-x64-msvc`) | Windows « Contrôle intelligent des applications » bloque la **copie** du module natif faite par la build (l'original de `node_modules` reste autorisé). Ne pas désactiver la protection : débloquer le fichier dans les réglages de sécurité Windows si vous le souhaitez, ou tester avec `pnpm dev` |
+| `pnpm start` : *Cannot find native binding* … *An Application Control policy has blocked this file* (`.output/server/node_modules/@node-rs/argon2-win32-x64-msvc`) | Windows « Contrôle intelligent des applications » bloque la **copie** du module natif faite par la build (l'original de `node_modules` reste autorisé) ; constaté à l'étape 10 puis de nouveau le 2026-10-03, pas entre les deux. Ne pas désactiver la protection : débloquer le fichier dans les réglages de sécurité Windows si vous le souhaitez, ou tester avec `pnpm dev` |
 | `/admin/api` en dev : *Cannot define property modal, object is not extensible* | deux copies de Vue chargées après la découverte tardive de Scalar par Vite : `vite.optimizeDeps.include` le pré-optimise (`nuxt.config.ts`) ; recharger la page si l'erreur apparaît encore après une mise à jour |
 | Avertissement de build *[vite:css][postcss] Lexical error … (50 - l) * infinity* | syntaxe CSS récente dans la feuille de style de Scalar, non comprise par PostCSS : sans effet (émise telle quelle) |
 | `[surge-media] OpenAPI — …` dans la console (dev) | documentation d'une route incomplète : voir § 9.12 (`defineRouteMeta`, traduction `x-i18n`, codes d'erreur) |
@@ -2118,6 +2132,42 @@ de téléphone sans défilement horizontal.
 - Pas d'aperçu dans le dialogue d'un préréglage (aucun média de référence).
 - Chaque aperçu est recalculé (seul le navigateur le garde 5 minutes) : sur une très grande image, il
   occupe un traitement à chaque changement de réglage (file bornée, § 8).
+
+**Après `git pull`**
+```bash
+pnpm install          # aucune nouvelle dépendance, aucune migration
+```
+
+### Étape 15 — 2026-10-03 — Générateur d'adresses : zone de recadrage, densité, formulaires
+
+**Cadre** : complément de C4 demandé par l'utilisateur : zone de recadrage et densité dans le générateur,
+formulation des champs plus explicite. Aucune route ni migration nouvelle (l'API et `/m/` acceptaient
+déjà `crop` et `dpr`).
+
+**Ajouté**
+- Zone de recadrage (`AdminCropSelector`) : deux clics sur deux coins opposés (pointeur unique), quatre
+  champs en pixels, image affichée avec la rotation et le miroir choisis, zone en surbrillance ; annonce
+  vocale des actions à la souris seulement (pas à chaque frappe).
+- Densité de pixels (1x à 3x, pas de 0,5) : adresse en dimensions multipliées, taille d'affichage et densité
+  réelle sous l'aperçu ; `srcset` 1x/2x/3x (chaque densité seulement si elle apporte au moins une
+  demi-densité, d'après la dimension la plus contrainte du cadre).
+- Champs regroupés par thème (Taille, Cadrage, Rendu, Orientation, Sortie) avec des aides qui décrivent le
+  choix courant ; ajustement et ancrage affichés quand ils agissent ; aperçu de la couleur de fond ; formats
+  décrits (« WebP — recommandé », « AVIF — le plus léger »…). Le dialogue des préréglages profite des mêmes
+  champs et affiche ses paramètres dès la saisie (sans attendre le nom).
+- `shared/schemas/transforms.ts` : `parseCropFields`, `rotatedSize`, `cropParameter`, `cropFieldValues`,
+  `TRANSFORM_DENSITIES` ; `imageSnippets` reçoit une liste de densités. 183 tests Vitest.
+
+**Vérifié** : typecheck, 183 tests Vitest, i18n (1067 clés), contrastes, migrations (`--check`), build ;
+**45 scénarios HTTP** de C4 (dont zone, densité, zone hors image, zone dans l'image tournée, adresses
+canoniques 1x/2x/3x) — sur le serveur de développement, la build ne démarrant plus (voir ci-dessous) ;
+interface : sélection en deux clics, saisie au clavier avec erreurs sur les champs, rotation (bornes de
+la zone échangées), densité (2x atteinte, densité réelle 1,2x, image trop petite), ajustements, dialogue des
+préréglages ; axe-core : 0 violation en fr/en × clair/sombre (zone sélectionnée et champ invalide compris) ;
+largeur de téléphone sans défilement horizontal.
+
+**À noter** : Windows Smart App Control bloque de nouveau la copie de `argon2` dans `.output` (la build se
+termine, `pnpm start` échoue au démarrage ; § 14) : vérifications faites avec `pnpm dev`.
 
 **Après `git pull`**
 ```bash

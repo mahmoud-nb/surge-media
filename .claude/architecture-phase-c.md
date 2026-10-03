@@ -13,10 +13,12 @@
 >   `resolveTransformRequest` (service des transformations) est désormais commun à l'aperçu, aux adresses et à l'API (erreurs
 >   métier `data.code`, converties en problèmes RFC 9457 par l'API).
 > - Options du générateur dans `GET /api/admin/media/:id` (`transforms` : politique, préréglages utilisables, formats, borne).
-> - Interface : préréglage ou paramètres structurés (champs partagés avec le dialogue des préréglages : `AdminTransformFields` ;
->   ni `crop` ni `dpr` dans les champs), format, validité du lien pour un média privé ; mise à jour après 400 ms de pause, requête
->   précédente annulée. Extraits : `<img>`, `<picture>` (AVIF, WebP, repli JPEG sinon PNG), `srcset` 1x/2x (`dpr_2`, seulement
->   si l'image dépasse la taille demandée) ; attributs échappés (`&amp;` des signatures) — module pur `shared/utils/snippets.ts`.
+> - Interface : préréglage ou paramètres structurés (champs partagés avec le dialogue des préréglages : `AdminTransformFields`,
+>   groupés Taille / Cadrage / Rendu / Orientation), format, validité du lien pour un média privé ; mise à jour après 400 ms de
+>   pause, requête précédente annulée. Complément du 2026-10-03 : **zone de recadrage** (deux clics, sans glisser, + champs ; image
+>   tournée et retournée) et **densité** (1x–3x ; taille d'affichage demandée et densité réelle). Extraits : `<img>`, `<picture>`
+>   (AVIF, WebP, repli JPEG sinon PNG), `srcset` 1x/2x/3x (chaque densité si elle apporte au moins une demi-densité) ; attributs
+>   échappés (`&amp;` des signatures) — module pur `shared/utils/snippets.ts`.
 > - Pas d'aperçu dans le dialogue d'un préréglage (pas de média de référence) : piste.
 >
 > Écarts et précisions de C3 (API et point d'intérêt) :

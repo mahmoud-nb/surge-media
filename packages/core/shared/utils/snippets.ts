@@ -2,8 +2,8 @@ import type { TransformFormat } from './transforms'
 
 /**
  * Extraits HTML d'intégration d'une image transformée (générateur d'adresses de la fiche média,
- * phase C4) : <img> simple, <picture> à plusieurs formats, srcset 1x/2x. Fonctions pures (testées
- * dans tests/transforms.test.ts), réutilisables par une documentation ou un SDK.
+ * phase C4) : <img> simple, <picture> à plusieurs formats, srcset par densité (1x, 2x, 3x). Fonctions
+ * pures (testées dans tests/transforms.test.ts), réutilisables par une documentation ou un SDK.
  */
 
 export type ImageSnippetKind = 'img' | 'picture' | 'srcset'
@@ -11,9 +11,7 @@ export type ImageSnippetKind = 'img' | 'picture' | 'srcset'
 export interface ImageSnippetInput {
   /** Adresse du dérivé (signée si nécessaire), dans le format choisi. */
   url: string
-  /** Adresse de la variante 2x (même transformation, densité doublée), si elle existe. */
-  url2x?: string | null
-  /** Dimensions du résultat (attributs width/height : pas de décalage au chargement). */
+  /** Taille d'affichage en pixels CSS (attributs width/height : pas de décalage au chargement). */
   width?: number | null
   height?: number | null
   alt: string
@@ -21,6 +19,8 @@ export interface ImageSnippetInput {
   formats: readonly TransformFormat[]
   /** Format de l'adresse fournie. */
   format: TransformFormat
+  /** Variantes par densité, 1x en premier (même transformation, dimensions multipliées). */
+  densities?: readonly { density: number, url: string }[] | null
 }
 
 /** Valeur d'attribut HTML échappée (les « & » des paramètres de signature compris). */
@@ -38,7 +38,8 @@ export function withTransformFormat(url: string, format: TransformFormat): strin
 
 /**
  * Extraits proposés : <img> ; <picture> (sources AVIF puis WebP si activés, repli JPEG, sinon PNG,
- * sinon le format choisi) quand au moins une source diffère du repli ; srcset 1x/2x si `url2x`.
+ * sinon le format choisi) quand au moins une source diffère du repli ; srcset quand au moins deux
+ * densités sont fournies (l'image 1x sert de `src`).
  */
 export function imageSnippets(input: ImageSnippetInput): { kind: ImageSnippetKind, code: string }[] {
   const size = input.width && input.height ? ` width="${input.width}" height="${input.height}"` : ''
@@ -59,8 +60,10 @@ export function imageSnippets(input: ImageSnippetInput): { kind: ImageSnippetKin
       ].join('\n'),
     })
   }
-  if (input.url2x) {
-    snippets.push({ kind: 'srcset', code: img(input.url, ` srcset="${htmlAttribute(input.url)} 1x, ${htmlAttribute(input.url2x)} 2x"`) })
+  const densities = input.densities ?? []
+  if (densities.length >= 2) {
+    const srcset = densities.map(({ density, url }) => `${htmlAttribute(url)} ${density}x`).join(', ')
+    snippets.push({ kind: 'srcset', code: img(densities[0]!.url, ` srcset="${srcset}"`) })
   }
   return snippets
 }
