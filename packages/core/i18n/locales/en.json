@@ -150,9 +150,9 @@
         "loggedInAt": "Signed in since"
       },
       "permissions": {
-        "title": "Your permissions",
         "granted": "Allowed",
-        "notGranted": "Not included"
+        "notGranted": "Not included",
+        "details": "Your permissions in detail ({count} of {total})"
       },
       "device": {
         "title": "Trusted device",
@@ -163,6 +163,79 @@
         "forgetAll": "Stop trusting all my devices | Stop trusting my device | Stop trusting my {count} devices",
         "forgotten": "This device is no longer trusted: your password will be asked again for sensitive actions.",
         "allForgotten": "No trusted device to remove. | Your device is no longer trusted. | Your {count} devices are no longer trusted."
+      },
+      "loadError": "The dashboard could not be loaded.",
+      "stats": {
+        "title": "Statistics",
+        "media": "Media",
+        "images": "no images | {count} image | {count} images",
+        "private": "none private | {count} private | {count} private",
+        "projects": "Active projects",
+        "archived": "none archived | {count} archived | {count} archived",
+        "variants": "Cached variants",
+        "variantsSize": "{size} generated on demand",
+        "users": "Accounts",
+        "invitedUsers": "Invited accounts",
+        "invited": "no pending invitation | {count} pending invitation | {count} pending invitations",
+        "inactive": "none deactivated | {count} deactivated | {count} deactivated",
+        "credentials": "Active API credentials",
+        "personalTokens": "no personal token | {count} personal token | {count} personal tokens",
+        "projectKeys": "no project key | {count} project key | {count} project keys"
+      },
+      "shortcuts": {
+        "title": "Shortcuts",
+        "upload": "Upload to the library",
+        "library": "Browse the library",
+        "newProject": "Create a project",
+        "projects": "See my projects",
+        "invite": "Invite a user",
+        "newToken": "Create a personal token",
+        "apiDocs": "Try the API",
+        "audit": "View the audit log",
+        "settings": "Installation settings"
+      },
+      "uploads": {
+        "title": "Uploads over the last 30 days",
+        "summary": "no uploads | {count} media uploaded in 30 days; busiest day: {date} ({peak}). | {count} media uploaded in 30 days; busiest day: {date} ({peak}).",
+        "empty": "No media uploaded in the last 30 days.",
+        "bar": "{date}: no uploads | {date}: {count} upload | {date}: {count} uploads",
+        "table": "Show the data",
+        "caption": "Media uploaded per day",
+        "day": "Day",
+        "count": "Uploads",
+        "loading": "Loading the chart…",
+        "peak": "no uploads | {count} upload | {count} uploads"
+      },
+      "attention": {
+        "title": "Needs attention",
+        "none": "Nothing to report.",
+        "warning": "Action needed:",
+        "info": "For information:",
+        "expiringTokens": "{count} personal token expires within {days} days | {count} personal tokens expire within {days} days",
+        "expiresOn": "{name}: {date}",
+        "manageTokens": "Manage my personal tokens",
+        "expiringKeys": "{count} secret key expires within {days} days | {count} secret keys expire within {days} days",
+        "keyLine": "{name} ({environment}) · {project}",
+        "invitations": "{count} pending invitation | {count} pending invitations",
+        "invitationsExpired": "including {count} whose link has expired: generate a new one | including {count} whose link has expired: generate new ones",
+        "manageInvitations": "See pending invitations",
+        "trash": "{count} media item in the trash | {count} media items in the trash",
+        "trashSpace": "{space} ({count})",
+        "siteUrl": "The public address of the installation (NUXT_SITE_URL) is not set: absolute addresses depend on each request.",
+        "mail": "Email sending is not configured (NUXT_SMTP_HOST, NUXT_SMTP_FROM): invitation links have to be sent by hand."
+      },
+      "projects": {
+        "title": "My projects",
+        "titleAll": "Projects",
+        "all": "No projects | See the project | See the {count} projects",
+        "media": "no media | {count} media item | {count} media items",
+        "emptyCreate": "No active project yet."
+      },
+      "activity": {
+        "title": "Recent activity",
+        "all": "See the full log",
+        "by": "by {actor}, {date}",
+        "empty": "No activity recorded."
       }
     }
   },

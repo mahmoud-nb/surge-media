@@ -1,10 +1,16 @@
 <script setup lang="ts">
-import { Check, Minus } from '@lucide/vue'
+/**
+ * Tableau de bord : statistiques, raccourcis, envois sur 30 jours, points d'attention, projets,
+ * activité récente (audit:read) et compte. Disposition fixe ; chaque widget n'apparaît que si le
+ * compte a les droits correspondants (données de GET /api/admin/dashboard, limitées à ses espaces).
+ */
+import { FolderKanban, Images, KeyRound, Layers, UserPlus, Users } from '@lucide/vue'
+import type { Component } from 'vue'
 
 definePageMeta({ layout: 'admin' })
 
 const { t, locale } = useI18n()
-const { user, role, loggedInAt, can } = useAuth()
+const { user, role, can } = useAuth()
 
 useSeoMeta({ title: () => t('admin.dashboard.meta.title') })
 
@@ -12,48 +18,92 @@ useSeoMeta({ title: () => t('admin.dashboard.meta.title') })
 const { data: status } = await useFetch('/api/admin/status', {
   immediate: can('users:manage'),
 })
+const { data, error, refresh } = await useApiFetch('/api/admin/dashboard')
 
 const displayName = computed(() => user.value?.name || user.value?.email || '')
+const number = computed(() => new Intl.NumberFormat(locale.value))
 
-// ─── Appareil de confiance (actions sensibles sans ressaisie du mot de passe) ──
-const { $api } = useNuxtApp()
-const { data: devices, refresh: refreshDevices } = await useApiFetch('/api/auth/trusted-devices')
-const otherDevices = computed(() => (devices.value ? devices.value.total - (devices.value.current ? 1 : 0) : 0))
-const forgetting = ref<TrustedDeviceScope | null>(null)
-const deviceStatus = ref<{ variant: 'success' | 'error', message: string } | null>(null)
-const deviceTitle = useTemplateRef<HTMLElement>('deviceTitle')
-
-async function forget(scope: TrustedDeviceScope) {
-  deviceStatus.value = null
-  forgetting.value = scope
-  try {
-    const { revoked } = await $api('/api/auth/trusted-devices', { method: 'DELETE', body: { scope } })
-    await refreshDevices()
-    deviceStatus.value = {
-      variant: 'success',
-      message: scope === 'current' ? t('admin.dashboard.device.forgotten') : t('admin.dashboard.device.allForgotten', { count: revoked }, revoked),
-    }
-  }
-  catch {
-    deviceStatus.value = { variant: 'error', message: t('common.unexpectedError') }
-  }
-  finally {
-    forgetting.value = null
-    // Le bouton utilisé a pu disparaître : le focus revient au titre de la rubrique.
-    await nextTick()
-    deviceTitle.value?.focus()
-  }
+interface Card {
+  key: string
+  icon: Component
+  label: string
+  value: string
+  detail?: string
+  to?: string
 }
 
-const permissionList = computed(() => PERMISSIONS.map(permission => ({
-  permission,
-  granted: can(permission),
-  label: t(`permissions.${permission.replace(':', '.')}`),
-})))
+const cards = computed<Card[]>(() => {
+  const d = data.value
+  if (!d) return []
+  const n = (value: number) => number.value.format(value)
+  const plural = (key: string, count: number) => t(key, { count: n(count) }, count)
+  const list: Card[] = []
+  if (d.media) {
+    list.push({
+      key: 'media',
+      icon: Images,
+      label: t('admin.dashboard.stats.media'),
+      value: n(d.media.total),
+      detail: [formatBytes(d.media.size, locale.value), plural('admin.dashboard.stats.images', d.media.kinds.IMAGE.count), plural('admin.dashboard.stats.private', d.media.private)].join(' · '),
+      to: can('library:read') ? '/admin/media' : '/admin/projects',
+    })
+  }
+  list.push({
+    key: 'projects',
+    icon: FolderKanban,
+    label: t('admin.dashboard.stats.projects'),
+    value: n(d.projects.active),
+    detail: plural('admin.dashboard.stats.archived', d.projects.archived),
+    to: '/admin/projects',
+  })
+  if (d.variants) {
+    list.push({
+      key: 'variants',
+      icon: Layers,
+      label: t('admin.dashboard.stats.variants'),
+      value: n(d.variants.count),
+      detail: t('admin.dashboard.stats.variantsSize', { size: formatBytes(d.variants.size, locale.value) }),
+    })
+  }
+  if (d.users) {
+    list.push(d.users.scope === 'all'
+      ? {
+          key: 'users',
+          icon: Users,
+          label: t('admin.dashboard.stats.users'),
+          value: n(d.users.total),
+          detail: [plural('admin.dashboard.stats.invited', d.users.invited), plural('admin.dashboard.stats.inactive', d.users.inactive)].join(' · '),
+          to: '/admin/users',
+        }
+      : {
+          key: 'invitations',
+          icon: UserPlus,
+          label: t('admin.dashboard.stats.invitedUsers'),
+          value: n(d.users.total),
+          detail: plural('admin.dashboard.stats.invited', d.users.invited),
+          to: '/admin/users',
+        })
+  }
+  if (d.credentials) {
+    const { personalTokens, projectKeys } = d.credentials
+    list.push({
+      key: 'credentials',
+      icon: KeyRound,
+      label: t('admin.dashboard.stats.credentials'),
+      value: n((personalTokens ?? 0) + (projectKeys ?? 0)),
+      detail: [
+        personalTokens === null ? null : plural('admin.dashboard.stats.personalTokens', personalTokens),
+        projectKeys === null ? null : plural('admin.dashboard.stats.projectKeys', projectKeys),
+      ].filter(Boolean).join(' · '),
+      to: personalTokens === null ? '/admin/projects' : '/admin/tokens',
+    })
+  }
+  return list
+})
 </script>
 
 <template>
-  <div v-if="user && role" class="mx-auto max-w-5xl">
+  <div v-if="user && role" class="mx-auto max-w-6xl">
     <AdminPageHeader
       :title="t('admin.dashboard.title')"
       :description="t('admin.dashboard.greeting', { name: displayName })"
@@ -68,106 +118,58 @@ const permissionList = computed(() => PERMISSIONS.map(permission => ({
       {{ t('admin.dashboard.bootstrapWarning.description') }}
     </UiAlert>
 
-    <div class="grid gap-6 lg:grid-cols-2">
-      <section aria-labelledby="account-title" class="rounded-xl border border-border bg-surface p-6 shadow-xs">
-        <h2 id="account-title" class="text-lg font-semibold text-foreground">
-          {{ t('admin.dashboard.account.title') }}
-        </h2>
-        <dl class="mt-5 grid gap-4 text-sm">
-          <div class="grid gap-1">
-            <dt class="text-muted-foreground">
-              {{ t('admin.dashboard.account.name') }}
-            </dt>
-            <dd class="font-medium text-foreground">
-              {{ user.name || t('admin.dashboard.account.noName') }}
-            </dd>
-          </div>
-          <div class="grid gap-1">
-            <dt class="text-muted-foreground">
-              {{ t('admin.dashboard.account.email') }}
-            </dt>
-            <dd class="font-medium break-all text-foreground">
-              {{ user.email }}
-            </dd>
-          </div>
-          <div class="grid gap-1">
-            <dt class="text-muted-foreground">
-              {{ t('admin.dashboard.account.role') }}
-            </dt>
-            <dd>
-              <span class="inline-flex rounded-full border border-primary/40 bg-primary-soft px-2.5 py-0.5 text-xs font-semibold text-primary">
-                {{ t(`roles.${role}.label`) }}
-              </span>
-            </dd>
-          </div>
-          <div v-if="loggedInAt" class="grid gap-1">
-            <dt class="text-muted-foreground">
-              {{ t('admin.dashboard.account.loggedInAt') }}
-            </dt>
-            <dd class="font-medium text-foreground">
-              <NuxtTime :datetime="loggedInAt" :locale="locale" date-style="long" time-style="short" />
-            </dd>
-          </div>
-        </dl>
+    <UiAlert v-if="error" variant="error" live="assertive" :title="t('admin.dashboard.loadError')" class="mb-6">
+      <UiButton variant="outline" size="sm" class="mt-2" @click="refresh()">
+        {{ t('common.retry') }}
+      </UiButton>
+    </UiAlert>
 
-        <div v-if="devices && devices.days > 0" class="mt-6 border-t border-border pt-5">
-          <h3 ref="deviceTitle" tabindex="-1" class="text-sm font-semibold text-foreground">
-            {{ t('admin.dashboard.device.title') }}
-          </h3>
-          <p class="mt-1.5 text-sm text-muted-foreground">
-            <i18n-t v-if="devices.current" keypath="admin.dashboard.device.trusted" tag="span" scope="global">
-              <template #date>
-                <NuxtTime :datetime="devices.current.expiresAt" :locale="locale" date-style="long" time-style="short" />
-              </template>
-            </i18n-t>
-            <template v-else>
-              {{ t('admin.dashboard.device.notTrusted', { days: devices.days }, devices.days) }}
-            </template>
-          </p>
-          <p v-if="otherDevices > 0" class="mt-1.5 text-sm text-muted-foreground">
-            {{ t('admin.dashboard.device.others', { count: otherDevices }, otherDevices) }}
-          </p>
-          <UiAlert v-if="deviceStatus" :variant="deviceStatus.variant" :live="deviceStatus.variant === 'error' ? 'assertive' : 'polite'" class="mt-3">
-            {{ deviceStatus.message }}
-          </UiAlert>
-          <div v-if="devices.total > 0" class="mt-3 flex flex-wrap gap-2">
-            <UiButton v-if="devices.current" variant="outline" size="sm" :loading="forgetting === 'current'" @click="forget('current')">
-              {{ t('admin.dashboard.device.forget') }}
-            </UiButton>
-            <UiButton v-if="otherDevices > 0" variant="outline" size="sm" :loading="forgetting === 'all'" @click="forget('all')">
-              {{ t('admin.dashboard.device.forgetAll', { count: devices.total }, devices.total) }}
-            </UiButton>
-          </div>
-        </div>
-      </section>
-
-      <section aria-labelledby="permissions-title" class="rounded-xl border border-border bg-surface p-6 shadow-xs">
-        <h2 id="permissions-title" class="text-lg font-semibold text-foreground">
-          {{ t('admin.dashboard.permissions.title') }}
+    <div v-else-if="data" class="grid gap-6">
+      <section aria-labelledby="stats-title">
+        <h2 id="stats-title" class="sr-only">
+          {{ t('admin.dashboard.stats.title') }}
         </h2>
-        <p class="mt-2 text-sm text-muted-foreground">
-          {{ t(`roles.${role}.description`) }}
-        </p>
-        <ul class="mt-5 grid gap-3 text-sm">
-          <li v-for="item in permissionList" :key="item.permission" class="flex items-center gap-3">
-            <span
-              :class="cn(
-                'flex size-6 shrink-0 items-center justify-center rounded-full',
-                item.granted ? 'bg-success-soft text-success' : 'bg-muted text-muted-foreground',
-              )"
-            >
-              <Check v-if="item.granted" class="size-3.5" aria-hidden="true" />
-              <Minus v-else class="size-3.5" aria-hidden="true" />
-            </span>
-            <span :class="item.granted ? 'text-foreground' : 'text-muted-foreground'">
-              {{ item.label }}
-            </span>
-            <span class="ml-auto text-xs text-muted-foreground">
-              {{ item.granted ? t('admin.dashboard.permissions.granted') : t('admin.dashboard.permissions.notGranted') }}
-            </span>
-          </li>
+        <ul class="grid grid-cols-[repeat(auto-fit,minmax(13rem,1fr))] gap-4">
+          <AdminDashboardStatCard
+            v-for="card in cards"
+            :key="card.key"
+            :icon="card.icon"
+            :label="card.label"
+            :value="card.value"
+            :detail="card.detail"
+            :to="card.to"
+          />
         </ul>
       </section>
+
+      <AdminDashboardShortcuts />
+
+      <div class="grid gap-6 lg:grid-cols-3">
+        <ClientOnly v-if="data.uploads">
+          <AdminDashboardUploadsChart :since="data.uploads.since" :hours="data.uploads.hours" class="lg:col-span-2" />
+          <template #fallback>
+            <section aria-labelledby="uploads-loading-title" class="rounded-xl border border-border bg-surface p-6 shadow-xs lg:col-span-2">
+              <h2 id="uploads-loading-title" class="text-lg font-semibold text-foreground">
+                {{ t('admin.dashboard.uploads.title') }}
+              </h2>
+              <p class="mt-4 text-sm text-muted-foreground">
+                {{ t('admin.dashboard.uploads.loading') }}
+              </p>
+            </section>
+          </template>
+        </ClientOnly>
+        <AdminDashboardAttention :items="data.attention" :class="data.uploads ? undefined : 'lg:col-span-3'" />
+      </div>
+
+      <div class="grid gap-6 lg:grid-cols-2">
+        <AdminDashboardProjects :items="data.projects.items" :total="data.projects.active" />
+        <AdminDashboardActivity v-if="data.activity" :items="data.activity" />
+        <AdminDashboardAccount v-else />
+      </div>
+
+      <AdminDashboardAccount v-if="data.activity" />
     </div>
+
+    <AdminDashboardAccount v-else-if="error" />
   </div>
 </template>

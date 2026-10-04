@@ -6,7 +6,7 @@ import type { Prisma } from '../../generated/prisma/client'
  * auteurs, identifiants d'API (actions faites par l'API v1) et projets sont résolus ici, et restent
  * affichés (« supprimé ») après leur disparition.
  */
-export async function listAuditEvents(query: AuditQuery) {
+export async function listAuditEvents(query: AuditQuery, pageSize = AUDIT_PAGE_SIZE) {
   const where: Prisma.AuditEventWhereInput = {}
   if (query.category) where.action = { startsWith: `${query.category}.` }
   if (query.project) where.projectId = query.project
@@ -17,8 +17,8 @@ export async function listAuditEvents(query: AuditQuery) {
     prisma.auditEvent.findMany({
       where,
       orderBy: [{ at: 'desc' }, { id: 'desc' }],
-      skip: (query.page - 1) * AUDIT_PAGE_SIZE,
-      take: AUDIT_PAGE_SIZE,
+      skip: (query.page - 1) * pageSize,
+      take: pageSize,
     }),
   ])
 
@@ -54,5 +54,5 @@ export async function listAuditEvents(query: AuditQuery) {
   })
 
   const filterProject = query.project ? (projectsById.get(query.project) ?? { id: query.project, deleted: true as const }) : null
-  return { items, total, page: query.page, pageSize: AUDIT_PAGE_SIZE, filterProject }
+  return { items, total, page: query.page, pageSize, filterProject }
 }
