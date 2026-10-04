@@ -15,6 +15,36 @@ const { data: status } = await useFetch('/api/admin/status', {
 
 const displayName = computed(() => user.value?.name || user.value?.email || '')
 
+// ─── Appareil de confiance (actions sensibles sans ressaisie du mot de passe) ──
+const { $api } = useNuxtApp()
+const { data: devices, refresh: refreshDevices } = await useApiFetch('/api/auth/trusted-devices')
+const otherDevices = computed(() => (devices.value ? devices.value.total - (devices.value.current ? 1 : 0) : 0))
+const forgetting = ref<TrustedDeviceScope | null>(null)
+const deviceStatus = ref<{ variant: 'success' | 'error', message: string } | null>(null)
+const deviceTitle = useTemplateRef<HTMLElement>('deviceTitle')
+
+async function forget(scope: TrustedDeviceScope) {
+  deviceStatus.value = null
+  forgetting.value = scope
+  try {
+    const { revoked } = await $api('/api/auth/trusted-devices', { method: 'DELETE', body: { scope } })
+    await refreshDevices()
+    deviceStatus.value = {
+      variant: 'success',
+      message: scope === 'current' ? t('admin.dashboard.device.forgotten') : t('admin.dashboard.device.allForgotten', { count: revoked }, revoked),
+    }
+  }
+  catch {
+    deviceStatus.value = { variant: 'error', message: t('common.unexpectedError') }
+  }
+  finally {
+    forgetting.value = null
+    // Le bouton utilisé a pu disparaître : le focus revient au titre de la rubrique.
+    await nextTick()
+    deviceTitle.value?.focus()
+  }
+}
+
 const permissionList = computed(() => PERMISSIONS.map(permission => ({
   permission,
   granted: can(permission),
@@ -79,6 +109,36 @@ const permissionList = computed(() => PERMISSIONS.map(permission => ({
             </dd>
           </div>
         </dl>
+
+        <div v-if="devices && devices.days > 0" class="mt-6 border-t border-border pt-5">
+          <h3 ref="deviceTitle" tabindex="-1" class="text-sm font-semibold text-foreground">
+            {{ t('admin.dashboard.device.title') }}
+          </h3>
+          <p class="mt-1.5 text-sm text-muted-foreground">
+            <i18n-t v-if="devices.current" keypath="admin.dashboard.device.trusted" tag="span" scope="global">
+              <template #date>
+                <NuxtTime :datetime="devices.current.expiresAt" :locale="locale" date-style="long" time-style="short" />
+              </template>
+            </i18n-t>
+            <template v-else>
+              {{ t('admin.dashboard.device.notTrusted', { days: devices.days }, devices.days) }}
+            </template>
+          </p>
+          <p v-if="otherDevices > 0" class="mt-1.5 text-sm text-muted-foreground">
+            {{ t('admin.dashboard.device.others', { count: otherDevices }, otherDevices) }}
+          </p>
+          <UiAlert v-if="deviceStatus" :variant="deviceStatus.variant" :live="deviceStatus.variant === 'error' ? 'assertive' : 'polite'" class="mt-3">
+            {{ deviceStatus.message }}
+          </UiAlert>
+          <div v-if="devices.total > 0" class="mt-3 flex flex-wrap gap-2">
+            <UiButton v-if="devices.current" variant="outline" size="sm" :loading="forgetting === 'current'" @click="forget('current')">
+              {{ t('admin.dashboard.device.forget') }}
+            </UiButton>
+            <UiButton v-if="otherDevices > 0" variant="outline" size="sm" :loading="forgetting === 'all'" @click="forget('all')">
+              {{ t('admin.dashboard.device.forgetAll', { count: devices.total }, devices.total) }}
+            </UiButton>
+          </div>
+        </div>
       </section>
 
       <section aria-labelledby="permissions-title" class="rounded-xl border border-border bg-surface p-6 shadow-xs">

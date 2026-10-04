@@ -111,6 +111,12 @@ function details(item: Item): string | null {
         change.role ? t('audit.details.change', { from: t(`roles.${text(change.role.from)}.label`), to: t(`roles.${text(change.role.to)}.label`) }) : null,
         change.isActive ? t(change.isActive.to ? 'audit.details.activated' : 'audit.details.deactivated') : null,
       ].filter(Boolean).join(' · ') || null
+    case 'user.device_trusted':
+      return t('audit.details.deviceTrusted', { days: Number(data.days ?? 0) }, Number(data.days ?? 0))
+    case 'user.devices_revoked':
+      return data.scope === 'current'
+        ? t('audit.details.deviceForgotten')
+        : t('audit.details.devicesRevoked', { count: Number(data.count ?? 0) }, Number(data.count ?? 0))
     case 'user.password_link':
       return t(`audit.details.passwordLink.${data.purpose === 'RESET' ? 'reset' : 'invitation'}`)
     case 'user.sessions_revoked':

@@ -153,6 +153,16 @@
         "title": "Your permissions",
         "granted": "Allowed",
         "notGranted": "Not included"
+      },
+      "device": {
+        "title": "Trusted device",
+        "trusted": "This device is trusted until {date}: sensitive actions do not ask for your password here.",
+        "notTrusted": "This device is not trusted: your password is asked again for sensitive actions. Check “Trust this device” when confirming to skip it for {days} day. | This device is not trusted: your password is asked again for sensitive actions. Check “Trust this device” when confirming to skip it for {days} days.",
+        "others": "No other trusted device. | One other device is trusted. | {count} other devices are trusted.",
+        "forget": "Stop trusting this device",
+        "forgetAll": "Stop trusting all my devices | Stop trusting my device | Stop trusting my {count} devices",
+        "forgotten": "This device is no longer trusted: your password will be asked again for sensitive actions.",
+        "allForgotten": "No trusted device to remove. | Your device is no longer trusted. | Your {count} devices are no longer trusted."
       }
     }
   },
@@ -341,7 +351,10 @@
       "sessionsRevoked": "No session closed. | {count} session closed. | {count} sessions closed.",
       "inactiveHint": "Reactivate the account to generate a link.",
       "invitationAccepted": "Invitation accepted. For a forgotten password, contact an administrator.",
-      "inactiveByAdmin": "This account was deactivated by an administrator."
+      "inactiveByAdmin": "This account was deactivated by an administrator.",
+      "trustedDevices": "Trusted devices",
+      "revokeDevices": "Stop trusting the devices",
+      "devicesRevoked": "No trusted device removed. | {count} trusted device removed. | {count} trusted devices removed."
     },
     "link": {
       "label": "Link to send",
@@ -898,7 +911,9 @@
     "password": "Password",
     "confirm": "Confirm",
     "incorrect": "Incorrect password.",
-    "tooManyAttempts": "Too many attempts. Try again in {minutes} min."
+    "tooManyAttempts": "Too many attempts. Try again in {minutes} min.",
+    "trustDevice": "Trust this device for {days} day | Trust this device for {days} days",
+    "trustDeviceHint": "Sensitive actions will no longer ask for your password in this browser. Do not check this on a shared computer."
   },
   "scopes": {
     "project": {
@@ -1303,7 +1318,9 @@
         "updated": "Account updated",
         "deleted": "Account deleted",
         "password_link": "Password link issued",
-        "sessions_revoked": "Sessions closed"
+        "sessions_revoked": "Sessions closed",
+        "device_trusted": "Trusted device added",
+        "devices_revoked": "Trust removed"
       },
       "preset": {
         "created": "Preset created",
@@ -1331,7 +1348,10 @@
       "sessions": "No session closed | One session closed | {count} sessions closed",
       "transformation": "Parameters: {value}",
       "libraryPolicy": "Library: {from} → {to}",
-      "projects": "Projects: {names}"
+      "projects": "Projects: {names}",
+      "deviceTrusted": "For {days} day | For {days} days",
+      "deviceForgotten": "This device",
+      "devicesRevoked": "No device | One device | {count} devices"
     },
     "fields": {
       "name": "name",

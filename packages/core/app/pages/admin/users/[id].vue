@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ArrowLeft, KeyRound, LogOut, Trash2 } from '@lucide/vue'
+import { ArrowLeft, KeyRound, LogOut, MonitorX, Trash2 } from '@lucide/vue'
 import { NAME_MAX_LENGTH, updateUserSchema } from '#shared/schemas/users'
 
 /**
@@ -104,6 +104,25 @@ async function generateLink() {
   }
   finally {
     generating.value = false
+  }
+}
+
+const revokingDevices = ref(false)
+
+/** Retire la confiance de tous les appareils du compte : ses actions sensibles redemanderont le mot de passe. */
+async function revokeDevices() {
+  accessStatus.value = null
+  revokingDevices.value = true
+  try {
+    const { revoked } = await $api(`/api/admin/users/${userId.value}/trusted-devices`, { method: 'DELETE' })
+    accessStatus.value = { variant: 'success', message: t('users.access.devicesRevoked', { count: revoked }, revoked) }
+    await refresh()
+  }
+  catch (err) {
+    accessStatus.value = { variant: 'error', message: userErrorMessage(err) }
+  }
+  finally {
+    revokingDevices.value = false
   }
 }
 
@@ -281,7 +300,7 @@ async function deleteUser() {
             {{ t('users.access.title') }}
           </h2>
 
-          <dl class="mt-5 grid gap-4 text-sm sm:grid-cols-3">
+          <dl class="mt-5 grid gap-4 text-sm sm:grid-cols-2 lg:grid-cols-4">
             <div class="grid gap-1">
               <dt class="text-muted-foreground">
                 {{ t('users.access.password') }}
@@ -305,6 +324,14 @@ async function deleteUser() {
               </dt>
               <dd class="font-medium text-foreground">
                 {{ data.activeSessions }}
+              </dd>
+            </div>
+            <div v-if="data.trustedDevices !== null" class="grid gap-1">
+              <dt class="text-muted-foreground">
+                {{ t('users.access.trustedDevices') }}
+              </dt>
+              <dd class="font-medium text-foreground">
+                {{ data.trustedDevices }}
               </dd>
             </div>
           </dl>
@@ -332,6 +359,10 @@ async function deleteUser() {
             <UiButton v-if="isAdmin" variant="outline" :disabled="data.activeSessions === 0" :loading="revoking" @click="revokeSessions">
               <LogOut aria-hidden="true" />
               {{ isSelf ? t('users.access.revokeOtherSessions') : t('users.access.revokeSessions') }}
+            </UiButton>
+            <UiButton v-if="data.trustedDevices !== null" variant="outline" :disabled="data.trustedDevices === 0" :loading="revokingDevices" @click="revokeDevices">
+              <MonitorX aria-hidden="true" />
+              {{ t('users.access.revokeDevices') }}
             </UiButton>
           </div>
           <p v-if="!user.isActive" class="mt-3 text-sm text-muted-foreground">

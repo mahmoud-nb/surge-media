@@ -29,6 +29,8 @@ export const AUDIT_ACTIONS = [
   'user.deleted',
   'user.password_link',
   'user.sessions_revoked',
+  'user.device_trusted',
+  'user.devices_revoked',
   'preset.created',
   'preset.updated',
   'preset.deleted',

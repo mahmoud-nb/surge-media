@@ -2,7 +2,8 @@
 /**
  * Boîte de dialogue de confirmation du mot de passe, ouverte par useReauth().run() quand l'API
  * exige une saisie récente (403 REAUTH_REQUIRED). Le focus va au champ ; Échap ou « Annuler »
- * abandonnent l'action ; une confirmation réussie la rejoue.
+ * abandonnent l'action ; une confirmation réussie la rejoue. Case « Faire confiance à cet appareil »
+ * (décochée à chaque ouverture) si l'option est active (NUXT_PUBLIC_TRUSTED_DEVICE_DAYS).
  */
 import { confirmPasswordSchema } from '#shared/schemas/credentials'
 
@@ -10,10 +11,12 @@ const { t } = useI18n()
 const { $api } = useNuxtApp()
 const { user } = useAuth()
 const { open, settle } = useReauth()
+const trustDays = trustedDeviceDays(useRuntimeConfig().public.trustedDeviceDays)
 
 const formId = useId()
 const FIELD_IDS = { password: `${formId}-password` } as const
-const form = reactive({ password: '' })
+const trustHintId = `${formId}-trust-hint`
+const form = reactive({ password: '', trustDevice: false })
 const { validate, message, clear, setError } = useFormValidation(confirmPasswordSchema, FIELD_IDS)
 const serverError = ref<string>()
 const submitting = ref(false)
@@ -21,6 +24,7 @@ const submitting = ref(false)
 watch(open, (value) => {
   if (value) {
     form.password = ''
+    form.trustDevice = false
     serverError.value = undefined
     clear('password')
   }
@@ -37,7 +41,7 @@ async function onSubmit() {
   if (!input) return
   submitting.value = true
   try {
-    await $api('/api/auth/confirm-password', { method: 'POST', body: input })
+    await $api('/api/auth/confirm-password', { method: 'POST', body: { ...input, trustDevice: trustDays > 0 && form.trustDevice } })
     settle(true)
   }
   catch (error) {
@@ -70,6 +74,21 @@ async function onSubmit() {
           @input="clear('password')"
         />
       </UiFormField>
+      <div v-if="trustDays > 0" class="grid gap-1">
+        <label class="flex cursor-pointer items-start gap-2.5 text-sm font-medium text-foreground">
+          <input
+            v-model="form.trustDevice"
+            type="checkbox"
+            name="trust-device"
+            :aria-describedby="trustHintId"
+            class="mt-0.5 size-4 shrink-0 accent-primary"
+          >
+          {{ t('reauth.trustDevice', { days: trustDays }, trustDays) }}
+        </label>
+        <p :id="trustHintId" class="pl-6.5 text-sm text-muted-foreground">
+          {{ t('reauth.trustDeviceHint') }}
+        </p>
+      </div>
     </form>
     <template #actions>
       <UiButton variant="outline" @click="open = false">

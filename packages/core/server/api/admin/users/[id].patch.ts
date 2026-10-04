@@ -20,7 +20,10 @@ export default defineEventHandler(async (event) => {
   const prisma = await usePrisma()
   const [user] = await prisma.$transaction([
     prisma.user.update({ where: { id: target.id }, data: input, include: USER_SUMMARY_INCLUDE }),
-    ...(input.isActive === false ? [prisma.session.deleteMany({ where: { userId: target.id } })] : []),
+    // Désactivation : sessions fermées et appareils de confiance oubliés.
+    ...(input.isActive === false
+      ? [prisma.session.deleteMany({ where: { userId: target.id } }), prisma.trustedDevice.deleteMany({ where: { userId: target.id } })]
+      : []),
     // Nouveau rôle : adhésions ramenées entre son plancher et son plafond (ex. gestionnaire → propriétaire).
     ...(input.role !== undefined && input.role !== target.role ? membershipNormalization(prisma, target.id, input.role) : []),
   ])

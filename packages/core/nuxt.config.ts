@@ -61,6 +61,11 @@ export default defineNuxtConfig({
       email: '',
       password: '',
     },
+    public: {
+      // Appareils de confiance : jours sans ressaisie du mot de passe pour les actions sensibles,
+      // 0 = option désactivée (shared/utils/auth.ts) — NUXT_PUBLIC_TRUSTED_DEVICE_DAYS
+      trustedDeviceDays: 15,
+    },
     // API publique v1 : requêtes par minute (seau à jetons, en mémoire) — NUXT_API_RATE_LIMIT_*
     api: {
       rateLimit: {

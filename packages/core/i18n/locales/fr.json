@@ -153,6 +153,16 @@
         "title": "Vos permissions",
         "granted": "Autorisé",
         "notGranted": "Non inclus"
+      },
+      "device": {
+        "title": "Appareil de confiance",
+        "trusted": "Cet appareil est de confiance jusqu'au {date} : les actions sensibles n'y redemandent pas votre mot de passe.",
+        "notTrusted": "Cet appareil n'est pas de confiance : votre mot de passe est redemandé pour les actions sensibles. Cochez « Faire confiance à cet appareil » lors d'une confirmation pour ne plus le saisir pendant {days} jour. | Cet appareil n'est pas de confiance : votre mot de passe est redemandé pour les actions sensibles. Cochez « Faire confiance à cet appareil » lors d'une confirmation pour ne plus le saisir pendant {days} jours.",
+        "others": "Aucun autre appareil de confiance. | Un autre appareil vous fait confiance. | {count} autres appareils vous font confiance.",
+        "forget": "Ne plus faire confiance à cet appareil",
+        "forgetAll": "Retirer la confiance de tous mes appareils | Retirer la confiance de mon appareil | Retirer la confiance de mes {count} appareils",
+        "forgotten": "Cet appareil n'est plus de confiance : votre mot de passe sera redemandé pour les actions sensibles.",
+        "allForgotten": "Aucun appareil de confiance à retirer. | La confiance a été retirée de votre appareil. | La confiance a été retirée de vos {count} appareils."
       }
     }
   },
@@ -341,7 +351,10 @@
       "sessionsRevoked": "Aucune session fermée. | {count} session fermée. | {count} sessions fermées.",
       "inactiveHint": "Réactivez le compte pour pouvoir générer un lien.",
       "invitationAccepted": "Invitation acceptée. Pour un mot de passe oublié, adressez-vous à un administrateur.",
-      "inactiveByAdmin": "Ce compte a été désactivé par un administrateur."
+      "inactiveByAdmin": "Ce compte a été désactivé par un administrateur.",
+      "trustedDevices": "Appareils de confiance",
+      "revokeDevices": "Retirer la confiance des appareils",
+      "devicesRevoked": "Aucun appareil de confiance retiré. | {count} appareil de confiance retiré. | {count} appareils de confiance retirés."
     },
     "link": {
       "label": "Lien à transmettre",
@@ -898,7 +911,9 @@
     "password": "Mot de passe",
     "confirm": "Confirmer",
     "incorrect": "Mot de passe incorrect.",
-    "tooManyAttempts": "Trop d'essais. Réessayez dans {minutes} min."
+    "tooManyAttempts": "Trop d'essais. Réessayez dans {minutes} min.",
+    "trustDevice": "Faire confiance à cet appareil pendant {days} jour | Faire confiance à cet appareil pendant {days} jours",
+    "trustDeviceHint": "Les actions sensibles ne redemanderont plus votre mot de passe dans ce navigateur. Ne cochez pas sur un ordinateur partagé."
   },
   "scopes": {
     "project": {
@@ -1303,7 +1318,9 @@
         "updated": "Compte modifié",
         "deleted": "Compte supprimé",
         "password_link": "Lien de mot de passe émis",
-        "sessions_revoked": "Sessions fermées"
+        "sessions_revoked": "Sessions fermées",
+        "device_trusted": "Appareil de confiance ajouté",
+        "devices_revoked": "Confiance retirée"
       },
       "preset": {
         "created": "Préréglage créé",
@@ -1331,7 +1348,10 @@
       "sessions": "Aucune session fermée | Une session fermée | {count} sessions fermées",
       "transformation": "Paramètres : {value}",
       "libraryPolicy": "Bibliothèque : {from} → {to}",
-      "projects": "Projets : {names}"
+      "projects": "Projets : {names}",
+      "deviceTrusted": "Pendant {days} jour | Pendant {days} jours",
+      "deviceForgotten": "Cet appareil",
+      "devicesRevoked": "Aucun appareil | Un appareil | {count} appareils"
     },
     "fields": {
       "name": "nom",
