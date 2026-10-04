@@ -252,7 +252,7 @@ Le fichier `packages/core/.env` est créé par `pnpm db:init` à partir de `.env
 
 | Modèle | Rôle |
 | --- | --- |
-| `User` | comptes de l'administration (rôle `ADMIN`/`EDITOR`/`DEVELOPER`, langue préférée, actif ou non) |
+| `User` | comptes de l'administration (rôle `ADMIN`/`MANAGER`/`DEVELOPER`/`EDITOR`, langue préférée, actif ou non, auteur de l'invitation `invitedById`) |
 | `Session` | sessions d'administration (seule l'empreinte SHA-256 du jeton est stockée) ; dernière saisie du mot de passe (`passwordVerifiedAt`, « mode sudo ») |
 | `PasswordToken` | lien à usage unique d'invitation ou de réinitialisation du mot de passe (empreinte, échéance, date d'utilisation) |
 | `Project` | application cliente et ses environnements : médias, dossiers, membres, jetons et origines CORS ; archivage (`archivedAt`) ; liste publique pour la clé publique (`publicListing`) |
@@ -706,14 +706,25 @@ Source unique : `shared/utils/permissions.ts` (auto-importé côté app et serve
 
 Deux niveaux : le **rôle de plateforme** (`User.role`) donne des permissions globales et les droits
 sur la bibliothèque ; le **rôle de projet** (`ProjectMember.role`) donne les droits dans ce projet,
-**plafonnés** par le rôle de plateforme. Un rôle n'est qu'un ensemble de **portées** : les
-identifiants d'API (§ 9.6) utilisent le même vocabulaire.
+**encadrés** par le rôle de plateforme (plafond, et plancher pour le gestionnaire). Un rôle n'est
+qu'un ensemble de **portées** : les identifiants d'API (§ 9.6) utilisent le même vocabulaire.
 
-| Rôle de plateforme | Bibliothèque (`library:manage`) | Projets | `projects:create` | `tokens:personal` | `api:docs` | `users:manage` | `audit:read` | `settings:manage` |
-| --- | :---: | --- | :---: | :---: | :---: | :---: | :---: | :---: |
-| `ADMIN` | ✓ | **tous** (`projects:all`), comme propriétaire | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
-| `DEVELOPER` | ✓ | ceux dont il est membre ; rôle de projet jusqu'à `OWNER` | ✓ | ✓ | ✓ | | | |
-| `EDITOR` | ✓ | ceux dont il est membre ; rôle de projet `EDITOR` au plus | | | | | | |
+| Rôle de plateforme | Bibliothèque | Projets | `projects:create` | `tokens:personal` | `api:docs` | Comptes | `audit:read` | `settings:manage` |
+| --- | --- | --- | :---: | :---: | :---: | --- | :---: | :---: |
+| `ADMIN` (Administrateur) | gestion (`library:manage`) | **tous** (`projects:all`), comme propriétaire | ✓ | ✓ | ✓ | tous (`users:manage`) | ✓ | ✓ |
+| `MANAGER` (Gestionnaire) | lecture (`library:read`) | ceux dont il est membre, **toujours propriétaire** | ✓ | ✓ | ✓ | invite des `DEVELOPER` / `EDITOR` (`users:invite`) | | |
+| `DEVELOPER` (Développeur) | lecture | ceux dont il est membre ; rôle de projet `DEVELOPER` au plus | | ✓ | ✓ | | | |
+| `EDITOR` (Éditeur) | lecture | ceux dont il est membre ; rôle de projet `EDITOR` | | | | | | |
+
+- **Rôle exercé** : `clampProjectRole` ramène le rôle de membre entre le **plancher**
+  (`PROJECT_ROLE_FLOOR` : `OWNER` pour un gestionnaire) et le **plafond** (`PROJECT_ROLE_CEILING`)
+  du rôle de plateforme ; `assignableProjectRoles` donne les rôles proposés (gestionnaire : `OWNER`
+  seulement ; développeur : `DEVELOPER` ou `EDITOR` ; éditeur : `EDITOR`). Changer le rôle de
+  plateforme d'un compte ramène ses adhésions dans ces bornes, dans la même transaction : le rôle
+  enregistré est toujours le rôle exercé (sauf pour l'ADMIN, propriétaire partout).
+- **Bibliothèque** : seul l'ADMIN y envoie, modifie, range, déplace et supprime des médias ; les autres
+  rôles la consultent et dupliquent ses médias dans leurs projets (`spaceScopes` → `media:read`).
+- **Invitations** : `invitableRoles` (ADMIN : tous les rôles ; MANAGER : `DEVELOPER`, `EDITOR`) — § 9.4.
 
 `api:docs` : documentation interactive de l'API (§ 9.12). `settings:manage` : réglages de
 l'installation (`/admin/settings` : politique des transformations de la bibliothèque, préréglages
@@ -747,7 +758,7 @@ désarchivage, suppression).
 | `POST /api/auth/logout` | ferme la session (cookie + base) |
 | `POST /api/auth/confirm-password` | `{ password }` → 200 `{ verifiedUntil }` · 422 `PASSWORD_INCORRECT` (la session reste ouverte) · 429 après 5 échecs en 15 min |
 | `GET /api/admin/status` | état de l'instance pour les administrateurs (`users:manage`) |
-| `/api/admin/users/*`, `/api/auth/password/*` | gestion des utilisateurs, voir § 9.4 |
+| `/api/admin/users/*`, `/api/auth/password/*` | gestion des utilisateurs et invitations, voir § 9.4 |
 
 Protéger une nouvelle route API (`server/utils/auth.ts`, `server/utils/access.ts`, auto-importés) :
 
@@ -789,7 +800,7 @@ redirection après connexion limitée aux chemins `/admin`, en-têtes `X-Frame-O
 
 Il n'y a pas d'inscription publique : les comptes sont créés par un administrateur (§ 9.4).
 
-### 9.4 Gestion des utilisateurs (`/admin/users`, permission `users:manage`)
+### 9.4 Gestion des utilisateurs et invitations (`/admin/users`, `users:manage` ou `users:invite`)
 
 **Parcours** : l'administrateur crée le compte (e-mail, nom facultatif, rôle ; `EDITOR` présélectionné,
 le moins privilégié). Aucun mot de passe n'est saisi : un **lien d'invitation à usage unique** (7 jours)
@@ -799,14 +810,24 @@ fois), puis se connecte. Mot de passe oublié : l'administrateur génère un **l
 (24 h) depuis la fiche du compte ; l'ancien mot de passe reste valable jusqu'à son utilisation, puis
 toutes les sessions du compte sont fermées.
 
+L'administrateur peut rattacher le compte à des projets dès sa création (facultatif, avec un rôle de
+projet permis par le rôle choisi) ; la liste indique qui a invité chaque compte (`User.invitedById`).
+
+**Gestionnaire** (`users:invite`) : la même page s'intitule « Mes invitations ». Il invite un
+développeur ou un éditeur en le rattachant à **au moins un** des projets actifs dont il gère les
+membres. Il voit les comptes qu'il a invités, leur fiche en lecture (statut, projets qu'il partage
+avec eux) et régénère le lien tant que l'invitation n'est pas acceptée. Modifier, désactiver ou
+supprimer un compte, fermer ses sessions ou réinitialiser son mot de passe restent réservés à
+l'administrateur ; un compte que le gestionnaire n'a pas invité lui répond 404.
+
 | Endpoint | Rôle |
 | --- | --- |
-| `GET /api/admin/users?q=&role=&status=&page=` | liste paginée (20 par page) ; recherche nom / e-mail insensible à la casse ; filtres invalides ignorés |
-| `POST /api/admin/users` | création + lien d'invitation (201) · 409 `EMAIL_TAKEN` |
-| `GET /api/admin/users/:id` | fiche : profil, sessions ouvertes, lien en attente (type et échéance, jamais le jeton) |
+| `GET /api/admin/users?q=&role=&status=&page=` | `users:invite` : tous les comptes (administrateur) ou ses invités (gestionnaire) ; 20 par page ; recherche nom / e-mail insensible à la casse ; filtres invalides ignorés ; `invitedBy` |
+| `POST /api/admin/users` | `{ email, name?, role, projectIds?, projectRole? }` → compte + adhésions + lien d'invitation (201) · 403 `ROLE_NOT_INVITABLE` · 422 `PROJECTS_REQUIRED` (gestionnaire sans projet) / `PROJECT_UNAVAILABLE` / `ROLE_NOT_ASSIGNABLE` · 409 `EMAIL_TAKEN` ; mot de passe récent si des projets sont choisis (§ 9.7) |
+| `GET /api/admin/users/:id` | fiche : profil, sessions ouvertes, lien en attente (type et échéance, jamais le jeton), projets (parmi ceux que voit l'auteur) ; gestionnaire : ses invités seulement |
 | `PATCH /api/admin/users/:id` | `{ name?, role?, isActive? }` ; désactiver ferme les sessions immédiatement |
 | `DELETE /api/admin/users/:id` | suppression définitive (les médias du compte sont conservés) |
-| `POST /api/admin/users/:id/password-link` | nouveau lien (invitation ou réinitialisation) ; annule le précédent · 409 si compte désactivé |
+| `POST /api/admin/users/:id/password-link` | nouveau lien (invitation ou réinitialisation) ; annule le précédent · 409 si compte désactivé ; gestionnaire : invitation non acceptée de ses invités (409 `INVITATION_ACCEPTED` sinon) |
 | `DELETE /api/admin/users/:id/sessions` | ferme les sessions du compte (sur son propre compte : sauf la session en cours) |
 | `GET /api/auth/password/:token` | public : e-mail et type du lien · 404 `TOKEN_INVALID` |
 | `POST /api/auth/password/:token` | public : `{ password, confirmation }` → enregistre le mot de passe (204) · 404 `TOKEN_INVALID` |
@@ -816,6 +837,7 @@ toutes les sessions du compte sont fermées.
 - un administrateur ne peut ni changer son propre rôle, ni se désactiver, ni se supprimer
   (403 `SELF_ACTION`) ;
 - on ne retire jamais le dernier administrateur actif (409 `LAST_ADMIN`) ;
+- un gestionnaire n'attribue que les rôles `DEVELOPER` et `EDITOR`, et seulement sur ses projets ;
 - un changement de rôle s'applique à la requête suivante (le rôle est relu en base) ;
 - un lien est à usage unique (consommation atomique), expire, et n'est plus valable si le compte est
   désactivé ; seule son empreinte SHA-256 est stockée ;
@@ -832,20 +854,22 @@ et ses environnements (développement, test, staging, production) : ils partagen
 chaque environnement a ses propres clés d'API (§ 9.6). Un environnement qui produit des envois
 jetables (tests automatisés) utilise plutôt un projet distinct, alimenté par duplication.
 
-- **Visibilité** : un ADMIN voit tous les projets ; les autres ne voient que ceux dont ils sont
-  membres (un projet invisible répond 404).
-- **Création** (`projects:create` : ADMIN, DEVELOPER) : nom, identifiant lisible (déduit du nom et
+- **Visibilité** : un ADMIN voit tous les projets ; les autres (gestionnaires compris) ne voient que
+  ceux dont ils sont membres (un projet invisible répond 404).
+- **Création** (`projects:create` : ADMIN, MANAGER) : nom, identifiant lisible (déduit du nom et
   suffixé `-2`, `-3`… s'il est pris ; saisi et déjà pris → 409 `SLUG_TAKEN`), description. Le
   créateur devient propriétaire.
 - **Membres** (`project:members` + confirmation récente du mot de passe) : ajout parmi les comptes
-  actifs non membres, rôle limité par le plafond du rôle de plateforme (422 `ROLE_NOT_ASSIGNABLE`), un
-  projet garde toujours un propriétaire (409 `LAST_OWNER`) ; chacun peut quitter un projet de lui-même
-  (sans confirmation).
+  actifs non membres, rôle compris entre le plancher et le plafond du rôle de plateforme
+  (422 `ROLE_NOT_ASSIGNABLE` : un gestionnaire est toujours propriétaire, un développeur jamais), un
+  projet garde toujours un propriétaire effectif parmi ses membres (409 `LAST_OWNER`) ; chacun peut
+  quitter un projet de lui-même (sans confirmation).
 - **Archivage** (`project:settings`) : lecture seule (aucun envoi ni modification ; clés et origines
   non gérables, clés refusées par l'API v1), réversible.
 - **Suppression** : projet archivé uniquement (409 `PROJECT_NOT_ARCHIVED`), confirmation par saisie de
   l'identifiant, avec un choix pour ses médias : **les déplacer vers la bibliothèque** (adresses
-  conservées) ou **les supprimer définitivement** (fichiers effacés en tâche de fond). `Media.projectId`
+  conservées ; administrateur seulement, 403 `LIBRARY_NOT_ALLOWED` sinon — l'interface ne propose
+  alors que la suppression) ou **les supprimer définitivement** (fichiers effacés en tâche de fond). `Media.projectId`
   est en `onDelete: Restrict` : un projet ne peut jamais emporter ses médias par cascade.
 
 | Endpoint | Portée | Rôle |
@@ -892,9 +916,10 @@ délégués** `sm_dt_` de quelques minutes, émis par une clé secrète ou un je
   de déployer la nouvelle.
 - **Révocation** immédiate ; **suppression** possible seulement une fois révoquée ou expirée
   (409 `TOKEN_ACTIVE` sinon). Portées immuables : pour en changer, créer un nouvel identifiant.
-- **Jetons personnels** (`/admin/tokens`, permission `tokens:personal` : ADMIN et DEVELOPER) :
+- **Jetons personnels** (`/admin/tokens`, permission `tokens:personal` : ADMIN, MANAGER et DEVELOPER) :
   « tous mes projets » (y compris ceux rejoints plus tard) ou une sélection de projets actifs
-  (422 `PROJECT_UNAVAILABLE` sinon), bibliothèque en option. Chacun ne voit et ne gère que les siens ;
+  (422 `PROJECT_UNAVAILABLE` sinon), bibliothèque en option (en lecture seule hors ADMIN : le jeton
+  n'a jamais plus de droits que son propriétaire). Chacun ne voit et ne gère que les siens ;
   supprimer un compte supprime ses jetons, le désactiver les rend inutilisables.
 - **Origines autorisées** (onglet « Origines autorisées », `project:credentials`) : origines exactes
   `schéma://hôte[:port]` normalisées (minuscules, port par défaut et « / » final retirés) ou joker de
@@ -921,7 +946,7 @@ Un projet archivé répond 403 `PROJECT_ARCHIVED` sur ses clés et origines.
 ### 9.7 Confirmation du mot de passe (« mode sudo »)
 
 Créer une clé secrète ou un jeton personnel, renouveler une clé secrète, ajouter un membre, changer
-son rôle ou le retirer exigent une saisie du mot de passe datant de **moins de 10 minutes**
+son rôle ou le retirer, inviter un compte en le rattachant à des projets exigent une saisie du mot de passe datant de **moins de 10 minutes**
 (`REAUTH_WINDOW_SECONDS`, `shared/utils/auth.ts`) ; la connexion compte comme une saisie
 (`Session.passwordVerifiedAt`). Sinon l'API répond 403 `REAUTH_REQUIRED` : l'interface
 (`useReauth().run(action)` + `<AdminReauthDialog>` dans la mise en page) demande le mot de passe puis
@@ -949,7 +974,7 @@ actions sur ce projet » de l'aperçu d'un projet). Pas encore de purge automati
 API REST pour les applications du client (sites, applications mobiles, serveurs, scripts), distincte
 de l'administration. Spécification **OpenAPI 3.1** : `GET /api/v1/openapi.json[?lang=fr|en]` (publique,
 générée depuis le code des routes et les schémas zod, § 9.12) ; catalogue des erreurs : `GET /api/v1/errors`.
-Documentation interactive : `/admin/api` (ADMIN, DEVELOPER).
+Documentation interactive : `/admin/api` (ADMIN, MANAGER, DEVELOPER).
 L'onglet « Clés d'API » d'un projet affiche son adresse et le lien vers la spécification.
 
 - **Authentification** : `Authorization: Bearer <identifiant>` (§ 9.6), **jamais de cookie** (la
@@ -1407,6 +1432,11 @@ pnpm start                          # node --env-file-if-exists=.env .output/ser
 | Média introuvable (404) juste après sa mise à la corbeille | normal : un média en corbeille n'est plus diffusé (sauf aperçu dans l'administration) |
 | `An Application Control policy has blocked this file` (`…binding-win32-x64-msvc…node`) au lancement de Nuxt | Windows (« Contrôle intelligent des applications ») refuse un module natif non signé : voir l'override `oxc-transform` (§ 13) ; pour un autre paquet, tester une version voisine ou débloquer le fichier côté Windows |
 | Projet introuvable (404) alors qu'il existe | l'utilisateur n'en est pas membre (seuls les ADMIN voient tous les projets) |
+| Un développeur reçoit 403 en créant un projet | depuis l'étape 16, seuls les administrateurs et les gestionnaires créent des projets : demander à un gestionnaire de l'y ajouter |
+| Bibliothèque sans envoi, sans dossiers à créer | normal hors ADMIN : la bibliothèque est en lecture (dupliquer un média vers son projet reste possible) |
+| 403 `LIBRARY_NOT_ALLOWED` à la suppression d'un projet | seul un administrateur verse des médias dans la bibliothèque : supprimer définitivement, ou demander à un administrateur |
+| 409 `INVITATION_ACCEPTED` (gestionnaire) | l'invité a déjà choisi son mot de passe : une réinitialisation passe par un administrateur |
+| Pas de menu « Rôle dans le projet » pour un membre | gestionnaire : un seul rôle possible (propriétaire) ; il administre tout projet dont il est membre |
 | Une boîte « Confirmez votre mot de passe » s'ouvre | normal : action sensible (clé secrète, jeton personnel, membres) plus de 10 min après la dernière saisie du mot de passe (§ 9.7) |
 | Clé secrète ou jeton personnel perdu | la valeur complète n'est jamais conservée : renouveler la clé (rotation avec recouvrement) ou créer un nouveau jeton, puis révoquer l'ancien |
 | Onglets « Clés d'API » et « Origines autorisées » absents | il faut la portée `project:credentials` (rôle de projet OWNER ou DEVELOPER, jamais un EDITOR de plateforme) et un projet non archivé |
@@ -2172,4 +2202,62 @@ termine, `pnpm start` échoue au démarrage ; § 14) : vérifications faites ave
 **Après `git pull`**
 ```bash
 pnpm install          # aucune nouvelle dépendance, aucune migration
+```
+
+### Étape 16 — 2026-10-03 — Rôle Gestionnaire et répartition des responsabilités
+
+**Cadre** : demande de l'utilisateur : un rôle **Gestionnaire**, administrateur limité aux projets qu'il a
+créés ou auxquels il est affecté, qui invite des développeurs et des éditeurs ; un développeur ne crée
+plus de projets et n'accède qu'aux projets auxquels il est affecté. Décisions validées : un gestionnaire
+membre d'un projet en est **toujours propriétaire** ; bibliothèque **en lecture pour tous, gérée par
+l'ADMIN** ; le gestionnaire **suit ses invitations** (lien régénérable tant qu'elle n'est pas acceptée) ;
+les développeurs propriétaires d'un projet sont **promus gestionnaires** à la migration.
+
+**Modifié / ajouté**
+- `shared/utils/permissions.ts` : rôle `MANAGER` (`ROLES` dans l'ordre ADMIN, MANAGER, DEVELOPER,
+  EDITOR), permissions `library:read` et `users:invite`, plafond `DEVELOPER` → `DEVELOPER`,
+  `PROJECT_ROLE_FLOOR` (MANAGER → OWNER), `clampProjectRole`, `invitableRoles` ; bibliothèque :
+  `media:read` seul hors ADMIN (§ 9.1).
+- Schéma : enum `Role` + `MANAGER`, `User.invitedById` (`onDelete: SetNull`, index). Migration
+  `20261003194322_manager_role` (3 fournisseurs ; PostgreSQL : type recréé pour pouvoir utiliser la
+  nouvelle valeur dans la reprise) : développeurs propriétaires → gestionnaires, adhésions des
+  gestionnaires → `OWNER`, autres adhésions ramenées au plafond.
+- Invitations (`POST /api/admin/users`, `users:invite`) : rôle parmi `invitableRoles`, projets et rôle de
+  projet (obligatoires pour un gestionnaire), mot de passe récent, audit `user.created` (+ projets) et
+  `member.added` ; liste, fiche et lien limités aux invités du gestionnaire (§ 9.4).
+- Changement de rôle de plateforme : adhésions normalisées dans la même transaction. `LAST_OWNER`
+  compte les propriétaires effectifs. Suppression d'un projet vers la bibliothèque : ADMIN seulement
+  (403 `LIBRARY_NOT_ALLOWED`). Jeton personnel avec la bibliothèque : `library:read` suffit.
+- Interface : « Mes invitations » dans la barre latérale du gestionnaire ; formulaire d'invitation (rôles
+  permis, projets, rôle dans ces projets — texte fixe s'il n'y en a qu'un) ; fiche en lecture pour le
+  gestionnaire ; colonne « Invité par » et section « Projets » pour l'administrateur ; membres : pas de
+  menu de rôle pour un gestionnaire (note « administre tout projet dont il est membre ») ; dialogue de
+  suppression d'un projet réduit à la suppression définitive hors ADMIN ; aide « lecture seule » pour la
+  bibliothèque d'un jeton personnel ; journal : projets d'une invitation. Libellé manquant
+  `permissions.settings.manage` du tableau de bord ajouté (absent depuis C2).
+- 199 tests Vitest (matrice des rôles, plancher, invitations, bibliothèque en lecture, schéma d'invitation).
+
+**Vérifié** : typecheck, 199 tests, i18n (1115 clés), contrastes, migrations (`--check`) ; migration
+rejouée sur une copie de la base avec un développeur propriétaire (11 contrôles) ; **79 scénarios HTTP**
+(création de projets, invitations et refus, confirmation du mot de passe, suivi, membres, plancher et
+plafond, normalisation, `LAST_OWNER`, bibliothèque, suppression d'un gestionnaire) ; non-régression
+B1–B5 et C1–C4 rejouée, le propriétaire des projets de test étant désormais un gestionnaire : seules
+changent les attentes voulues (rétrogradation d'un gestionnaire, versement dans la bibliothèque par un
+éditeur, un gestionnaire ou un jeton). Interface (gestionnaire et administrateur) : parcours d'invitation,
+erreurs reliées aux champs, fiches, membres, bibliothèque, dialogue de suppression ; axe-core : 0 violation
+en fr/en × clair/sombre ; largeur de téléphone sans défilement horizontal.
+
+**Non vérifié** : `pnpm build` (votre serveur de développement tournait et partage `.nuxt` ; le démarrage
+de production reste bloqué par Smart App Control, § 14).
+
+**Limites connues / suites possibles**
+- La recherche de comptes à ajouter (`candidates`) montre tous les comptes actifs (nom, e-mail) à un
+  propriétaire de projet, gestionnaire compris.
+- Pas de journal d'audit par projet pour un gestionnaire (`audit:read` reste à l'ADMIN).
+- Toujours pas d'envoi d'e-mail : le lien d'invitation se transmet à la main.
+
+**Après `git pull`**
+```bash
+pnpm install          # aucune nouvelle dépendance
+pnpm db:migrate       # migration manager_role (rôle Gestionnaire, auteur des invitations)
 ```

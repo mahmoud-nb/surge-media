@@ -19,10 +19,10 @@ const { user, can, logout } = useAuth()
 
 const items = computed<NavItem[]>(() => [
   { to: '/admin', label: t('admin.nav.dashboard'), icon: LayoutDashboard },
-  { to: '/admin/media', label: t('admin.nav.library'), icon: Images, permission: 'library:manage' as const },
+  { to: '/admin/media', label: t('admin.nav.library'), icon: Images, permission: 'library:read' as const },
   { to: '/admin/projects', label: t('admin.nav.projects'), icon: FolderKanban },
   { to: '/admin/tokens', label: t('admin.nav.tokens'), icon: KeyRound, permission: 'tokens:personal' as const },
-  { to: '/admin/users', label: t('admin.nav.users'), icon: Users, permission: 'users:manage' as const },
+  { to: '/admin/users', label: can('users:manage') ? t('admin.nav.users') : t('admin.nav.invitations'), icon: Users, permission: 'users:invite' as const },
   { to: '/admin/audit', label: t('admin.nav.audit'), icon: ScrollText, permission: 'audit:read' as const },
   { to: '/admin/api', label: t('admin.nav.apiDocs'), icon: BookOpenText, permission: 'api:docs' as const },
   { to: '/admin/settings', label: t('admin.nav.settings'), icon: Settings, permission: 'settings:manage' as const },

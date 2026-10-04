@@ -1,5 +1,5 @@
 <script setup lang="ts">
-definePageMeta({ layout: 'admin', permission: 'library:manage' })
+definePageMeta({ layout: 'admin', permission: 'library:read' })
 
 const { t } = useI18n()
 const route = useRoute()

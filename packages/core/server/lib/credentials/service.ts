@@ -185,7 +185,7 @@ export async function createPersonalToken(user: User, input: CreatePersonalToken
     const access = await resolveSpaceAccess(user, spaceFor(id))
     if (!access || access.project?.archivedAt) throw credentialError(422, 'PROJECT_UNAVAILABLE')
   }
-  if (input.includeLibrary && !hasPermission(user.role, 'library:manage')) {
+  if (input.includeLibrary && !hasPermission(user.role, 'library:read')) {
     throw createError({ statusCode: 403, statusMessage: 'Forbidden' })
   }
 

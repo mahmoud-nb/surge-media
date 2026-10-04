@@ -1,8 +1,10 @@
 import { describe, expect, it } from 'vitest'
 import {
   assignableProjectRoles,
+  clampProjectRole,
   effectiveProjectRole,
   hasPermission,
+  invitableRoles,
   hasScope,
   MEDIA_SCOPES,
   PERMISSIONS,
@@ -26,7 +28,10 @@ const EDITOR_PROJECT: Scope[] = ['project:read', ...MEDIA_SCOPES]
 const EXPECTED_PROJECT_SCOPES: Record<Role, Record<ProjectRole | 'none', Scope[]>> = {
   // L'ADMIN est propriétaire de tous les projets, membre ou non.
   ADMIN: { none: ALL_PROJECT, OWNER: ALL_PROJECT, DEVELOPER: ALL_PROJECT, EDITOR: ALL_PROJECT },
-  DEVELOPER: { none: [], OWNER: ALL_PROJECT, DEVELOPER: DEVELOPER_PROJECT, EDITOR: EDITOR_PROJECT },
+  // Plancher : un MANAGER administre tout projet dont il est membre, et seulement ceux-là.
+  MANAGER: { none: [], OWNER: ALL_PROJECT, DEVELOPER: ALL_PROJECT, EDITOR: ALL_PROJECT },
+  // Plafond : un DEVELOPER de plateforme n'administre aucun projet (ni réglages ni membres).
+  DEVELOPER: { none: [], OWNER: DEVELOPER_PROJECT, DEVELOPER: DEVELOPER_PROJECT, EDITOR: EDITOR_PROJECT },
   // Plafond : un EDITOR de plateforme n'exerce jamais plus que le rôle EDITOR d'un projet.
   EDITOR: { none: [], OWNER: EDITOR_PROJECT, DEVELOPER: EDITOR_PROJECT, EDITOR: EDITOR_PROJECT },
 }
@@ -42,13 +47,32 @@ describe('permissions de plateforme', () => {
     for (const permission of PERMISSIONS) expect(hasPermission('ADMIN', permission)).toBe(true)
   })
 
-  it('limite l\'EDITOR à la bibliothèque', () => {
-    expect(PERMISSIONS.filter(permission => hasPermission('EDITOR', permission))).toEqual(['library:manage'])
+  it('limite l\'EDITOR à la consultation de la bibliothèque', () => {
+    expect(PERMISSIONS.filter(permission => hasPermission('EDITOR', permission))).toEqual(['library:read'])
   })
 
-  it('permet au DEVELOPER de créer des projets et des jetons personnels, et de tester l\'API, sans accès global', () => {
+  it('permet au DEVELOPER les jetons personnels et la documentation de l\'API, sans créer de projet', () => {
     expect(PERMISSIONS.filter(permission => hasPermission('DEVELOPER', permission)))
-      .toEqual(['library:manage', 'projects:create', 'tokens:personal', 'api:docs'])
+      .toEqual(['library:read', 'tokens:personal', 'api:docs'])
+  })
+
+  it('permet au MANAGER de créer des projets et d\'inviter, sans gestion globale', () => {
+    expect(PERMISSIONS.filter(permission => hasPermission('MANAGER', permission)))
+      .toEqual(['library:read', 'projects:create', 'tokens:personal', 'api:docs', 'users:invite'])
+  })
+
+  it('réserve la gestion de la bibliothèque, des comptes, de l\'audit et des réglages à l\'ADMIN', () => {
+    for (const permission of ['library:manage', 'projects:all', 'users:manage', 'audit:read', 'settings:manage'] as const) {
+      expect(ROLES.filter(role => hasPermission(role, permission))).toEqual(['ADMIN'])
+    }
+  })
+
+  it('limite les rôles qu\'on peut inviter', () => {
+    expect(invitableRoles('ADMIN')).toEqual(['ADMIN', 'MANAGER', 'DEVELOPER', 'EDITOR'])
+    expect(invitableRoles('MANAGER')).toEqual(['DEVELOPER', 'EDITOR'])
+    expect(invitableRoles('DEVELOPER')).toEqual([])
+    expect(invitableRoles('EDITOR')).toEqual([])
+    expect(invitableRoles(null)).toEqual([])
   })
 
   it('refuse tout sans rôle', () => {
@@ -58,10 +82,19 @@ describe('permissions de plateforme', () => {
 })
 
 describe('rôles de projet', () => {
-  it('plafonne les rôles attribuables selon le rôle de plateforme', () => {
+  it('encadre les rôles attribuables selon le rôle de plateforme', () => {
     expect(assignableProjectRoles('ADMIN')).toEqual(['OWNER', 'DEVELOPER', 'EDITOR'])
-    expect(assignableProjectRoles('DEVELOPER')).toEqual(['OWNER', 'DEVELOPER', 'EDITOR'])
+    expect(assignableProjectRoles('MANAGER')).toEqual(['OWNER'])
+    expect(assignableProjectRoles('DEVELOPER')).toEqual(['DEVELOPER', 'EDITOR'])
     expect(assignableProjectRoles('EDITOR')).toEqual(['EDITOR'])
+  })
+
+  it('ramène un rôle de membre entre plancher et plafond (normalisation des adhésions)', () => {
+    expect(clampProjectRole('MANAGER', 'EDITOR')).toBe('OWNER')
+    expect(clampProjectRole('DEVELOPER', 'OWNER')).toBe('DEVELOPER')
+    expect(clampProjectRole('DEVELOPER', 'EDITOR')).toBe('EDITOR')
+    expect(clampProjectRole('EDITOR', 'DEVELOPER')).toBe('EDITOR')
+    expect(clampProjectRole('ADMIN', 'EDITOR')).toBe('EDITOR')
   })
 
   it('calcule le rôle exercé', () => {
@@ -69,14 +102,18 @@ describe('rôles de projet', () => {
     expect(effectiveProjectRole('ADMIN', 'EDITOR')).toBe('OWNER')
     expect(effectiveProjectRole('DEVELOPER', null)).toBeNull()
     expect(effectiveProjectRole('DEVELOPER', 'DEVELOPER')).toBe('DEVELOPER')
+    expect(effectiveProjectRole('DEVELOPER', 'OWNER')).toBe('DEVELOPER')
+    expect(effectiveProjectRole('MANAGER', null)).toBeNull()
+    expect(effectiveProjectRole('MANAGER', 'EDITOR')).toBe('OWNER')
     expect(effectiveProjectRole('EDITOR', undefined)).toBeNull()
     expect(effectiveProjectRole('EDITOR', 'OWNER')).toBe('EDITOR')
   })
 })
 
 describe('portées par espace', () => {
-  it('donne toutes les portées médias de la bibliothèque à chaque rôle', () => {
-    for (const role of ROLES) expect(sorted(spaceScopes(role, { type: 'library' }))).toEqual(sorted(MEDIA_SCOPES))
+  it('donne la gestion de la bibliothèque à l\'ADMIN et sa seule lecture aux autres rôles', () => {
+    expect(sorted(spaceScopes('ADMIN', { type: 'library' }))).toEqual(sorted(MEDIA_SCOPES))
+    for (const role of ['MANAGER', 'DEVELOPER', 'EDITOR'] as const) expect(spaceScopes(role, { type: 'library' })).toEqual(['media:read'])
   })
 
   for (const role of ROLES) {
@@ -99,6 +136,7 @@ describe('portées par espace', () => {
 
   it('rend un projet invisible (aucune portée) à un non-membre qui n\'est pas ADMIN', () => {
     expect(spaceScopes('DEVELOPER', { type: 'project', memberRole: null, archived: false })).toEqual([])
+    expect(spaceScopes('MANAGER', { type: 'project', memberRole: null, archived: false })).toEqual([])
     expect(spaceScopes('EDITOR', { type: 'project', memberRole: null, archived: true })).toEqual([])
   })
 })

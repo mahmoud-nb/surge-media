@@ -102,7 +102,10 @@ function details(item: Item): string | null {
     case 'key.rotated':
       return [t(`apiKeys.rotate.overlaps.${text(data.overlap)}.label`), data.replacedBy ? t('apiKeys.replacedBy', { name: text(data.replacedBy) }) : null].filter(Boolean).join(' · ')
     case 'user.created':
-      return t('audit.details.role', { role: t(`roles.${text(data.role)}.label`) })
+      return [
+        t('audit.details.role', { role: t(`roles.${text(data.role)}.label`) }),
+        Array.isArray(data.projects) && data.projects.length ? t('audit.details.projects', { names: data.projects.map(text).join(', ') }) : null,
+      ].filter(Boolean).join(' · ')
     case 'user.updated':
       return [
         change.role ? t('audit.details.change', { from: t(`roles.${text(change.role.from)}.label`), to: t(`roles.${text(change.role.to)}.label`) }) : null,

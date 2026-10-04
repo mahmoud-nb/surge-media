@@ -1,13 +1,18 @@
 <script setup lang="ts">
 import { Plus, Search, Users } from '@lucide/vue'
 
-definePageMeta({ layout: 'admin', permission: 'users:manage' })
+/**
+ * Comptes : tous pour un administrateur (users:manage) ; pour un gestionnaire (users:invite), ceux
+ * qu'il a invités — le serveur filtre la liste.
+ */
+definePageMeta({ layout: 'admin', permission: 'users:invite' })
 
 const { t, locale } = useI18n()
 const route = useRoute()
-const { user: currentUser } = useAuth()
+const { user: currentUser, can } = useAuth()
+const isAdmin = computed(() => can('users:manage'))
 
-useSeoMeta({ title: () => t('users.list.meta.title') })
+useSeoMeta({ title: () => (isAdmin.value ? t('users.list.meta.title') : t('users.list.meta.invitationsTitle')) })
 
 const flash = useFlash().consume()
 
@@ -47,7 +52,7 @@ function pageLink(page: number) {
 
 const roleOptions = computed(() => [
   { value: '' as const, label: t('users.filters.allRoles') },
-  ...ROLES.map(role => ({ value: role, label: t(`roles.${role}.label`) })),
+  ...(isAdmin.value ? ROLES : invitableRoles(currentUser.value?.role)).map(role => ({ value: role, label: t(`roles.${role}.label`) })),
 ])
 const statusOptions = computed(() => [
   { value: '' as const, label: t('users.filters.allStatuses') },
@@ -57,11 +62,14 @@ const statusOptions = computed(() => [
 
 <template>
   <div class="mx-auto max-w-6xl">
-    <AdminPageHeader :title="t('users.list.title')" :description="t('users.list.description')">
+    <AdminPageHeader
+      :title="isAdmin ? t('users.list.title') : t('users.list.invitationsTitle')"
+      :description="isAdmin ? t('users.list.description') : t('users.list.invitationsDescription')"
+    >
       <template #actions>
         <UiButton to="/admin/users/new">
           <Plus aria-hidden="true" />
-          {{ t('users.list.create') }}
+          {{ isAdmin ? t('users.list.create') : t('users.list.invite') }}
         </UiButton>
       </template>
     </AdminPageHeader>
@@ -111,7 +119,7 @@ const statusOptions = computed(() => [
       >
         <table class="w-full min-w-[40rem] text-left text-sm">
           <caption id="users-caption" class="sr-only">
-            {{ t('users.list.caption') }}
+            {{ isAdmin ? t('users.list.caption') : t('users.list.invitationsCaption') }}
           </caption>
           <thead class="border-b border-border text-muted-foreground">
             <tr>
@@ -126,6 +134,9 @@ const statusOptions = computed(() => [
               </th>
               <th scope="col" class="px-4 py-3 font-medium">
                 {{ t('users.columns.lastLogin') }}
+              </th>
+              <th v-if="isAdmin" scope="col" class="px-4 py-3 font-medium">
+                {{ t('users.columns.invitedBy') }}
               </th>
             </tr>
           </thead>
@@ -154,6 +165,12 @@ const statusOptions = computed(() => [
                 <NuxtTime v-if="item.lastLoginAt" :datetime="item.lastLoginAt" :locale="locale" date-style="medium" time-style="short" />
                 <span v-else>{{ t('users.list.never') }}</span>
               </td>
+              <td v-if="isAdmin" class="px-4 py-3 text-muted-foreground">
+                <template v-if="item.invitedBy">
+                  {{ item.invitedBy.id === currentUser?.id ? t('users.list.you') : (item.invitedBy.name || item.invitedBy.email) }}
+                </template>
+                <span v-else>{{ t('users.list.noInviter') }}</span>
+              </td>
             </tr>
           </tbody>
         </table>
@@ -162,7 +179,7 @@ const statusOptions = computed(() => [
       <div v-else class="flex flex-col items-center gap-3 rounded-xl border border-dashed border-input bg-surface px-6 py-14 text-center">
         <Users class="size-8 text-muted-foreground" aria-hidden="true" />
         <p class="font-medium text-foreground">
-          {{ hasFilters ? t('users.list.emptyFiltered') : t('users.list.empty') }}
+          {{ hasFilters ? t('users.list.emptyFiltered') : (isAdmin ? t('users.list.empty') : t('users.list.invitationsEmpty')) }}
         </p>
         <UiButton v-if="hasFilters" to="/admin/users" variant="outline" size="sm">
           {{ t('users.filters.reset') }}

@@ -45,7 +45,11 @@
     "integerRange": "Saisissez un nombre entier de {min} à {max}.",
     "color": "Saisissez une couleur hexadécimale à 6 chiffres, par exemple ffffff.",
     "cropIncomplete": "Indiquez les quatre valeurs de la zone, ou videz-les toutes.",
-    "cropOutside": "La zone dépasse de l'image : {max} px au plus ici."
+    "cropOutside": "La zone dépasse de l'image : {max} px au plus ici.",
+    "projectsRequired": "Choisissez au moins un projet.",
+    "roleNotInvitable": "Vous ne pouvez pas attribuer ce rôle.",
+    "projectUnavailable": "Un des projets choisis n'est plus disponible : vérifiez la sélection.",
+    "projectRoleNotAssignable": "Ce rôle de projet n'est pas permis par le rôle choisi."
   },
   "auth": {
     "logout": "Se déconnecter"
@@ -124,7 +128,8 @@
       "library": "Bibliothèque",
       "audit": "Journal d'audit",
       "apiDocs": "Documentation de l'API",
-      "settings": "Réglages"
+      "settings": "Réglages",
+      "invitations": "Mes invitations"
     },
     "dashboard": {
       "meta": {
@@ -154,15 +159,19 @@
   "roles": {
     "ADMIN": {
       "label": "Administrateur",
-      "description": "Tous les privilèges : utilisateurs, tous les projets et la bibliothèque."
+      "description": "Tous les privilèges : comptes, tous les projets, gestion de la bibliothèque et réglages."
     },
-    "EDITOR": {
-      "label": "Éditeur",
-      "description": "Bibliothèque de l'organisation et médias des projets dont il est membre."
+    "MANAGER": {
+      "label": "Gestionnaire",
+      "description": "Crée des projets et administre ceux dont il est membre ; invite des développeurs et des éditeurs. Bibliothèque en lecture."
     },
     "DEVELOPER": {
       "label": "Développeur",
-      "description": "Bibliothèque, création de projets, clés d'API et intégrations des projets dont il est membre."
+      "description": "Projets dont il est membre : clés d'API, origines autorisées et médias. Bibliothèque en lecture."
+    },
+    "EDITOR": {
+      "label": "Éditeur",
+      "description": "Médias des projets dont il est membre. Bibliothèque en lecture."
     }
   },
   "permissions": {
@@ -170,10 +179,12 @@
       "personal": "Créer des jetons personnels"
     },
     "users": {
-      "manage": "Gérer les utilisateurs"
+      "manage": "Gérer les utilisateurs",
+      "invite": "Inviter des comptes"
     },
     "library": {
-      "manage": "Gérer la bibliothèque de l'organisation"
+      "manage": "Gérer la bibliothèque de l'organisation",
+      "read": "Consulter la bibliothèque de l'organisation"
     },
     "projects": {
       "create": "Créer des projets",
@@ -184,6 +195,9 @@
     },
     "api": {
       "docs": "Consulter la documentation de l'API et la tester"
+    },
+    "settings": {
+      "manage": "Gérer les réglages de l'installation"
     }
   },
   "errors": {
@@ -232,7 +246,8 @@
     },
     "list": {
       "meta": {
-        "title": "Utilisateurs"
+        "title": "Utilisateurs",
+        "invitationsTitle": "Mes invitations"
       },
       "title": "Utilisateurs",
       "description": "Comptes ayant accès à l'administration et rôle de chacun.",
@@ -243,7 +258,13 @@
       "never": "Jamais",
       "empty": "Aucun utilisateur pour le moment.",
       "emptyFiltered": "Aucun utilisateur ne correspond à ces filtres.",
-      "loadError": "Impossible de charger les utilisateurs."
+      "loadError": "Impossible de charger les utilisateurs.",
+      "invitationsTitle": "Mes invitations",
+      "invitationsDescription": "Comptes que vous avez invités sur vos projets et état de leur invitation.",
+      "invite": "Inviter un utilisateur",
+      "invitationsCaption": "Comptes que vous avez invités",
+      "invitationsEmpty": "Vous n'avez invité personne pour le moment.",
+      "noInviter": "Non renseigné"
     },
     "filters": {
       "label": "Filtrer les utilisateurs",
@@ -259,7 +280,8 @@
       "user": "Utilisateur",
       "role": "Rôle",
       "status": "Statut",
-      "lastLogin": "Dernière connexion"
+      "lastLogin": "Dernière connexion",
+      "invitedBy": "Invité par"
     },
     "fields": {
       "email": "Adresse e-mail",
@@ -267,17 +289,33 @@
       "nameHint": "Facultatif. Affiché dans l'administration.",
       "role": "Rôle",
       "active": "Compte actif",
-      "activeHint": "Un compte désactivé ne peut plus se connecter et ses sessions sont fermées immédiatement."
+      "activeHint": "Un compte désactivé ne peut plus se connecter et ses sessions sont fermées immédiatement.",
+      "roleInviteHint": "Un gestionnaire invite des développeurs et des éditeurs.",
+      "projects": "Projets",
+      "projectsRequired": "Projets (au moins un)",
+      "projectsHint": "Facultatif. Le compte deviendra membre des projets cochés.",
+      "projectsHintManager": "Le compte deviendra membre des projets cochés, parmi ceux que vous administrez.",
+      "projectsLoadError": "Impossible de charger vos projets.",
+      "noProjects": "Aucun projet actif : le compte pourra être ajouté à un projet plus tard.",
+      "noProjectsManager": "Vous n'administrez aucun projet actif : créez-en un avant d'inviter quelqu'un.",
+      "projectRole": "Rôle dans ces projets",
+      "projectRoleHint": "Seuls les rôles permis par le rôle choisi ci-dessus sont proposés.",
+      "projectRoleFixed": "Rôle dans ces projets : {role}."
     },
     "create": {
       "meta": {
-        "title": "Nouvel utilisateur"
+        "title": "Nouvel utilisateur",
+        "inviteTitle": "Inviter un utilisateur"
       },
       "title": "Nouvel utilisateur",
       "description": "Créez le compte puis transmettez le lien d'invitation à la personne concernée.",
       "invitationNote": "Aucun mot de passe n'est défini ici : un lien d'invitation valable 7 jours sera généré, pour que l'utilisateur choisisse lui-même son mot de passe.",
       "submit": "Créer le compte",
-      "success": "Le compte {email} a été créé."
+      "success": "Le compte {email} a été créé.",
+      "inviteTitle": "Inviter un utilisateur",
+      "inviteDescription": "Invitez un développeur ou un éditeur sur vos projets, puis transmettez-lui le lien d'invitation.",
+      "inviteSubmit": "Inviter",
+      "inviteSuccess": "Invitation créée pour {email}."
     },
     "edit": {
       "profileTitle": "Profil",
@@ -301,7 +339,9 @@
       "revokeSessions": "Fermer toutes les sessions",
       "revokeOtherSessions": "Fermer mes autres sessions",
       "sessionsRevoked": "Aucune session fermée. | {count} session fermée. | {count} sessions fermées.",
-      "inactiveHint": "Réactivez le compte pour pouvoir générer un lien."
+      "inactiveHint": "Réactivez le compte pour pouvoir générer un lien.",
+      "invitationAccepted": "Invitation acceptée. Pour un mot de passe oublié, adressez-vous à un administrateur.",
+      "inactiveByAdmin": "Ce compte a été désactivé par un administrateur."
     },
     "link": {
       "label": "Lien à transmettre",
@@ -328,7 +368,15 @@
     },
     "errors": {
       "selfAction": "Vous ne pouvez pas modifier le rôle, désactiver ou supprimer votre propre compte.",
-      "lastAdmin": "Impossible : ce compte est le dernier administrateur actif."
+      "lastAdmin": "Impossible : ce compte est le dernier administrateur actif.",
+      "invitationAccepted": "Cette invitation a déjà été acceptée : seul un administrateur peut réinitialiser le mot de passe."
+    },
+    "backToInvitations": "Retour à mes invitations",
+    "view": {
+      "readOnlyNote": "Seul un administrateur peut modifier ce compte.",
+      "projectsTitle": "Projets",
+      "noProjects": "Membre d'aucun projet.",
+      "noSharedProjects": "Membre d'aucun de vos projets."
     }
   },
   "password": {
@@ -678,7 +726,7 @@
       "caption": "Liste des projets",
       "count": "Aucun projet | {count} projet | {count} projets",
       "empty": "Aucun projet pour le moment.",
-      "emptyMember": "Vous n'êtes membre d'aucun projet. Demandez à un propriétaire de projet de vous ajouter.",
+      "emptyMember": "Vous n'êtes membre d'aucun projet. Demandez à un gestionnaire ou à un administrateur de vous y ajouter.",
       "emptyFiltered": "Aucun projet ne correspond à ces filtres.",
       "loadError": "Impossible de charger les projets.",
       "noRole": "—"
@@ -780,7 +828,8 @@
       "confirmLabel": "Pour confirmer, saisissez l'identifiant du projet : {slug}",
       "confirmMismatch": "L'identifiant saisi ne correspond pas.",
       "confirm": "Supprimer définitivement",
-      "success": "Le projet « {name} » a été supprimé."
+      "success": "Le projet « {name} » a été supprimé.",
+      "purgeOnly": "Les médias du projet seront supprimés définitivement, avec leurs fichiers. Pour les conserver dans la bibliothèque, demandez à un administrateur de supprimer le projet."
     },
     "media": {
       "meta": {
@@ -828,8 +877,10 @@
         "role": "Rôle de {name}",
         "action": "Ajouter",
         "actionLabel": "Ajouter {name} au projet",
-        "added": "{name} fait maintenant partie du projet."
-      }
+        "added": "{name} fait maintenant partie du projet.",
+        "asRole": "comme {role}"
+      },
+      "managerOwner": "Gestionnaire : administre tout projet dont il est membre."
     },
     "errors": {
       "PROJECT_ARCHIVED": "Le projet est archivé : cette action est impossible.",
@@ -837,7 +888,8 @@
       "LAST_OWNER": "Impossible : le projet doit garder au moins un propriétaire.",
       "ALREADY_MEMBER": "Ce compte est déjà membre du projet.",
       "ROLE_NOT_ASSIGNABLE": "Ce rôle dépasse ce que permet son rôle sur la plateforme.",
-      "USER_NOT_FOUND": "Ce compte n'existe plus ou a été désactivé."
+      "USER_NOT_FOUND": "Ce compte n'existe plus ou a été désactivé.",
+      "LIBRARY_NOT_ALLOWED": "Seul un administrateur peut verser des médias dans la bibliothèque."
     }
   },
   "reauth": {
@@ -1163,7 +1215,8 @@
         "choose": "Projets inclus",
         "noProjects": "Vous n'avez accès à aucun projet actif.",
         "library": "Inclure la bibliothèque de l'organisation",
-        "libraryHint": "Le jeton pourra aussi agir sur les médias de la bibliothèque."
+        "libraryHint": "Le jeton pourra aussi agir sur les médias de la bibliothèque.",
+        "libraryReadHint": "Le jeton pourra aussi lire les médias de la bibliothèque (votre rôle n'y permet que la consultation)."
       },
       "notice": "Le jeton ne sera affiché qu'une fois. Votre mot de passe peut vous être demandé.",
       "submit": "Créer le jeton",
@@ -1277,7 +1330,8 @@
       },
       "sessions": "Aucune session fermée | Une session fermée | {count} sessions fermées",
       "transformation": "Paramètres : {value}",
-      "libraryPolicy": "Bibliothèque : {from} → {to}"
+      "libraryPolicy": "Bibliothèque : {from} → {to}",
+      "projects": "Projets : {names}"
     },
     "fields": {
       "name": "nom",

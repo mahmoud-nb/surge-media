@@ -2,7 +2,12 @@
 import { ArrowLeft, KeyRound, LogOut, Trash2 } from '@lucide/vue'
 import { NAME_MAX_LENGTH, updateUserSchema } from '#shared/schemas/users'
 
-definePageMeta({ layout: 'admin', permission: 'users:manage' })
+/**
+ * Fiche d'un compte. Administrateur (users:manage) : profil, rôle, statut, liens, sessions et
+ * suppression. Gestionnaire (users:invite) : fiche en lecture d'un compte qu'il a invité, avec un
+ * nouveau lien d'invitation tant qu'elle n'est pas acceptée.
+ */
+definePageMeta({ layout: 'admin', permission: 'users:invite' })
 
 interface PasswordLink {
   path: string
@@ -19,7 +24,8 @@ interface StatusMessage {
 const { t, locale } = useI18n()
 const route = useRoute()
 const { $api } = useNuxtApp()
-const { user: currentUser, refresh: refreshSession } = useAuth()
+const { user: currentUser, refresh: refreshSession, can } = useAuth()
+const isAdmin = computed(() => can('users:manage'))
 const flash = useFlash()
 const initialFlash = flash.consume()
 
@@ -40,6 +46,7 @@ function userErrorMessage(err: unknown): string {
   const { code } = apiError(err)
   if (code === 'SELF_ACTION') return t('users.errors.selfAction')
   if (code === 'LAST_ADMIN') return t('users.errors.lastAdmin')
+  if (code === 'INVITATION_ACCEPTED') return t('users.errors.invitationAccepted')
   return t('common.unexpectedError')
 }
 
@@ -144,7 +151,7 @@ async function deleteUser() {
   <div class="mx-auto max-w-4xl">
     <NuxtLink to="/admin/users" class="mb-4 inline-flex items-center gap-1.5 rounded-lg text-sm font-medium text-muted-foreground hover:text-foreground">
       <ArrowLeft class="size-4" aria-hidden="true" />
-      {{ t('users.backToList') }}
+      {{ isAdmin ? t('users.backToList') : t('users.backToInvitations') }}
     </NuxtLink>
 
     <UiAlert v-if="error" variant="error" live="assertive" :title="t('users.edit.loadError')">
@@ -172,7 +179,38 @@ async function deleteUser() {
           <h2 id="profile-title" class="text-lg font-semibold text-foreground">
             {{ t('users.edit.profileTitle') }}
           </h2>
-          <form class="mt-5 grid gap-6" novalidate @submit.prevent="saveProfile">
+          <template v-if="!isAdmin">
+            <dl class="mt-5 grid gap-4 text-sm sm:grid-cols-3">
+              <div class="grid gap-1">
+                <dt class="text-muted-foreground">
+                  {{ t('users.fields.email') }}
+                </dt>
+                <dd class="font-medium break-all text-foreground">
+                  {{ user.email }}
+                </dd>
+              </div>
+              <div class="grid gap-1">
+                <dt class="text-muted-foreground">
+                  {{ t('users.fields.name') }}
+                </dt>
+                <dd class="font-medium text-foreground">
+                  {{ user.name || t('admin.dashboard.account.noName') }}
+                </dd>
+              </div>
+              <div class="grid gap-1">
+                <dt class="text-muted-foreground">
+                  {{ t('users.fields.role') }}
+                </dt>
+                <dd class="font-medium text-foreground">
+                  {{ t(`roles.${user.role}.label`) }}
+                </dd>
+              </div>
+            </dl>
+            <p class="mt-4 text-sm text-muted-foreground">
+              {{ t('users.view.readOnlyNote') }}
+            </p>
+          </template>
+          <form v-else class="mt-5 grid gap-6" novalidate @submit.prevent="saveProfile">
             <UiAlert v-if="profileStatus" :variant="profileStatus.variant" :live="profileStatus.variant === 'error' ? 'assertive' : 'polite'">
               {{ profileStatus.message }}
             </UiAlert>
@@ -214,6 +252,29 @@ async function deleteUser() {
           </form>
         </section>
 
+        <!-- Projets -->
+        <section aria-labelledby="projects-title" class="rounded-xl border border-border bg-surface p-6 shadow-xs">
+          <h2 id="projects-title" class="text-lg font-semibold text-foreground">
+            {{ t('users.view.projectsTitle') }}
+          </h2>
+          <ul v-if="data.projects.length" class="mt-4 divide-y divide-border rounded-lg border border-border text-sm">
+            <li v-for="project in data.projects" :key="project.id" class="flex flex-wrap items-center justify-between gap-2 px-4 py-3">
+              <span class="flex flex-wrap items-center gap-2">
+                <NuxtLink :to="`/admin/projects/${project.id}/members`" class="font-medium text-primary underline-offset-4 hover:underline">
+                  {{ project.name }}
+                </NuxtLink>
+                <UiBadge v-if="project.archivedAt">
+                  {{ t('projects.status.archived') }}
+                </UiBadge>
+              </span>
+              <span class="text-muted-foreground">{{ project.role ? t(`projectRoles.${project.role}.label`) : '' }}</span>
+            </li>
+          </ul>
+          <p v-else class="mt-2 text-sm text-muted-foreground">
+            {{ isAdmin ? t('users.view.noProjects') : t('users.view.noSharedProjects') }}
+          </p>
+        </section>
+
         <!-- Accès et sécurité -->
         <section aria-labelledby="access-title" class="rounded-xl border border-border bg-surface p-6 shadow-xs">
           <h2 id="access-title" class="text-lg font-semibold text-foreground">
@@ -238,7 +299,7 @@ async function deleteUser() {
                 <span v-else>{{ t('users.list.never') }}</span>
               </dd>
             </div>
-            <div class="grid gap-1">
+            <div v-if="isAdmin" class="grid gap-1">
               <dt class="text-muted-foreground">
                 {{ t('users.access.sessions') }}
               </dt>
@@ -260,23 +321,26 @@ async function deleteUser() {
             {{ accessStatus.message }}
           </UiAlert>
 
-          <div class="mt-5 flex flex-wrap gap-3">
+          <p v-if="!isAdmin && user.status === 'active'" class="mt-4 text-sm text-muted-foreground">
+            {{ t('users.access.invitationAccepted') }}
+          </p>
+          <div v-if="isAdmin || user.status === 'invited'" class="mt-5 flex flex-wrap gap-3">
             <UiButton variant="outline" :disabled="!user.isActive" :loading="generating" @click="generateLink">
               <KeyRound aria-hidden="true" />
               {{ user.status === 'invited' ? t('users.access.newInvitation') : t('users.access.resetLink') }}
             </UiButton>
-            <UiButton variant="outline" :disabled="data.activeSessions === 0" :loading="revoking" @click="revokeSessions">
+            <UiButton v-if="isAdmin" variant="outline" :disabled="data.activeSessions === 0" :loading="revoking" @click="revokeSessions">
               <LogOut aria-hidden="true" />
               {{ isSelf ? t('users.access.revokeOtherSessions') : t('users.access.revokeSessions') }}
             </UiButton>
           </div>
           <p v-if="!user.isActive" class="mt-3 text-sm text-muted-foreground">
-            {{ t('users.access.inactiveHint') }}
+            {{ isAdmin ? t('users.access.inactiveHint') : t('users.access.inactiveByAdmin') }}
           </p>
         </section>
 
         <!-- Suppression -->
-        <section v-if="!isSelf" aria-labelledby="danger-title" class="rounded-xl border border-destructive/40 bg-surface p-6 shadow-xs">
+        <section v-if="isAdmin && !isSelf" aria-labelledby="danger-title" class="rounded-xl border border-destructive/40 bg-surface p-6 shadow-xs">
           <h2 id="danger-title" class="text-lg font-semibold text-foreground">
             {{ t('users.delete.title') }}
           </h2>

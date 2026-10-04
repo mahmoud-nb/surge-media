@@ -132,6 +132,10 @@ export async function updateProject(access: SpaceAccess, input: UpdateProjectInp
 export async function deleteProject(access: SpaceAccess, mediaOnDelete: ProjectMediaOnDelete): Promise<{ media: number }> {
   const project = access.project!
   if (!project.archivedAt) throw projectError(409, 'PROJECT_NOT_ARCHIVED')
+  // Verser les médias dans la bibliothèque revient à y envoyer des médias (administrateur seulement).
+  if (mediaOnDelete === 'library' && !hasScope(spaceScopes(access.user.role, { type: 'library' }), 'media:upload')) {
+    throw projectError(403, 'LIBRARY_NOT_ALLOWED')
+  }
 
   const prisma = await usePrisma()
   const media = await prisma.media.findMany({ where: { projectId: project.id }, select: { id: true, storageKey: true } })
@@ -225,19 +229,38 @@ async function findMemberOr404(projectId: string, userId: string) {
   return member
 }
 
-/** Un projet garde toujours au moins un propriétaire enregistré (409 LAST_OWNER). */
-async function assertNotLastOwner(projectId: string, member: { role: ProjectRole }): Promise<void> {
-  if (member.role !== 'OWNER') return
+/**
+ * Un projet garde toujours au moins un propriétaire parmi ses membres (409 LAST_OWNER) : rôle de
+ * membre encadré par le rôle de plateforme (un gestionnaire membre compte, un rôle plafonné non).
+ */
+async function assertNotLastOwner(projectId: string, member: MemberWithUser): Promise<void> {
+  if (clampProjectRole(member.user.role, member.role) !== 'OWNER') return
   const prisma = await usePrisma()
-  const owners = await prisma.projectMember.count({ where: { projectId, role: 'OWNER' } })
-  if (owners <= 1) throw projectError(409, 'LAST_OWNER')
+  const others = await prisma.projectMember.findMany({
+    where: { projectId, userId: { not: member.user.id } },
+    select: { role: true, user: { select: { role: true } } },
+  })
+  if (!others.some(other => clampProjectRole(other.user.role, other.role) === 'OWNER')) throw projectError(409, 'LAST_OWNER')
+}
+
+/**
+ * Requêtes (à exécuter dans la transaction du changement de rôle de plateforme) qui ramènent les
+ * adhésions d'un compte entre le plancher et le plafond de son nouveau rôle : rôle enregistré =
+ * rôle exercé (un gestionnaire devient propriétaire de ses projets, un développeur n'en est plus
+ * propriétaire).
+ */
+export function membershipNormalization(prisma: Awaited<ReturnType<typeof usePrisma>>, userId: string, platformRole: Role) {
+  return PROJECT_ROLES.flatMap((role) => {
+    const target = clampProjectRole(platformRole, role)
+    return target === role ? [] : [prisma.projectMember.updateMany({ where: { userId, role }, data: { role: target } })]
+  })
 }
 
 /** Nouveau rôle d'un membre ; renvoie aussi le rôle précédent (journal d'audit). */
 export async function updateMemberRole(projectId: string, userId: string, role: ProjectRole) {
   const member = await findMemberOr404(projectId, userId)
   assertAssignable(member.user, role)
-  if (role !== 'OWNER') await assertNotLastOwner(projectId, member)
+  if (clampProjectRole(member.user.role, role) !== 'OWNER') await assertNotLastOwner(projectId, member)
   const prisma = await usePrisma()
   const updated = await prisma.projectMember.update({
     where: { projectId_userId: { projectId, userId } },

@@ -5,8 +5,8 @@
 > français, avec le « Journal des étapes »). En cas de divergence, **le code fait foi**, puis
 > `setup.md`, puis ce fichier.
 >
-> **État décrit** : commit `15d7d3c` (C4) + complément du générateur (zone de recadrage, densité, formulaires ; 2026-10-03, non
-> commité au moment de la rédaction : vérifier `git log`). Étapes terminées : 1 (monorepo, core, base), 2 (UI, auth, rôles),
+> **État décrit** : commit `42c4fa8` (complément de C4 : zone de recadrage, densité, formulaires) + **étape 16, rôle Gestionnaire**
+> (2026-10-03, non commitée au moment de la rédaction : vérifier `git log` ; § 7.1, § 8, § 9.10). Étapes terminées : 1 (monorepo, core, base), 2 (UI, auth, rôles),
 > 3 (utilisateurs), 4 (médias, phase A), 5 = **B1** (projets, espaces, autorisations), 6 = **B2**
 > (identifiants d'API, origines, mode sudo, journal d'audit), 7 = **B3** (API publique v1 en lecture),
 > 8 = **B4** (API v1 en écriture, jetons délégués `sm_dt_`, file bornée des traitements, pré-génération),
@@ -15,7 +15,8 @@
 > 11 = **C1** (transformations d'images à la demande : moteur et diffusion par `/m/`, § 9.16), 12 = **C2** (politique des
 > transformations, préréglages, page « Réglages », § 9.17), 13 = **C3** (API : `urlTemplate`, `focalPoint`, liens signés de
 > transformation unitaires et par lot ; point d'intérêt dans la fiche média, § 9.18), 14 = **C4** (générateur d'adresses de la
-> fiche média : aperçu à la volée non enregistré, adresses signées si nécessaire, extraits HTML, § 9.19). **Les phases B et C sont
+> fiche média : aperçu à la volée non enregistré, adresses signées si nécessaire, extraits HTML, § 9.19), 16 = **rôle Gestionnaire**
+> (`MANAGER` : administre ses projets, invite développeurs et éditeurs ; bibliothèque gérée par l'ADMIN seul). **Les phases B et C sont
 > terminées** (`.claude/architecture-phase-c.md` : décisions CD1 à CD12, écarts en tête). **Prochaine étape** : à proposer et faire
 > valider — `@surge-media/client` + composants (Vue d'abord), ou phase D (vidéos et documents). Architecture de la phase B :
 > `.claude/architecture-phase-b.md` (en-tête = écarts B1 à B5).
@@ -129,7 +130,7 @@ Couches serveur :
 - `components/ui/` (`<Ui…>`) : Button, Input, FormField, Alert, Badge, Select, Switch, PasswordInput, Dialog, Pagination, RadioCards,
   **CheckboxGroup** (cartes à cocher, fieldset/legend, `id` de la 1re case), CopyField, **CopyButton** (bouton compact + annonce `role=status`).
 - `components/app/` (`<App…>`) : Logo, SkipLink, ThemeSwitcher, LocaleSwitcher.
-- `components/admin/` (`<Admin…>`) : Sidebar, PageHeader, RoleField, UserStatusBadge, PasswordLinkPanel, MediaUploader, MediaCard,
+- `components/admin/` (`<Admin…>`) : Sidebar, PageHeader, RoleField (prop `roles`, défaut `ROLES`), UserStatusBadge, PasswordLinkPanel, MediaUploader, MediaCard,
   **MediaBrowser** (médias d'un espace : envoi si portée, filtres URL, grille, corbeille ; prop `projectId?`), **ProjectHeader** (retour, h1, badges,
   onglets Aperçu/Médias/Membres + Clés d'API/Origines si `project:credentials` — prop `scopes` ; `aria-current="true"` sur une sous-page ; alerte archivé),
   **FolderActions** (B5 : nouveau dossier, renommer, déplacer, supprimer), **TransformSettings** (C2 : politique, préréglages, limites),
@@ -159,7 +160,8 @@ Couches serveur :
 - `plugins/` : `auth-session.ts` (hooks nuxt-auth-utils), `bootstrap-admin.ts` (avertissements au démarrage), `database.ts` (déconnexion Prisma à l'arrêt),
   `site-url.ts` (avertit en production si `NUXT_SITE_URL` est vide), `search-backfill.ts` (indexe la recherche des médias existants),
   `delegated-usage.ts` (purge horaire des compteurs de jetons délégués expirés).
-- `utils/` (auto-importés par Nitro) : `prisma.ts` (`usePrisma`, `textContains`, `textSearch`, `isUniqueViolation`, `disconnectPrisma`), `auth.ts`, `password.ts`, `rate-limit.ts`, `users.ts`, `password-tokens.ts`,
+- `utils/` (auto-importés par Nitro) : `prisma.ts` (`usePrisma`, `textContains`, `textSearch`, `isUniqueViolation`, `disconnectPrisma`), `auth.ts`, `password.ts`, `rate-limit.ts`, `users.ts` (`toUserSummary` + `invitedBy`, `USER_SUMMARY_INCLUDE`,
+  `visibleUsersWhere`, `userListWhere(query, actor)`, `findVisibleUserOr404` — étape 16), `password-tokens.ts`,
   **`access.ts`** (`Space`, `LIBRARY`, `spaceFor`, `spaceOfMedia`, `sameSpace`, `describeAccess`, `resolveSpaceAccess`, `assertScope`, `requireSpaceAccess`, `requireMediaAccess` ; vérif. de type enum `ProjectRole`),
   **`projects.ts`** (`projectError`), **`credentials.ts`** (`credentialError` ; vérif. de type enum `TokenType`), **`audit.ts`** (`recordAudit`, `AuditEntry`) ;
   `auth.ts` a en plus `authError`, `requireRecentPassword`, `markPasswordVerified`.
@@ -215,7 +217,7 @@ Identifiants : `String @id @default(cuid())` partout. Horodatages `createdAt @de
 
 | Modèle | Champs clés | Relations / index |
 | --- | --- | --- |
-| **User** | `email @unique` (stocké en minuscules), `name?`, `passwordHash?` (null = invitation non acceptée), `role Role @default(EDITOR)`, `locale @default("fr")` (**non utilisé par l'UI**), `isActive @default(true)`, `lastLoginAt?` | sessions, projectMemberships, createdProjects (`ProjectCreatedBy`), uploadedMedia (`MediaUploadedBy`), accessTokens (`AccessTokenCreatedBy`), passwordTokens (`PasswordTokenUser`), issuedPasswordTokens (`PasswordTokenCreatedBy`) |
+| **User** | `email @unique` (stocké en minuscules), `name?`, `passwordHash?` (null = invitation non acceptée), `role Role @default(EDITOR)`, `locale @default("fr")` (**non utilisé par l'UI**), `isActive @default(true)`, `lastLoginAt?`, `invitedById?` (étape 16, `UserInvitedBy`, SetNull, index) | invitedBy / invitedUsers, sessions, projectMemberships, createdProjects (`ProjectCreatedBy`), uploadedMedia (`MediaUploadedBy`), accessTokens (`AccessTokenCreatedBy`), passwordTokens (`PasswordTokenUser`), issuedPasswordTokens (`PasswordTokenCreatedBy`) |
 | **Session** | `userId`, `tokenHash @unique` (SHA-256 hex du jeton), `ipAddress?`, `userAgent?` (≤191), `expiresAt`, `lastSeenAt`, `passwordVerifiedAt` (B2 : dernière saisie du mot de passe, mode sudo) | user (Cascade) ; index userId, expiresAt |
 | **PasswordToken** | `userId`, `purpose PasswordTokenPurpose`, `tokenHash @unique`, `expiresAt`, `usedAt?`, `createdById?` | user (Cascade), createdBy (SetNull) ; index userId |
 | **Project** | `name`, `slug @unique`, `description?`, `archivedAt?` (lecture seule), `publicListing` (B3, défaut false), `transformPolicy` (C2, OPEN par défaut), `createdById?` | createdBy (SetNull), members, media, folders, accessTokens (clés), tokenGrants (`AccessTokenProject`), allowedOrigins, transformPresets (C2) |
@@ -232,7 +234,7 @@ Identifiants : `String @id @default(cuid())` partout. Horodatages `createdAt @de
 | **Media** | `projectId?` (**null = bibliothèque** ; un seul espace), `folderId?`, `kind MediaKind`, `visibility Visibility @default(PUBLIC)`, `storageKey @unique` (clé opaque), `version Int @default(1)`, `originalName`, `mimeType`, `size Int` (octets, ≤ 2 Gio sous PG/MySQL), `checksum` (SHA-256 hex), `width?`, `height?`, `duration?`, `title?`, `altText?`, `searchTitle?`, `searchName` (défaut `''` = à indexer), `searchAlt?` (B3, normalisées), `metadata Json?`, `focalX?`, `focalY?` (C3 : point d'intérêt, fractions 0 à 1, 4 décimales), `uploadedById?`, `uploadedByTokenId?` (B4, identifiant d'API ou émetteur d'un jeton délégué), `uploadSubject?` (B4, sujet final d'un jeton délégué), `duplicatedFromId?` (provenance d'une copie), `deletedAt?` (corbeille) | project (**Restrict** : un projet n'emporte jamais ses médias), folder (SetNull), uploadedBy (SetNull), uploadedByToken (`MediaUploadedByToken`, SetNull ; index), duplicatedFrom/duplicates (`MediaDuplicates`, SetNull), variants ; index (projectId, deletedAt, createdAt), (projectId, checksum), folderId, deletedAt, duplicatedFromId |
 | **MediaVariant** | `mediaId`, `transformation` (`v<n>/<opération effective>.<format>` depuis C1, ex. `v3/size_480x320,q_72.webp`), `storageKey @unique`, `format` (webp…), `size`, `width`, `height` | media (Cascade) ; `@@unique([mediaId, transformation])` |
 
-Enums : `Role { ADMIN EDITOR DEVELOPER }`, `ProjectRole { OWNER DEVELOPER EDITOR }`, `TokenType { PERSONAL SECRET PUBLISHABLE }`, `PasswordTokenPurpose { INVITATION RESET }`,
+Enums : `Role { ADMIN MANAGER DEVELOPER EDITOR }` (MANAGER : étape 16), `ProjectRole { OWNER DEVELOPER EDITOR }`, `TokenType { PERSONAL SECRET PUBLISHABLE }`, `PasswordTokenPurpose { INVITATION RESET }`,
 `MediaKind { IMAGE VIDEO AUDIO DOCUMENT OTHER }`, `Visibility { PUBLIC PRIVATE }`.
 
 **Migrations** (une par fournisseur : `prisma/migrations/{sqlite,postgresql,mysql}/`) :
@@ -244,7 +246,11 @@ recrée la table Media, rien à la main), `20260929103323_b2_credentials` (B2 ; 
 main : `DELETE FROM AccessToken` en tête — ancien format jamais utilisable — et `UPDATE Session SET passwordVerifiedAt = createdAt` en fin ;
 vérifiée sur SQLite ; la reprise de fin a été ajoutée après application locale : somme de contrôle mise à jour à la main dans
 `_prisma_migrations` de la base de dev), `20261001154517_api_console` (colonne inutilisée, retirée par `20261002180128_drop_api_console`),
-`20261001205756_c2_transforms` (C2), `20261002181734_c3_focal_point` (C3 : `Media.focalX`, `focalY`, rien à la main).
+`20261001205756_c2_transforms` (C2), `20261002181734_c3_focal_point` (C3 : `Media.focalX`, `focalY`, rien à la main),
+`20261003194322_manager_role` (étape 16 : `Role.MANAGER`, `User.invitedById` ; PostgreSQL : type `Role` **recréé** — une valeur ajoutée
+par `ADD VALUE` est inutilisable dans la même transaction — ; reprise à la main : DEVELOPER propriétaires → MANAGER, adhésions des MANAGER →
+OWNER, autres ramenées au plafond ; vérifiée sur une copie SQLite ; générée sous le nom `d1_manager_role` puis renommée avant commit, ligne
+`_prisma_migrations` de la base de dev renommée à la main).
 
 **Règles de portabilité** (schéma commun SQLite / PostgreSQL / MySQL) : pas d'attribut `@db.*`, pas de
 `String[]`, chaînes ≤ 191 caractères sous MySQL (validées par zod/API), enums et Json acceptés
@@ -314,17 +320,25 @@ Core : `dev` / `build` / `typecheck` lancent d'abord `prisma generate` ; `build`
 
 Permissions de **plateforme** (`User.role`) :
 
-| Rôle | `library:manage` | `projects:create` | `projects:all` | `tokens:personal` | `api:docs` (étape 10) | `users:manage` | `audit:read` (B2) | `settings:manage` (C2) |
-| --- | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: |
-| ADMIN | ✓ | ✓ | ✓ (OWNER implicite partout) | ✓ | ✓ | ✓ | ✓ | ✓ |
-| DEVELOPER | ✓ | ✓ | | ✓ | ✓ | | | |
-| EDITOR (défaut, moindre privilège) | ✓ | | | | | | | |
+| Rôle | `library:read` | `library:manage` | `projects:create` | `projects:all` | `tokens:personal` | `api:docs` (étape 10) | `users:invite` | `users:manage` | `audit:read` (B2) | `settings:manage` (C2) |
+| --- | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: |
+| ADMIN | ✓ | ✓ | ✓ | ✓ (OWNER implicite partout) | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
+| MANAGER (étape 16) | ✓ | | ✓ | | ✓ | ✓ | ✓ | | | |
+| DEVELOPER | ✓ | | | | ✓ | ✓ | | | | |
+| EDITOR (défaut, moindre privilège) | ✓ | | | | | | | | | |
+
+Étape 16 (décisions validées par l'utilisateur le 2026-10-03) : un MANAGER membre d'un projet en est **toujours propriétaire**
+(`PROJECT_ROLE_FLOOR`) ; un DEVELOPER ne crée plus de projet et n'est plus jamais propriétaire (plafond `DEVELOPER`) ; bibliothèque
+**en lecture** pour tous sauf l'ADMIN (`library:read` → `media:read`) ; `invitableRoles` : ADMIN → tous, MANAGER → DEVELOPER/EDITOR ;
+le MANAGER suit ses invitations (§ 8).
 
 Portées d'**espace** : `media:read|upload|write|delete` (bibliothèque ou projet) et `project:read|credentials|members|settings`.
-- Bibliothèque : `library:manage` → toutes les portées `media:*`.
+- Bibliothèque : `library:manage` (ADMIN) → toutes les portées `media:*` ; `library:read` (autres rôles) → `media:read` seul.
 - Projet : rôle de membre `OWNER` (`project:*` + `media:*`), `DEVELOPER` (`project:read`, `project:credentials`, `media:*`),
-  `EDITOR` (`project:read`, `media:*`) ; **plafond** `PROJECT_ROLE_CEILING` : ADMIN/DEVELOPER → OWNER, EDITOR → EDITOR ;
-  rôle exercé = `effectiveProjectRole(platformRole, memberRole)` (ADMIN → OWNER même non membre ; non membre → null = projet invisible).
+  `EDITOR` (`project:read`, `media:*`) ; **plafond** `PROJECT_ROLE_CEILING` : ADMIN/MANAGER → OWNER, DEVELOPER → DEVELOPER,
+  EDITOR → EDITOR ; **plancher** `PROJECT_ROLE_FLOOR` : MANAGER → OWNER ; `clampProjectRole(platformRole, memberRole)` encadre le rôle ;
+  rôle exercé = `effectiveProjectRole(platformRole, memberRole)` (ADMIN → OWNER même non membre ; non membre → null = projet invisible ;
+  sinon `clampProjectRole`) ; `assignableProjectRoles` = rôles entre plancher et plafond (MANAGER : OWNER seul).
 - Projet archivé : `ARCHIVED_PROJECT_SCOPES` = `project:read`, `project:settings`, `media:read`.
 - `spaceScopes(role, { type: 'library' } | { type: 'project', memberRole, archived })` est la seule source des droits.
 - Vérifications de type : `ROLES` ↔ enum `Role` (`server/utils/auth.ts`), `PROJECT_ROLES` ↔ enum `ProjectRole` (`server/utils/access.ts`).
@@ -334,8 +348,9 @@ Portées d'**espace** : `media:read|upload|write|delete` (bibliothèque ou proje
   renvoyés par l'API (ergonomie uniquement).
 - Portées des identifiants d'API (B2) : `TOKEN_SCOPES` = `project:read` + `media:*` ; `TOKEN_BASE_SCOPES` (`project:read`, `media:read`)
   toujours incluses ; `tokenScopes(optionnelles)` rend l'ensemble canonique. Jamais de portée de gestion (membres, clés, réglages).
-- Barre latérale : Tableau de bord (tous), Bibliothèque (`library:manage`), Projets (tous), Jetons personnels (`tokens:personal`),
-  Utilisateurs (`users:manage`), Journal d'audit (`audit:read`), Documentation de l'API (`api:docs`).
+- Barre latérale : Tableau de bord (tous), Bibliothèque (`library:read`), Projets (tous), Jetons personnels (`tokens:personal`),
+  Utilisateurs (`users:invite` ; libellé « Mes invitations » sans `users:manage`), Journal d'audit (`audit:read`), Documentation de
+  l'API (`api:docs`), Réglages (`settings:manage`).
 
 ### 7.2 Sessions hybrides (cookie scellé + base)
 
@@ -400,6 +415,20 @@ Portées d'**espace** : `media:read|upload|write|delete` (bibliothèque ou proje
   - désactivation → sessions supprimées dans la même transaction ;
   - e-mail non modifiable après création (PATCH n'accepte que name, role, isActive) ; `EMAIL_TAKEN` (409) à la création.
 - Fermer les sessions d'un compte : sur son propre compte, la session courante est conservée.
+- **Invitations (étape 16)** : `POST /api/admin/users` exige `users:invite` ; rôle ∈ `invitableRoles(acteur)` (403
+  `ROLE_NOT_INVITABLE`) ; `projectIds` + `projectRole` (schéma : rôle requis dès qu'un projet est choisi, projets dédoublonnés,
+  50 au plus) — obligatoires sans `users:manage` (422 `PROJECTS_REQUIRED`), chaque projet résolu avec `resolveSpaceAccess` et la portée
+  `project:members` (422 `PROJECT_UNAVAILABLE` : inconnu, d'autrui ou archivé), rôle de projet ∈ `assignableProjectRoles(rôle invité)`
+  (422 `ROLE_NOT_ASSIGNABLE`), `requireRecentPassword` si projets ; création unique (`user.create` + `projectMemberships`,
+  `invitedById` = acteur — aussi pour un ADMIN), puis lien ; audit `user.created` (`projects` : noms) + `member.added` par projet.
+- **Suivi par un gestionnaire** : `visibleUsersWhere(acteur)` = `{}` avec `users:manage`, sinon `{ invitedById: acteur }` ; liste,
+  fiche (`findVisibleUserOr404` → 404 pour un autre compte) et `password-link` en `users:invite` ; lien seulement si le mot de passe
+  n'est pas défini (409 `INVITATION_ACCEPTED`). PATCH, DELETE et sessions restent `users:manage`. La fiche renvoie `projects`
+  (adhésions du compte parmi les projets visibles de l'acteur, rôle exercé). Interface : `/admin/users` « Mes invitations », formulaire
+  avec rôles permis + projets (`/api/admin/spaces?scope=project:members`) + rôle de projet (texte fixe s'il n'y en a qu'un ; projets
+  masqués pour le rôle ADMIN), fiche en lecture (profil, projets, lien d'invitation), colonne « Invité par » pour l'ADMIN.
+- **Changement de rôle de plateforme** : `membershipNormalization(prisma, userId, role)` (`lib/projects/service.ts`) ajoute à la
+  transaction du PATCH un `updateMany` par rôle de projet hors bornes (`clampProjectRole`) : rôle enregistré = rôle exercé.
 
 ## 9. Médias (étape 4, phase A)
 
@@ -537,16 +566,18 @@ clé `originals/…` ; nouvelle ligne (version 1, mêmes kind/visibility/origina
 
 ### 9.10 Projets et membres (B1, `server/lib/projects/service.ts`)
 
-- Visibilité : ADMIN (`projects:all`) → tous ; sinon projets dont l'utilisateur est membre. `toProjectSummary` : id, name, slug,
+- Visibilité : ADMIN (`projects:all`) → tous ; sinon (MANAGER compris) projets dont l'utilisateur est membre. `toProjectSummary` : id, name, slug,
   description, archivedAt, dates, `role` (exercé), `memberRole`, `mediaCount` (hors corbeille), `memberCount`.
-- Création (`projects:create`) : slug fourni → 409 `SLUG_TAKEN` s'il est pris ; sinon `slugify(name) || 'project'` suffixé `-2…-20`
+- Création (`projects:create` : ADMIN, MANAGER depuis l'étape 16) : slug fourni → 409 `SLUG_TAKEN` s'il est pris ; sinon `slugify(name) || 'project'` suffixé `-2…-20`
   en cas de collision ; le créateur devient `OWNER` (membre).
 - Réglages / archivage : `PATCH { name?, slug?, description?, archived? }` (`project:settings`, permis aussi archivé).
-- Suppression : projet **archivé** seulement (409 `PROJECT_NOT_ARCHIVED`), `{ media: 'library' | 'purge' }` :
+- Suppression : projet **archivé** seulement (409 `PROJECT_NOT_ARCHIVED`), `{ media: 'library' | 'purge' }` (`library` exige
+  `media:upload` sur la bibliothèque, donc l'ADMIN : 403 `LIBRARY_NOT_ALLOWED` sinon, étape 16 ; l'interface ne propose alors que la purge) :
   `library` = transaction `updateMany(projectId → null, folderId → null)` + delete ; `purge` = transaction `deleteMany` + delete, puis
   `deleteStoredFiles` **sans attendre**. Membres, dossiers, jetons, origines partent en cascade.
 - Membres : ajout (comptes actifs, 404 `USER_NOT_FOUND`, 409 `ALREADY_MEMBER`, 422 `ROLE_NOT_ASSIGNABLE` au-delà du plafond),
-  changement de rôle et retrait (409 `LAST_OWNER` : le dernier `OWNER` enregistré ne peut être ni rétrogradé ni retiré ; la
+  changement de rôle et retrait (409 `LAST_OWNER` : le dernier propriétaire **effectif** — `clampProjectRole(rôle de plateforme, rôle`
+  `de membre)` = OWNER, étape 16 — ne peut être ni rétrogradé ni retiré ; un MANAGER n'a que OWNER d'attribuable, d'où 422 avant 409 ; la
   suppression d'un compte ou la baisse de son rôle de plateforme ne sont pas bloquées — un ADMIN reste capable d'administrer),
   départ volontaire (`project:read` suffit pour se retirer soi-même). `toMemberSummary` : user (id, name, email, role, isActive,
   status), role, `effectiveRole`, `assignableRoles`, createdAt.
@@ -938,12 +969,12 @@ Format d'erreur (h3) : `{ statusCode, statusMessage, message, data? }` ; **codes
 | GET `/api/auth/password/:token` | public | — | `{ email, purpose, expiresAt }` · 404 `TOKEN_INVALID` |
 | POST `/api/auth/password/:token` | public (CSRF) | `{ password, confirmation }` | 204 · 400 · 404 `TOKEN_INVALID` |
 | GET `/api/admin/status` | `users:manage` | — | `{ bootstrapCredentialsSet }` |
-| GET `/api/admin/users` | `users:manage` | `?q&role&status&page` | `{ items: UserSummary[], total, page, pageSize: 20 }` (tri e-mail) |
-| POST `/api/admin/users` | `users:manage` | `{ email, name?, role }` | 201 `{ user, invitation { path, purpose, expiresAt } }` · 409 `EMAIL_TAKEN` |
-| GET `/api/admin/users/:id` | `users:manage` | — | `{ user, activeSessions, pendingLink { purpose, expiresAt } \| null }` · 404 |
+| GET `/api/admin/users` | `users:invite` (gestionnaire : ses invités) | `?q&role&status&page` | `{ items: UserSummary[], total, page, pageSize: 20 }` (tri e-mail) |
+| POST `/api/admin/users` | `users:invite` (+ sudo si projets) | `{ email, name?, role, projectIds?, projectRole? }` | 201 `{ user, invitation { path, purpose, expiresAt } }` · 403 `ROLE_NOT_INVITABLE` · 422 `PROJECTS_REQUIRED` / `PROJECT_UNAVAILABLE` / `ROLE_NOT_ASSIGNABLE` · 409 `EMAIL_TAKEN` |
+| GET `/api/admin/users/:id` | `users:invite` (gestionnaire : ses invités) | — | `{ user, activeSessions, pendingLink { purpose, expiresAt } \| null, projects: { id, name, archivedAt, role }[] }` · 404 |
 | PATCH `/api/admin/users/:id` | `users:manage` | `{ name?, role?, isActive? }` | `{ user }` · 403 `SELF_ACTION` · 409 `LAST_ADMIN` |
 | DELETE `/api/admin/users/:id` | `users:manage` | — | 204 · 403 · 409 |
-| POST `/api/admin/users/:id/password-link` | `users:manage` | — | `{ path, purpose, expiresAt }` · 409 si inactif (sans code) |
+| POST `/api/admin/users/:id/password-link` | `users:invite` (gestionnaire : invitation non acceptée de ses invités) | — | `{ path, purpose, expiresAt }` · 409 si inactif (sans code) · 409 `INVITATION_ACCEPTED` · 404 |
 | DELETE `/api/admin/users/:id/sessions` | `users:manage` | — | `{ revoked }` |
 | GET `/api/admin/config/media` | session | — | `{ maxUploadSize, acceptedTypes, signedUrlDurations }` |
 | GET `/api/admin/spaces` | session | `?scope=` (défaut `media:upload`) | `{ spaces: ({ type: 'library' } \| { type: 'project', id, name })[] }` |
@@ -963,7 +994,7 @@ Format d'erreur (h3) : `{ statusCode, statusMessage, message, data? }` ; **codes
 | POST `/api/admin/projects` | `projects:create` | `{ name, slug?, description? }` | 201 `{ project }` · 409 `SLUG_TAKEN` |
 | GET `/api/admin/projects/:id` | `project:read` | — | `{ project, trashCount, scopes }` · 404 |
 | PATCH `/api/admin/projects/:id` | `project:settings` | `{ name?, slug?, description?, archived? }` | `{ project, trashCount, scopes }` · 409 `SLUG_TAKEN` |
-| DELETE `/api/admin/projects/:id` | `project:settings` | `{ media: 'library' \| 'purge' }` | `{ media: n }` · 409 `PROJECT_NOT_ARCHIVED` |
+| DELETE `/api/admin/projects/:id` | `project:settings` (`library` : + `media:upload` bibliothèque) | `{ media: 'library' \| 'purge' }` | `{ media: n }` · 409 `PROJECT_NOT_ARCHIVED` · 403 `LIBRARY_NOT_ALLOWED` |
 | GET `/api/admin/projects/:id/members` | `project:read` | — | `{ members: MemberSummary[], space, projectRole, scopes }` |
 | GET `/api/admin/projects/:id/candidates` | `project:members` | `?q` | `{ candidates: { id, name, email, role, assignableRoles }[] }` (≤ 20) |
 | POST `/api/admin/projects/:id/members` | `project:members` | `{ userId, role }` | 201 `{ member }` · 404 `USER_NOT_FOUND` · 409 `ALREADY_MEMBER` · 422 `ROLE_NOT_ASSIGNABLE` |
@@ -1008,17 +1039,18 @@ Format d'erreur (h3) : `{ statusCode, statusMessage, message, data? }` ; **codes
 
 Contrats de données :
 - `SessionUser` : `{ id, email, name, role, locale }` ; session client : `{ user, loggedInAt }`.
-- `UserSummary` (`toUserSummary`) : `{ id, email, name, role, locale, isActive, status, lastLoginAt, createdAt }` (jamais d'empreinte).
+- `UserSummary` (`toUserSummary`) : `{ id, email, name, role, locale, isActive, status, lastLoginAt, createdAt, invitedBy { id, name, email } | null }` (jamais d'empreinte ; `invitedBy` : étape 16).
 - `MediaSummary` (`toMediaSummary`) : `{ id, projectId, folderId (B5), kind, visibility, originalName, title, altText, mimeType, extension, size, width,
   height, duration, version, focalPoint (C3), url, previewUrl, uploadedBy { id, name, email } | null, createdAt, updatedAt, deletedAt }` ;
   `MediaDetail` = + `checksum`, `metadata`, `duplicatedFromId` ; B4 : + `uploadedByToken { id, name, type, prefix } | null`, `uploadSubject`. `url`/`previewUrl` sont des chemins **relatifs**, signés `scope=admin`
   si privé ou en corbeille ; les adresses à copier (`publicUrl`, `signed-url`) sont **absolues** (`mediaBaseUrl`).
 - `describeAccess(access)` → `{ space: { type: 'library', project: null } | { type: 'project', project: { id, name, slug, archivedAt } },
   projectRole, scopes }` (joint aux réponses média/membres).
-- Codes métier : utilisateurs `EMAIL_TAKEN, SELF_ACTION, LAST_ADMIN, TOKEN_INVALID` ; médias `NO_FILE, MULTIPART_REQUIRED,
+- Codes métier : utilisateurs `EMAIL_TAKEN, SELF_ACTION, LAST_ADMIN, TOKEN_INVALID, ROLE_NOT_INVITABLE, PROJECTS_REQUIRED,
+  PROJECT_UNAVAILABLE, ROLE_NOT_ASSIGNABLE, INVITATION_ACCEPTED` (`userError` accepte 422) ; médias `NO_FILE, MULTIPART_REQUIRED,
   FILE_TOO_LARGE, UNSUPPORTED_TYPE, UNREADABLE_FILE, DIMENSIONS_TOO_LARGE, KIND_MISMATCH, VERSION_CONFLICT, NOT_IN_TRASH, IN_TRASH,
   MEDIA_FORBIDDEN, SIGNATURE_INVALID, SIGNATURE_EXPIRED` ; projets `SLUG_TAKEN, PROJECT_ARCHIVED, PROJECT_NOT_ARCHIVED, LAST_OWNER,
-  ALREADY_MEMBER, ROLE_NOT_ASSIGNABLE, USER_NOT_FOUND` (`projectError`, traduits `projects.errors.*`) ; identifiants `TOKEN_NOT_ACTIVE,
+  ALREADY_MEMBER, ROLE_NOT_ASSIGNABLE, USER_NOT_FOUND, LIBRARY_NOT_ALLOWED` (`projectError`, traduits `projects.errors.*`) ; identifiants `TOKEN_NOT_ACTIVE,
   TOKEN_ACTIVE, TOKEN_REPLACED, PROJECT_UNAVAILABLE, ORIGIN_EXISTS, ORIGIN_LIMIT_REACHED` (`credentialError`, `credentials.errors.*`) ;
   authentification `REAUTH_REQUIRED, PASSWORD_INCORRECT` (`authError`).
 - Typage : les réponses sont inférées des routes Nitro (`useApiFetch('/api/...')`, `$api(...)`). **Éviter une route statique sœur d'une
@@ -1185,7 +1217,7 @@ Contrats de données :
 - Un média appartient à un seul espace ; les listes partent toujours de l'espace imposé par le serveur.
 - Projet : nom 1–100, slug `^[a-z0-9]+(?:-[a-z0-9]+)*$` ≤ 60 unique, description ≤ 191 ; toujours au moins un OWNER enregistré
   (sauf suppression de compte) ; archivé = lecture seule ; suppression seulement archivé.
-- Un EDITOR de plateforme n'exerce jamais plus que `EDITOR` dans un projet ; un ADMIN est OWNER partout.
+- Un EDITOR de plateforme n'exerce jamais plus que `EDITOR` dans un projet, un DEVELOPER jamais plus que `DEVELOPER` ; un MANAGER membre est toujours OWNER ; un ADMIN est OWNER partout. Seuls ADMIN et MANAGER créent des projets ; seul l'ADMIN gère la bibliothèque (étape 16).
 - Identifiants (B2) : valeur complète renvoyée **une seule fois** (création, rotation) sauf clé publique ; jamais d'empreinte dans une
   réponse ni de secret dans le journal ; portées immuables ; jeton personnel toujours à échéance (30/90/365 j) ; clé secrète 30/90/365 j
   ou sans échéance ; clé publique sans échéance ; environnement obligatoire ; 100 origines max par projet.
@@ -1209,7 +1241,7 @@ Contrats de données :
   ≤ 100 liens, une échéance.
 - Générateur (C4) : `media:read` dans l'espace ; aperçu jamais enregistré ni compté, hors politique ; adresses soumises à la politique
   de l'espace (bibliothèque : réglage de l'installation) ; 4 liens au plus par appel ; rien dans la corbeille.
-- Actions sensibles (sudo) : clé secrète (création, rotation), jeton personnel (création), membres (ajout, rôle, retrait d'autrui) ;
+- Actions sensibles (sudo) : clé secrète (création, rotation), jeton personnel (création), membres (ajout, rôle, retrait d'autrui), invitation rattachée à des projets (étape 16) ;
   jamais pour une action qui retire des droits (révoquer, quitter).
 
 ## 18. Pièges, edge cases et problèmes connus
@@ -1309,7 +1341,9 @@ Contrats de données :
   scripts de test lisent les lignes commentées (regex `^#?\s*NAME=`), sans jamais afficher la valeur.
 - Médias de l'utilisateur à préserver : une photo (« granola », envoyée le 26/09) désormais dans la bibliothèque, une image
   « landscape.jpg » (bibliothèque, envoyée le 2026-10-02 au soir, point d'intérêt, version 3) et ses deux entrées d'audit
-  `media.visibility_changed`, et un compte EDITOR existant : ne jamais les supprimer dans les nettoyages de tests.
+  `media.visibility_changed`, et un compte EDITOR existant : ne jamais les supprimer dans les nettoyages de tests. Depuis le
+  2026-10-03 aussi un compte **DEVELOPER** (« SM Dev », créé par l'utilisateur à 12 h 38, membre d'aucun projet) et ses entrées
+  d'audit `user.created` / `user.password_link` (référence avant l'étape 16 : 7 entrées d'audit, 2 médias, 1 projet, 1 jeton, 2 adhésions).
 - Pas d'outil de copie entre stockages, pas de nettoyage des fichiers orphelins ni des liens de mot de passe utilisés.
 - Originaux diffusés avec leurs EXIF (GPS possible).
 - Tests automatisés limités aux modules purs (Vitest, depuis B1) : API et interface vérifiées par scripts ad hoc et audits
@@ -1365,10 +1399,18 @@ Contrats de données :
 - Tests d'API faits jusqu'ici avec des scripts Node temporaires (fetch + FormData + cookie), rejoués en dev **et** en prod ;
   S3 testé contre `s3rver` (faux S3 local, `pnpm dlx s3rver@3.7.1 --port 4568 --configure-bucket surge-media`).
 - Interface : navigateur intégré (pilotage par JS quand le panneau ne s'affiche pas), audits axe injectés depuis jsDelivr.
-- Automatisé dans le dépôt depuis B1 : tests unitaires Vitest des modules purs (183 tests depuis le complément de C4 : `tests/{permissions,signing,projects,credentials,api,openapi,delegated,processing,folders,transforms,image-transform}.test.ts` ;
+- Automatisé dans le dépôt depuis B1 : tests unitaires Vitest des modules purs (199 tests depuis l'étape 16 : `tests/{permissions,signing,projects,credentials,api,openapi,delegated,processing,folders,transforms,image-transform}.test.ts` ;
   `image-transform` exécute le vrai pipeline sharp). Le reste (API, interface, axe) reste manuel
   (piste : tests d'intégration API + Playwright + @axe-core/playwright).
 - Viewport du navigateur intégré : 1024 px (DPR 1,25) ; les mises en page à 5 colonnes doivent attendre `xl`.
+- Étape 16 (rôle Gestionnaire) : `d1-roles-test.mjs [base]` (79 contrôles : création de projets par rôle, invitations et refus,
+  sudo, projet archivé, suivi, `INVITATION_ACCEPTED`, membres — plancher, plafond, `LAST_OWNER` effectif —, normalisation au
+  changement de rôle, bibliothèque en lecture, suppression d'un gestionnaire → `invitedById` null) ; `d1-migration-test.mjs` (reprise
+  rejouée sur une **copie** de la base) ; anciens scénarios rejoués via des copies `d1-<script>` où le propriétaire des projets de test
+  est un MANAGER (attentes changées seulement là où la règle change, marquées `[D1]`) ; interface : `d1-ui-account.mjs setup|cleanup`
+  (MANAGER + projet ; nettoie projets, invités, audit) et `c3-ui-account.mjs` (ADMIN) ; axe par navigation SPA
+  (`$router.push` via `#__nuxt.__vue_app__`, axe reste chargé) ; panneau masqué → `innerWidth` 0 : mesurer le défilement après
+  `resize_window` (mobile). L'action `computer wait` bloque quand le panneau ne s'affiche pas : attendre dans la page.
 - Complément C4 (2026-10-03) : `c4-test.mjs` porté à 45 contrôles (zone, densité, zone hors image, image tournée, adresses 1x/2x/3x),
   rejoué sur `pnpm dev` (`node c4-test.mjs http://localhost:3000`) ; scripts d'interface paramétrables (`BASE=http://localhost:3000`) ;
   axe en dev : exclure `nuxt-devtools-frame` et `.nuxt-devtools-label` (violation `region` de l'outil Nuxt, absente en production).
@@ -1418,7 +1460,8 @@ et portées, projets et membres, duplication/déplacement, diffusion sans cookie
 garde-fous, signatures de transformation et permanentes) ; **C2** (politique des transformations, préréglages globaux et de projet,
 page « Réglages », onglet « Transformations », API v1 `presets`) ; **C3** (`urlTemplate`, `focalPoint` et nouvelle version, liens signés
 de transformation et de préréglage, lot `signed-urls`, OpenAPI, point d'intérêt dans la fiche média) ; **C4** (générateur d'adresses :
-aperçu à la volée, adresses signées si nécessaire, extraits HTML). **Phase C terminée.**
+aperçu à la volée, adresses signées si nécessaire, extraits HTML). **Phase C terminée.** **Étape 16** : rôle Gestionnaire (invitations,
+administration limitée à ses projets, bibliothèque gérée par l'ADMIN).
 
 **Section vide** : aucune (la section « à venir » des jetons a été remplacée en B2).
 
@@ -1434,6 +1477,9 @@ aperçu à la volée, adresses signées si nécessaire, extraits HTML). **Phase 
   étape 13 ; C4 : § 9.19, étape 14.
 - **Suite (à proposer et faire valider avant de commencer)** : `@surge-media/client` + composants (Vue d'abord) ; **Phase D** : vidéos et
   documents (gestionnaires, signatures, Range).
+- Pistes étape 16 : recherche des comptes à ajouter limitée (aujourd'hui tous les comptes actifs, nom et e-mail, visibles par un
+  propriétaire de projet), journal d'audit par projet pour un gestionnaire, envoi des invitations par e-mail (SMTP), réinitialisation du
+  mot de passe d'un invité par son gestionnaire (à décider), retrait d'un compte de tous ses projets en un geste.
 - Pistes C4 : aperçu dans le dialogue d'un préréglage (avec un média de référence), `srcset` en largeurs (`w`) avec `sizes`, cache
   serveur des aperçus, poignées de redimensionnement de la zone au clavier (aujourd'hui : champs).
 - Pistes C3 : point d'intérêt proposé automatiquement (`attention`), journal des changements de point d'intérêt, signature locale par
