@@ -1,6 +1,6 @@
 import { z } from 'zod'
 import { ROLES } from '../utils/permissions'
-import { USER_STATUSES } from '../utils/users'
+import { EMAIL_LOCALES, USER_STATUSES } from '../utils/users'
 import { emailSchema, PASSWORD_MAX_LENGTH, PASSWORD_MIN_LENGTH } from './auth'
 import { projectRoleSchema } from './projects'
 
@@ -56,6 +56,18 @@ export const userListQuerySchema = z.object({
   page: z.coerce.number().int().min(1).max(10_000).catch(1),
 })
 export type UserListQuery = z.infer<typeof userListQuerySchema>
+
+/**
+ * Envoi par e-mail d'un lien déjà émis (POST /api/admin/users/:id/password-link/email) : le jeton du
+ * lien affiché (vérifié par le serveur, jamais stocké en clair), la langue et le fuseau horaire de
+ * l'expéditeur (date d'échéance écrite dans l'e-mail).
+ */
+export const emailPasswordLinkSchema = z.object({
+  token: z.string().min(1).max(128).regex(/^[\w-]+$/),
+  locale: z.enum(EMAIL_LOCALES),
+  timeZone: z.string().max(64).optional(),
+})
+export type EmailPasswordLinkInput = z.input<typeof emailPasswordLinkSchema>
 
 /** Nouveau mot de passe (invitation ou réinitialisation), saisi deux fois. */
 export const newPasswordSchema = z.object({

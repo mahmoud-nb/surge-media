@@ -3,6 +3,7 @@
  * Valeur à copier (lien, identifiant…) : champ en lecture seule + bouton « Copier ».
  * La confirmation est annoncée (role="status") ; si le presse-papiers est indisponible
  * (HTTP, permission refusée), le texte est sélectionné pour une copie manuelle.
+ * Emplacement `actions` : autres boutons à côté de « Copier » (ex. envoi par e-mail).
  */
 import { Check, Copy } from '@lucide/vue'
 
@@ -51,6 +52,7 @@ onBeforeUnmount(() => clearTimeout(timer))
         <Copy v-else aria-hidden="true" />
         {{ copyLabel ?? t('common.copy') }}
       </UiButton>
+      <slot name="actions" />
     </div>
     <p class="min-h-5 text-sm font-medium text-success" role="status">
       {{ copied ? t('common.copied') : '' }}

@@ -61,6 +61,16 @@ export default defineNuxtConfig({
       email: '',
       password: '',
     },
+    // Envoi d'e-mails (liens d'invitation et de réinitialisation) — NUXT_SMTP_*. Hôte ou expéditeur
+    // vide : envoi désactivé, le bouton « Envoyer par e-mail » n'est pas proposé (server/lib/mail/).
+    smtp: {
+      host: '', // NUXT_SMTP_HOST
+      port: 587, // NUXT_SMTP_PORT
+      secure: false, // TLS dès la connexion (port 465) ; sinon STARTTLS si le serveur le propose — NUXT_SMTP_SECURE
+      user: '', // identifiant, facultatif (relais sans authentification) — NUXT_SMTP_USER
+      password: '', // NUXT_SMTP_PASSWORD
+      from: '', // expéditeur, ex. « surgeMedia <no-reply@example.com> » — NUXT_SMTP_FROM
+    },
     public: {
       // Appareils de confiance : jours sans ressaisie du mot de passe pour les actions sensibles,
       // 0 = option désactivée (shared/utils/auth.ts) — NUXT_PUBLIC_TRUSTED_DEVICE_DAYS

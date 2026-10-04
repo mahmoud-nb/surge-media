@@ -5,8 +5,9 @@
 > français, avec le « Journal des étapes »). En cas de divergence, **le code fait foi**, puis
 > `setup.md`, puis ce fichier.
 >
-> **État décrit** : commit `7a42f45` (**étape 16, rôle Gestionnaire**, 2026-10-03 ; § 7.1, § 8, § 9.10) + **étape 17, appareils de
-> confiance** (2026-10-04 ; § 7.2), non commitée au moment de la rédaction : vérifier `git log`. Étapes terminées : 1 (monorepo, core, base), 2 (UI, auth, rôles),
+> **État décrit** : commit `608b8f6` (**étape 17, appareils de confiance**, 2026-10-04 ; § 7.2), après `7a42f45` (**étape 16, rôle
+> Gestionnaire** ; § 7.1, § 8, § 9.10) + **étape 18, envoi des liens par e-mail** (2026-10-04 ; § 8), non commitée au moment de la
+> rédaction : vérifier `git log`. Étapes terminées : 1 (monorepo, core, base), 2 (UI, auth, rôles),
 > 3 (utilisateurs), 4 (médias, phase A), 5 = **B1** (projets, espaces, autorisations), 6 = **B2**
 > (identifiants d'API, origines, mode sudo, journal d'audit), 7 = **B3** (API publique v1 en lecture),
 > 8 = **B4** (API v1 en écriture, jetons délégués `sm_dt_`, file bornée des traitements, pré-génération),
@@ -275,6 +276,7 @@ Ne jamais modifier une migration publiée.
 | `NUXT_SESSION_PASSWORD` | généré par `db:init` | secret des cookies scellés (≥ 32 car.) |
 | `NUXT_SESSION_MAX_AGE` | 43200 (12 h) | durée de session (cookie + base) |
 | `NUXT_SESSION_COOKIE_SECURE` | true | `false` seulement pour tester en HTTP hors localhost (vaut aussi pour le cookie des appareils de confiance) |
+| `NUXT_SMTP_HOST`, `_PORT` (587), `_SECURE` (false), `_USER`, `_PASSWORD`, `_FROM` | — | envoi d'e-mails (étape 18) ; hôte + expéditeur requis, sinon désactivé |
 | `NUXT_PUBLIC_TRUSTED_DEVICE_DAYS` | 15 | appareils de confiance (étape 17) : jours sans ressaisie pour les actions sensibles, 0 = désactivé (et appareils existants ignorés), ≤ 365 ; lu côté client (case) et serveur |
 | `NUXT_BOOTSTRAP_ADMIN_EMAIL` / `_PASSWORD` | — | compte d'amorçage (§ 7.5) |
 | `NUXT_SITE_URL` | demandée par `db:init` (`--site-url`) | URL publique de l'installation ; vide = origine de la requête (avertissement en prod) |
@@ -418,7 +420,18 @@ Portées d'**espace** : `media:read|upload|write|delete` (bibliothèque ou proje
 - Pages : `/admin/users` (recherche nom/e-mail, filtres rôle et statut dans l'URL, tableau, pagination 20), `/admin/users/new`,
   `/admin/users/[id]` (profil, accès et sécurité, suppression dans `<UiDialog>`). Permission `users:manage`.
 - **Pas de mot de passe saisi par l'administrateur** : création → **lien d'invitation** à usage unique (7 jours) affiché une fois
-  (`AdminPasswordLinkPanel`, focus sur son titre), transmis à la main (pas de SMTP). Réinitialisation : lien de 24 h depuis la fiche.
+  (`AdminPasswordLinkPanel`, focus sur son titre), transmis à la main ou par e-mail (étape 18, si SMTP). Réinitialisation : lien de 24 h depuis la fiche.
+- **Envoi par e-mail (étape 18, choix validés le 2026-10-04 : SMTP par l'environnement, langue de l'expéditeur)** : `runtimeConfig.smtp`
+  (`NUXT_SMTP_HOST|PORT|SECURE|USER|PASSWORD|FROM`, serveur seulement) ; `mailEnabled` = hôte + expéditeur ; `GET /api/admin/config/mail`
+  → `{ enabled }` (`users:invite`) pilote le bouton « Envoyer par e-mail » (emplacement `actions` de `UiCopyField`, prop `userId` du panneau).
+  `POST /api/admin/users/:id/password-link/email { token, locale, timeZone? }` : `findVisibleUserOr404`, 409 `MAIL_NOT_CONFIGURED`,
+  `findValidPasswordToken(token)` du **même compte** (sinon 404 `TOKEN_INVALID`), non-ADMIN : `INVITATION` seulement (409
+  `INVITATION_ACCEPTED`), limiteur 5/h par compte (429 + Retry-After, compté avant l'envoi), destinataire = `user.email` (un champ `to` est
+  ignoré par zod), `passwordLinkMail` (`server/lib/mail/password-link.ts`, pur, testé : `mail.*` de `fr.json`/`en.json` importés,
+  `app.name`, HTML échappé `role="article"` + `aria-roledescription="email"`, échéance `Intl` avec fuseau, repli sur celui du serveur),
+  `sendMail` (nodemailer, transport mis en cache par configuration, délais 10/10/20 s) ; échec → `console.error` + 502 `MAIL_FAILED` sans
+  audit ; succès → audit `user.link_emailed` (`purpose`) → `{ to }`. `EMAIL_LOCALES` (`shared/utils/users.ts`) = langues de
+  `nuxt.config.ts` (test). nodemailer 10 a des exports conditionnels : tracé correct vérifié par une build (`dist/esm` dans `.output`).
 - Page publique `/password/[token]` : e-mail en lecture seule (`autocomplete=username`), nouveau mot de passe (12–128) + confirmation,
   puis `/login?passwordSet=1`. Lien invalide / expiré / utilisé / compte inactif → page « Lien invalide ou expiré ».
 - Liens (`server/utils/password-tokens.ts`) : un seul lien actif par compte (les non utilisés sont supprimés à l'émission) ; seule
@@ -622,7 +635,7 @@ clé `originals/…` ; nouvelle ligne (version 1, mêmes kind/visibility/origina
 - **Accès** : clés et origines = `project:credentials` (OWNER, DEVELOPER du projet ; ADMIN) ; projet archivé → 403 `PROJECT_ARCHIVED`
   (portée retirée par l'archivage). Jetons personnels = `tokens:personal`, chacun les siens.
 - **Audit** (`server/utils/audit.ts`) : `recordAudit` attendu (await) après l'action, erreurs avalées et journalisées. Actions :
-  `shared/utils/audit.ts` (31 depuis l'étape 17). Choix : `member.role_changed` seulement si le rôle change (`{ from, to }`) ; `project.updated` avec
+  `shared/utils/audit.ts` (32 depuis l'étape 18). Choix : `member.role_changed` seulement si le rôle change (`{ from, to }`) ; `project.updated` avec
   `changes` (name, slug, description) ; `project.archived|restored` ; `media.visibility_changed` seulement si elle change ;
   `media.moved` rattaché au projet d'origine (sinon cible), `data.from/to` = `{ id, name } | null` ; `media.deleted` = purge définitive ;
   `key.rotated` avec `overlap` et `replacedBy` (libellé) ; jetons personnels sans `projectId`. Lecture : `listAuditEvents` (50/page,
@@ -993,6 +1006,8 @@ Format d'erreur (h3) : `{ statusCode, statusMessage, message, data? }` ; **codes
 | GET `/api/admin/users/:id` | `users:invite` (gestionnaire : ses invités) | — | `{ user, activeSessions, pendingLink { purpose, expiresAt } \| null, projects: { id, name, archivedAt, role }[] }` · 404 |
 | PATCH `/api/admin/users/:id` | `users:manage` | `{ name?, role?, isActive? }` | `{ user }` · 403 `SELF_ACTION` · 409 `LAST_ADMIN` |
 | DELETE `/api/admin/users/:id` | `users:manage` | — | 204 · 403 · 409 |
+| POST `/api/admin/users/:id/password-link/email` | `users:invite` (gestionnaire : invitation de ses invités) | `{ token, locale, timeZone? }` | `{ to }` · 404 `TOKEN_INVALID` · 409 `MAIL_NOT_CONFIGURED` / `INVITATION_ACCEPTED` · 429 · 502 `MAIL_FAILED` |
+| GET `/api/admin/config/mail` | `users:invite` | — | `{ enabled }` |
 | POST `/api/admin/users/:id/password-link` | `users:invite` (gestionnaire : invitation non acceptée de ses invités) | — | `{ path, purpose, expiresAt }` · 409 si inactif (sans code) · 409 `INVITATION_ACCEPTED` · 404 |
 | DELETE `/api/admin/users/:id/sessions` | `users:manage` | — | `{ revoked }` |
 | GET `/api/admin/config/media` | session | — | `{ maxUploadSize, acceptedTypes, signedUrlDurations }` |
@@ -1066,7 +1081,7 @@ Contrats de données :
 - `describeAccess(access)` → `{ space: { type: 'library', project: null } | { type: 'project', project: { id, name, slug, archivedAt } },
   projectRole, scopes }` (joint aux réponses média/membres).
 - Codes métier : utilisateurs `EMAIL_TAKEN, SELF_ACTION, LAST_ADMIN, TOKEN_INVALID, ROLE_NOT_INVITABLE, PROJECTS_REQUIRED,
-  PROJECT_UNAVAILABLE, ROLE_NOT_ASSIGNABLE, INVITATION_ACCEPTED` (`userError` accepte 422) ; médias `NO_FILE, MULTIPART_REQUIRED,
+  PROJECT_UNAVAILABLE, ROLE_NOT_ASSIGNABLE, INVITATION_ACCEPTED, MAIL_NOT_CONFIGURED, MAIL_FAILED` (`userError` accepte 422) ; médias `NO_FILE, MULTIPART_REQUIRED,
   FILE_TOO_LARGE, UNSUPPORTED_TYPE, UNREADABLE_FILE, DIMENSIONS_TOO_LARGE, KIND_MISMATCH, VERSION_CONFLICT, NOT_IN_TRASH, IN_TRASH,
   MEDIA_FORBIDDEN, SIGNATURE_INVALID, SIGNATURE_EXPIRED` ; projets `SLUG_TAKEN, PROJECT_ARCHIVED, PROJECT_NOT_ARCHIVED, LAST_OWNER,
   ALREADY_MEMBER, ROLE_NOT_ASSIGNABLE, USER_NOT_FOUND, LIBRARY_NOT_ALLOWED` (`projectError`, traduits `projects.errors.*`) ; identifiants `TOKEN_NOT_ACTIVE,
@@ -1183,7 +1198,7 @@ Contrats de données :
 | argon2id (@node-rs/argon2) | recommandation OWASP, binaires précompilés |
 | Composants Tailwind maison | contrôle total de l'accessibilité et du thème, pas de dépendance de composants |
 | i18n `no_prefix` | URL stables pour `/admin/*` |
-| Liens d'invitation/réinitialisation au lieu de mots de passe saisis par l'admin | l'admin ne connaît jamais le mot de passe ; fonctionne sans SMTP |
+| Liens d'invitation/réinitialisation au lieu de mots de passe saisis par l'admin | l'admin ne connaît jamais le mot de passe ; fonctionne sans SMTP ; envoi par e-mail facultatif (étape 18) du lien affiché, revérifié par le serveur, à l'adresse du compte seulement |
 | Flydrive derrière `MediaStorage` | flux, S3/GCS, URL signées, clés sûres ; remplaçable ; validé par l'utilisateur |
 | Node ≥ 24 | exigé par Flydrive 2 (Flydrive 1.3 resterait possible pour Node 22) |
 | Détection de type maison (`sniff.ts`), **pas `file-type`** | `file-type` → `strtok3` (exports conditionnels) cassé après build Nitro + pnpm ; zéro dépendance |
@@ -1421,10 +1436,16 @@ Contrats de données :
 - Tests d'API faits jusqu'ici avec des scripts Node temporaires (fetch + FormData + cookie), rejoués en dev **et** en prod ;
   S3 testé contre `s3rver` (faux S3 local, `pnpm dlx s3rver@3.7.1 --port 4568 --configure-bucket surge-media`).
 - Interface : navigateur intégré (pilotage par JS quand le panneau ne s'affiche pas), audits axe injectés depuis jsDelivr.
-- Automatisé dans le dépôt depuis B1 : tests unitaires Vitest des modules purs (202 tests depuis l'étape 17 : `tests/{permissions,signing,projects,credentials,api,openapi,delegated,processing,folders,transforms,image-transform}.test.ts` ;
+- Automatisé dans le dépôt depuis B1 : tests unitaires Vitest des modules purs (208 tests depuis l'étape 18, dont `mail` : `tests/{permissions,signing,projects,credentials,api,openapi,delegated,processing,folders,transforms,image-transform}.test.ts` ;
   `image-transform` exécute le vrai pipeline sharp). Le reste (API, interface, axe) reste manuel
   (piste : tests d'intégration API + Playwright + @axe-core/playwright).
 - Viewport du navigateur intégré : 1024 px (DPR 1,25) ; les mises en page à 5 colonnes doivent attendre `xl`.
+- Étape 18 (e-mails) : `mail-test.mjs <base SMTP> <base sans SMTP> <base SQLite>` (28 contrôles) contre une **copie isolée** de
+  `packages/core` (robocopy sans node_modules/.nuxt/.output/data + jonction `node_modules` + base copiée par `VACUUM INTO`), lancée sur
+  3200 par une configuration de lancement temporaire (`cwd` doit être dans le projet : `process.chdir` vers la copie dans le script),
+  reliée à `smtp-sink.mjs` (faux SMTP 127.0.0.1:2525, messages dans `mails/`, destinataire « refuse » → 550) ; la même copie sert à une
+  **build de production** sans toucher au `.nuxt` du serveur de l'utilisateur. Supprimer la jonction avant la copie (sinon
+  `node_modules` réel en danger). Vite de la copie refuse une police hors de sa liste (sans effet sur l'API).
 - Étape 17 (appareils de confiance) : `trusted-devices-test.mjs [base]` (37 contrôles ; pot à cookies multi-cookies, vieillissement de
   `Session.passwordVerifiedAt` en SQL pour dépasser la fenêtre de 10 min, action sensible = création d'un jeton personnel) ; interface avec
   `c3-ui-account.mjs` (session vieillie en SQL pour ouvrir le dialogue).
@@ -1502,6 +1523,8 @@ administration limitée à ses projets, bibliothèque gérée par l'ADMIN).
   étape 13 ; C4 : § 9.19, étape 14.
 - **Suite (à proposer et faire valider avant de commencer)** : `@surge-media/client` + composants (Vue d'abord) ; **Phase D** : vidéos et
   documents (gestionnaires, signatures, Range).
+- Pistes étape 18 : « Envoyer un e-mail de test » (Réglages ou CLI), envoi automatique à la création d'un compte, file d'envoi, alerte à
+  l'ajout d'un appareil de confiance, réinitialisation demandée par l'utilisateur lui-même (« mot de passe oublié » sur la page de connexion).
 - Pistes étape 17 : page « Mon compte » avec la liste des appareils de confiance (navigateur, dernière utilisation, retrait un par un),
   actions exclues de la confiance (ex. création d'une clé secrète), alerte à l'ajout d'un appareil (SMTP).
 - Pistes étape 16 : recherche des comptes à ajouter limitée (aujourd'hui tous les comptes actifs, nom et e-mail, visibles par un

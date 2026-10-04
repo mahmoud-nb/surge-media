@@ -118,6 +118,7 @@ function details(item: Item): string | null {
         ? t('audit.details.deviceForgotten')
         : t('audit.details.devicesRevoked', { count: Number(data.count ?? 0) }, Number(data.count ?? 0))
     case 'user.password_link':
+    case 'user.link_emailed':
       return t(`audit.details.passwordLink.${data.purpose === 'RESET' ? 'reset' : 'invitation'}`)
     case 'user.sessions_revoked':
       return t('audit.details.sessions', { count: Number(data.count ?? 0) }, Number(data.count ?? 0))

@@ -227,6 +227,9 @@ Le fichier `packages/core/.env` est créé par `pnpm db:init` à partir de `.env
 | `NUXT_SESSION_PASSWORD` | généré par `db:init` | secret des cookies de session (≥ 32 caractères ; le changer déconnecte tout le monde) |
 | `NUXT_SESSION_MAX_AGE` | `43200` (12 h) | durée d'une session, en secondes |
 | `NUXT_SESSION_COOKIE_SECURE` | `true` | cookie réservé à HTTPS (localhost excepté) ; `false` uniquement pour un test en HTTP (s'applique aussi au cookie des appareils de confiance) |
+| `NUXT_SMTP_HOST` / `NUXT_SMTP_FROM` | — | envoi d'e-mails (§ 9.4) : serveur SMTP et expéditeur (« surgeMedia <no-reply@example.com> ») ; les deux sont requis, sinon le bouton « Envoyer par e-mail » n'est pas proposé |
+| `NUXT_SMTP_PORT` / `NUXT_SMTP_SECURE` | `587` / `false` | 587 avec STARTTLS si le serveur le propose, ou 465 avec `NUXT_SMTP_SECURE=true` (TLS dès la connexion) |
+| `NUXT_SMTP_USER` / `NUXT_SMTP_PASSWORD` | — | identifiants SMTP, facultatifs (relais sans authentification) |
 | `NUXT_PUBLIC_TRUSTED_DEVICE_DAYS` | `15` | appareils de confiance : jours sans ressaisie du mot de passe pour les actions sensibles (365 au plus) ; `0` désactive l'option et ignore les appareils déjà de confiance (§ 9.7) |
 | `NUXT_BOOTSTRAP_ADMIN_EMAIL` | — | compte d'amorçage (§ 9.3), à supprimer après la première connexion |
 | `NUXT_BOOTSTRAP_ADMIN_PASSWORD` | — | mot de passe d'amorçage (12 caractères minimum) |
@@ -808,11 +811,21 @@ Il n'y a pas d'inscription publique : les comptes sont créés par un administra
 
 **Parcours** : l'administrateur crée le compte (e-mail, nom facultatif, rôle ; `EDITOR` présélectionné,
 le moins privilégié). Aucun mot de passe n'est saisi : un **lien d'invitation à usage unique** (7 jours)
-est affiché une seule fois, à copier et transmettre par un canal sûr (pas encore d'envoi d'e-mail).
+est affiché une seule fois, à copier et transmettre par un canal sûr, ou à **envoyer par e-mail** (bouton à côté de
+« Copier le lien », proposé seulement si l'envoi SMTP est configuré : voir plus bas).
 L'utilisateur ouvre `/password/<jeton>`, choisit son mot de passe (12 caractères minimum, saisi deux
 fois), puis se connecte. Mot de passe oublié : l'administrateur génère un **lien de réinitialisation**
 (24 h) depuis la fiche du compte ; l'ancien mot de passe reste valable jusqu'à son utilisation, puis
 toutes les sessions du compte sont fermées.
+
+**Envoi par e-mail** (étape 18) : avec `NUXT_SMTP_HOST` et `NUXT_SMTP_FROM` (§ 6), le panneau du lien
+propose « Envoyer par e-mail ». Le navigateur renvoie le jeton affiché ; le serveur vérifie que c'est
+bien le lien encore valable de ce compte, puis l'envoie **à l'adresse du compte, jamais ailleurs**, dans
+la langue de l'interface de l'expéditeur, avec l'échéance dans son fuseau horaire (version texte et
+HTML). Le jeton n'est toujours stocké qu'en empreinte. 5 envois par heure et par compte ; un refus du
+serveur SMTP répond 502 `MAIL_FAILED` (détail dans les journaux du serveur) ; chaque envoi est journalisé
+(`user.link_emailed`). Mêmes droits que l'émission du lien : un gestionnaire n'envoie que l'invitation
+de ses invités. Sans configuration SMTP, rien ne change : le lien se copie et se transmet à la main.
 
 L'administrateur peut rattacher le compte à des projets dès sa création (facultatif, avec un rôle de
 projet permis par le rôle choisi) ; la liste indique qui a invité chaque compte (`User.invitedById`).
@@ -832,6 +845,8 @@ l'administrateur ; un compte que le gestionnaire n'a pas invité lui répond 404
 | `PATCH /api/admin/users/:id` | `{ name?, role?, isActive? }` ; désactiver ferme les sessions immédiatement |
 | `DELETE /api/admin/users/:id` | suppression définitive (les médias du compte sont conservés) |
 | `POST /api/admin/users/:id/password-link` | nouveau lien (invitation ou réinitialisation) ; annule le précédent · 409 si compte désactivé ; gestionnaire : invitation non acceptée de ses invités (409 `INVITATION_ACCEPTED` sinon) |
+| `POST /api/admin/users/:id/password-link/email` | `{ token, locale, timeZone? }` → envoie le lien encore valable du compte à son adresse (200 `{ to }`) · 404 `TOKEN_INVALID` · 409 `MAIL_NOT_CONFIGURED` / `INVITATION_ACCEPTED` · 429 · 502 `MAIL_FAILED` |
+| `GET /api/admin/config/mail` | `{ enabled }` : envoi d'e-mails configuré (`users:invite`) ; aucun paramètre SMTP renvoyé |
 | `DELETE /api/admin/users/:id/sessions` | ferme les sessions du compte (sur son propre compte : sauf la session en cours) |
 | `GET /api/auth/password/:token` | public : e-mail et type du lien · 404 `TOKEN_INVALID` |
 | `POST /api/auth/password/:token` | public : `{ password, confirmation }` → enregistre le mot de passe (204) · 404 `TOKEN_INVALID` |
@@ -1410,6 +1425,7 @@ pnpm start                          # node --env-file-if-exists=.env .output/ser
 | Rôles = ensembles de portées, plafonnés par le rôle de plateforme | un seul moteur (`spaceScopes`), pur et testé, pour les sessions aujourd'hui et les jetons demain |
 | Diffusion `/m/` sans cookie, liens signés v2 (`kid`, droit élargi, échéance alignée) | cachable par un CDN, domaine dédié possible, rotation du secret sans coupure, URL stables pendant 15 min pour l'administration |
 | Identifiants opaques `sm_<type>_…` + CRC32, empreinte SHA-256 (pas de JWT durable, pas d'argon2) | révocation instantanée, rejet des jetons mal formés sans base, repérage par les outils de détection de secrets ; 256 bits d'entropie rendent un hachage lent inutile |
+| E-mails : nodemailer (SMTP), configuration par l'environnement | bibliothèque de référence, sans dépendance ni module natif ; identifiants SMTP hors de la base, comme ceux de S3 ; textes dans les fichiers de traduction (`mail.*`) |
 | « Mode sudo » stocké dans la session en base (`passwordVerifiedAt`) | vérifié côté serveur à chaque action sensible, révocable avec la session ; l'interface rejoue l'action après confirmation |
 | Journal d'audit sans clés étrangères | les entrées survivent aux suppressions (comptes, projets, clés) ; libellé lisible conservé dans `data.label` |
 | API v1 : projet dans l'URL, Bearer sans cookie, RFC 9457, curseurs | architecture § 6 : isolation lisible, preflight CORS sans authentification, contrat indépendant de l'administration |
@@ -1464,6 +1480,10 @@ pnpm start                          # node --env-file-if-exists=.env .output/ser
 | Pas de menu « Rôle dans le projet » pour un membre | gestionnaire : un seul rôle possible (propriétaire) ; il administre tout projet dont il est membre |
 | Une boîte « Confirmez votre mot de passe » s'ouvre | normal : action sensible (clé secrète, jeton personnel, membres) plus de 10 min après la dernière saisie du mot de passe (§ 9.7) ; cochez « Faire confiance à cet appareil » pour ne plus la voir pendant 15 jours dans ce navigateur |
 | La confirmation est redemandée malgré « Faire confiance à cet appareil » | confiance expirée (15 jours), retirée (tableau de bord, administrateur), mot de passe changé, cookies du navigateur effacés, autre navigateur ou navigation privée, ou option désactivée (`NUXT_PUBLIC_TRUSTED_DEVICE_DAYS=0`) |
+| Pas de bouton « Envoyer par e-mail » à côté de « Copier le lien » | `NUXT_SMTP_HOST` ou `NUXT_SMTP_FROM` manquant (redémarrer le serveur après les avoir définis) |
+| « L'e-mail n'a pas pu être envoyé » (502 `MAIL_FAILED`) | serveur SMTP injoignable, identifiants refusés, port ou TLS incorrect (587 STARTTLS, ou 465 avec `NUXT_SMTP_SECURE=true`), expéditeur refusé : le détail est dans les journaux du serveur (« Envoi d'e-mail impossible ») |
+| « Ce lien n'est plus valable » à l'envoi par e-mail | le lien affiché a été utilisé, remplacé par un plus récent ou a expiré : en générer un nouveau |
+| E-mail reçu en indésirable | configurer SPF, DKIM et DMARC du domaine de `NUXT_SMTP_FROM` chez votre fournisseur |
 | Pas de case « Faire confiance à cet appareil » | option désactivée : `NUXT_PUBLIC_TRUSTED_DEVICE_DAYS=0` |
 | Clé secrète ou jeton personnel perdu | la valeur complète n'est jamais conservée : renouveler la clé (rotation avec recouvrement) ou créer un nouveau jeton, puis révoquer l'ancien |
 | Onglets « Clés d'API » et « Origines autorisées » absents | il faut la portée `project:credentials` (rôle de projet OWNER ou DEVELOPER, jamais un EDITOR de plateforme) et un projet non archivé |
@@ -2337,3 +2357,41 @@ les actions (toutes les actions sensibles en profitent).
 pnpm install          # aucune nouvelle dépendance
 pnpm db:migrate       # migration trusted_devices (table TrustedDevice)
 ```
+
+### Étape 18 — 2026-10-04 — Envoi des liens d'invitation et de réinitialisation par e-mail
+
+**Cadre** : demande de l'utilisateur : un bouton à côté de « Copier le lien » pour envoyer le lien par
+e-mail, absent si les paramètres SMTP ne sont pas renseignés. Choix validés : paramètres SMTP par
+**variables d'environnement** (`NUXT_SMTP_*`, comme S3 ; aucun secret en base) ; e-mail dans la **langue
+de l'interface de l'expéditeur**.
+
+**Ajouté**
+- Dépendance `nodemailer` 10 (MIT-0, sans dépendance ni module natif ; `@types/nodemailer` en
+  développement). `server/lib/mail/transport.ts` (`smtpConfig`, `mailEnabled`, `sendMail`, connexion
+  réutilisée, délais de 10 à 20 s) et `server/lib/mail/password-link.ts` (module pur testé : textes
+  `mail.*` des fichiers de traduction, version texte et HTML échappée, échéance avec fuseau).
+- `POST /api/admin/users/:id/password-link/email` (jeton du lien affiché revérifié, destinataire = adresse
+  du compte, 5 envois par heure et par compte, audit `user.link_emailed`) et `GET /api/admin/config/mail`.
+- Interface : emplacement `actions` de `<UiCopyField>` ; bouton « Envoyer par e-mail » dans
+  `<AdminPasswordLinkPanel>` (prop `userId`), confirmation annoncée, erreurs traduites ; phrase « ne
+  sera plus affiché » adaptée quand l'envoi est possible. 208 tests Vitest (`tests/mail.test.ts`).
+
+**Vérifié** : typecheck, 208 tests, i18n (1158 clés), contrastes, migrations (`--check`, aucune) ; **28
+scénarios HTTP** contre une copie isolée de l'application (sa propre base, port 3200) reliée à un faux
+serveur SMTP local, et contre votre serveur sans SMTP (bouton masqué, 409) : contenu fr/en, destinataire
+imposé, liens utilisés, remplacés ou d'un autre compte refusés, droits du gestionnaire et du développeur,
+refus SMTP (502, rien de journalisé), limite d'envoi, journal sans jeton ; interface : bouton à côté de
+« Copier le lien », envoi, erreur, absence sans SMTP ; axe-core : 0 violation (fr clair, en sombre,
+erreur) ; largeur de téléphone sans défilement ; e-mail reçu affiché et audité (contrastes conformes).
+**Build de production** faite dans la copie isolée : `nodemailer` (exports conditionnels) est bien tracé
+dans `.output`, et un message envoyé depuis la build est arrivé au faux serveur.
+
+**Limites connues / suites possibles** : pas de bouton « Envoyer un e-mail de test » ni de commande CLI pour
+vérifier la configuration ; pas d'envoi automatique à la création du compte ; pas de file d'attente (l'envoi
+se fait pendant la requête) ; limite d'envoi en mémoire (par instance).
+
+**Après `git pull`**
+```bash
+pnpm install          # nouvelle dépendance nodemailer ; aucune migration
+```
+Pour activer l'envoi : définir au moins `NUXT_SMTP_HOST` et `NUXT_SMTP_FROM` (voir `.env.example`), puis redémarrer.
