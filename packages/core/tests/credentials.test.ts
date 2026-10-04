@@ -7,8 +7,8 @@ import {
   TOKEN_BODY_LENGTH,
   TOKEN_CHECKSUM_LENGTH,
 } from '../server/lib/access/tokens'
-import { addOriginSchema, createPersonalTokenSchema, createProjectKeySchema } from '../shared/schemas/credentials'
-import { isRecentlyVerified, REAUTH_WINDOW_SECONDS } from '../shared/utils/auth'
+import { addOriginSchema, confirmPasswordSchema, createPersonalTokenSchema, createProjectKeySchema, forgetTrustedDevicesSchema } from '../shared/schemas/credentials'
+import { isRecentlyVerified, REAUTH_WINDOW_SECONDS, TRUSTED_DEVICE_DEFAULT_DAYS, TRUSTED_DEVICE_MAX_DAYS, trustedDeviceDays } from '../shared/utils/auth'
 import { TOKEN_PREFIXES, TOKEN_TYPES, tokenStatus } from '../shared/utils/credentials'
 import { isOriginAllowed, isWildcardOrigin, normalizeOrigin } from '../shared/utils/origins'
 import { hasPermission, ROLES, tokenScopes } from '../shared/utils/permissions'
@@ -170,5 +170,32 @@ describe('confirmation du mot de passe', () => {
     expect(isRecentlyVerified(new Date(now - (REAUTH_WINDOW_SECONDS * 1000 - 1)), now)).toBe(true)
     expect(isRecentlyVerified(new Date(now - REAUTH_WINDOW_SECONDS * 1000), now)).toBe(false)
     expect(isRecentlyVerified('2026-09-29T11:00:00Z', now)).toBe(false)
+  })
+})
+
+describe('appareils de confiance', () => {
+  it('lit la durée configurée : jours entiers, 0 = option désactivée, plafonnée', () => {
+    expect(TRUSTED_DEVICE_DEFAULT_DAYS).toBe(15)
+    expect(trustedDeviceDays(15)).toBe(15)
+    expect(trustedDeviceDays('30')).toBe(30)
+    expect(trustedDeviceDays(7.9)).toBe(7)
+    expect(trustedDeviceDays(0)).toBe(0)
+    expect(trustedDeviceDays(-3)).toBe(0)
+    expect(trustedDeviceDays('abc')).toBe(0)
+    expect(trustedDeviceDays(undefined)).toBe(0)
+    expect(trustedDeviceDays(10_000)).toBe(TRUSTED_DEVICE_MAX_DAYS)
+  })
+
+  it('confirmation : la case est facultative et booléenne', () => {
+    expect(confirmPasswordSchema.parse({ password: 'x' })).toEqual({ password: 'x' })
+    expect(confirmPasswordSchema.parse({ password: 'x', trustDevice: true }).trustDevice).toBe(true)
+    expect(confirmPasswordSchema.safeParse({ password: 'x', trustDevice: 'yes' }).success).toBe(false)
+  })
+
+  it('retrait : cet appareil ou tous', () => {
+    expect(forgetTrustedDevicesSchema.parse({ scope: 'current' }).scope).toBe('current')
+    expect(forgetTrustedDevicesSchema.parse({ scope: 'all' }).scope).toBe('all')
+    expect(forgetTrustedDevicesSchema.safeParse({}).success).toBe(false)
+    expect(forgetTrustedDevicesSchema.safeParse({ scope: 'others' }).success).toBe(false)
   })
 })

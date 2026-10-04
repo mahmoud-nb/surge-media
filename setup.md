@@ -226,7 +226,8 @@ Le fichier `packages/core/.env` est créé par `pnpm db:init` à partir de `.env
 | `DATABASE_URL` | `file:./data/surge-media.db` | URL de connexion (obligatoire hors SQLite) |
 | `NUXT_SESSION_PASSWORD` | généré par `db:init` | secret des cookies de session (≥ 32 caractères ; le changer déconnecte tout le monde) |
 | `NUXT_SESSION_MAX_AGE` | `43200` (12 h) | durée d'une session, en secondes |
-| `NUXT_SESSION_COOKIE_SECURE` | `true` | cookie réservé à HTTPS (localhost excepté) ; `false` uniquement pour un test en HTTP |
+| `NUXT_SESSION_COOKIE_SECURE` | `true` | cookie réservé à HTTPS (localhost excepté) ; `false` uniquement pour un test en HTTP (s'applique aussi au cookie des appareils de confiance) |
+| `NUXT_PUBLIC_TRUSTED_DEVICE_DAYS` | `15` | appareils de confiance : jours sans ressaisie du mot de passe pour les actions sensibles (365 au plus) ; `0` désactive l'option et ignore les appareils déjà de confiance (§ 9.7) |
 | `NUXT_BOOTSTRAP_ADMIN_EMAIL` | — | compte d'amorçage (§ 9.3), à supprimer après la première connexion |
 | `NUXT_BOOTSTRAP_ADMIN_PASSWORD` | — | mot de passe d'amorçage (12 caractères minimum) |
 | `SURGE_MEDIA_LANG` | locale système, sinon `fr` | langue de la CLI |
@@ -254,6 +255,7 @@ Le fichier `packages/core/.env` est créé par `pnpm db:init` à partir de `.env
 | --- | --- |
 | `User` | comptes de l'administration (rôle `ADMIN`/`MANAGER`/`DEVELOPER`/`EDITOR`, langue préférée, actif ou non, auteur de l'invitation `invitedById`) |
 | `Session` | sessions d'administration (seule l'empreinte SHA-256 du jeton est stockée) ; dernière saisie du mot de passe (`passwordVerifiedAt`, « mode sudo ») |
+| `TrustedDevice` | appareil de confiance : empreinte du jeton de son cookie, échéance, navigateur et IP, dernière utilisation (§ 9.7) |
 | `PasswordToken` | lien à usage unique d'invitation ou de réinitialisation du mot de passe (empreinte, échéance, date d'utilisation) |
 | `Project` | application cliente et ses environnements : médias, dossiers, membres, jetons et origines CORS ; archivage (`archivedAt`) ; liste publique pour la clé publique (`publicListing`) |
 | `ProjectMember` | membre d'un projet et son rôle (`OWNER`, `DEVELOPER`, `EDITOR`) |
@@ -756,7 +758,9 @@ désarchivage, suppression).
 | --- | --- |
 | `POST /api/auth/login` | `{ email, password }` → 200 + cookie · 400 invalide · 401 refusé · 429 trop de tentatives (`Retry-After`) |
 | `POST /api/auth/logout` | ferme la session (cookie + base) |
-| `POST /api/auth/confirm-password` | `{ password }` → 200 `{ verifiedUntil }` · 422 `PASSWORD_INCORRECT` (la session reste ouverte) · 429 après 5 échecs en 15 min |
+| `POST /api/auth/confirm-password` | `{ password, trustDevice? }` → 200 `{ verifiedUntil, trustedUntil }` · 422 `PASSWORD_INCORRECT` (la session reste ouverte) · 429 après 5 échecs en 15 min |
+| `GET /api/auth/trusted-devices` | durée configurée, confiance de ce navigateur, nombre d'appareils de confiance du compte |
+| `DELETE /api/auth/trusted-devices` | `{ scope: 'current' \| 'all' }` → 200 `{ revoked }` : ne plus faire confiance à ce navigateur, ou à tous ses appareils |
 | `GET /api/admin/status` | état de l'instance pour les administrateurs (`users:manage`) |
 | `/api/admin/users/*`, `/api/auth/password/*` | gestion des utilisateurs et invitations, voir § 9.4 |
 
@@ -953,6 +957,27 @@ son rôle ou le retirer, inviter un compte en le rattachant à des projets exige
 rejoue l'action ; « Annuler » ou Échap l'abandonnent sans message d'erreur. Côté serveur, appeler
 `requireRecentPassword(event)` **avant** tout effet de bord. Les actions qui retirent des droits
 (révoquer, quitter un projet) ne demandent pas de confirmation.
+
+**Appareils de confiance** (étape 17) : la case « Faire confiance à cet appareil pendant 15 jours »
+du dialogue (décochée à chaque ouverture) dispense ce navigateur de ressaisir le mot de passe pour les
+actions sensibles pendant `NUXT_PUBLIC_TRUSTED_DEVICE_DAYS` jours (15 par défaut, durée fixe, `0`
+désactive l'option). Elle ne remplace jamais la connexion (sessions de 12 h) et survit à la
+déconnexion.
+
+- **Mécanisme** (`server/utils/trusted-devices.ts`) : jeton aléatoire de 256 bits dans le cookie
+  `surge-media-trusted-device` (HTTP-only, `Secure` comme la session, `SameSite=Lax`, chemin `/`) ;
+  seule son empreinte SHA-256 est enregistrée (`TrustedDevice`), liée au compte. Le cookie présenté par
+  un autre compte ne sert à rien. Cocher de nouveau la case remplace le jeton de ce navigateur.
+- **La confiance tombe** à son échéance, au changement de mot de passe (lien d'invitation ou de
+  réinitialisation), à la désactivation du compte, à sa suppression, ou sur demande : tableau de bord
+  (« Votre compte » › « Appareil de confiance » : ne plus faire confiance à cet appareil, ou à tous ses
+  appareils) et fiche d'un compte pour l'administrateur (« Retirer la confiance des appareils »).
+- **Journal** : `user.device_trusted` (durée) et `user.devices_revoked` (cet appareil ou tous, nombre).
+- À ne pas cocher sur un ordinateur partagé : l'interface le rappelle sous la case.
+
+| Endpoint | Accès | Rôle |
+| --- | --- | --- |
+| `DELETE /api/admin/users/:id/trusted-devices` | `users:manage` | retire la confiance de tous les appareils d'un compte → `{ revoked }` ; la fiche (`GET /api/admin/users/:id`) donne leur nombre (`trustedDevices`) |
 
 ### 9.8 Journal d'audit (`/admin/audit`, permission `audit:read` : ADMIN)
 
@@ -1437,7 +1462,9 @@ pnpm start                          # node --env-file-if-exists=.env .output/ser
 | 403 `LIBRARY_NOT_ALLOWED` à la suppression d'un projet | seul un administrateur verse des médias dans la bibliothèque : supprimer définitivement, ou demander à un administrateur |
 | 409 `INVITATION_ACCEPTED` (gestionnaire) | l'invité a déjà choisi son mot de passe : une réinitialisation passe par un administrateur |
 | Pas de menu « Rôle dans le projet » pour un membre | gestionnaire : un seul rôle possible (propriétaire) ; il administre tout projet dont il est membre |
-| Une boîte « Confirmez votre mot de passe » s'ouvre | normal : action sensible (clé secrète, jeton personnel, membres) plus de 10 min après la dernière saisie du mot de passe (§ 9.7) |
+| Une boîte « Confirmez votre mot de passe » s'ouvre | normal : action sensible (clé secrète, jeton personnel, membres) plus de 10 min après la dernière saisie du mot de passe (§ 9.7) ; cochez « Faire confiance à cet appareil » pour ne plus la voir pendant 15 jours dans ce navigateur |
+| La confirmation est redemandée malgré « Faire confiance à cet appareil » | confiance expirée (15 jours), retirée (tableau de bord, administrateur), mot de passe changé, cookies du navigateur effacés, autre navigateur ou navigation privée, ou option désactivée (`NUXT_PUBLIC_TRUSTED_DEVICE_DAYS=0`) |
+| Pas de case « Faire confiance à cet appareil » | option désactivée : `NUXT_PUBLIC_TRUSTED_DEVICE_DAYS=0` |
 | Clé secrète ou jeton personnel perdu | la valeur complète n'est jamais conservée : renouveler la clé (rotation avec recouvrement) ou créer un nouveau jeton, puis révoquer l'ancien |
 | Onglets « Clés d'API » et « Origines autorisées » absents | il faut la portée `project:credentials` (rôle de projet OWNER ou DEVELOPER, jamais un EDITOR de plateforme) et un projet non archivé |
 | `TS2321: Excessive stack depth` sur un appel `$api(…)` passé à une fonction générique (ex. `useReauth().run`) | isoler l'appel dans une fonction nommée (`function createRequest(body) { return $api(…) }`) : son type de retour n'est alors calculé qu'une fois |
@@ -2260,4 +2287,53 @@ de production reste bloqué par Smart App Control, § 14).
 ```bash
 pnpm install          # aucune nouvelle dépendance
 pnpm db:migrate       # migration manager_role (rôle Gestionnaire, auteur des invitations)
+```
+
+### Étape 17 — 2026-10-04 — Appareils de confiance pour les actions sensibles
+
+**Cadre** : demande de l'utilisateur : une case « Faire confiance à cet appareil » pour ne plus ressaisir le
+mot de passe des actions sensibles pendant 15 jours. Choix validés : la case figure **dans le dialogue de
+confirmation seulement** (pas sur la page de connexion, pour ne pas la confondre avec un « rester
+connecté ») ; la confiance se consulte et se retire depuis le **tableau de bord** (ce navigateur ou tous
+ses appareils) et la **fiche d'un compte** (administrateur).
+
+**Ajouté**
+- Table `TrustedDevice` (migration `20261004151952_trusted_devices`, création seule, 3 fournisseurs) ;
+  `server/utils/trusted-devices.ts` (cookie `surge-media-trusted-device` HTTP-only, Secure, Lax, chemin
+  `/` ; empreinte seule en base ; toutes les valeurs homonymes du cookie sont examinées) ;
+  `requireRecentPassword` accepte un appareil de confiance du compte (§ 9.7).
+- `POST /api/auth/confirm-password` : `trustDevice` → `trustedUntil` ; `GET` / `DELETE /api/auth/trusted-devices` ;
+  `DELETE /api/admin/users/:id/trusted-devices` ; `trustedDevices` dans la fiche d'un compte (administrateur).
+- Retrait automatique au changement de mot de passe et à la désactivation (mêmes transactions que les
+  sessions). Audit `user.device_trusted` et `user.devices_revoked`.
+- Configuration `NUXT_PUBLIC_TRUSTED_DEVICE_DAYS` (15 ; 0 désactive ; 365 au plus) ; `trustedDeviceDays`,
+  `TRUSTED_DEVICE_SCOPES` (`shared/utils/auth.ts`), `forgetTrustedDevicesSchema`.
+- Interface : case + rappel « ordinateur partagé » dans `<AdminReauthDialog>` ; rubrique « Appareil de
+  confiance » de « Votre compte » (échéance, autres appareils, retrait, focus rendu au titre) ; fiche
+  d'un compte : nombre d'appareils et retrait ; journal : durée et nombre d'appareils. 202 tests Vitest.
+
+**Corrigé pendant les essais** : le cookie, d'abord limité à `/api` en `SameSite=Strict`, n'accompagnait pas
+le chargement des pages : le tableau de bord rendu côté serveur affichait « pas de confiance ». Il suit
+désormais les attributs du cookie de session.
+
+**Vérifié** : typecheck, 202 tests, i18n (1133 clés), contrastes, migrations (`--check`) ; **37 scénarios
+HTTP** (sans et avec la case, attributs du cookie, empreinte seule, action permise après la fenêtre de
+10 min, cookie sans session ou d'un autre compte refusé, rendu serveur, survie à la déconnexion, second
+appareil, remplacement, retrait de cet appareil ou de tous, expiration, retrait par l'administrateur,
+changement de mot de passe, désactivation, journal sans jeton) ; B2 et rôles (79) rejoués ; interface :
+dialogue (case, focus sur le mot de passe), action rejouée puis action suivante sans dialogue, tableau de
+bord, fiche, journal ; axe-core : 0 violation en fr/en × clair/sombre ; largeur de téléphone sans
+défilement horizontal.
+
+**Non vérifié** : `pnpm build` (votre serveur de développement tournait ; démarrage de production bloqué par
+Smart App Control, § 14).
+
+**Limites connues / suites possibles** : pas de liste détaillée des appareils (navigateur, dernière
+utilisation) ni de retrait un par un — page « Mon compte » à envisager ; la confiance ne distingue pas
+les actions (toutes les actions sensibles en profitent).
+
+**Après `git pull`**
+```bash
+pnpm install          # aucune nouvelle dépendance
+pnpm db:migrate       # migration trusted_devices (table TrustedDevice)
 ```

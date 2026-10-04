@@ -113,14 +113,16 @@ async function currentSessionRecord(event: H3Event) {
 
 /**
  * Action sensible (« mode sudo ») : session valide ET mot de passe saisi il y a moins de
- * REAUTH_WINDOW_SECONDS (connexion ou confirmation), sinon 403 REAUTH_REQUIRED.
+ * REAUTH_WINDOW_SECONDS (connexion ou confirmation) — ou appareil de confiance de ce compte
+ * (server/utils/trusted-devices.ts) —, sinon 403 REAUTH_REQUIRED.
  * À appeler avant tout effet de bord ; l'interface rejoue l'action après confirmation.
  */
 export async function requireRecentPassword(event: H3Event): Promise<User> {
   const user = await requireAuth(event)
   const session = await currentSessionRecord(event)
-  if (!session || !isRecentlyVerified(session.passwordVerifiedAt)) throw authError(403, 'REAUTH_REQUIRED')
-  return user
+  if (!session) throw authError(403, 'REAUTH_REQUIRED')
+  if (isRecentlyVerified(session.passwordVerifiedAt) || await findTrustedDevice(event, user)) return user
+  throw authError(403, 'REAUTH_REQUIRED')
 }
 
 /** Note une saisie réussie du mot de passe pour la session courante ; renvoie sa date. */

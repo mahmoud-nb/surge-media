@@ -57,7 +57,8 @@ export async function pendingPasswordLink(userId: string): Promise<Pick<Password
 /**
  * Consomme le lien et enregistre le nouveau mot de passe. L'invalidation est atomique
  * (updateMany conditionnel) : deux soumissions simultanées ne peuvent pas réussir toutes les deux.
- * Toutes les sessions du compte sont fermées (réinitialisation après oubli ou compromission).
+ * Toutes les sessions du compte sont fermées et ses appareils de confiance oubliés (réinitialisation
+ * après oubli ou compromission : la confiance accordée avec l'ancien mot de passe tombe).
  */
 export async function consumePasswordToken(record: PasswordToken, password: string): Promise<boolean> {
   const prisma = await usePrisma()
@@ -74,6 +75,7 @@ export async function consumePasswordToken(record: PasswordToken, password: stri
     prisma.user.update({ where: { id: record.userId }, data: { passwordHash } }),
     prisma.passwordToken.deleteMany({ where: { userId: record.userId, usedAt: null } }),
     prisma.session.deleteMany({ where: { userId: record.userId } }),
+    prisma.trustedDevice.deleteMany({ where: { userId: record.userId } }),
   ])
   return true
 }

@@ -1,5 +1,6 @@
 import { z } from 'zod'
 import { AUDIT_CATEGORIES } from '../utils/audit'
+import { TRUSTED_DEVICE_SCOPES } from '../utils/auth'
 import {
   ENVIRONMENT_MAX_LENGTH,
   ENVIRONMENT_PATTERN,
@@ -95,12 +96,21 @@ export const addOriginSchema = z.object({
     }),
 })
 
-/** Confirmation du mot de passe avant une action sensible. */
+/**
+ * Confirmation du mot de passe avant une action sensible ; `trustDevice` : ne plus la demander dans ce
+ * navigateur pendant la durée des appareils de confiance (ignoré si l'option est désactivée).
+ */
 export const confirmPasswordSchema = z.object({
   password: z
     .string('validation.required')
     .min(1, 'validation.required')
     .max(PASSWORD_MAX_LENGTH, 'validation.tooLong'),
+  trustDevice: z.boolean().optional(),
+})
+
+/** Retrait de la confiance accordée à ses appareils (DELETE /api/auth/trusted-devices). */
+export const forgetTrustedDevicesSchema = z.object({
+  scope: z.enum(TRUSTED_DEVICE_SCOPES),
 })
 
 export const AUDIT_PAGE_SIZE = 50

@@ -5,8 +5,8 @@
 > français, avec le « Journal des étapes »). En cas de divergence, **le code fait foi**, puis
 > `setup.md`, puis ce fichier.
 >
-> **État décrit** : commit `42c4fa8` (complément de C4 : zone de recadrage, densité, formulaires) + **étape 16, rôle Gestionnaire**
-> (2026-10-03, non commitée au moment de la rédaction : vérifier `git log` ; § 7.1, § 8, § 9.10). Étapes terminées : 1 (monorepo, core, base), 2 (UI, auth, rôles),
+> **État décrit** : commit `7a42f45` (**étape 16, rôle Gestionnaire**, 2026-10-03 ; § 7.1, § 8, § 9.10) + **étape 17, appareils de
+> confiance** (2026-10-04 ; § 7.2), non commitée au moment de la rédaction : vérifier `git log`. Étapes terminées : 1 (monorepo, core, base), 2 (UI, auth, rôles),
 > 3 (utilisateurs), 4 (médias, phase A), 5 = **B1** (projets, espaces, autorisations), 6 = **B2**
 > (identifiants d'API, origines, mode sudo, journal d'audit), 7 = **B3** (API publique v1 en lecture),
 > 8 = **B4** (API v1 en écriture, jetons délégués `sm_dt_`, file bornée des traitements, pré-génération),
@@ -192,7 +192,8 @@ Couches serveur :
 - `utils/projects.ts` (longueurs, `PROJECT_SLUG_PATTERN`, `PROJECT_STATUSES`, `PROJECT_MEDIA_ON_DELETE`, `slugify`, `PROJECT_ERROR_CODES`) — auto-importé.
 - `utils/credentials.ts` (`TOKEN_TYPES`, `PROJECT_KEY_TYPES`, `TOKEN_PREFIXES`, `KEY_ENVIRONMENTS`, `ENVIRONMENT_PATTERN`, durées, `ROTATION_OVERLAPS`,
   `tokenStatus`, `MAX_ALLOWED_ORIGINS`, `CREDENTIAL_ERROR_CODES`), `utils/origins.ts` (`normalizeOrigin`, `isWildcardOrigin`, `isOriginAllowed` — purs, testés),
-  `utils/auth.ts` (`REAUTH_WINDOW_SECONDS` = 600, `AUTH_ERROR_CODES`, `isRecentlyVerified`), `utils/audit.ts` (`AUDIT_ACTIONS`, `AUDIT_CATEGORIES`, `auditCategory`) — auto-importés.
+  `utils/auth.ts` (`REAUTH_WINDOW_SECONDS` = 600, `AUTH_ERROR_CODES`, `isRecentlyVerified` ; étape 17 : `TRUSTED_DEVICE_DEFAULT_DAYS`,
+  `TRUSTED_DEVICE_MAX_DAYS`, `trustedDeviceDays`, `TRUSTED_DEVICE_SCOPES`), `utils/audit.ts` (`AUDIT_ACTIONS`, `AUDIT_CATEGORIES`, `auditCategory`) — auto-importés.
 - `utils/users.ts` (USER_STATUSES, userStatus, USER_ERROR_CODES) — auto-importé.
 - `utils/media.ts` (MEDIA_KINDS, MEDIA_VISIBILITIES, ACCEPTED_MEDIA_TYPES, ENABLED_MEDIA_KINDS, mediaKindForMime, extensionForMime, SIGNED_URL_DURATIONS, SIGNED_URL_MAX_TTL, MEDIA_ERROR_CODES) — auto-importé.
 - `utils/api.ts` (`API_ERRORS` catalogue code → statut + titre, `API_CREDENTIAL_TYPES` (+ `DELEGATED`, type `ApiCredentialType`),
@@ -219,6 +220,7 @@ Identifiants : `String @id @default(cuid())` partout. Horodatages `createdAt @de
 | --- | --- | --- |
 | **User** | `email @unique` (stocké en minuscules), `name?`, `passwordHash?` (null = invitation non acceptée), `role Role @default(EDITOR)`, `locale @default("fr")` (**non utilisé par l'UI**), `isActive @default(true)`, `lastLoginAt?`, `invitedById?` (étape 16, `UserInvitedBy`, SetNull, index) | invitedBy / invitedUsers, sessions, projectMemberships, createdProjects (`ProjectCreatedBy`), uploadedMedia (`MediaUploadedBy`), accessTokens (`AccessTokenCreatedBy`), passwordTokens (`PasswordTokenUser`), issuedPasswordTokens (`PasswordTokenCreatedBy`) |
 | **Session** | `userId`, `tokenHash @unique` (SHA-256 hex du jeton), `ipAddress?`, `userAgent?` (≤191), `expiresAt`, `lastSeenAt`, `passwordVerifiedAt` (B2 : dernière saisie du mot de passe, mode sudo) | user (Cascade) ; index userId, expiresAt |
+| **TrustedDevice** (étape 17) | `userId`, `tokenHash @unique` (SHA-256 du jeton du cookie), `ipAddress?`, `userAgent?`, `expiresAt`, `lastUsedAt` (≤ 5 min), `createdAt` | user (Cascade) ; index userId |
 | **PasswordToken** | `userId`, `purpose PasswordTokenPurpose`, `tokenHash @unique`, `expiresAt`, `usedAt?`, `createdById?` | user (Cascade), createdBy (SetNull) ; index userId |
 | **Project** | `name`, `slug @unique`, `description?`, `archivedAt?` (lecture seule), `publicListing` (B3, défaut false), `transformPolicy` (C2, OPEN par défaut), `createdById?` | createdBy (SetNull), members, media, folders, accessTokens (clés), tokenGrants (`AccessTokenProject`), allowedOrigins, transformPresets (C2) |
 | **TransformPreset** (C2) | `projectId?` (null = global), `name`, `transformation` (canonique, sans format), `description?` | projet (Cascade) ; index projectId ; unicité des noms par niveau : application (§ 9.17) |
@@ -250,7 +252,7 @@ vérifiée sur SQLite ; la reprise de fin a été ajoutée après application lo
 `20261003194322_manager_role` (étape 16 : `Role.MANAGER`, `User.invitedById` ; PostgreSQL : type `Role` **recréé** — une valeur ajoutée
 par `ADD VALUE` est inutilisable dans la même transaction — ; reprise à la main : DEVELOPER propriétaires → MANAGER, adhésions des MANAGER →
 OWNER, autres ramenées au plafond ; vérifiée sur une copie SQLite ; générée sous le nom `d1_manager_role` puis renommée avant commit, ligne
-`_prisma_migrations` de la base de dev renommée à la main).
+`_prisma_migrations` de la base de dev renommée à la main), `20261004151952_trusted_devices` (étape 17 : table `TrustedDevice`, rien à la main).
 
 **Règles de portabilité** (schéma commun SQLite / PostgreSQL / MySQL) : pas d'attribut `@db.*`, pas de
 `String[]`, chaînes ≤ 191 caractères sous MySQL (validées par zod/API), enums et Json acceptés
@@ -272,7 +274,8 @@ Ne jamais modifier une migration publiée.
 | `DATABASE_URL` | `file:./data/surge-media.db` | schéma d'URL validé contre le fournisseur (`file:`, `postgres(ql):`, `mysql:`) |
 | `NUXT_SESSION_PASSWORD` | généré par `db:init` | secret des cookies scellés (≥ 32 car.) |
 | `NUXT_SESSION_MAX_AGE` | 43200 (12 h) | durée de session (cookie + base) |
-| `NUXT_SESSION_COOKIE_SECURE` | true | `false` seulement pour tester en HTTP hors localhost |
+| `NUXT_SESSION_COOKIE_SECURE` | true | `false` seulement pour tester en HTTP hors localhost (vaut aussi pour le cookie des appareils de confiance) |
+| `NUXT_PUBLIC_TRUSTED_DEVICE_DAYS` | 15 | appareils de confiance (étape 17) : jours sans ressaisie pour les actions sensibles, 0 = désactivé (et appareils existants ignorés), ≤ 365 ; lu côté client (case) et serveur |
 | `NUXT_BOOTSTRAP_ADMIN_EMAIL` / `_PASSWORD` | — | compte d'amorçage (§ 7.5) |
 | `NUXT_SITE_URL` | demandée par `db:init` (`--site-url`) | URL publique de l'installation ; vide = origine de la requête (avertissement en prod) |
 | `NUXT_MEDIA_PUBLIC_URL` | vide (= `NUXT_SITE_URL`) | base des URL de diffusion (CDN, sous-domaine) ; `mediaBaseUrl(event)` |
@@ -366,7 +369,20 @@ Portées d'**espace** : `media:read|upload|write|delete` (bibliothèque ou proje
 - **Mode sudo (B2)** : `Session.passwordVerifiedAt` (connexion = saisie) ; `requireRecentPassword(event)` → 403 `REAUTH_REQUIRED` au-delà de
   `REAUTH_WINDOW_SECONDS` (600) ; `POST /api/auth/confirm-password` (422 `PASSWORD_INCORRECT` — surtout pas 401, que `$api` traite comme une
   session expirée —, 429 après 5 échecs / 15 min par compte, limiteur en mémoire) met la date à jour. Exigé pour : clé secrète (création,
-  rotation), jeton personnel (création), membres (ajout, rôle, retrait d'autrui). Client : `useReauth().run(() => …)` + `<AdminReauthDialog>`.
+  rotation), jeton personnel (création), membres (ajout, rôle, retrait d'autrui), invitation rattachée à des projets. Client :
+  `useReauth().run(() => …)` + `<AdminReauthDialog>`.
+- **Appareils de confiance (étape 17, choix validés le 2026-10-04 : case dans le dialogue seulement ; gestion depuis le tableau de bord et
+  la fiche d'un compte)** : `confirm-password` accepte `trustDevice` → `trustDevice(event, user)` (`server/utils/trusted-devices.ts`) :
+  jeton 32 octets dans le cookie `surge-media-trusted-device` (HTTP-only, Secure selon `session.cookie.secure`, **SameSite=Lax, chemin /**
+  — d'abord `/api` + Strict, abandonné : le rendu serveur d'une page ne le transmettait pas à l'API —), empreinte en base liée au compte,
+  échéance fixe ; l'ancien jeton de ce navigateur et les expirés du compte sont supprimés. `requireRecentPassword` : fenêtre de 10 min **ou**
+  `findTrustedDevice` (toutes les valeurs homonymes du cookie, compte, échéance ; `lastUsedAt` ≤ 5 min ; option à 0 → ignoré). Retrait :
+  `DELETE /api/auth/trusted-devices { scope }` (`forgetCurrentDevice` / `revokeTrustedDevices`, cookie effacé), `DELETE
+  /api/admin/users/:id/trusted-devices` (`users:manage`), transactions du nouveau mot de passe (`consumePasswordToken`) et de la
+  désactivation (PATCH). Survit à la déconnexion. Audit `user.device_trusted` (`days`) et `user.devices_revoked` (`scope`, `count`).
+  Interface : case (décochée à chaque ouverture, aide « ordinateur partagé ») ; tableau de bord « Appareil de confiance » (échéance, autres
+  appareils, bouton « tous » seulement s'il y en a d'autres, focus rendu au titre) ; fiche : `trustedDevices` (null pour un gestionnaire) +
+  bouton de retrait.
 
 ### 7.3 Connexion (`POST /api/auth/login`)
 
@@ -606,7 +622,7 @@ clé `originals/…` ; nouvelle ligne (version 1, mêmes kind/visibility/origina
 - **Accès** : clés et origines = `project:credentials` (OWNER, DEVELOPER du projet ; ADMIN) ; projet archivé → 403 `PROJECT_ARCHIVED`
   (portée retirée par l'archivage). Jetons personnels = `tokens:personal`, chacun les siens.
 - **Audit** (`server/utils/audit.ts`) : `recordAudit` attendu (await) après l'action, erreurs avalées et journalisées. Actions :
-  `shared/utils/audit.ts` (25). Choix : `member.role_changed` seulement si le rôle change (`{ from, to }`) ; `project.updated` avec
+  `shared/utils/audit.ts` (31 depuis l'étape 17). Choix : `member.role_changed` seulement si le rôle change (`{ from, to }`) ; `project.updated` avec
   `changes` (name, slug, description) ; `project.archived|restored` ; `media.visibility_changed` seulement si elle change ;
   `media.moved` rattaché au projet d'origine (sinon cible), `data.from/to` = `{ id, name } | null` ; `media.deleted` = purge définitive ;
   `key.rotated` avec `overlap` et `replacedBy` (libellé) ; jetons personnels sans `projectId`. Lecture : `listAuditEvents` (50/page,
@@ -964,7 +980,10 @@ Format d'erreur (h3) : `{ statusCode, statusMessage, message, data? }` ; **codes
 | GET `/api/health` | public | — | 200/503 `{ status, checks { database, storage, imageProcessing } }` (statuts seulement) |
 | POST `/api/auth/login` | public (CSRF) | `{ email, password }` | 200 `{ user }` + cookie · 400 · 401 · 429 |
 | POST `/api/auth/logout` | cookie | — | `{ loggedOut: true }` |
-| POST `/api/auth/confirm-password` | cookie (CSRF) | `{ password }` | `{ verifiedUntil }` · 422 `PASSWORD_INCORRECT` · 429 |
+| POST `/api/auth/confirm-password` | cookie (CSRF) | `{ password, trustDevice? }` | `{ verifiedUntil, trustedUntil }` (+ cookie de confiance) · 422 `PASSWORD_INCORRECT` · 429 |
+| GET `/api/auth/trusted-devices` | session | — | `{ days, current: { createdAt, expiresAt } \| null, total }` |
+| DELETE `/api/auth/trusted-devices` | session (CSRF) | `{ scope: 'current' \| 'all' }` | `{ revoked }` (cookie effacé) · 400 |
+| DELETE `/api/admin/users/:id/trusted-devices` | `users:manage` | — | `{ revoked }` · 404 |
 | GET / DELETE `/api/_auth/session` | nuxt-auth-utils | — | session (sans `secure`) ; 401 si révoquée · DELETE efface |
 | GET `/api/auth/password/:token` | public | — | `{ email, purpose, expiresAt }` · 404 `TOKEN_INVALID` |
 | POST `/api/auth/password/:token` | public (CSRF) | `{ password, confirmation }` | 204 · 400 · 404 `TOKEN_INVALID` |
@@ -1344,6 +1363,9 @@ Contrats de données :
   `media.visibility_changed`, et un compte EDITOR existant : ne jamais les supprimer dans les nettoyages de tests. Depuis le
   2026-10-03 aussi un compte **DEVELOPER** (« SM Dev », créé par l'utilisateur à 12 h 38, membre d'aucun projet) et ses entrées
   d'audit `user.created` / `user.password_link` (référence avant l'étape 16 : 7 entrées d'audit, 2 médias, 1 projet, 1 jeton, 2 adhésions).
+  Activité de l'utilisateur ensuite (2026-10-03 soir et 2026-10-04), à préserver aussi : compte MANAGER « sm-ges », projet « My Phone »
+  et ses clés publique et secrète, jeton personnel « test jeton », rôles et adhésions modifiés (référence avant l'étape 17 : 4 comptes,
+  25 entrées d'audit, 4 médias, 2 projets, 4 jetons, 5 adhésions).
 - Pas d'outil de copie entre stockages, pas de nettoyage des fichiers orphelins ni des liens de mot de passe utilisés.
 - Originaux diffusés avec leurs EXIF (GPS possible).
 - Tests automatisés limités aux modules purs (Vitest, depuis B1) : API et interface vérifiées par scripts ad hoc et audits
@@ -1399,10 +1421,13 @@ Contrats de données :
 - Tests d'API faits jusqu'ici avec des scripts Node temporaires (fetch + FormData + cookie), rejoués en dev **et** en prod ;
   S3 testé contre `s3rver` (faux S3 local, `pnpm dlx s3rver@3.7.1 --port 4568 --configure-bucket surge-media`).
 - Interface : navigateur intégré (pilotage par JS quand le panneau ne s'affiche pas), audits axe injectés depuis jsDelivr.
-- Automatisé dans le dépôt depuis B1 : tests unitaires Vitest des modules purs (199 tests depuis l'étape 16 : `tests/{permissions,signing,projects,credentials,api,openapi,delegated,processing,folders,transforms,image-transform}.test.ts` ;
+- Automatisé dans le dépôt depuis B1 : tests unitaires Vitest des modules purs (202 tests depuis l'étape 17 : `tests/{permissions,signing,projects,credentials,api,openapi,delegated,processing,folders,transforms,image-transform}.test.ts` ;
   `image-transform` exécute le vrai pipeline sharp). Le reste (API, interface, axe) reste manuel
   (piste : tests d'intégration API + Playwright + @axe-core/playwright).
 - Viewport du navigateur intégré : 1024 px (DPR 1,25) ; les mises en page à 5 colonnes doivent attendre `xl`.
+- Étape 17 (appareils de confiance) : `trusted-devices-test.mjs [base]` (37 contrôles ; pot à cookies multi-cookies, vieillissement de
+  `Session.passwordVerifiedAt` en SQL pour dépasser la fenêtre de 10 min, action sensible = création d'un jeton personnel) ; interface avec
+  `c3-ui-account.mjs` (session vieillie en SQL pour ouvrir le dialogue).
 - Étape 16 (rôle Gestionnaire) : `d1-roles-test.mjs [base]` (79 contrôles : création de projets par rôle, invitations et refus,
   sudo, projet archivé, suivi, `INVITATION_ACCEPTED`, membres — plancher, plafond, `LAST_OWNER` effectif —, normalisation au
   changement de rôle, bibliothèque en lecture, suppression d'un gestionnaire → `invitedById` null) ; `d1-migration-test.mjs` (reprise
@@ -1477,6 +1502,8 @@ administration limitée à ses projets, bibliothèque gérée par l'ADMIN).
   étape 13 ; C4 : § 9.19, étape 14.
 - **Suite (à proposer et faire valider avant de commencer)** : `@surge-media/client` + composants (Vue d'abord) ; **Phase D** : vidéos et
   documents (gestionnaires, signatures, Range).
+- Pistes étape 17 : page « Mon compte » avec la liste des appareils de confiance (navigateur, dernière utilisation, retrait un par un),
+  actions exclues de la confiance (ex. création d'une clé secrète), alerte à l'ajout d'un appareil (SMTP).
 - Pistes étape 16 : recherche des comptes à ajouter limitée (aujourd'hui tous les comptes actifs, nom et e-mail, visibles par un
   propriétaire de projet), journal d'audit par projet pour un gestionnaire, envoi des invitations par e-mail (SMTP), réinitialisation du
   mot de passe d'un invité par son gestionnaire (à décider), retrait d'un compte de tous ses projets en un geste.
