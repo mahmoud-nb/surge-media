@@ -150,9 +150,9 @@
         "loggedInAt": "Connecté depuis le"
       },
       "permissions": {
-        "title": "Vos permissions",
         "granted": "Autorisé",
-        "notGranted": "Non inclus"
+        "notGranted": "Non inclus",
+        "details": "Détail de vos permissions ({count} sur {total})"
       },
       "device": {
         "title": "Appareil de confiance",
@@ -163,6 +163,79 @@
         "forgetAll": "Retirer la confiance de tous mes appareils | Retirer la confiance de mon appareil | Retirer la confiance de mes {count} appareils",
         "forgotten": "Cet appareil n'est plus de confiance : votre mot de passe sera redemandé pour les actions sensibles.",
         "allForgotten": "Aucun appareil de confiance à retirer. | La confiance a été retirée de votre appareil. | La confiance a été retirée de vos {count} appareils."
+      },
+      "loadError": "Impossible de charger le tableau de bord.",
+      "stats": {
+        "title": "Statistiques",
+        "media": "Médias",
+        "images": "aucune image | {count} image | {count} images",
+        "private": "aucun privé | {count} privé | {count} privés",
+        "projects": "Projets actifs",
+        "archived": "aucun archivé | {count} archivé | {count} archivés",
+        "variants": "Dérivés en cache",
+        "variantsSize": "{size} générés à la demande",
+        "users": "Comptes",
+        "invitedUsers": "Comptes invités",
+        "invited": "aucune invitation en attente | {count} invitation en attente | {count} invitations en attente",
+        "inactive": "aucun désactivé | {count} désactivé | {count} désactivés",
+        "credentials": "Identifiants d'API actifs",
+        "personalTokens": "aucun jeton personnel | {count} jeton personnel | {count} jetons personnels",
+        "projectKeys": "aucune clé de projet | {count} clé de projet | {count} clés de projet"
+      },
+      "shortcuts": {
+        "title": "Raccourcis",
+        "upload": "Envoyer dans la bibliothèque",
+        "library": "Parcourir la bibliothèque",
+        "newProject": "Créer un projet",
+        "projects": "Voir mes projets",
+        "invite": "Inviter un utilisateur",
+        "newToken": "Créer un jeton personnel",
+        "apiDocs": "Tester l'API",
+        "audit": "Consulter le journal d'audit",
+        "settings": "Réglages de l'installation"
+      },
+      "uploads": {
+        "title": "Envois des 30 derniers jours",
+        "summary": "aucun envoi | {count} média envoyé en 30 jours ; journée la plus chargée : {date} ({peak}). | {count} médias envoyés en 30 jours ; journée la plus chargée : {date} ({peak}).",
+        "empty": "Aucun média envoyé ces 30 derniers jours.",
+        "bar": "{date} : aucun envoi | {date} : {count} envoi | {date} : {count} envois",
+        "table": "Voir les données",
+        "caption": "Médias envoyés par jour",
+        "day": "Jour",
+        "count": "Envois",
+        "loading": "Chargement du graphique…",
+        "peak": "aucun envoi | {count} envoi | {count} envois"
+      },
+      "attention": {
+        "title": "Points d'attention",
+        "none": "Rien à signaler.",
+        "warning": "À traiter :",
+        "info": "Pour information :",
+        "expiringTokens": "{count} jeton personnel expire d'ici {days} jours | {count} jetons personnels expirent d'ici {days} jours",
+        "expiresOn": "{name} : {date}",
+        "manageTokens": "Gérer mes jetons personnels",
+        "expiringKeys": "{count} clé secrète expire d'ici {days} jours | {count} clés secrètes expirent d'ici {days} jours",
+        "keyLine": "{name} ({environment}) · {project}",
+        "invitations": "{count} invitation en attente | {count} invitations en attente",
+        "invitationsExpired": "dont {count} dont le lien a expiré : générez-en un nouveau | dont {count} dont le lien a expiré : générez-en de nouveaux",
+        "manageInvitations": "Voir les invitations en attente",
+        "trash": "{count} média en corbeille | {count} médias en corbeille",
+        "trashSpace": "{space} ({count})",
+        "siteUrl": "L'adresse publique de l'installation (NUXT_SITE_URL) n'est pas définie : les adresses absolues dépendent de chaque requête.",
+        "mail": "L'envoi d'e-mails n'est pas configuré (NUXT_SMTP_HOST, NUXT_SMTP_FROM) : les liens d'invitation se transmettent à la main."
+      },
+      "projects": {
+        "title": "Mes projets",
+        "titleAll": "Projets",
+        "all": "Aucun projet | Voir le projet | Voir les {count} projets",
+        "media": "aucun média | {count} média | {count} médias",
+        "emptyCreate": "Aucun projet actif pour le moment."
+      },
+      "activity": {
+        "title": "Activité récente",
+        "all": "Voir tout le journal",
+        "by": "par {actor}, {date}",
+        "empty": "Aucune activité enregistrée."
       }
     }
   },

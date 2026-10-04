@@ -1349,6 +1349,29 @@ Documentation de l'API (`/admin/api`, Scalar) : 0 violation sur la page et la r�
 dupliquée). Un correctif local requalifie les blocs « Code sample » de Scalar en groupes traduits
 (`AdminApiReference`).
 
+### 10.4 Tableau de bord (`/admin`)
+
+Disposition fixe ; chaque widget n'apparaît que si le compte a les droits correspondants, et ses
+chiffres se limitent à **ce que ce compte peut voir** (bibliothèque en lecture et projets visibles,
+selon `spaceScopes`). Une seule requête : `GET /api/admin/dashboard` (`server/lib/dashboard/service.ts`,
+agrégats en base).
+
+| Widget | Contenu | Qui |
+| --- | --- | --- |
+| Statistiques | médias (nombre, poids, images, privés), projets actifs (archivés), dérivés en cache (nombre, poids), comptes (invitations en attente, désactivés) ou comptes invités, identifiants d'API actifs (jetons personnels, clés de projet) | tous ; comptes : `users:manage` / `users:invite` ; identifiants : `tokens:personal` ou `project:credentials` |
+| Raccourcis | envoyer dans la bibliothèque ou la parcourir, créer un projet ou voir ses projets, inviter, créer un jeton, tester l'API, journal, réglages | selon les permissions |
+| Envois des 30 derniers jours | barres par jour dans le fuseau du navigateur, résumé (total, journée la plus chargée), tableau « Voir les données » | tous |
+| Points d'attention | jetons personnels et clés secrètes qui expirent d'ici 7 jours (hors clés déjà remplacées), invitations en attente ou expirées, corbeille par espace, adresse du site absente (production) et envoi d'e-mails non configuré | selon les droits |
+| Projets / Mes projets | 6 projets actifs (ordre alphabétique), rôle exercé, nombre de médias | tous |
+| Activité récente | 8 dernières entrées du journal | `audit:read` |
+| Votre compte | identité, rôle et sa description, connexion, détail des permissions (replié), appareil de confiance | tous |
+
+Graphique : le rendu serveur ignore le fuseau du visiteur ; l'API compte les envois **par heure UTC**
+sur 31 jours (liste creuse) et le navigateur les regroupe par jour local (`dailyUploads`,
+`shared/utils/dashboard.ts`, testé : changements d'heure, fuseaux). Le graphique est donc rendu dans
+le navigateur (`<ClientOnly>`). Les envois comptés incluent les médias depuis mis à la corbeille.
+Mise en forme du journal partagée avec `/admin/audit` : `useAuditFormat()`.
+
 ## 11. Multilingue
 
 - `@nuxtjs/i18n`, stratégie `no_prefix` : les URL ne changent pas (`/admin`), la langue est mémorisée
@@ -1480,6 +1503,8 @@ pnpm start                          # node --env-file-if-exists=.env .output/ser
 | Pas de menu « Rôle dans le projet » pour un membre | gestionnaire : un seul rôle possible (propriétaire) ; il administre tout projet dont il est membre |
 | Une boîte « Confirmez votre mot de passe » s'ouvre | normal : action sensible (clé secrète, jeton personnel, membres) plus de 10 min après la dernière saisie du mot de passe (§ 9.7) ; cochez « Faire confiance à cet appareil » pour ne plus la voir pendant 15 jours dans ce navigateur |
 | La confirmation est redemandée malgré « Faire confiance à cet appareil » | confiance expirée (15 jours), retirée (tableau de bord, administrateur), mot de passe changé, cookies du navigateur effacés, autre navigateur ou navigation privée, ou option désactivée (`NUXT_PUBLIC_TRUSTED_DEVICE_DAYS=0`) |
+| Tableau de bord : chiffres différents d'un compte à l'autre | normal : chaque compte ne voit que ses espaces (bibliothèque et projets dont il est membre ; tout pour l'administrateur) |
+| Tableau de bord : graphique des envois vide au premier affichage | il est dessiné dans le navigateur (fuseau horaire du visiteur) : « Chargement du graphique… » le temps de l'hydratation |
 | Pas de bouton « Envoyer par e-mail » à côté de « Copier le lien » | `NUXT_SMTP_HOST` ou `NUXT_SMTP_FROM` manquant (redémarrer le serveur après les avoir définis) |
 | « L'e-mail n'a pas pu être envoyé » (502 `MAIL_FAILED`) | serveur SMTP injoignable, identifiants refusés, port ou TLS incorrect (587 STARTTLS, ou 465 avec `NUXT_SMTP_SECURE=true`), expéditeur refusé : le détail est dans les journaux du serveur (« Envoi d'e-mail impossible ») |
 | « Ce lien n'est plus valable » à l'envoi par e-mail | le lien affiché a été utilisé, remplacé par un plus récent ou a expiré : en générer un nouveau |
@@ -2395,3 +2420,36 @@ se fait pendant la requête) ; limite d'envoi en mémoire (par instance).
 pnpm install          # nouvelle dépendance nodemailer ; aucune migration
 ```
 Pour activer l'envoi : définir au moins `NUXT_SMTP_HOST` et `NUXT_SMTP_FROM` (voir `.env.example`), puis redémarrer.
+
+### Étape 19 — 2026-10-04 — Tableau de bord : statistiques, raccourcis et widgets
+
+**Cadre** : demande de l'utilisateur : plus de widgets, des statistiques et des raccourcis. Choix validés :
+statistiques, raccourcis, projets, **points d'attention**, **graphique des envois** (30 jours) et **activité
+récente** (administrateur) ; disposition **fixe par rôle** ; « Vos permissions » **replié** dans « Votre compte ».
+
+**Ajouté**
+- `GET /api/admin/dashboard` (`server/lib/dashboard/service.ts`) : agrégats limités aux espaces visibles
+  (`groupBy`/`count`/`aggregate`), comptes ou invitations, identifiants d'API, points d'attention assemblés
+  selon les droits, journal (`listAuditEvents` accepte une taille de page). Aucune empreinte ni secret renvoyé.
+- `shared/utils/dashboard.ts` (pur, testé) : `hourlyCounts`, `dailyUploads`, `calendarDay`, `attentionSeverity`,
+  type `DashboardAttention`, constantes (30 jours, 7 jours, 6 projets, 8 entrées).
+- Composants `app/components/admin/dashboard/` : `StatCard` (lien étendu à la carte, contour de focus),
+  `Shortcuts`, `UploadsChart` (SVG décoratif + légende + tableau repliable), `Attention`, `Projects`,
+  `Activity`, `Account` ; composable `useAuditFormat` (mise en forme partagée avec la page du journal).
+- 214 tests Vitest (`tests/dashboard.test.ts`).
+
+**Vérifié** : typecheck, 214 tests, i18n (1219 clés), contrastes, migrations (`--check`, aucune) ; **38
+scénarios HTTP** : chaque chiffre (médias, poids, images, public/privé, corbeille, dérivés, envois, projets,
+comptes par rôle, invitations et expirées, clés et jetons) comparé à un calcul SQL indépendant, pour un
+administrateur, un gestionnaire, un développeur et un éditeur ; points d'attention par rôle, absence de
+secret ; interface : administrateur et gestionnaire, tableau des données du graphique ; axe-core : 0
+violation (fr clair, en sombre, gestionnaire) ; largeur de téléphone sans défilement horizontal.
+
+**Limites connues / suites possibles** : pas de personnalisation (masquer, réordonner) ; chiffres calculés
+à chaque affichage (pas de cache : à prévoir pour de très grandes bibliothèques) ; pas de médias récents
+en vignettes ; journal réservé à l'administrateur (pas de journal par projet).
+
+**Après `git pull`**
+```bash
+pnpm install          # aucune nouvelle dépendance, aucune migration
+```

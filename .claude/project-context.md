@@ -5,9 +5,9 @@
 > français, avec le « Journal des étapes »). En cas de divergence, **le code fait foi**, puis
 > `setup.md`, puis ce fichier.
 >
-> **État décrit** : commit `608b8f6` (**étape 17, appareils de confiance**, 2026-10-04 ; § 7.2), après `7a42f45` (**étape 16, rôle
-> Gestionnaire** ; § 7.1, § 8, § 9.10) + **étape 18, envoi des liens par e-mail** (2026-10-04 ; § 8), non commitée au moment de la
-> rédaction : vérifier `git log`. Étapes terminées : 1 (monorepo, core, base), 2 (UI, auth, rôles),
+> **État décrit** : commit `919a113` (**étape 18, envoi des liens par e-mail**, 2026-10-04 ; § 8), après `608b8f6` (**étape 17,
+> appareils de confiance** ; § 7.2) et `7a42f45` (**étape 16, rôle Gestionnaire** ; § 7.1, § 8, § 9.10) + **étape 19, tableau de bord**
+> (2026-10-04 ; § 9.20), non commitée au moment de la rédaction : vérifier `git log`. Étapes terminées : 1 (monorepo, core, base), 2 (UI, auth, rôles),
 > 3 (utilisateurs), 4 (médias, phase A), 5 = **B1** (projets, espaces, autorisations), 6 = **B2**
 > (identifiants d'API, origines, mode sudo, journal d'audit), 7 = **B3** (API publique v1 en lecture),
 > 8 = **B4** (API v1 en écriture, jetons délégués `sm_dt_`, file bornée des traitements, pré-génération),
@@ -126,6 +126,8 @@ Couches serveur :
 - `composables/` : `useAuth`, `useApiFetch`, `useFormValidation`, `useFlash`, `useMediaUpload`, `useAppHead`,
   `useAdminSection` (section de la barre latérale imposée par une page, ex. fiche d'un média de projet → Projets),
   **`useReauth`** (`run(action)` : rejoue l'action après confirmation du mot de passe ; `ReauthCancelledError`/`isReauthCancelled`),
+  **useAuditFormat** (étape 19 : `actionLabel`, `actorName`, `actorDetails`, `projectName`, `details` d'une entrée du journal ; type
+  `AuditEntryView` à importer explicitement depuis `~/composables/useAuditFormat`),
   **`useCredentialLabels`** (libellés d'environnement, tri, options de portées, messages d'erreur des identifiants).
 - `utils/` (auto-importés) : `cn` (clsx + tailwind-merge), `redirect.ts` (`safeAdminRedirect`), `validation.ts` (`fieldErrors`), `api-error.ts` (`apiError`), `format.ts` (`formatBytes`, `formatPercent`).
 - `components/ui/` (`<Ui…>`) : Button, Input, FormField, Alert, Badge, Select, Switch, PasswordInput, Dialog, Pagination, RadioCards,
@@ -139,6 +141,7 @@ Couches serveur :
   d'adresses de la fiche média), **CropSelector** (zone de recadrage du générateur), **TransformFields** (C4 : champs structurés d'une transformation, partagés avec le dialogue des
   préréglages), **ReauthDialog** (dans `layouts/admin.vue`), **SecretPanel** (valeur affichée une fois, focus sur le titre, `defineExpose({ focus })`),
   **ScopeList**, **TokenStatusBadge** (prop `kind: key|token` pour l'accord en français). `UpcomingSection` supprimé en B2.
+  **`admin/dashboard/`** (étape 19, `<AdminDashboard…>`) : StatCard, Shortcuts, UploadsChart, Attention, Projects, Activity, Account (§ 9.20).
 - `pages/` : `index` (accueil), `login`, `password/[token]`, `admin/index` (tableau de bord), `admin/users/{index,new,[id]}`,
   `admin/media/{index (bibliothèque),[id]}`, `admin/projects/{index,new}`, `admin/projects/[id]/{index (aperçu, réglages, archivage, suppression),media,members}`,
   `admin/projects/[id]/keys/{index,new}`, `admin/projects/[id]/origins`, `admin/tokens/{index,new}` (`tokens:personal`), `admin/audit` (`audit:read`),
@@ -983,6 +986,32 @@ Référence d'exploitation : `setup.md` § 8.4. Aucune migration. Écarts : en-t
   (`validation.cropIncomplete`, `integerRange`, `cropOutside` avec `max`), `rotatedSize`, `cropParameter`. `imageSnippets({ …, densities })`
   (srcset dès deux densités, `1.5x` avec un point). Dialogue des préréglages : paramètres affichés d'après `transformFieldsSchema`.
 
+### 9.20 Tableau de bord (étape 19)
+
+- **Choix validés (2026-10-04)** : statistiques, raccourcis, projets, points d'attention, graphique des envois sur 30 jours, activité
+  récente (audit:read) ; disposition fixe par rôle (pas de préférence enregistrée) ; « Vos permissions » replié dans « Votre compte » ;
+  pas de widget « médias récents ».
+- **API** : `GET /api/admin/dashboard` (session) → `dashboardData(event, user)` (`server/lib/dashboard/service.ts`) :
+  - espaces : projets visibles (tous pour `projects:all`) avec `spaceScopes` ; filtre médias = `{}` (ADMIN) ou `OR` bibliothèque
+    (`library:read`) + projets lisibles (archivés compris) ; `null` si aucun espace ;
+  - `media` : `groupBy kind` (nombre, `_sum.size`), `groupBy visibility`, corbeille (`groupBy projectId` sur `deletedAt not null`) ;
+    `variants` : `mediaVariant.aggregate` des médias actifs ; `uploads` : `{ since, hours }` = comptes par heure UTC sur
+    `UPLOAD_WINDOW_HOURS` (31 jours, médias depuis mis à la corbeille compris) ;
+  - `projects` : `{ active, archived, items }` (6 actifs, ordre alphabétique, `role` exercé, `mediaCount` hors corbeille) ;
+  - `users` : `users:manage` → tous (`scope: 'all'`, `roles`, `invited`, `inactive`) ; `users:invite` seul → ses invités (`scope: 'invited'`) ;
+  - `credentials` : jetons personnels actifs (`tokens:personal`) et clés actives des projets avec `project:credentials` (non archivés) ;
+  - `attention` (`DashboardAttention`, `shared/utils/dashboard.ts`) : `siteUrl` (`settings:manage`, production seulement), jetons et
+    clés secrètes (non remplacées) expirant d'ici `EXPIRING_SOON_DAYS` (7), invitations (`pending`, `expired` = sans lien valable),
+    `trash` par espace, `mail` (`users:manage`, SMTP absent) ; `attentionSeverity` : warning / info ;
+  - `activity` : `listAuditEvents({ page: 1 }, 8)` si `audit:read`, sinon `null`.
+- **Interface** (`pages/admin/index.vue`) : cartes (`StatCard` : libellé = lien étendu `after:absolute`, contour `has-[a:focus-visible]`),
+  raccourcis selon `can()`, graphique en `<ClientOnly>` (`dailyUploads` dans le fuseau du navigateur : jours calendaires calculés à
+  midi UTC, sûrs aux changements d'heure ; légende = résumé, barres `aria-hidden`, tableau dans `<details>`), points d'attention
+  (icône + texte « À traiter » / « Pour information » pour les lecteurs d'écran), projets, activité (`useAuditFormat`), compte
+  (`Account` reprend l'appareil de confiance). Grille des cartes `repeat(auto-fit, minmax(13rem, 1fr))`.
+- **Tests** : `tests/dashboard.test.ts` ; scénarios `dashboard-test.mjs` (38) : valeurs attendues recalculées en SQL avec les mêmes
+  définitions pour 4 rôles (exactes malgré les données de l'utilisateur).
+
 ## 10. Référence des API
 
 Format d'erreur (h3) : `{ statusCode, statusMessage, message, data? }` ; **codes métier dans `data.code`** (lus côté client par
@@ -1001,6 +1030,7 @@ Format d'erreur (h3) : `{ statusCode, statusMessage, message, data? }` ; **codes
 | GET `/api/auth/password/:token` | public | — | `{ email, purpose, expiresAt }` · 404 `TOKEN_INVALID` |
 | POST `/api/auth/password/:token` | public (CSRF) | `{ password, confirmation }` | 204 · 400 · 404 `TOKEN_INVALID` |
 | GET `/api/admin/status` | `users:manage` | — | `{ bootstrapCredentialsSet }` |
+| GET `/api/admin/dashboard` | session | — | `{ media, variants, uploads { since, hours }, projects { active, archived, items }, users, credentials, attention, activity }` (§ 9.20) |
 | GET `/api/admin/users` | `users:invite` (gestionnaire : ses invités) | `?q&role&status&page` | `{ items: UserSummary[], total, page, pageSize: 20 }` (tri e-mail) |
 | POST `/api/admin/users` | `users:invite` (+ sudo si projets) | `{ email, name?, role, projectIds?, projectRole? }` | 201 `{ user, invitation { path, purpose, expiresAt } }` · 403 `ROLE_NOT_INVITABLE` · 422 `PROJECTS_REQUIRED` / `PROJECT_UNAVAILABLE` / `ROLE_NOT_ASSIGNABLE` · 409 `EMAIL_TAKEN` |
 | GET `/api/admin/users/:id` | `users:invite` (gestionnaire : ses invités) | — | `{ user, activeSessions, pendingLink { purpose, expiresAt } \| null, projects: { id, name, archivedAt, role }[] }` · 404 |
@@ -1436,7 +1466,7 @@ Contrats de données :
 - Tests d'API faits jusqu'ici avec des scripts Node temporaires (fetch + FormData + cookie), rejoués en dev **et** en prod ;
   S3 testé contre `s3rver` (faux S3 local, `pnpm dlx s3rver@3.7.1 --port 4568 --configure-bucket surge-media`).
 - Interface : navigateur intégré (pilotage par JS quand le panneau ne s'affiche pas), audits axe injectés depuis jsDelivr.
-- Automatisé dans le dépôt depuis B1 : tests unitaires Vitest des modules purs (208 tests depuis l'étape 18, dont `mail` : `tests/{permissions,signing,projects,credentials,api,openapi,delegated,processing,folders,transforms,image-transform}.test.ts` ;
+- Automatisé dans le dépôt depuis B1 : tests unitaires Vitest des modules purs (214 tests depuis l'étape 19, dont `mail` et `dashboard` : `tests/{permissions,signing,projects,credentials,api,openapi,delegated,processing,folders,transforms,image-transform}.test.ts` ;
   `image-transform` exécute le vrai pipeline sharp). Le reste (API, interface, axe) reste manuel
   (piste : tests d'intégration API + Playwright + @axe-core/playwright).
 - Viewport du navigateur intégré : 1024 px (DPR 1,25) ; les mises en page à 5 colonnes doivent attendre `xl`.
@@ -1523,6 +1553,8 @@ administration limitée à ses projets, bibliothèque gérée par l'ADMIN).
   étape 13 ; C4 : § 9.19, étape 14.
 - **Suite (à proposer et faire valider avant de commencer)** : `@surge-media/client` + composants (Vue d'abord) ; **Phase D** : vidéos et
   documents (gestionnaires, signatures, Range).
+- Pistes étape 19 : widgets masquables / réordonnables (préférence par compte), cache des agrégats pour de très grandes
+  bibliothèques, médias récents en vignettes, journal par projet pour les propriétaires.
 - Pistes étape 18 : « Envoyer un e-mail de test » (Réglages ou CLI), envoi automatique à la création d'un compte, file d'envoi, alerte à
   l'ajout d'un appareil de confiance, réinitialisation demandée par l'utilisateur lui-même (« mot de passe oublié » sur la page de connexion).
 - Pistes étape 17 : page « Mon compte » avec la liste des appareils de confiance (navigateur, dernière utilisation, retrait un par un),
