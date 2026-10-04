@@ -191,7 +191,7 @@ async function deleteUser() {
           {{ initialFlash.message }}
         </UiAlert>
 
-        <AdminPasswordLinkPanel v-if="link" v-bind="link" />
+        <AdminPasswordLinkPanel v-if="link" v-bind="link" :user-id="userId" />
 
         <!-- Profil -->
         <section aria-labelledby="profile-title" class="rounded-xl border border-border bg-surface p-6 shadow-xs">

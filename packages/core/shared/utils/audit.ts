@@ -31,6 +31,7 @@ export const AUDIT_ACTIONS = [
   'user.sessions_revoked',
   'user.device_trusted',
   'user.devices_revoked',
+  'user.link_emailed',
   'preset.created',
   'preset.updated',
   'preset.deleted',

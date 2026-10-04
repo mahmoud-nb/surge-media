@@ -368,7 +368,16 @@
       "reset": {
         "title": "Lien de réinitialisation",
         "description": "Transmettez ce lien à {email} : il lui permet de choisir un nouveau mot de passe. Le mot de passe actuel reste valable jusque-là."
-      }
+      },
+      "mail": {
+        "send": "Envoyer par e-mail",
+        "sent": "E-mail envoyé à {email}.",
+        "invalid": "Ce lien n'est plus valable (utilisé, remplacé ou expiré) : générez-en un nouveau.",
+        "notConfigured": "L'envoi d'e-mails n'est pas configuré sur le serveur : transmettez le lien à la main.",
+        "failed": "L'e-mail n'a pas pu être envoyé. Réessayez plus tard, ou copiez le lien et transmettez-le à la main.",
+        "tooMany": "Trop d'envois pour ce compte. Réessayez dans {minutes} min."
+      },
+      "onceMail": "Ce lien ne sera plus affiché : envoyez-le par e-mail, ou copiez-le et transmettez-le par un canal sûr."
     },
     "delete": {
       "title": "Supprimer le compte",
@@ -1320,7 +1329,8 @@
         "password_link": "Lien de mot de passe émis",
         "sessions_revoked": "Sessions fermées",
         "device_trusted": "Appareil de confiance ajouté",
-        "devices_revoked": "Confiance retirée"
+        "devices_revoked": "Confiance retirée",
+        "link_emailed": "Lien envoyé par e-mail"
       },
       "preset": {
         "created": "Préréglage créé",
@@ -1660,6 +1670,31 @@
       "format": "1 à 100. Vide : qualité par défaut pour {format} ({quality}). Plus bas = fichier plus léger.",
       "png": "PNG : sans perte si vide ; une qualité (1 à 100) réduit la palette de couleurs pour un fichier plus léger.",
       "any": "1 à 100. Vide : qualité par défaut du format (80 en JPEG et WebP, 50 en AVIF ; PNG sans perte)."
+    }
+  },
+  "mail": {
+    "greeting": "Bonjour,",
+    "fallback": "Si le bouton ne fonctionne pas, copiez cette adresse dans votre navigateur :",
+    "signature": "{app} · {site}",
+    "passwordLink": {
+      "invitation": {
+        "subject": "Votre invitation à {app}",
+        "heading": "Invitation à rejoindre {app}",
+        "intro": "{sender} vous invite à rejoindre l'administration de {app} avec le compte {email}.",
+        "action": "Choisir mon mot de passe",
+        "textAction": "Pour choisir votre mot de passe et activer votre compte, ouvrez ce lien :",
+        "expires": "Ce lien est personnel et ne sert qu'une fois. Il est valable jusqu'au {date}.",
+        "ignore": "Si vous n'attendiez pas cette invitation, ignorez simplement cet e-mail."
+      },
+      "reset": {
+        "subject": "Réinitialisation de votre mot de passe {app}",
+        "heading": "Choisissez un nouveau mot de passe",
+        "intro": "{sender} a demandé la réinitialisation du mot de passe de votre compte {app} ({email}).",
+        "action": "Choisir un nouveau mot de passe",
+        "textAction": "Pour choisir un nouveau mot de passe, ouvrez ce lien :",
+        "expires": "Ce lien est personnel et ne sert qu'une fois. Il est valable jusqu'au {date} ; votre mot de passe actuel reste valable jusque-là.",
+        "ignore": "Si vous n'êtes pas à l'origine de cette demande, prévenez votre administrateur."
+      }
     }
   }
 }

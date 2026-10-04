@@ -46,6 +46,7 @@
     "citty": "^0.2.2",
     "clsx": "^2.1.1",
     "flydrive": "^2.1.0",
+    "nodemailer": "^10.0.14",
     "nuxt": "^3.21.11",
     "nuxt-auth-utils": "^0.5.30",
     "prisma": "7.10.0",
@@ -59,6 +60,7 @@
   "devDependencies": {
     "@types/busboy": "^1.5.4",
     "@types/node": "^24.13.6",
+    "@types/nodemailer": "^8.0.2",
     "tsdown": "^0.23.0",
     "tsx": "^4.23.15",
     "typescript": "~6.0.3",
