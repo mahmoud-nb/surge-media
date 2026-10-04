@@ -6,24 +6,30 @@
  * Deux niveaux :
  *  - le rôle de plateforme (User.role) donne des permissions globales et les portées dans la
  *    bibliothèque de l'organisation ;
- *  - le rôle de projet (ProjectMember.role) donne les portées dans ce projet, plafonnées par
- *    le rôle de plateforme. Un ADMIN est propriétaire de tous les projets sans en être membre.
+ *  - le rôle de projet (ProjectMember.role) donne les portées dans ce projet, encadrées par
+ *    le rôle de plateforme (plafond, et plancher pour un gestionnaire). Un ADMIN est
+ *    propriétaire de tous les projets sans en être membre ; un MANAGER, de ceux dont il est membre.
  * Un rôle n'est qu'un ensemble de portées : les jetons d'accès utilisent le même vocabulaire.
  */
 
 // ─── Plateforme ──────────────────────────────────────────────────────────────
 
-/** Doit rester identique à l'enum `Role` de prisma/schema.prisma (vérifié à la compilation). */
-export const ROLES = ['ADMIN', 'EDITOR', 'DEVELOPER'] as const
+/**
+ * Doit rester identique à l'enum `Role` de prisma/schema.prisma (vérifié à la compilation) ; du plus
+ * au moins privilégié (ordre d'affichage).
+ */
+export const ROLES = ['ADMIN', 'MANAGER', 'DEVELOPER', 'EDITOR'] as const
 export type Role = (typeof ROLES)[number]
 
 export const PERMISSIONS = [
-  'library:manage', // médias de la bibliothèque de l'organisation
+  'library:read', // consulter la bibliothèque de l'organisation (et dupliquer ses médias)
+  'library:manage', // envoyer, modifier et supprimer des médias de la bibliothèque
   'projects:create', // créer des projets (le créateur en devient propriétaire)
   'projects:all', // accès à tous les projets comme propriétaire, sans en être membre
   'tokens:personal', // jetons d'accès personnels
   'api:docs', // documentation interactive de l'API (requêtes de test avec une clé publique)
-  'users:manage', // comptes et rôles de plateforme
+  'users:invite', // inviter des comptes (rôles de invitableRoles) et suivre ses invitations
+  'users:manage', // tous les comptes et rôles de plateforme
   'audit:read', // journal d'audit de toute l'installation
   'settings:manage', // réglages de l'installation : politique de la bibliothèque, préréglages globaux
 ] as const
@@ -31,12 +37,25 @@ export type Permission = (typeof PERMISSIONS)[number]
 
 export const ROLE_PERMISSIONS: Record<Role, readonly Permission[]> = {
   ADMIN: PERMISSIONS,
-  EDITOR: ['library:manage'],
-  DEVELOPER: ['library:manage', 'projects:create', 'tokens:personal', 'api:docs'],
+  MANAGER: ['library:read', 'projects:create', 'tokens:personal', 'api:docs', 'users:invite'],
+  DEVELOPER: ['library:read', 'tokens:personal', 'api:docs'],
+  EDITOR: ['library:read'],
 }
 
 export function hasPermission(role: Role | null | undefined, permission: Permission): boolean {
   return role ? ROLE_PERMISSIONS[role].includes(permission) : false
+}
+
+/** Rôles de plateforme qu'un compte peut attribuer en invitant quelqu'un. */
+const INVITABLE_ROLES: Record<Role, readonly Role[]> = {
+  ADMIN: ROLES,
+  MANAGER: ['DEVELOPER', 'EDITOR'],
+  DEVELOPER: [],
+  EDITOR: [],
+}
+
+export function invitableRoles(role: Role | null | undefined): Role[] {
+  return role ? [...INVITABLE_ROLES[role]] : []
 }
 
 // ─── Portées ─────────────────────────────────────────────────────────────────
@@ -64,8 +83,14 @@ export const PROJECT_ROLE_SCOPES: Record<ProjectRole, readonly Scope[]> = {
 /** Rôle de projet le plus élevé que peut exercer chaque rôle de plateforme. */
 export const PROJECT_ROLE_CEILING: Record<Role, ProjectRole> = {
   ADMIN: 'OWNER',
-  DEVELOPER: 'OWNER',
+  MANAGER: 'OWNER',
+  DEVELOPER: 'DEVELOPER',
   EDITOR: 'EDITOR',
+}
+
+/** Rôle de projet minimal d'un membre : un gestionnaire administre tout projet dont il est membre. */
+export const PROJECT_ROLE_FLOOR: Partial<Record<Role, ProjectRole>> = {
+  MANAGER: 'OWNER',
 }
 
 /** Portées conservées dans un projet archivé : lecture, désarchivage et suppression. */
@@ -76,21 +101,34 @@ function projectRoleRank(role: ProjectRole): number {
   return PROJECT_ROLES.length - PROJECT_ROLES.indexOf(role)
 }
 
-/** Rôles de projet attribuables à un utilisateur selon son rôle de plateforme. */
+/** Rôles de projet attribuables à un utilisateur selon son rôle de plateforme (entre plancher et plafond). */
 export function assignableProjectRoles(platformRole: Role): ProjectRole[] {
   const ceiling = projectRoleRank(PROJECT_ROLE_CEILING[platformRole])
-  return PROJECT_ROLES.filter(role => projectRoleRank(role) <= ceiling)
+  const floor = PROJECT_ROLE_FLOOR[platformRole]
+  const minimum = floor ? projectRoleRank(floor) : 0
+  return PROJECT_ROLES.filter(role => projectRoleRank(role) <= ceiling && projectRoleRank(role) >= minimum)
+}
+
+/**
+ * Rôle de membre ramené entre le plancher et le plafond du rôle de plateforme (un MANAGER membre
+ * est donc propriétaire). Sert aussi à normaliser les adhésions quand le rôle de plateforme change.
+ */
+export function clampProjectRole(platformRole: Role, memberRole: ProjectRole): ProjectRole {
+  const ceiling = PROJECT_ROLE_CEILING[platformRole]
+  const floor = PROJECT_ROLE_FLOOR[platformRole]
+  if (projectRoleRank(memberRole) > projectRoleRank(ceiling)) return ceiling
+  if (floor && projectRoleRank(memberRole) < projectRoleRank(floor)) return floor
+  return memberRole
 }
 
 /**
  * Rôle exercé dans un projet : propriétaire pour qui a `projects:all` (ADMIN), sinon le rôle de
- * membre plafonné par le rôle de plateforme ; null si l'utilisateur n'a pas accès au projet.
+ * membre encadré par le rôle de plateforme (clampProjectRole) ; null si l'utilisateur n'a pas accès
+ * au projet.
  */
 export function effectiveProjectRole(platformRole: Role, memberRole: ProjectRole | null | undefined): ProjectRole | null {
   if (hasPermission(platformRole, 'projects:all')) return 'OWNER'
-  if (!memberRole) return null
-  const ceiling = PROJECT_ROLE_CEILING[platformRole]
-  return projectRoleRank(memberRole) > projectRoleRank(ceiling) ? ceiling : memberRole
+  return memberRole ? clampProjectRole(platformRole, memberRole) : null
 }
 
 /** Espace vu par le moteur de portées (les données nécessaires, sans accès à la base). */
@@ -101,7 +139,8 @@ export type SpaceContext =
 /** Portées d'un utilisateur dans un espace ; liste vide = espace invisible pour lui. */
 export function spaceScopes(platformRole: Role, space: SpaceContext): Scope[] {
   if (space.type === 'library') {
-    return hasPermission(platformRole, 'library:manage') ? [...MEDIA_SCOPES] : []
+    if (hasPermission(platformRole, 'library:manage')) return [...MEDIA_SCOPES]
+    return hasPermission(platformRole, 'library:read') ? ['media:read'] : []
   }
   const role = effectiveProjectRole(platformRole, space.memberRole)
   if (!role) return []

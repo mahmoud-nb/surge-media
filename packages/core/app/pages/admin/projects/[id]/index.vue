@@ -89,6 +89,8 @@ async function setArchived(value: boolean) {
 // ─── Suppression ─────────────────────────────────────────────────────────────
 
 const deleteOpen = ref(false)
+// Verser les médias dans la bibliothèque revient à y envoyer des médias : administrateur seulement.
+const canKeepMedia = computed(() => can('library:manage'))
 const deleteMedia = ref<ProjectMediaOnDelete | ''>('library')
 const deleteConfirmation = ref('')
 const deleteError = ref<string>()
@@ -103,7 +105,7 @@ const deleteOptions = computed(() => PROJECT_MEDIA_ON_DELETE.map(value => ({
 })))
 
 function openDelete() {
-  deleteMedia.value = 'library'
+  deleteMedia.value = canKeepMedia.value ? 'library' : 'purge'
   deleteConfirmation.value = ''
   deleteError.value = undefined
   confirmationError.value = undefined
@@ -298,7 +300,10 @@ async function remove() {
         :description="t('projects.delete.confirmDescription')"
       >
         <form id="delete-project-form" class="grid gap-5" novalidate @submit.prevent="remove">
-          <UiRadioCards v-model="deleteMedia" :legend="t('projects.delete.mediaChoice')" :options="deleteOptions" :columns="2" />
+          <UiRadioCards v-if="canKeepMedia" v-model="deleteMedia" :legend="t('projects.delete.mediaChoice')" :options="deleteOptions" :columns="2" />
+          <UiAlert v-else variant="warning">
+            {{ t('projects.delete.purgeOnly') }}
+          </UiAlert>
           <UiFormField v-slot="field" :id="confirmationId" :label="t('projects.delete.confirmLabel', { slug: project.slug })" :error="confirmationError" required>
             <UiInput
               v-bind="field"

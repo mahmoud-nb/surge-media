@@ -3,8 +3,15 @@ import type { UserErrorCode, UserStatus } from '#shared/utils/users'
 import { userStatus } from '#shared/utils/users'
 import type { Prisma, User } from '../generated/prisma/client'
 
+/** Relations jointes à un compte pour sa représentation publique. */
+export const USER_SUMMARY_INCLUDE = {
+  invitedBy: { select: { id: true, name: true, email: true } },
+} satisfies Prisma.UserInclude
+
+type UserWithInviter = User & { invitedBy?: { id: string, name: string | null, email: string } | null }
+
 /** Représentation publique d'un compte (jamais d'empreinte de mot de passe). */
-export function toUserSummary(user: User) {
+export function toUserSummary(user: UserWithInviter) {
   return {
     id: user.id,
     email: user.email,
@@ -15,6 +22,8 @@ export function toUserSummary(user: User) {
     status: userStatus({ isActive: user.isActive, hasPassword: user.passwordHash !== null }),
     lastLoginAt: user.lastLoginAt,
     createdAt: user.createdAt,
+    /** Auteur de l'invitation (null : compte d'amorçage, ou auteur supprimé). */
+    invitedBy: user.invitedBy ?? null,
   }
 }
 
@@ -26,18 +35,26 @@ const STATUS_FILTERS: Record<UserStatus, Prisma.UserWhereInput> = {
   inactive: { isActive: false },
 }
 
-export function userListWhere(query: UserListQuery): Prisma.UserWhereInput {
-  const and: Prisma.UserWhereInput[] = []
+/**
+ * Comptes visibles par `actor` : tous avec `users:manage` ; sinon (gestionnaire, `users:invite`)
+ * seulement ceux qu'il a invités.
+ */
+export function visibleUsersWhere(actor: User): Prisma.UserWhereInput {
+  return hasPermission(actor.role, 'users:manage') ? {} : { invitedById: actor.id }
+}
+
+export function userListWhere(query: UserListQuery, actor: User): Prisma.UserWhereInput {
+  const and: Prisma.UserWhereInput[] = [visibleUsersWhere(actor)]
   if (query.q) {
     and.push({ OR: textSearch(['email', 'name'], query.q) })
   }
   if (query.role) and.push({ role: query.role })
   if (query.status) and.push(STATUS_FILTERS[query.status])
-  return and.length > 0 ? { AND: and } : {}
+  return { AND: and }
 }
 
 /** Erreur métier : statut HTTP + code traduit par l'interface (`data.code`). */
-export function userError(statusCode: 400 | 403 | 404 | 409, code: UserErrorCode) {
+export function userError(statusCode: 400 | 403 | 404 | 409 | 422, code: UserErrorCode) {
   return createError({ statusCode, statusMessage: code, data: { code } })
 }
 
@@ -72,6 +89,17 @@ export async function assertUserChangeAllowed(
 export async function findUserOr404(id: string): Promise<User> {
   const prisma = await usePrisma()
   const user = await prisma.user.findUnique({ where: { id } })
+  if (!user) throw createError({ statusCode: 404, statusMessage: 'User not found' })
+  return user
+}
+
+/**
+ * Compte visible par `actor` (voir visibleUsersWhere), avec l'auteur de son invitation ; 404 sinon
+ * (un gestionnaire n'apprend pas l'existence des comptes qu'il n'a pas invités).
+ */
+export async function findVisibleUserOr404(actor: User, id: string) {
+  const prisma = await usePrisma()
+  const user = await prisma.user.findFirst({ where: { AND: [{ id }, visibleUsersWhere(actor)] }, include: USER_SUMMARY_INCLUDE })
   if (!user) throw createError({ statusCode: 404, statusMessage: 'User not found' })
   return user
 }

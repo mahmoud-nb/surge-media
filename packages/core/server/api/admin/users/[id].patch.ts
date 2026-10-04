@@ -1,11 +1,13 @@
 import { updateUserSchema } from '#shared/schemas/users'
 import { invalidateUserCredentials } from '../../../lib/access/credentials'
+import { membershipNormalization } from '../../../lib/projects/service'
 
 /**
  * PATCH /api/admin/users/:id — { name?, role?, isActive? }.
  * 403 SELF_ACTION (son propre rôle ou sa désactivation) · 409 LAST_ADMIN.
  * Désactiver un compte ferme immédiatement toutes ses sessions ; un changement de rôle
- * s'applique à la requête suivante (le rôle est relu en base à chaque vérification).
+ * s'applique à la requête suivante (le rôle est relu en base à chaque vérification) et ramène
+ * ses adhésions aux projets dans les bornes du nouveau rôle (même transaction).
  * Changements de rôle et de statut inscrits au journal d'audit.
  */
 export default defineEventHandler(async (event) => {
@@ -17,8 +19,10 @@ export default defineEventHandler(async (event) => {
 
   const prisma = await usePrisma()
   const [user] = await prisma.$transaction([
-    prisma.user.update({ where: { id: target.id }, data: input }),
+    prisma.user.update({ where: { id: target.id }, data: input, include: USER_SUMMARY_INCLUDE }),
     ...(input.isActive === false ? [prisma.session.deleteMany({ where: { userId: target.id } })] : []),
+    // Nouveau rôle : adhésions ramenées entre son plancher et son plafond (ex. gestionnaire → propriétaire).
+    ...(input.role !== undefined && input.role !== target.role ? membershipNormalization(prisma, target.id, input.role) : []),
   ])
 
   // Rôle ou statut changé : les jetons personnels du compte sont relus à la requête suivante.

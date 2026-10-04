@@ -2,6 +2,7 @@ import { z } from 'zod'
 import { ROLES } from '../utils/permissions'
 import { USER_STATUSES } from '../utils/users'
 import { emailSchema, PASSWORD_MAX_LENGTH, PASSWORD_MIN_LENGTH } from './auth'
+import { projectRoleSchema } from './projects'
 
 /** VARCHAR(191) sous MySQL. */
 export const NAME_MAX_LENGTH = 191
@@ -17,10 +18,26 @@ export const userNameSchema = z
   .transform(value => value || null)
   .nullable()
 
+/** Nombre maximal de projets auxquels rattacher un compte dès son invitation. */
+export const INVITATION_PROJECTS_MAX = 50
+
+/**
+ * Invitation : rôle de plateforme parmi `invitableRoles(auteur)` et, facultativement pour un
+ * administrateur (obligatoirement pour un gestionnaire, contrôlé par le serveur), des projets
+ * auxquels rattacher le compte avec un même rôle de projet.
+ */
 export const createUserSchema = z.object({
   email: emailSchema,
   name: userNameSchema.optional(),
   role: roleSchema,
+  projectIds: z.array(z.string().min(1).max(NAME_MAX_LENGTH))
+    .max(INVITATION_PROJECTS_MAX)
+    .transform(ids => [...new Set(ids)])
+    .optional(),
+  projectRole: projectRoleSchema.optional(),
+}).refine(input => !input.projectIds?.length || input.projectRole !== undefined, {
+  path: ['projectRole'],
+  message: 'validation.required',
 })
 export type CreateUserInput = z.input<typeof createUserSchema>
 

@@ -45,7 +45,11 @@
     "integerRange": "Enter a whole number from {min} to {max}.",
     "color": "Enter a 6-digit hexadecimal colour, for example ffffff.",
     "cropIncomplete": "Enter all four values of the area, or clear them all.",
-    "cropOutside": "The area goes beyond the image: {max} px at most here."
+    "cropOutside": "The area goes beyond the image: {max} px at most here.",
+    "projectsRequired": "Choose at least one project.",
+    "roleNotInvitable": "You cannot assign this role.",
+    "projectUnavailable": "One of the chosen projects is no longer available: check the selection.",
+    "projectRoleNotAssignable": "This project role is not allowed by the chosen role."
   },
   "auth": {
     "logout": "Sign out"
@@ -124,7 +128,8 @@
       "library": "Library",
       "audit": "Audit log",
       "apiDocs": "API documentation",
-      "settings": "Settings"
+      "settings": "Settings",
+      "invitations": "My invitations"
     },
     "dashboard": {
       "meta": {
@@ -154,15 +159,19 @@
   "roles": {
     "ADMIN": {
       "label": "Administrator",
-      "description": "All privileges: users, every project and the library."
+      "description": "Every privilege: accounts, every project, library management and settings."
     },
-    "EDITOR": {
-      "label": "Editor",
-      "description": "The organization library and the media of the projects they belong to."
+    "MANAGER": {
+      "label": "Manager",
+      "description": "Creates projects and administers those they belong to; invites developers and editors. Read-only library."
     },
     "DEVELOPER": {
       "label": "Developer",
-      "description": "The library, project creation, API keys and integrations of the projects they belong to."
+      "description": "Projects they belong to: API keys, allowed origins and media. Read-only library."
+    },
+    "EDITOR": {
+      "label": "Editor",
+      "description": "Media of the projects they belong to. Read-only library."
     }
   },
   "permissions": {
@@ -170,10 +179,12 @@
       "personal": "Create personal tokens"
     },
     "users": {
-      "manage": "Manage users"
+      "manage": "Manage users",
+      "invite": "Invite accounts"
     },
     "library": {
-      "manage": "Manage the organization library"
+      "manage": "Manage the organization library",
+      "read": "Browse the organization library"
     },
     "projects": {
       "create": "Create projects",
@@ -184,6 +195,9 @@
     },
     "api": {
       "docs": "Browse and try the API documentation"
+    },
+    "settings": {
+      "manage": "Manage installation settings"
     }
   },
   "errors": {
@@ -232,7 +246,8 @@
     },
     "list": {
       "meta": {
-        "title": "Users"
+        "title": "Users",
+        "invitationsTitle": "My invitations"
       },
       "title": "Users",
       "description": "Accounts with access to the administration and the role of each one.",
@@ -243,7 +258,13 @@
       "never": "Never",
       "empty": "No users yet.",
       "emptyFiltered": "No users match these filters.",
-      "loadError": "Unable to load users."
+      "loadError": "Unable to load users.",
+      "invitationsTitle": "My invitations",
+      "invitationsDescription": "Accounts you invited to your projects and the state of their invitation.",
+      "invite": "Invite a user",
+      "invitationsCaption": "Accounts you invited",
+      "invitationsEmpty": "You have not invited anyone yet.",
+      "noInviter": "Not recorded"
     },
     "filters": {
       "label": "Filter users",
@@ -259,7 +280,8 @@
       "user": "User",
       "role": "Role",
       "status": "Status",
-      "lastLogin": "Last sign-in"
+      "lastLogin": "Last sign-in",
+      "invitedBy": "Invited by"
     },
     "fields": {
       "email": "Email address",
@@ -267,17 +289,33 @@
       "nameHint": "Optional. Displayed in the administration.",
       "role": "Role",
       "active": "Active account",
-      "activeHint": "A deactivated account can no longer sign in and its sessions are closed immediately."
+      "activeHint": "A deactivated account can no longer sign in and its sessions are closed immediately.",
+      "roleInviteHint": "A manager invites developers and editors.",
+      "projects": "Projects",
+      "projectsRequired": "Projects (at least one)",
+      "projectsHint": "Optional. The account will join the checked projects.",
+      "projectsHintManager": "The account will join the checked projects, among those you administer.",
+      "projectsLoadError": "Your projects could not be loaded.",
+      "noProjects": "No active project: the account can be added to a project later.",
+      "noProjectsManager": "You do not administer any active project: create one before inviting someone.",
+      "projectRole": "Role in these projects",
+      "projectRoleHint": "Only the roles allowed by the role chosen above are offered.",
+      "projectRoleFixed": "Role in these projects: {role}."
     },
     "create": {
       "meta": {
-        "title": "New user"
+        "title": "New user",
+        "inviteTitle": "Invite a user"
       },
       "title": "New user",
       "description": "Create the account, then send the invitation link to the person concerned.",
       "invitationNote": "No password is set here: an invitation link valid for 7 days will be generated so that the user chooses their own password.",
       "submit": "Create account",
-      "success": "The account {email} has been created."
+      "success": "The account {email} has been created.",
+      "inviteTitle": "Invite a user",
+      "inviteDescription": "Invite a developer or an editor to your projects, then send them the invitation link.",
+      "inviteSubmit": "Invite",
+      "inviteSuccess": "Invitation created for {email}."
     },
     "edit": {
       "profileTitle": "Profile",
@@ -301,7 +339,9 @@
       "revokeSessions": "Close all sessions",
       "revokeOtherSessions": "Close my other sessions",
       "sessionsRevoked": "No session closed. | {count} session closed. | {count} sessions closed.",
-      "inactiveHint": "Reactivate the account to generate a link."
+      "inactiveHint": "Reactivate the account to generate a link.",
+      "invitationAccepted": "Invitation accepted. For a forgotten password, contact an administrator.",
+      "inactiveByAdmin": "This account was deactivated by an administrator."
     },
     "link": {
       "label": "Link to send",
@@ -328,7 +368,15 @@
     },
     "errors": {
       "selfAction": "You cannot change the role of, deactivate or delete your own account.",
-      "lastAdmin": "Not possible: this account is the last active administrator."
+      "lastAdmin": "Not possible: this account is the last active administrator.",
+      "invitationAccepted": "This invitation was already accepted: only an administrator can reset the password."
+    },
+    "backToInvitations": "Back to my invitations",
+    "view": {
+      "readOnlyNote": "Only an administrator can change this account.",
+      "projectsTitle": "Projects",
+      "noProjects": "Not a member of any project.",
+      "noSharedProjects": "Not a member of any of your projects."
     }
   },
   "password": {
@@ -678,7 +726,7 @@
       "caption": "Project list",
       "count": "No projects | {count} project | {count} projects",
       "empty": "No projects yet.",
-      "emptyMember": "You are not a member of any project. Ask a project owner to add you.",
+      "emptyMember": "You are not a member of any project. Ask a manager or an administrator to add you.",
       "emptyFiltered": "No project matches these filters.",
       "loadError": "Unable to load projects.",
       "noRole": "—"
@@ -780,7 +828,8 @@
       "confirmLabel": "To confirm, type the project identifier: {slug}",
       "confirmMismatch": "The identifier you typed does not match.",
       "confirm": "Delete permanently",
-      "success": "The project “{name}” has been deleted."
+      "success": "The project “{name}” has been deleted.",
+      "purgeOnly": "The project media will be permanently deleted, with their files. To keep them in the library, ask an administrator to delete the project."
     },
     "media": {
       "meta": {
@@ -828,8 +877,10 @@
         "role": "Role of {name}",
         "action": "Add",
         "actionLabel": "Add {name} to the project",
-        "added": "{name} has been added to the project."
-      }
+        "added": "{name} has been added to the project.",
+        "asRole": "as {role}"
+      },
+      "managerOwner": "Manager: administers every project they belong to."
     },
     "errors": {
       "PROJECT_ARCHIVED": "The project is archived: this action is not possible.",
@@ -837,7 +888,8 @@
       "LAST_OWNER": "Not possible: the project must keep at least one owner.",
       "ALREADY_MEMBER": "This account is already a member of the project.",
       "ROLE_NOT_ASSIGNABLE": "This role exceeds what their platform role allows.",
-      "USER_NOT_FOUND": "This account no longer exists or has been deactivated."
+      "USER_NOT_FOUND": "This account no longer exists or has been deactivated.",
+      "LIBRARY_NOT_ALLOWED": "Only an administrator can move media to the library."
     }
   },
   "reauth": {
@@ -1163,7 +1215,8 @@
         "choose": "Included projects",
         "noProjects": "You do not have access to any active project.",
         "library": "Include the organization library",
-        "libraryHint": "The token can also act on media in the library."
+        "libraryHint": "The token can also act on media in the library.",
+        "libraryReadHint": "The token will also read the library media (your role only allows browsing it)."
       },
       "notice": "The token will be shown only once. You may be asked for your password.",
       "submit": "Create token",
@@ -1277,7 +1330,8 @@
       },
       "sessions": "No session closed | One session closed | {count} sessions closed",
       "transformation": "Parameters: {value}",
-      "libraryPolicy": "Library: {from} → {to}"
+      "libraryPolicy": "Library: {from} → {to}",
+      "projects": "Projects: {names}"
     },
     "fields": {
       "name": "name",

@@ -26,7 +26,7 @@ afterEach(() => {
 
 describe('portées effectives des identifiants', () => {
   const ALL = ['project:read', ...MEDIA_SCOPES]
-  const owner = (role: 'ADMIN' | 'DEVELOPER' | 'EDITOR', memberRole?: 'OWNER' | 'DEVELOPER' | 'EDITOR') =>
+  const owner = (role: 'ADMIN' | 'MANAGER' | 'DEVELOPER' | 'EDITOR', memberRole?: 'OWNER' | 'DEVELOPER' | 'EDITOR') =>
     spaceScopes(role, { type: 'project', memberRole, archived: false })
 
   it('jeton personnel : portées du jeton ∩ droits actuels du propriétaire, seulement dans sa sélection', () => {
@@ -56,6 +56,20 @@ describe('portées effectives des identifiants', () => {
     const library = spaceScopes('EDITOR', { type: 'library' })
     expect(credentialScopes({ type: 'PERSONAL', scopes: ALL, inSelection: true, ownerScopes: library }))
       .toEqual(MEDIA_SCOPES.filter(scope => (library as Scope[]).includes(scope)))
+    // Seul l'ADMIN gère la bibliothèque : le jeton d'un autre rôle n'y fait que lire.
+    for (const role of ['MANAGER', 'DEVELOPER', 'EDITOR'] as const) {
+      expect(credentialScopes({ type: 'PERSONAL', scopes: ALL, inSelection: true, ownerScopes: spaceScopes(role, { type: 'library' }) }))
+        .toEqual(['media:read'])
+    }
+    expect(credentialScopes({ type: 'PERSONAL', scopes: ALL, inSelection: true, ownerScopes: spaceScopes('ADMIN', { type: 'library' }) }))
+      .toEqual([...MEDIA_SCOPES])
+  })
+
+  it('jeton personnel d\'un gestionnaire : propriétaire de ses projets, plafonné aux portées d\'un jeton', () => {
+    const managerScopes = spaceScopes('MANAGER', { type: 'project', memberRole: 'EDITOR', archived: false })
+    expect(credentialScopes({ type: 'PERSONAL', scopes: ALL, inSelection: true, ownerScopes: managerScopes })).toEqual(ALL)
+    expect(credentialScopes({ type: 'PERSONAL', scopes: ALL, inSelection: true, ownerScopes: spaceScopes('MANAGER', { type: 'project', memberRole: null, archived: false }) }))
+      .toEqual([])
   })
 })
 

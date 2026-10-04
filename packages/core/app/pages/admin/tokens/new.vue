@@ -5,6 +5,7 @@ import { createPersonalTokenSchema, type CreatePersonalTokenData } from '#shared
 definePageMeta({ layout: 'admin', permission: 'tokens:personal' })
 
 const { t } = useI18n()
+const { can } = useAuth()
 const { $api } = useNuxtApp()
 const flash = useFlash()
 const reauth = useReauth()
@@ -154,7 +155,7 @@ async function onSubmit() {
           :id="librarySwitchId"
           v-model="form.includeLibrary"
           :label="t('tokens.new.access.library')"
-          :description="t('tokens.new.access.libraryHint')"
+          :description="can('library:manage') ? t('tokens.new.access.libraryHint') : t('tokens.new.access.libraryReadHint')"
         />
         <p v-if="accessErrorShown" :id="accessErrorId" class="text-sm font-medium text-destructive">
           {{ message('projectIds') }}

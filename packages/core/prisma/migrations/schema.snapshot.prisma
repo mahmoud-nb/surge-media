@@ -25,11 +25,12 @@ datasource db {
 
 // ─── Utilisateurs & sessions (interface d'administration) ────────────────────
 
-/// Rôle de plateforme ; il plafonne aussi le rôle dans chaque projet (shared/utils/permissions.ts)
+/// Rôle de plateforme ; il encadre aussi le rôle dans chaque projet (shared/utils/permissions.ts)
 enum Role {
-  ADMIN // tous les privilèges : utilisateurs, tous les projets, bibliothèque
-  EDITOR // bibliothèque ; médias des projets dont il est membre
-  DEVELOPER // bibliothèque ; création de projets ; projets dont il est membre (clés d'API, CORS)
+  ADMIN // tous les privilèges : utilisateurs, tous les projets, gestion de la bibliothèque, réglages
+  MANAGER // création de projets ; propriétaire des projets dont il est membre ; invitations (développeurs, éditeurs)
+  DEVELOPER // projets dont il est membre (clés d'API, CORS, médias) ; bibliothèque en lecture
+  EDITOR // médias des projets dont il est membre ; bibliothèque en lecture
 }
 
 model User {
@@ -44,9 +45,13 @@ model User {
   locale       String    @default("fr")
   isActive     Boolean   @default(true)
   lastLoginAt  DateTime?
+  /// Compte qui a créé (invité) celui-ci ; un gestionnaire suit ainsi ses invitations
+  invitedById  String?
   createdAt    DateTime  @default(now())
   updatedAt    DateTime  @updatedAt
 
+  invitedBy            User?           @relation("UserInvitedBy", fields: [invitedById], references: [id], onDelete: SetNull)
+  invitedUsers         User[]          @relation("UserInvitedBy")
   sessions             Session[]
   projectMemberships   ProjectMember[]
   createdProjects      Project[]       @relation("ProjectCreatedBy")
@@ -55,6 +60,8 @@ model User {
   createdAccessTokens  AccessToken[]   @relation("AccessTokenCreatedBy")
   passwordTokens       PasswordToken[] @relation("PasswordTokenUser")
   issuedPasswordTokens PasswordToken[] @relation("PasswordTokenCreatedBy")
+
+  @@index([invitedById])
 }
 
 model Session {

@@ -36,5 +36,6 @@ export const PROJECT_ERROR_CODES = [
   'ALREADY_MEMBER', // l'utilisateur est déjà membre du projet
   'ROLE_NOT_ASSIGNABLE', // rôle de projet supérieur au plafond du rôle de plateforme
   'USER_NOT_FOUND', // utilisateur à ajouter introuvable ou désactivé
+  'LIBRARY_NOT_ALLOWED', // verser les médias dans la bibliothèque exige de pouvoir y envoyer des médias
 ] as const
 export type ProjectErrorCode = (typeof PROJECT_ERROR_CODES)[number]

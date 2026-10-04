@@ -159,7 +159,8 @@ async function searchCandidates() {
   try {
     const result = await $api(`/api/admin/projects/${projectId.value}/candidates`, { query: { q: search.value.trim() || undefined } })
     candidates.value = result.candidates
-    for (const candidate of result.candidates) candidateRoles[candidate.id] = 'EDITOR'
+    // Rôle le moins privilégié parmi ceux qu'on peut lui attribuer (propriétaire pour un gestionnaire).
+    for (const candidate of result.candidates) candidateRoles[candidate.id] = candidate.assignableRoles.at(-1) ?? ''
     searched.value = true
   }
   catch (error) {
@@ -269,7 +270,7 @@ async function addCandidate(candidate: Candidate) {
                   {{ t(`roles.${member.user.role}.label`) }}
                 </td>
                 <td class="px-4 py-3 align-top">
-                  <form v-if="canManage" class="flex flex-wrap items-center gap-2" @submit.prevent="saveRole(member)">
+                  <form v-if="canManage && member.assignableRoles.length > 1" class="flex flex-wrap items-center gap-2" @submit.prevent="saveRole(member)">
                     <UiSelect
                       v-model="roleDrafts[member.user.id]"
                       :options="roleOptions(member.assignableRoles)"
@@ -287,7 +288,10 @@ async function addCandidate(candidate: Candidate) {
                       {{ t('projects.members.saveRole') }}
                     </UiButton>
                   </form>
-                  <span v-else>{{ t(`projectRoles.${member.role}.label`) }}</span>
+                  <span v-else>{{ t(`projectRoles.${member.effectiveRole ?? member.role}.label`) }}</span>
+                  <p v-if="member.user.role === 'MANAGER'" class="mt-1 text-xs text-muted-foreground">
+                    {{ t('projects.members.managerOwner') }}
+                  </p>
                   <p v-if="isCapped(member) && member.effectiveRole" class="mt-1 text-xs text-muted-foreground">
                     {{ t('projects.members.capped', { role: t(`projectRoles.${member.effectiveRole}.label`) }) }}
                   </p>
@@ -369,11 +373,15 @@ async function addCandidate(candidate: Candidate) {
               </div>
               <form class="flex flex-wrap items-center gap-2" @submit.prevent="addCandidate(candidate)">
                 <UiSelect
+                  v-if="candidate.assignableRoles.length > 1"
                   v-model="candidateRoles[candidate.id]"
                   :options="roleOptions(candidate.assignableRoles)"
                   :aria-label="t('projects.members.add.role', { name: displayName(candidate) })"
                   class="w-44"
                 />
+                <span v-else-if="candidate.assignableRoles[0]" class="text-sm text-muted-foreground">
+                  {{ t('projects.members.add.asRole', { role: t(`projectRoles.${candidate.assignableRoles[0]}.label`) }) }}
+                </span>
                 <UiButton
                   type="submit"
                   size="sm"
