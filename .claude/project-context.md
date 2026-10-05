@@ -18,8 +18,11 @@
 > transformation unitaires et par lot ; point d'intérêt dans la fiche média, § 9.18), 14 = **C4** (générateur d'adresses de la
 > fiche média : aperçu à la volée non enregistré, adresses signées si nécessaire, extraits HTML, § 9.19), 16 = **rôle Gestionnaire**
 > (`MANAGER` : administre ses projets, invite développeurs et éditeurs ; bibliothèque gérée par l'ADMIN seul). **Les phases B et C sont
-> terminées** (`.claude/architecture-phase-c.md` : décisions CD1 à CD12, écarts en tête). **Prochaine étape** : à proposer et faire
-> valider — `@surge-media/client` + composants (Vue d'abord), ou phase D (vidéos et documents). Architecture de la phase B :
+> terminées** (`.claude/architecture-phase-c.md` : décisions CD1 à CD12, écarts en tête). **Prochaine étape** : **phase D = vidéos**,
+> demandée le 2026-10-05 (CRUD + diffusion directe d'abord, sans transcodage) ; proposition `.claude/architecture-phase-d.md`
+> (DD1 à DD14) **en attente de validation** — ne rien implémenter avant. **Correctifs du 2026-10-05** (non commités au moment de la
+> rédaction ; § 7.6, § 9.4, § 9.6, § 18) : fermeture des flux interrompus de `/m/`, corps JSON bornés (1 Mio, 30 s), envois arrêtés
+> après 60 s sans donnée. Architecture de la phase B :
 > `.claude/architecture-phase-b.md` (en-tête = écarts B1 à B5).
 >
 > Les éléments marqués **[À CONFIRMER]** sont des hypothèses ou des points non validés par
@@ -160,7 +163,8 @@ Couches serveur :
   `api/admin/api-docs.get.ts` (étape 10).
 - `routes/m/[...path].ts` (diffusion des médias, sans cookie ; Bearer, Range, OPTIONS depuis B3).
 - `api/v1/**` (API publique, § 9.12).
-- `middleware/api-v1.ts` (entrée de l'API v1), `middleware/csrf.ts`.
+- `middleware/api-v1.ts` (entrée de l'API v1), `middleware/csrf.ts`, **`middleware/body-limit.ts`** (2026-10-05 : `req.rawBody` = lecture
+  différée et bornée, § 7.6).
 - `plugins/` : `auth-session.ts` (hooks nuxt-auth-utils), `bootstrap-admin.ts` (avertissements au démarrage), `database.ts` (déconnexion Prisma à l'arrêt),
   `site-url.ts` (avertit en production si `NUXT_SITE_URL` est vide), `search-backfill.ts` (indexe la recherche des médias existants),
   `delegated-usage.ts` (purge horaire des compteurs de jetons délégués expirés).
@@ -179,7 +183,9 @@ Couches serveur :
   étape 10 : **`api/docs.ts`** (`docsProjects`), `api/openapi.ts` réécrit (§ 9.15), `server/types/nitro-handlers-meta.d.ts` ;
   C1 : **`media/{delivery-path,transform-plan,transform-settings}.ts`** (chemins et opération effective purs, bornes), plugin
   `server/plugins/variant-keys.ts` (§ 9.16) ; C2 : **`transforms/service.ts`** (politique, préréglages, § 9.17), `server/utils/transforms.ts` ;
-  C3 : **`api/{signature-plan,signed-urls}.ts`** (liens signés de l'API, § 9.18 ; réutilisés par l'administration en C4) ; C4 : routes
+  C3 : **`api/{signature-plan,signed-urls}.ts`** (liens signés de l'API, § 9.18 ; réutilisés par l'administration en C4) ;
+  2026-10-05 : **`http/{body,stream}.ts`** (purs, testés : `readLimitedBody`, `BodyReadError`, `BODY_MAX_SIZE`, `BODY_READ_TIMEOUT_MS` ;
+  `closeWithResponse`) ; C4 : routes
   `api/admin/media/[id]/{transform.get,links.post}.ts` (§ 9.19). Les nouveaux modules **importent explicitement** les utilitaires de
   `#shared/utils/*` (un auto-import non injecté a causé un `ReferenceError` en production, voir § 18).
   Les **types** exportés de `server/utils` (ex. `Space`) s'importent explicitement (`import type { Space } from '../../utils/access'`).
@@ -417,6 +423,13 @@ Portées d'**espace** : `media:read|upload|write|delete` (bibliothèque ou proje
 - **CSRF** (`server/middleware/csrf.ts`) : pour POST/PUT/PATCH/DELETE sur `/api/auth/`, `/api/admin/`, `/api/_auth/`, si l'en-tête `Origin`
   est présent, son hôte doit égaler `Host` → sinon 403. Sans Origin (clients non navigateurs) : accepté (ils n'utilisent pas le cookie).
 - En-têtes de sécurité et `no-store` / `noindex` via `routeRules` (§ 6.2).
+- **Corps des requêtes** (2026-10-05, `server/middleware/body-limit.ts`) : h3 1.15 `readRawBody` lit tout en mémoire sans limite ; le
+  middleware pose sur chaque requête à corps (POST/PUT/PATCH/DELETE avec `Content-Length` > 0 ou `chunked`) un **thenable** dans
+  `req.rawBody` (h3 le prend avant de lire la socket) : la lecture n'a lieu que si la route lit son corps (après ses contrôles d'accès),
+  une seule fois, bornée à **1 Mio** (413 `BODY_TOO_LARGE`, `data.maxSize`) et **30 s** (408 `REQUEST_TIMEOUT`), avec `Connection: close`.
+  Ignoré si `req.body` est posé (appels internes `$fetch` de Nitro : `body` vaut au moins `null`). Les envois multipart lisent la
+  socket en flux (busboy) et ne sont pas concernés. `readApiBody` (API v1) laisse passer les 408/413 au lieu d'`INVALID_REQUEST`.
+  À revérifier avec h3 2.
 
 ## 8. Gestion des utilisateurs (étape 3)
 
@@ -511,7 +524,9 @@ URL signées, visibilité, normalisation des clés anti-traversée.
 2. `receiveUpload(event, maxSize)` : exige `multipart/form-data` (sinon 400 `MULTIPART_REQUIRED`) ; refus immédiat si `Content-Length` >
    max + 64 Kio (413) ; busboy (`defParamCharset: utf8`, limites : 1 fichier champ `file`, 10 champs, 4096 o/champ, 12 parties) ;
    écriture dans un dossier temporaire `surge-media-upload-*` avec SHA-256 et taille au fil de l'eau ; dépassement → 413 `FILE_TOO_LARGE`
-   (`data.maxSize`) ; fichier vide ou absent → 400 `NO_FILE` ; `cleanup()` ne lève jamais (retries, simple avertissement).
+   (`data.maxSize`) ; fichier vide ou absent → 400 `NO_FILE` ; `cleanup()` ne lève jamais (retries, simple avertissement) ;
+   **inactivité** (2026-10-05) : aucune donnée pendant `UPLOAD_IDLE_TIMEOUT_MS` (60 s) → `unpipe`, flux du fichier détruit,
+   `Connection: close`, 408 `UPLOAD_TIMEOUT` (`data.timeout`) ; `file.catch(() => {})` évite un rejet non traité.
 3. `sanitizeFilename` : basename, NFC, sans caractères de contrôle, ≤ 191 (extension préservée), défaut `media`.
 4. Champs texte (`title`, `altText`, `visibility`) validés par `mediaMetadataSchema` (400 avec issues zod si invalide).
 5. `analyze` : `sniffMimeType` → genre → gestionnaire, sinon 415 `UNSUPPORTED_TYPE` (`data.accepted`) ; `inspect`.
@@ -556,6 +571,9 @@ clé `originals/…` ; nouvelle ligne (version 1, mêmes kind/visibility/origina
   `Content-Length`, `X-Content-Type-Options: nosniff`, `Content-Security-Policy: default-src 'none'; sandbox`,
   `Cross-Origin-Resource-Policy: cross-origin`, `Access-Control-Allow-Origin: *` (B1), `Content-Disposition: inline; filename="ascii"; filename*=UTF-8''…` (nom d'origine pour
   l'original), `X-Robots-Tag: noindex` hors public ; plus les en-têtes globaux (`X-Frame-Options: DENY`…).
+- **Flux interrompus** (2026-10-05) : `sendStream(event, closeWithResponse(event.node.res, await storage.getStream(…)))` — h3 1.15
+  n'appelle que `stream.abort()` à la fermeture de la réponse (absente de `fs.ReadStream` et du corps S3) : sans ce garde-fou,
+  chaque requête abandonnée gardait un descripteur ou une connexion S3 jusqu'au redémarrage (mesuré : 20/20).
 - Dérivés (`media/variants.ts` depuis B4, généralisés en C1 : § 9.16) : `resolveDeliverable` → cache → ligne `MediaVariant (mediaId, "v<version>/<opération>.<format>")` sinon
   génération par le gestionnaire dans la file bornée (dédoublonnée par processus via une Map de promesses), `put` puis `create`
   (violation d'unicité ignorée) ; pré-générés après envoi/remplacement/duplication ; file pleine → 503 + `Retry-After`.
@@ -1113,7 +1131,9 @@ Contrats de données :
 - Codes métier : utilisateurs `EMAIL_TAKEN, SELF_ACTION, LAST_ADMIN, TOKEN_INVALID, ROLE_NOT_INVITABLE, PROJECTS_REQUIRED,
   PROJECT_UNAVAILABLE, ROLE_NOT_ASSIGNABLE, INVITATION_ACCEPTED, MAIL_NOT_CONFIGURED, MAIL_FAILED` (`userError` accepte 422) ; médias `NO_FILE, MULTIPART_REQUIRED,
   FILE_TOO_LARGE, UNSUPPORTED_TYPE, UNREADABLE_FILE, DIMENSIONS_TOO_LARGE, KIND_MISMATCH, VERSION_CONFLICT, NOT_IN_TRASH, IN_TRASH,
-  MEDIA_FORBIDDEN, SIGNATURE_INVALID, SIGNATURE_EXPIRED` ; projets `SLUG_TAKEN, PROJECT_ARCHIVED, PROJECT_NOT_ARCHIVED, LAST_OWNER,
+  MEDIA_FORBIDDEN, SIGNATURE_INVALID, SIGNATURE_EXPIRED, UPLOAD_TIMEOUT` (408, 2026-10-05) ; corps des requêtes `BODY_TOO_LARGE` (413),
+  `REQUEST_TIMEOUT` (408) (middleware, aussi dans `API_ERRORS` avec `UPLOAD_TIMEOUT`, ajoutés d'office par `bodyErrors` aux opérations
+  OpenAPI à corps) ; projets `SLUG_TAKEN, PROJECT_ARCHIVED, PROJECT_NOT_ARCHIVED, LAST_OWNER,
   ALREADY_MEMBER, ROLE_NOT_ASSIGNABLE, USER_NOT_FOUND, LIBRARY_NOT_ALLOWED` (`projectError`, traduits `projects.errors.*`) ; identifiants `TOKEN_NOT_ACTIVE,
   TOKEN_ACTIVE, TOKEN_REPLACED, PROJECT_UNAVAILABLE, ORIGIN_EXISTS, ORIGIN_LIMIT_REACHED` (`credentialError`, `credentials.errors.*`) ;
   authentification `REAUTH_REQUIRED, PASSWORD_INCORRECT` (`authError`).
@@ -1411,6 +1431,15 @@ Contrats de données :
   Activité de l'utilisateur ensuite (2026-10-03 soir et 2026-10-04), à préserver aussi : compte MANAGER « sm-ges », projet « My Phone »
   et ses clés publique et secrète, jeton personnel « test jeton », rôles et adhésions modifiés (référence avant l'étape 17 : 4 comptes,
   25 entrées d'audit, 4 médias, 2 projets, 4 jetons, 5 adhésions).
+- **h3 1.15 `sendStream`** ne détruit pas le flux quand le client part (seulement `abort()` s'il existe) → toujours passer par
+  `closeWithResponse` ; **`readRawBody`** n'a ni limite ni délai → borné par `body-limit.ts` (thenable dans `req.rawBody`). Banc d'essai
+  isolé réutilisable : serveur h3 + requêtes abandonnées (`tests/http.test.ts` imite `sendStream`, h3 n'étant pas résolvable depuis
+  `packages/core`).
+- **Windows 11** : supprimer un fichier encore ouvert par Node **réussit** (libuv ouvre avec `FILE_SHARE_DELETE`, sémantique POSIX) ;
+  une fuite de descripteur ne se voit donc pas par un échec de purge (mesurer `HandleCount` du processus, ou `stream.closed`).
+- Délai global de Node `requestTimeout` (300 s, requête entière) toujours en place : un envoi de 25 Mio exige ≥ 0,7 Mbit/s ; à relever
+  avec les vidéos (D1, `architecture-phase-d.md` § 6.2). Mesuré : un envoi de 512 Mio (busboy + SHA-256 + disque) ne retarde pas la
+  boucle d'événements (pas de `worker_threads` pour les envois, DD14).
 - Pas d'outil de copie entre stockages, pas de nettoyage des fichiers orphelins ni des liens de mot de passe utilisés.
 - Originaux diffusés avec leurs EXIF (GPS possible).
 - Tests automatisés limités aux modules purs (Vitest, depuis B1) : API et interface vérifiées par scripts ad hoc et audits
@@ -1470,6 +1499,12 @@ Contrats de données :
   `image-transform` exécute le vrai pipeline sharp). Le reste (API, interface, axe) reste manuel
   (piste : tests d'intégration API + Playwright + @axe-core/playwright).
 - Viewport du navigateur intégré : 1024 px (DPR 1,25) ; les mises en page à 5 colonnes doivent attendre `xl`.
+- Correctifs du 2026-10-05 : `tests/http.test.ts` (11) ; `body-limit-test.mjs [base]` (8 contrôles : 413 annoncé et fragmenté, 401
+  inchangé, 408 à 30 s) ; `upload-guard-test.mjs [base] [pid…]` (28 : 413 admin et v1 en RFC 9457, envois normaux, plages, 40 requêtes
+  abandonnées avec `HandleCount` des processus du serveur de dev — `nuxt.mjs dev` et ses deux enfants —, envois bloqués admin et v1 en
+  parallèle → 408 à 60 s, aucun dossier `surge-media-upload-*` restant, purge, base revenue à la référence) ; `ui-account.mjs
+  setup|cleanup [base]` (ADMIN jetable, purge de ses médias) ; scénarios d1-roles, trusted-devices, d1-b2, d1-b4, d1-c2, dashboard
+  rejoués sur le dev (copiés depuis le bloc-notes de la session 1f436366) ; build dans une copie isolée.
 - Étape 18 (e-mails) : `mail-test.mjs <base SMTP> <base sans SMTP> <base SQLite>` (28 contrôles) contre une **copie isolée** de
   `packages/core` (robocopy sans node_modules/.nuxt/.output/data + jonction `node_modules` + base copiée par `VACUUM INTO`), lancée sur
   3200 par une configuration de lancement temporaire (`cwd` doit être dans le projet : `process.chdir` vers la copie dans le script),
@@ -1551,8 +1586,9 @@ administration limitée à ses projets, bibliothèque gérée par l'ADMIN).
 - **B5 (faite)** : voir § 9.14 et `setup.md` étape 9.
 - **Phase C (terminée)** : `.claude/architecture-phase-c.md`. C1 : § 9.16 et `setup.md` étape 11 ; C2 : § 9.17, étape 12 ; C3 : § 9.18,
   étape 13 ; C4 : § 9.19, étape 14.
-- **Suite (à proposer et faire valider avant de commencer)** : `@surge-media/client` + composants (Vue d'abord) ; **Phase D** : vidéos et
-  documents (gestionnaires, signatures, Range).
+- **Phase D (vidéos)** : demandée le 2026-10-05 ; proposition `.claude/architecture-phase-d.md` (D1 = envoi, stockage, CRUD,
+  diffusion directe sans transcodage ; D2–D4 et transverses étudiés ensuite), **à valider avant de commencer**. Audio et documents :
+  phases ultérieures (DD13). `@surge-media/client` + composants (Vue d'abord) : toujours en attente.
 - Pistes étape 19 : widgets masquables / réordonnables (préférence par compte), cache des agrégats pour de très grandes
   bibliothèques, médias récents en vignettes, journal par projet pour les propriétaires.
 - Pistes étape 18 : « Envoyer un e-mail de test » (Réglages ou CLI), envoi automatique à la création d'un compte, file d'envoi, alerte à

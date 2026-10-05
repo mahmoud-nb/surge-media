@@ -161,7 +161,10 @@ export async function readApiBody<S extends z.ZodType>(event: H3Event, schema: S
   try {
     body = await readBody(event)
   }
-  catch {
+  catch (error) {
+    // Corps refusé par le middleware body-limit (413 BODY_TOO_LARGE, 408 REQUEST_TIMEOUT) : conservé.
+    const status = (error as { statusCode?: number } | null)?.statusCode
+    if (status === 408 || status === 413) throw error
     throw apiProblem('INVALID_REQUEST', 'The request body is not valid JSON.')
   }
   const result = schema.safeParse(body ?? {})

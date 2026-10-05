@@ -80,7 +80,8 @@ surge-media/
       │  ├─ lib/audit/     lecture du journal d'audit
       │  ├─ lib/api/       API v1 : contexte (Bearer, débit), erreurs RFC 9457, requêtes, écritures, contrats, liens signés, OpenAPI
       │  ├─ lib/cache/     cache mémoire (LRU) et compteurs de révision
-      │  ├─ middleware/    api-v1.ts (CORS, identité, débit), csrf.ts
+      │  ├─ lib/http/      lecture bornée des corps de requête, fermeture des flux interrompus
+      │  ├─ middleware/    api-v1.ts (CORS, identité, débit), body-limit.ts (corps ≤ 1 Mio, 30 s), csrf.ts
       │  ├─ plugins/       base, sessions, rappels d'amorçage, indexation de la recherche, purge des compteurs
       │  │                 des jetons délégués
       │  ├─ utils/         usePrisma(), requireAuth(), requireSpaceAccess(), requireRecentPassword(),
@@ -355,7 +356,9 @@ la diffusion passe toujours par surgeMedia. `GET /api/health` vérifie que le st
 
 1. Session + portée `media:upload` dans l'espace visé (`?project=<id>`, sinon bibliothèque).
 2. Lecture multipart **en flux** (busboy) : un seul fichier, taille plafonnée pendant la lecture
-   (`NUXT_MEDIA_MAX_UPLOAD_SIZE`) → 413 sans jamais charger le fichier en mémoire.
+   (`NUXT_MEDIA_MAX_UPLOAD_SIZE`) → 413 sans jamais charger le fichier en mémoire. Aucune donnée reçue
+   pendant **60 s** (réseau perdu sans fermeture) → 408 `UPLOAD_TIMEOUT`, connexion fermée, fichier
+   temporaire supprimé.
 3. Fichier temporaire + empreinte SHA-256 et taille calculées au fil de l'eau (toujours supprimé).
 4. **Type réel** d'après la signature binaire (`server/lib/media/sniff.ts`, liste d'autorisation) ;
    nom et type annoncés par le client ignorés → 415.
@@ -418,6 +421,9 @@ d'accès), `X-Robots-Tag: noindex` hors public.
 `If-Range` respecté, `Accept-Ranges: bytes` ; sous S3, seule la plage est lue dans le bucket. `OPTIONS`
 répond au preflight (lecture par script avec `Authorization` ou `Range`). Les métadonnées de diffusion
 sont gardées 60 s en mémoire (invalidées à chaque écriture locale ; autres instances : ≤ 60 s).
+Un client qui interrompt une réponse (page quittée pendant le chargement des aperçus, déplacement dans
+une vidéo) fait **fermer le flux du stockage** (`server/lib/http/stream.ts`) : aucun descripteur de fichier
+ni connexion S3 ne reste ouvert (h3 ne le faisait pas : voir « Correctifs — 2026-10-05 »).
 
 Les chemins renvoyés à l'interface d'administration restent relatifs ; les adresses à copier
 (adresse publique, lien de partage) sont absolues, construites sur cette base.
@@ -1033,6 +1039,9 @@ L'onglet « Clés d'API » d'un projet affiche son adresse et le lien vers la sp
 - **Erreurs RFC 9457** (`application/problem+json`) : `{ type, title, status, code, detail?,
   instance, requestId, errors? }` ; `code` est stable (catalogue `shared/utils/api.ts`), `requestId`
   = en-tête `X-Request-Id`, `errors` détaille les paramètres invalides (400 `INVALID_REQUEST`).
+- **Corps des requêtes** : JSON de **1 Mio** au plus (413 `BODY_TOO_LARGE`), reçu en **30 s** au plus
+  (408 `REQUEST_TIMEOUT`) ; envoi de fichier arrêté après **60 s** sans donnée (408 `UPLOAD_TIMEOUT`). Ces
+  codes sont ajoutés d'office aux opérations concernées de la spécification.
 - **CORS** : sous `/api/v1/projects/<id>/…`, seules les origines autorisées du projet reçoivent les
   en-têtes (preflight `OPTIONS` sans authentification, `Max-Age` 2 h) ; `/me` et `/projects` : toute
   origine (aucun cookie). Jamais `Access-Control-Allow-Credentials`.
@@ -1421,6 +1430,11 @@ pnpm start                          # node --env-file-if-exists=.env .output/ser
 - Jetons délégués : signés avec une clé dérivée de `NUXT_MEDIA_SIGNING_SECRET` ; changer ce secret sans
   garder l'ancien (`NUXT_MEDIA_PREVIOUS_SIGNING_SECRET`) invalide aussi les jetons délégués en cours
   (au plus 1 h).
+- **Corps des requêtes** (`server/middleware/body-limit.ts`) : JSON et formulaires lus en mémoire limités à
+  1 Mio et 30 s (413 `BODY_TOO_LARGE`, 408 `REQUEST_TIMEOUT`, connexion fermée) ; les envois de fichiers ont
+  leurs propres limites (`NUXT_MEDIA_MAX_UPLOAD_SIZE`, 60 s sans donnée). Un mandataire inverse applique
+  souvent une limite plus basse aux envois : nginx refuse par défaut les corps de plus de 1 Mo
+  (`client_max_body_size`, à porter au moins à la taille maximale d'un envoi).
 - Placer un CDN ou un cache devant `/m/` est possible : les URL publiques sont immuables et la
   diffusion n'utilise pas de cookie. Limite : passer un média public en privé ou le mettre à la
   corbeille n'efface pas les copies déjà en cache (navigateurs, CDN).
@@ -1534,6 +1548,9 @@ pnpm start                          # node --env-file-if-exists=.env .output/ser
 | Un préréglage modifié montre encore l'ancien rendu | le navigateur ou le CDN garde l'URL jusqu'à `NUXT_MEDIA_TRANSFORM_PRESET_MAX_AGE` (7 jours) : vider le cache, ou purger le CDN |
 | 400 `INVALID_TRANSFORM` sur un préréglage qui fonctionnait | sa définition dépasse une borne abaissée depuis (`NUXT_MEDIA_TRANSFORM_MAX_DIMENSION`, formats) : modifier le préréglage |
 | Image transformée plus petite que demandée | jamais d'agrandissement : la sortie est réduite en gardant le rapport demandé, et bornée à 4096 px |
+| 413 `BODY_TOO_LARGE` sur une requête JSON | corps de plus de 1 Mio : aucune route n'en attend autant (vérifier le client) ; les fichiers passent par les routes d'envoi multipart |
+| 408 `UPLOAD_TIMEOUT` à l'envoi | aucune donnée pendant 60 s : connexion perdue ou bloquée (proxy qui met tout le corps en mémoire avant de le transmettre : nginx `proxy_request_buffering off`) |
+| 408 `REQUEST_TIMEOUT` | corps JSON non reçu en 30 s : client ou réseau très lent |
 | 503 `SERVER_BUSY` à l'envoi ou sur un aperçu | file des traitements pleine : réessayer après `Retry-After` ; en production, ajuster `NUXT_MEDIA_PROCESSING_*` (§ 8) |
 | Image privée cassée dans une page externe après un changement de secret | lien signé avec l'ancien secret : déclarer celui-ci dans `NUXT_MEDIA_PREVIOUS_SIGNING_SECRET` pendant 7 jours |
 
@@ -2448,6 +2465,45 @@ violation (fr clair, en sombre, gestionnaire) ; largeur de téléphone sans déf
 **Limites connues / suites possibles** : pas de personnalisation (masquer, réordonner) ; chiffres calculés
 à chaque affichage (pas de cache : à prévoir pour de très grandes bibliothèques) ; pas de médias récents
 en vignettes ; journal réservé à l'administrateur (pas de journal par projet).
+
+**Après `git pull`**
+```bash
+pnpm install          # aucune nouvelle dépendance, aucune migration
+```
+
+### Correctifs — 2026-10-05 — Flux interrompus, corps des requêtes, envois bloqués
+
+**Cadre** : en préparant la phase D (vidéos, proposition `.claude/architecture-phase-d.md`, en attente de
+validation), trois faiblesses de l'existant ont été mesurées ; l'utilisateur a demandé de les corriger
+tout de suite, indépendamment de la vidéo.
+
+**Corrigé**
+- **Flux de `/m/` interrompus** : h3 1.15 (`sendStream`) n'appelle que `stream.abort()` quand le client
+  abandonne une réponse ; ni un flux de fichier local ni le corps d'une réponse S3 n'ont cette méthode.
+  Mesuré : 20 requêtes interrompues sur 20 laissaient leur fichier ouvert (descripteur pris, espace d'un
+  fichier purgé non libéré ; avec S3, connexion du pool prise). `closeWithResponse`
+  (`server/lib/http/stream.ts`) détruit le flux à la fermeture de la réponse : 0 sur 20.
+- **Corps des requêtes sans limite** : h3 (`readRawBody`) accumulait tout corps en mémoire, même sur une
+  route publique (`POST /api/auth/login`). Middleware `body-limit.ts` : lecture différée (seulement quand
+  la route lit son corps, après ses contrôles), **1 Mio** et **30 s** au plus → 413 `BODY_TOO_LARGE`, 408
+  `REQUEST_TIMEOUT`, `Connection: close`. Les envois multipart ne sont pas concernés (lus en flux).
+- **Envoi bloqué** : `receiveUpload` s'arrête après **60 s** sans donnée → 408 `UPLOAD_TIMEOUT` (avant :
+  jusqu'à 300 s, délai global de Node), fichier temporaire supprimé, message traduit dans l'interface.
+- Catalogue de l'API v1 : `REQUEST_TIMEOUT`, `UPLOAD_TIMEOUT` (408), `BODY_TOO_LARGE` (413), ajoutés
+  d'office aux opérations à corps de la spécification OpenAPI ; `readApiBody` ne masque plus ces refus
+  derrière `INVALID_REQUEST`.
+
+**Vérifié** : typecheck, 225 tests Vitest (`tests/http.test.ts` : lecture bornée, et fermeture des flux
+sur une vraie connexion, avec et sans garde-fou), i18n (1220 clés) ; sur le serveur de dev : limite de
+corps (taille annoncée, corps fragmenté, corps lent → 408 à 30 s, connexion normale inchangée), envois
+bloqués administration et API v1 (408 à 60 s, problème RFC 9457, aucun fichier temporaire restant), 40
+requêtes abandonnées sur un original de 5,5 Mio (descripteurs du serveur stables), plages, purge ;
+scénarios rejoués : rôles (79), appareils de confiance (37), B2, API v1 en écriture (94), C2 (58),
+tableau de bord (38) ; connexion et envoi depuis le navigateur ; build de production (copie isolée).
+
+**Limites connues** : la limite de 1 Mio et les délais sont des constantes (`server/lib/http/body.ts`,
+`UPLOAD_IDLE_TIMEOUT_MS`) ; le délai global de Node (`requestTimeout`, 300 s) reste en place : il sera
+relevé avec les vidéos (D1), un envoi de 25 Mio exigeant aujourd'hui au moins 0,7 Mbit/s.
 
 **Après `git pull`**
 ```bash

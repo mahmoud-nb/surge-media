@@ -570,7 +570,8 @@
       "VERSION_CONFLICT": "Le fichier vient d'être remplacé par quelqu'un d'autre. Rechargez la page et réessayez.",
       "NO_FILE": "Aucun fichier reçu.",
       "network": "La connexion a été interrompue.",
-      "SERVER_BUSY": "Le serveur traite déjà beaucoup de fichiers. Réessayez dans quelques secondes."
+      "SERVER_BUSY": "Le serveur traite déjà beaucoup de fichiers. Réessayez dans quelques secondes.",
+      "UPLOAD_TIMEOUT": "L'envoi a été interrompu : aucune donnée n'est arrivée pendant {seconds} s. Vérifiez la connexion puis réessayez."
     },
     "detail": {
       "backToList": "Retour à la bibliothèque",
