@@ -98,8 +98,9 @@ const STATUS_LABELS: Record<number, [string, string]> = {
   403: ['Accès refusé', 'Access denied'],
   404: ['Introuvable', 'Not found'],
   405: ['Méthode non permise', 'Method not allowed'],
+  408: ['Délai dépassé', 'Request timeout'],
   409: ['Conflit', 'Conflict'],
-  413: ['Fichier trop volumineux', 'Payload too large'],
+  413: ['Contenu trop volumineux', 'Payload too large'],
   415: ['Type de fichier non accepté', 'Unsupported media type'],
   422: ['Contenu non traitable', 'Unprocessable content'],
   429: ['Trop de requêtes', 'Too many requests'],
@@ -383,6 +384,16 @@ function authErrors(credentials: ApiCredentialType[]): ApiErrorCode[] {
   return codes
 }
 
+/** Corps de fichier lus en flux (multipart) ; tout autre corps est lu en mémoire, borné (server/lib/http/body.ts). */
+const UPLOAD_BODIES = new Set(['MediaUpload', 'FileReplace'])
+
+/** Erreurs de lecture du corps : envoi interrompu par inactivité, ou corps JSON trop volumineux ou trop lent. */
+function bodyErrors(requestBody: unknown): ApiErrorCode[] {
+  if (!requestBody) return []
+  const name = (requestBody as { $ref?: unknown }).$ref
+  return typeof name === 'string' && UPLOAD_BODIES.has(name.split('/').pop()!) ? ['UPLOAD_TIMEOUT'] : ['BODY_TOO_LARGE', 'REQUEST_TIMEOUT']
+}
+
 /** Réponses d'erreur groupées par statut, un exemple RFC 9457 par code. */
 function errorResponses(codes: ApiErrorCode[], serverUrl: string, path: string): Json {
   const byStatus = new Map<number, ApiErrorCode[]>()
@@ -505,7 +516,7 @@ export function describeApi(routes: RouteMetaEntry[], serverUrl: string): Built 
     })
     const queryParams = query && QUERY_SCHEMAS[query] ? queryParameters(QUERY_SCHEMAS[query]) : []
 
-    const known = (codes as string[]).filter((code): code is ApiErrorCode => code in API_ERRORS)
+    const known = [...(codes as string[]).filter((code): code is ApiErrorCode => code in API_ERRORS), ...bodyErrors(rest.requestBody)]
     const access = isPublic ? undefined : { fr: accessLine(scopes, credentials, 'fr'), en: accessLine(scopes, credentials, 'en') }
     const summary = (rest.summary as string | undefined) ?? where
     const description = rest.description as string | undefined

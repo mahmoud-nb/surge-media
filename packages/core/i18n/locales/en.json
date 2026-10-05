@@ -570,7 +570,8 @@
       "VERSION_CONFLICT": "The file has just been replaced by someone else. Reload the page and try again.",
       "NO_FILE": "No file received.",
       "network": "The connection was interrupted.",
-      "SERVER_BUSY": "The server is already processing many files. Try again in a few seconds."
+      "SERVER_BUSY": "The server is already processing many files. Try again in a few seconds.",
+      "UPLOAD_TIMEOUT": "The upload was stopped: no data arrived for {seconds} s. Check the connection and try again."
     },
     "detail": {
       "backToList": "Back to the library",

@@ -1,6 +1,7 @@
 import { freeTransformAllowed } from '#shared/utils/transforms'
 import type { Media } from '../../generated/prisma/client'
 import { createTokenBucketLimiter } from '../../lib/api/rate-limit'
+import { closeWithResponse } from '../../lib/http/stream'
 import { findDeliveryMedia } from '../../lib/media/cache'
 import {
   authorizeDelivery,
@@ -37,7 +38,8 @@ const generations = createTokenBucketLimiter()
  * Public : mis en cache sans limite (l'URL change à chaque remplacement). Privé : lien signé
  * (?exp=&kid=&sig=) ou identifiant d'API (`Authorization: Bearer`), jamais par cookie. Le chemin
  * physique n'est jamais exposé ; le type MIME vient de la base (nosniff). Requêtes partielles
- * (`Range`, une plage) : 206 / 416. Métadonnées lues via le cache de diffusion (60 s).
+ * (`Range`, une plage) : 206 / 416. Métadonnées lues via le cache de diffusion (60 s). Flux du stockage
+ * fermé si le client interrompt la réponse (`closeWithResponse`).
  * OPTIONS : preflight CORS (lecture avec en-tête Authorization ou Range depuis un script).
  */
 export default defineEventHandler(async (event) => {
@@ -143,7 +145,7 @@ export default defineEventHandler(async (event) => {
       'Content-Range': `bytes ${range.start}-${range.end}/${object.size}`,
       'Content-Length': range.end - range.start + 1,
     })
-    return sendStream(event, await storage.getStream(object.key, { start: range.start, end: range.end }))
+    return sendStream(event, closeWithResponse(event.node.res, await storage.getStream(object.key, { start: range.start, end: range.end })))
   }
 
   setResponseHeader(event, 'Content-Length', object.size)
@@ -152,7 +154,7 @@ export default defineEventHandler(async (event) => {
     event.node.res.end()
     return
   }
-  return sendStream(event, await storage.getStream(object.key))
+  return sendStream(event, closeWithResponse(event.node.res, await storage.getStream(object.key)))
 })
 
 /**

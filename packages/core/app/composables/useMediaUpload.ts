@@ -81,6 +81,8 @@ export function useMediaUpload() {
       case 'NO_FILE':
       case 'SERVER_BUSY':
         return t(`media.errors.${data.code}`)
+      case 'UPLOAD_TIMEOUT':
+        return t('media.errors.UPLOAD_TIMEOUT', { seconds: (data as { timeout?: number }).timeout ?? 60 })
       default:
         // Dossier de destination supprimé entre-temps, par exemple.
         return data?.code && (FOLDER_ERROR_CODES as readonly string[]).includes(data.code)

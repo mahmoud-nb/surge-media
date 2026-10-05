@@ -49,6 +49,8 @@ function problemDetail(code: ApiErrorCode, data: Record<string, unknown>): strin
       return Array.isArray(data.accepted) ? `Accepted types (detected from the content): ${data.accepted.join(', ')}.` : undefined
     case 'DIMENSIONS_TOO_LARGE':
       return typeof data.maxPixels === 'number' ? `The image exceeds ${data.maxPixels} pixels.` : undefined
+    case 'UPLOAD_TIMEOUT':
+      return typeof data.timeout === 'number' ? `No data received for ${data.timeout} s: the upload was stopped.` : undefined
     case 'KIND_MISMATCH':
       return 'The new file must be of the same kind as the original.'
     case 'VERSION_CONFLICT':

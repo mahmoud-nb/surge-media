@@ -3,11 +3,14 @@ import { createWriteStream } from 'node:fs'
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { Transform } from 'node:stream'
+import { type Readable, Transform } from 'node:stream'
 import { pipeline } from 'node:stream/promises'
 import busboy from 'busboy'
 import type { H3Event } from 'h3'
 import { mediaError } from './errors'
+
+/** Envoi abandonné si aucune donnée n'arrive pendant ce délai (connexion perdue sans fermeture). */
+export const UPLOAD_IDLE_TIMEOUT_MS = 60_000
 
 /** Fichier reçu, écrit dans un dossier temporaire (à supprimer avec `cleanup`). */
 export interface ReceivedUpload {
@@ -36,8 +39,8 @@ export function sanitizeFilename(name: string): string {
 /**
  * Lit un envoi multipart/form-data en flux : un seul fichier (champ « file »), taille plafonnée
  * pendant la lecture (413 sans jamais charger le fichier en mémoire), empreinte SHA-256
- * calculée au fil de l'eau. Le type MIME et le nom annoncés par le client ne sont pas utilisés
- * pour la validation.
+ * calculée au fil de l'eau, envoi arrêté après 60 s sans donnée reçue (408 UPLOAD_TIMEOUT). Le type
+ * MIME et le nom annoncés par le client ne sont pas utilisés pour la validation.
  */
 export async function receiveUpload(event: H3Event, maxSize: number): Promise<ReceivedUpload> {
   const headers = event.node.req.headers
@@ -57,7 +60,8 @@ export async function receiveUpload(event: H3Event, maxSize: number): Promise<Re
     .catch((error: unknown) => console.warn(`[surge-media] Fichier temporaire non supprimé (${directory}) :`, error))
 
   try {
-    return await new Promise<ReceivedUpload>((resolve, reject) => {
+    return await new Promise<ReceivedUpload>((resolveUpload, rejectUpload) => {
+      const request = event.node.req
       const parser = busboy({
         headers,
         defParamCharset: 'utf8',
@@ -65,13 +69,40 @@ export async function receiveUpload(event: H3Event, maxSize: number): Promise<Re
       })
       const fields: Record<string, string> = {}
       let file: Promise<Omit<ReceivedUpload, 'fields' | 'cleanup'>> | undefined
+      let fileStream: Readable | undefined
       let tooLarge = false
+
+      // Inactivité : aucune donnée reçue pendant UPLOAD_IDLE_TIMEOUT_MS (réseau perdu sans fermeture) →
+      // 408, connexion fermée ; le fichier temporaire est libéré sans attendre le délai global de Node.
+      let idle: ReturnType<typeof setTimeout> | undefined
+      const touch = () => {
+        clearTimeout(idle)
+        idle = setTimeout(() => {
+          request.unpipe(parser)
+          fileStream?.destroy()
+          setResponseHeader(event, 'Connection', 'close')
+          reject(mediaError(408, 'UPLOAD_TIMEOUT', { timeout: UPLOAD_IDLE_TIMEOUT_MS / 1000 }))
+        }, UPLOAD_IDLE_TIMEOUT_MS)
+      }
+      const stopWatching = () => {
+        clearTimeout(idle)
+        request.off('data', touch)
+      }
+      const resolve = (upload: ReceivedUpload) => {
+        stopWatching()
+        resolveUpload(upload)
+      }
+      const reject = (error: unknown) => {
+        stopWatching()
+        rejectUpload(error)
+      }
 
       parser.on('file', (name, stream, info) => {
         if (name !== 'file' || file) {
           stream.resume()
           return
         }
+        fileStream = stream
         const path = join(directory, 'upload')
         const hash = createHash('sha256')
         let size = 0
@@ -89,12 +120,14 @@ export async function receiveUpload(event: H3Event, maxSize: number): Promise<Re
           checksum: hash.digest('hex'),
           filename: sanitizeFilename(info.filename ?? ''),
         }))
+        // Échec après un refus déjà rendu (délai d'inactivité) : ne pas laisser de rejet non traité.
+        file.catch(() => {})
       })
       parser.on('field', (name, value) => {
         fields[name] = value
       })
       parser.on('error', reject)
-      event.node.req.once('aborted', () => reject(createError({ statusCode: 400, statusMessage: 'Upload aborted' })))
+      request.once('aborted', () => reject(createError({ statusCode: 400, statusMessage: 'Upload aborted' })))
       parser.on('close', () => {
         if (!file) return reject(mediaError(400, 'NO_FILE'))
         file.then((received) => {
@@ -103,7 +136,9 @@ export async function receiveUpload(event: H3Event, maxSize: number): Promise<Re
           resolve({ ...received, fields, cleanup })
         }, reject)
       })
-      event.node.req.pipe(parser)
+      request.pipe(parser)
+      request.on('data', touch)
+      touch()
     })
   }
   catch (error) {
