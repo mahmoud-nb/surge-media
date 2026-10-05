@@ -89,7 +89,10 @@ export default defineNuxtConfig({
     },
     // Médias — variables NUXT_MEDIA_* (voir .env.example et setup.md § 7).
     media: {
-      maxUploadSize: 25 * 1024 * 1024, // octets — NUXT_MEDIA_MAX_UPLOAD_SIZE
+      maxUploadSize: 25 * 1024 * 1024, // images, octets — NUXT_MEDIA_MAX_UPLOAD_SIZE
+      maxVideoUploadSize: 512 * 1024 * 1024, // vidéos, octets, 2 147 483 647 au plus — NUXT_MEDIA_MAX_VIDEO_UPLOAD_SIZE
+      // Délai (s) pour recevoir une requête entière (envois longs) ; Node coupe sinon à 300 s — NUXT_MEDIA_UPLOAD_TIMEOUT
+      uploadTimeout: 3600,
       signingSecret: '', // liens signés des médias privés — NUXT_MEDIA_SIGNING_SECRET
       previousSigningSecret: '', // ancien secret, accepté pendant une rotation — NUXT_MEDIA_PREVIOUS_SIGNING_SECRET
       // Base des URL de diffusion (CDN, domaine dédié) ; vide = NUXT_SITE_URL — NUXT_MEDIA_PUBLIC_URL

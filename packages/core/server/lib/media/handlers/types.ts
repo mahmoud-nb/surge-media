@@ -29,6 +29,11 @@ export interface RenderedVariant {
 export interface MediaTypeHandler {
   kind: MediaKind
   /**
+   * L'analyse passe-t-elle par la file bornée des traitements (décodage coûteux) ? Défaut : oui.
+   * Non pour la vidéo (lecture d'en-têtes) : une file pleine refuserait un envoi déjà long.
+   */
+  queued?: boolean
+  /**
    * Analyse un fichier dont le type (détecté d'après son contenu) appartient à ce genre.
    * Lève une erreur métier (422) si le fichier est illisible ou hors limites.
    */

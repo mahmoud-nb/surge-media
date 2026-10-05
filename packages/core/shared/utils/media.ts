@@ -1,10 +1,11 @@
 /**
  * Types de médias, visibilités et codes d'erreur (partagés app / serveur).
  *
- * Ajouter un type de média (vidéo, document…) :
- *  1. déclarer ses types MIME dans ACCEPTED_MEDIA_TYPES ;
- *  2. écrire son gestionnaire côté serveur (server/lib/media/handlers/) et l'inscrire au registre.
- * Le schéma Prisma prévoit déjà les genres VIDEO, AUDIO et DOCUMENT.
+ * Ajouter un type de média (audio, document…) :
+ *  1. déclarer ses types MIME dans ACCEPTED_MEDIA_TYPES et sa limite d'envoi par défaut ;
+ *  2. reconnaître sa signature (server/lib/media/sniff.ts) ;
+ *  3. écrire son gestionnaire côté serveur (server/lib/media/handlers/) et l'inscrire au registre.
+ * Le schéma Prisma prévoit déjà les genres AUDIO et DOCUMENT. Vidéos : phase D (architecture-phase-d.md).
  */
 
 export const MEDIA_KINDS = ['IMAGE', 'VIDEO', 'AUDIO', 'DOCUMENT', 'OTHER'] as const
@@ -15,7 +16,9 @@ export type MediaVisibility = (typeof MEDIA_VISIBILITIES)[number]
 
 /**
  * Types acceptés par genre : type MIME (détecté d'après le contenu, jamais d'après le nom)
- * → extension canonique. v1 : images uniquement. SVG exclu (peut contenir du script).
+ * → extension canonique. SVG exclu (peut contenir du script). Vidéos (phase D1) : MP4, WebM et
+ * QuickTime, stockées et servies telles qu'envoyées (MKV, AVI, 3GP, MPEG-TS… refusés : lecture
+ * impossible ou aléatoire dans les navigateurs sans transcodage).
  */
 export const ACCEPTED_MEDIA_TYPES: Partial<Record<MediaKind, Readonly<Record<string, string>>>> = {
   IMAGE: {
@@ -25,7 +28,30 @@ export const ACCEPTED_MEDIA_TYPES: Partial<Record<MediaKind, Readonly<Record<str
     'image/avif': 'avif',
     'image/gif': 'gif',
   },
+  VIDEO: {
+    'video/mp4': 'mp4',
+    'video/webm': 'webm',
+    'video/quicktime': 'mov',
+  },
 }
+
+/** Tous les types acceptés par l'installation. */
+export const ACCEPTED_MIME_TYPES: readonly string[] = Object.values(ACCEPTED_MEDIA_TYPES).flatMap(types => Object.keys(types ?? {}))
+
+/**
+ * Taille maximale stockable (octets) : `Media.size` est un entier 32 bits sous PostgreSQL et MySQL.
+ * Au-delà, il faudra passer la colonne en BigInt (migration).
+ */
+export const MEDIA_SIZE_CEILING = 2_147_483_647
+
+/** Limites d'envoi par défaut, par genre (NUXT_MEDIA_MAX_UPLOAD_SIZE, NUXT_MEDIA_MAX_VIDEO_UPLOAD_SIZE). */
+export const DEFAULT_UPLOAD_SIZES: Readonly<Partial<Record<MediaKind, number>>> = {
+  IMAGE: 25 * 1024 * 1024,
+  VIDEO: 512 * 1024 * 1024,
+}
+
+/** Limite d'envoi par genre activé. */
+export type UploadSizes = Partial<Record<MediaKind, number>>
 
 export const ENABLED_MEDIA_KINDS = Object.keys(ACCEPTED_MEDIA_TYPES) as MediaKind[]
 

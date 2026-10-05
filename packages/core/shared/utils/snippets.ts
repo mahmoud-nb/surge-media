@@ -67,3 +67,33 @@ export function imageSnippets(input: ImageSnippetInput): { kind: ImageSnippetKin
   }
   return snippets
 }
+
+export interface VideoSnippetInput {
+  /** Adresse du fichier (signée si le média est privé). */
+  url: string
+  mimeType: string
+  /** Chaîne RFC 6381 des codecs, si elle est connue (type de la source). */
+  codecs: string | null
+  /** Dimensions affichées : rapport d'aspect réservé avant le chargement. */
+  width?: number | null
+  height?: number | null
+  /** Nom accessible du lecteur (texte alternatif ou titre), vide = aucun. */
+  label: string
+}
+
+/**
+ * Extrait HTML d'intégration d'une vidéo servie telle quelle (phase D1) : lecteur natif avec ses
+ * commandes, sans lecture automatique (WCAG 1.4.2), métadonnées seulement chargées à l'avance,
+ * type de la source avec ses codecs pour que le navigateur sache s'il peut la lire. Pure, testée.
+ */
+export function videoSnippet(input: VideoSnippetInput): string {
+  const attributes = [
+    'controls',
+    'preload="metadata"',
+    'playsinline',
+    ...(input.width && input.height ? [`width="${input.width}"`, `height="${input.height}"`, 'style="max-width: 100%; height: auto"'] : []),
+    ...(input.label ? [`aria-label="${htmlAttribute(input.label)}"`] : []),
+  ]
+  const type = input.codecs ? `${input.mimeType}; codecs="${input.codecs.split(',').join(', ')}"` : input.mimeType
+  return `<video ${attributes.join(' ')}>\n  <source src="${htmlAttribute(input.url)}" type="${htmlAttribute(type)}">\n</video>`
+}

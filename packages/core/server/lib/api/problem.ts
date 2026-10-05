@@ -45,8 +45,11 @@ function problemDetail(code: ApiErrorCode, data: Record<string, unknown>): strin
   switch (code) {
     case 'FILE_TOO_LARGE':
       return typeof data.maxSize === 'number' ? `The file exceeds the maximum size of ${data.maxSize} bytes.` : undefined
-    case 'UNSUPPORTED_TYPE':
-      return Array.isArray(data.accepted) ? `Accepted types (detected from the content): ${data.accepted.join(', ')}.` : undefined
+    case 'UNSUPPORTED_TYPE': {
+      // Précision du gestionnaire (vidéo sans piste vidéo), puis les types acceptés.
+      const accepted = Array.isArray(data.accepted) ? `Accepted types (detected from the content): ${data.accepted.join(', ')}.` : null
+      return [typeof data.detail === 'string' ? data.detail : null, accepted].filter(Boolean).join(' ') || undefined
+    }
     case 'DIMENSIONS_TOO_LARGE':
       return typeof data.maxPixels === 'number' ? `The image exceeds ${data.maxPixels} pixels.` : undefined
     case 'UPLOAD_TIMEOUT':

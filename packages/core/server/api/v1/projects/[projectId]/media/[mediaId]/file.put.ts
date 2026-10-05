@@ -11,7 +11,7 @@ defineRouteMeta({
     'operationId': 'replaceMediaFile',
     'tags': ['media'],
     'summary': 'Remplacer le fichier',
-    'description': 'Identifiant, titre, texte alternatif et visibilité conservés ; version incrémentée, donc nouvelles URL (les anciennes redirigent). Mêmes contrôles que l\'envoi ; un fichier d\'un autre genre est refusé.',
+    'description': 'Identifiant, titre, texte alternatif et visibilité conservés ; version incrémentée, donc nouvelles URL (les anciennes redirigent). Mêmes contrôles que l\'envoi ; un fichier d\'un autre genre (une vidéo à la place d\'une image…) est refusé dès ses premiers octets.',
     'x-scopes': ['media:write'],
     'x-credentials': ['secret', 'personal', 'delegated'],
     'x-errors': [
@@ -35,7 +35,7 @@ defineRouteMeta({
     'x-i18n': {
       en: {
         summary: 'Replace the file',
-        description: 'Id, title, alternative text and visibility are kept; the version is incremented, hence new URLs (old ones redirect). Same checks as an upload; a file of another kind is rejected.',
+        description: 'Id, title, alternative text and visibility are kept; the version is incremented, hence new URLs (old ones redirect). Same checks as an upload; a file of another kind (a video instead of an image…) is rejected from its first bytes.',
       },
     },
   },
@@ -53,7 +53,7 @@ export default defineApiHandler(async (event, principal) => {
   const media = await findApiMedia(project.id, getRouterParam(event, 'mediaId') ?? '', false)
   if (!media) throw apiProblem('MEDIA_NOT_FOUND')
 
-  const replaced = await withApiUpload(event, principal, (upload, options) => replaceMediaFile(media, upload, options))
+  const replaced = await withApiUpload(event, principal, (upload, options) => replaceMediaFile(media, upload, options), media.kind)
   const expires = apiLinkExpiry()
   setResponseHeader(event, 'ETag', mediaEtag(replaced, expires))
   return toApiMedia(replaced, mediaBaseUrl(event), expires)

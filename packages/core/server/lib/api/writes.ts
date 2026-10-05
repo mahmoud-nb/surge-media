@@ -1,9 +1,10 @@
 import type { H3Event } from 'h3'
 import type { ApiMediaUpdate } from '#shared/schemas/api'
 import type { MediaMetadataInput } from '#shared/schemas/media'
-import type { MediaVisibility } from '#shared/utils/media'
+import type { MediaKind, MediaVisibility } from '#shared/utils/media'
 import type { Media } from '../../generated/prisma/client'
 import { releaseDelegatedUpload, reserveDelegatedUpload } from '../access/delegated'
+import { uploadRules } from '../media/limits'
 import type { MediaProvenance, UploadOptions } from '../media/service'
 import { type ReceivedUpload, receiveUpload } from '../media/upload'
 import { type ApiPrincipal, requireUploadAllowance } from './context'
@@ -43,13 +44,15 @@ export function toMetadataInput(fields: ApiMediaUpdate, imposed: { visibility?: 
 /**
  * Reçoit le fichier d'un envoi ou d'un remplacement puis exécute `task` : débit des envois,
  * réservation d'un envoi pour un jeton délégué limité (403 UPLOAD_LIMIT_REACHED, libérée si l'envoi
- * échoue), taille bornée par la limite de l'installation et celle du jeton, types restreints.
- * Le fichier temporaire est toujours supprimé.
+ * échoue), taille bornée par la limite du genre et celle du jeton, types restreints (refusés dès les
+ * premiers octets, comme un autre genre que `expectedKind` pour un remplacement). Le fichier
+ * temporaire est toujours supprimé.
  */
 export async function withApiUpload<T>(
   event: H3Event,
   principal: ApiPrincipal,
   task: (upload: ReceivedUpload, options: UploadOptions) => Promise<T>,
+  expectedKind?: MediaKind,
 ): Promise<T> {
   requireUploadAllowance(event, principal)
   const grant = principal.delegated
@@ -59,8 +62,8 @@ export async function withApiUpload<T>(
 
   let succeeded = false
   try {
-    const installationMax = Number(useRuntimeConfig(event).media.maxUploadSize)
-    const upload = await receiveUpload(event, Math.min(installationMax, grant?.upload?.maxSize ?? installationMax))
+    const rules = uploadRules(grant?.upload?.types, grant?.upload?.maxSize)
+    const upload = await receiveUpload(event, expectedKind ? { ...rules, expectedKind } : rules)
     try {
       const result = await task(upload, { acceptedTypes: grant?.upload?.types })
       succeeded = true

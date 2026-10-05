@@ -1,13 +1,14 @@
 <script setup lang="ts">
 /**
- * Envoi de médias : bouton « Choisir des fichiers » (champ natif, utilisable au clavier et
- * par les lecteurs d'écran) et glisser-déposer en complément. Envois un par un avec
- * progression ; chaque résultat est annoncé (role="status").
+ * Envoi de médias (images, vidéos) : bouton « Choisir des fichiers » (champ natif, utilisable au
+ * clavier et par les lecteurs d'écran) et glisser-déposer en complément. Envois un par un avec
+ * progression ; chaque résultat est annoncé (role="status"). Formats et taille maximale indiqués par
+ * genre ; quitter la page pendant un envoi demande une confirmation (envoi de vidéo long).
  *
  *   création     : <AdminMediaUploader :rules="rules" @uploaded="refresh" />
- *   remplacement : <AdminMediaUploader :rules="rules" :endpoint="`/api/admin/media/${id}/file`" method="PUT" :multiple="false" />
+ *   remplacement : <AdminMediaUploader :rules="rules" :endpoint="`/api/admin/media/${id}/file`" method="PUT" :multiple="false" :kinds="[kind]" />
  */
-import { CircleAlert, CircleCheck, ImageUp } from '@lucide/vue'
+import { CircleAlert, CircleCheck, Upload } from '@lucide/vue'
 
 interface QueueItem {
   key: number
@@ -26,6 +27,8 @@ const props = withDefaults(defineProps<{
   withVisibility?: boolean
   /** Champs ajoutés à chaque envoi (ex. dossier de destination). */
   fields?: Record<string, string>
+  /** Genres acceptés (remplacement : celui du média) ; tous par défaut. */
+  kinds?: readonly string[]
 }>(), {
   endpoint: '/api/admin/media',
   method: 'POST',
@@ -40,7 +43,7 @@ const emit = defineEmits<{
 }>()
 
 const { t, locale } = useI18n()
-const { send, precheck, errorMessage, acceptedMimeTypes, acceptedExtensions } = useMediaUpload()
+const { send, precheck, errorMessage, acceptedMimeTypes, acceptedExtensions, kindsOf, maxSizeFor } = useMediaUpload()
 
 const inputId = useId()
 const helpId = useId()
@@ -52,11 +55,15 @@ const announcement = ref('')
 const busy = computed(() => queue.value.some(item => item.status === 'pending' || item.status === 'uploading'))
 let nextKey = 0
 
-const accept = computed(() => acceptedMimeTypes(props.rules).join(','))
-const constraints = computed(() => t('media.upload.constraints', {
-  types: acceptedExtensions(props.rules),
-  max: formatBytes(props.rules.maxUploadSize, locale.value),
-}))
+const accept = computed(() => acceptedMimeTypes(props.rules, props.kinds).join(','))
+/** Une ligne par genre : formats et taille maximale. */
+const constraints = computed(() => kindsOf(props.rules, props.kinds).map(kind => ({
+  kind,
+  text: t(`media.upload.constraintsByKind.${kind}`, {
+    types: acceptedExtensions(props.rules, [kind]),
+    max: formatBytes(maxSizeFor(props.rules, kind), locale.value),
+  }),
+})))
 const visibilityOptions = computed(() => MEDIA_VISIBILITIES.map(value => ({ value, label: t(`media.visibility.${value}.label`) })))
 
 async function enqueue(files: File[]) {
@@ -66,7 +73,7 @@ async function enqueue(files: File[]) {
   queue.value = [...items.map(({ item }) => item), ...queue.value].slice(0, 20)
 
   for (const { file, item } of items) {
-    const invalid = precheck(file, props.rules)
+    const invalid = precheck(file, props.rules, props.kinds)
     if (invalid) {
       Object.assign(item, { status: 'error', message: invalid })
       announcement.value = t('media.upload.failed', { name: item.name, message: invalid })
@@ -82,7 +89,7 @@ async function enqueue(files: File[]) {
         emit('uploaded', (result.body as { media: { id: string, originalName: string } }).media)
       }
       else {
-        const message = errorMessage(result, props.rules)
+        const message = errorMessage(result, props.rules, props.kinds)
         Object.assign(item, { status: 'error', message })
         announcement.value = t('media.upload.failed', { name: item.name, message })
       }
@@ -106,6 +113,17 @@ function onDrop(event: DragEvent) {
   dragging.value = false
   enqueue([...(event.dataTransfer?.files ?? [])])
 }
+
+// Fermeture ou rechargement de l'onglet pendant un envoi : le navigateur demande confirmation (son
+// propre message, dans sa langue). La navigation dans l'administration n'interrompt pas l'envoi.
+function confirmLeave(event: BeforeUnloadEvent) {
+  event.preventDefault()
+}
+watch(busy, (value) => {
+  if (value) window.addEventListener('beforeunload', confirmLeave)
+  else window.removeEventListener('beforeunload', confirmLeave)
+})
+onBeforeUnmount(() => window.removeEventListener('beforeunload', confirmLeave))
 </script>
 
 <template>
@@ -120,7 +138,7 @@ function onDrop(event: DragEvent) {
       @dragleave.prevent="dragging = false"
       @drop.prevent="onDrop"
     >
-      <ImageUp class="size-8 text-muted-foreground" aria-hidden="true" />
+      <Upload class="size-8 text-muted-foreground" aria-hidden="true" />
       <p class="text-sm text-foreground">
         {{ multiple ? t('media.upload.dropHint') : t('media.upload.dropHintSingle') }}
       </p>
@@ -146,8 +164,8 @@ function onDrop(event: DragEvent) {
           {{ multiple ? t('media.upload.choose') : t('media.upload.chooseSingle') }}
         </label>
       </div>
-      <p :id="helpId" class="text-sm text-muted-foreground">
-        {{ constraints }}
+      <p :id="helpId" class="grid gap-0.5 text-sm text-muted-foreground">
+        <span v-for="line in constraints" :key="line.kind">{{ line.text }}</span>
       </p>
     </div>
 

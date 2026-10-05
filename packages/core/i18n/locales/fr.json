@@ -62,7 +62,7 @@
     "hero": {
       "eyebrow": "Open source · auto-hébergé",
       "title": "Vos médias, sous votre contrôle.",
-      "description": "Centralisez les images de tous vos projets, recadrez, redimensionnez et optimisez-les à la demande, puis diffusez-les à vos applications par une API sécurisée, sur votre propre infrastructure.",
+      "description": "Centralisez les images et vidéos de tous vos projets, recadrez, redimensionnez et optimisez les images à la demande, puis diffusez vos médias à vos applications par une API sécurisée, sur votre propre infrastructure.",
       "ctaLogin": "Accéder à l'administration",
       "ctaAdmin": "Ouvrir l'administration"
     },
@@ -169,6 +169,7 @@
         "title": "Statistiques",
         "media": "Médias",
         "images": "aucune image | {count} image | {count} images",
+        "videos": "aucune vidéo | {count} vidéo | {count} vidéos",
         "private": "aucun privé | {count} privé | {count} privés",
         "projects": "Projets actifs",
         "archived": "aucun archivé | {count} archivé | {count} archivés",
@@ -498,6 +499,11 @@
   },
   "media": {
     "dimensions": "{width} × {height} px",
+    "kinds": {
+      "IMAGE": "Images",
+      "VIDEO": "Vidéos"
+    },
+    "durationLabel": "Durée : {duration}",
     "visibility": {
       "PUBLIC": {
         "label": "Public",
@@ -518,7 +524,7 @@
       "trashDescription": "Médias retirés de la diffusion. Restaurez-les ou supprimez-les définitivement.",
       "count": "Aucun média | {count} média | {count} médias",
       "gridLabel": "Médias",
-      "empty": "Aucun média pour le moment : téléversez vos premières images ci-dessus.",
+      "empty": "Aucun média pour le moment : téléversez vos premières images ou vidéos ci-dessus.",
       "emptyFiltered": "Aucun média ne correspond à ces filtres.",
       "emptyTrash": "La corbeille est vide.",
       "loadError": "Impossible de charger les médias.",
@@ -531,6 +537,8 @@
       "search": "Nom, titre ou texte alternatif",
       "visibility": "Visibilité",
       "allVisibilities": "Toutes",
+      "kind": "Type",
+      "allKinds": "Tous",
       "sort": "Trier par",
       "sorts": {
         "newest": "Plus récents",
@@ -546,12 +554,15 @@
       "recursive": "Inclure les sous-dossiers"
     },
     "upload": {
-      "title": "Téléverser des images",
-      "dropHint": "Glissez-déposez vos images ici, ou",
-      "dropHintSingle": "Glissez-déposez la nouvelle image ici, ou",
+      "title": "Téléverser des médias",
+      "dropHint": "Glissez-déposez vos fichiers ici, ou",
+      "dropHintSingle": "Glissez-déposez le nouveau fichier ici, ou",
       "choose": "Choisir des fichiers",
       "chooseSingle": "Choisir un fichier",
-      "constraints": "Formats acceptés : {types}. Taille maximale : {max} par fichier.",
+      "constraintsByKind": {
+        "IMAGE": "Images : {types}, {max} au plus par fichier.",
+        "VIDEO": "Vidéos : {types}, {max} au plus par fichier."
+      },
       "visibility": "Visibilité des fichiers envoyés",
       "queue": "Envois en cours et terminés",
       "progress": "Progression de l'envoi de {name}",
@@ -580,6 +591,13 @@
       "infoTitle": "Informations",
       "format": "Format",
       "dimensions": "Dimensions",
+      "duration": "Durée",
+      "unknownDuration": "Inconnue",
+      "codecs": "Codecs",
+      "videoTrack": "Vidéo : {codec}",
+      "audioTrack": "Son : {codec}",
+      "noAudio": "Sans son",
+      "bitrate": "Débit moyen",
       "size": "Taille",
       "version": "Version du fichier",
       "uploadedBy": "Téléversé par",
@@ -605,7 +623,37 @@
       "titleHint": "Facultatif. Sert aussi au nom lisible de l'adresse du fichier.",
       "altText": "Texte alternatif",
       "altTextHint": "Décrivez ce que montre l'image pour les personnes qui ne la voient pas (125 caractères environ). Laissez vide si l'image est purement décorative.",
+      "videoDescription": "Description courte",
+      "videoDescriptionHint": "Identifie la vidéo pour les personnes qui ne la voient pas (sujet et contexte, 125 caractères environ). Elle est associée au lecteur vidéo.",
       "visibility": "Visibilité"
+    },
+    "video": {
+      "fallback": "Votre navigateur ne peut pas lire cette vidéo.",
+      "download": "Télécharger le fichier",
+      "notices": {
+        "variable": {
+          "title": "Lecture variable selon les navigateurs",
+          "text": "Codec {codec} : certains navigateurs ou appareils ne liront pas cette vidéo. Pour une lecture partout, envoyez-la en H.264 (MP4) ou VP9 (WebM)."
+        },
+        "faststart": {
+          "title": "Démarrage de la lecture plus lent",
+          "text": "L'index de la vidéo se trouve en fin de fichier : le navigateur doit le récupérer avant de lancer la lecture. La plupart des logiciels d'export proposent l'option « optimiser pour le web » (faststart)."
+        },
+        "duration": {
+          "title": "Durée inconnue",
+          "text": "Le fichier n'indique pas sa durée (enregistrement fait dans un navigateur, par exemple) : la barre de lecture peut être imprécise."
+        },
+        "location": {
+          "title": "Lieu de tournage dans le fichier",
+          "text": "Cette vidéo contient les coordonnées de son lieu de tournage. Elle est servie telle quelle : toute personne qui la télécharge peut les lire."
+        }
+      },
+      "snippet": {
+        "title": "Intégrer la vidéo",
+        "description": "Exemple pour une page web : lecteur natif avec ses commandes, sans lecture automatique ; seules les métadonnées sont chargées à l'avance.",
+        "copy": "Copier l'exemple de lecteur vidéo",
+        "privateNote": "Exemple construit avec le lien temporaire : la vidéo ne sera plus lue après son échéance."
+      }
     },
     "links": {
       "title": "Adresse du fichier",

@@ -1,7 +1,7 @@
 import { createReadStream } from 'node:fs'
 import type { MediaListQuery, MediaMetadataInput } from '#shared/schemas/media'
 import { MEDIA_PAGE_SIZE } from '#shared/schemas/media'
-import { ACCEPTED_MEDIA_TYPES, extensionForMime, mediaKindForMime, type MediaKind } from '#shared/utils/media'
+import { ACCEPTED_MIME_TYPES, extensionForMime, mediaKindForMime, type MediaKind } from '#shared/utils/media'
 import { mediaSearchColumns, normalizeSearchText } from '#shared/utils/search'
 import { sameFocalPoint } from '#shared/utils/transforms'
 import type { AccessToken, Media, Prisma } from '../../generated/prisma/client'
@@ -176,23 +176,30 @@ interface AnalyzedUpload {
 
 /**
  * Identifie le fichier d'après son contenu (signature binaire), jamais d'après le nom ou le
- * type annoncés par le client, puis le fait analyser par le gestionnaire de son genre (dans la
- * file bornée des traitements : 503 SERVER_BUSY si elle est pleine).
+ * type annoncés par le client, puis le fait analyser par le gestionnaire de son genre (images : dans
+ * la file bornée des traitements, 503 SERVER_BUSY si elle est pleine ; vidéos : lecture d'en-têtes,
+ * hors file).
  */
 async function analyze(upload: ReceivedUpload, options: UploadOptions = {}): Promise<AnalyzedUpload> {
   const mimeType = await sniffMimeType(upload.path)
   const kind = mimeType ? mediaKindForMime(mimeType) : undefined
   const handler = kind ? handlerFor(kind) : undefined
-  const accepted = options.acceptedTypes ?? Object.values(ACCEPTED_MEDIA_TYPES).flatMap(types => Object.keys(types ?? {}))
+  const accepted = options.acceptedTypes ?? ACCEPTED_MIME_TYPES
   if (!mimeType || !kind || !handler || !accepted.includes(mimeType)) {
     throw mediaError(415, 'UNSUPPORTED_TYPE', { accepted })
   }
-  return {
-    kind,
-    mimeType,
-    extension: extensionForMime(mimeType)!,
-    inspected: await runProcessing(() => handler.inspect(upload.path, mimeType)),
+  const inspect = () => handler.inspect(upload.path, mimeType)
+  let inspected: InspectedMedia
+  try {
+    inspected = await (handler.queued === false ? inspect() : runProcessing(inspect))
   }
+  catch (error) {
+    // Contenu refusé par le gestionnaire (vidéo sans piste vidéo) : même réponse qu'un type inconnu.
+    const data = (error as { data?: { code?: string, detail?: string } } | null)?.data
+    if (data?.code === 'UNSUPPORTED_TYPE') throw mediaError(415, 'UNSUPPORTED_TYPE', { accepted, detail: data.detail })
+    throw error
+  }
+  return { kind, mimeType, extension: extensionForMime(mimeType)!, inspected }
 }
 
 async function storeOriginal(upload: ReceivedUpload, analyzed: AnalyzedUpload): Promise<string> {

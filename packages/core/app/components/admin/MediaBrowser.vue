@@ -24,9 +24,10 @@ function queryValue(value: unknown): string {
 }
 
 // Formulaire de filtres (appliqués à la soumission) ; la liste suit les paramètres d'URL.
-const filters = reactive({ q: '', visibility: '', sort: '', status: '', recursive: false })
+const filters = reactive({ q: '', kind: '', visibility: '', sort: '', status: '', recursive: false })
 watch(() => route.query, (query) => {
   filters.q = queryValue(query.q)
+  filters.kind = queryValue(query.kind)
   filters.visibility = queryValue(query.visibility)
   filters.sort = queryValue(query.sort) || 'newest'
   filters.status = queryValue(query.status)
@@ -36,7 +37,7 @@ watch(() => route.query, (query) => {
 const inTrash = computed(() => route.query.status === 'trash')
 const folderId = computed(() => (inTrash.value ? undefined : queryValue(route.query.folder) || undefined))
 const recursive = computed(() => !inTrash.value && route.query.recursive === '1')
-const hasFilters = computed(() => Boolean(route.query.q || route.query.visibility || recursive.value))
+const hasFilters = computed(() => Boolean(route.query.q || route.query.kind || route.query.visibility || recursive.value))
 
 const { data: rules } = await useApiFetch('/api/admin/config/media')
 const { data: folderData, refresh: refreshFolders } = await useApiFetch('/api/admin/folders', {
@@ -48,6 +49,7 @@ const { data, error, refresh } = await useApiFetch('/api/admin/media', {
     folder: folderId.value,
     recursive: recursive.value ? '1' : undefined,
     q: route.query.q,
+    kind: route.query.kind,
     visibility: route.query.visibility,
     sort: route.query.sort,
     status: route.query.status,
@@ -76,10 +78,10 @@ const uploadFields = computed(() => {
   return fields
 })
 
-/** Lien vers un dossier : tri, visibilité et récursivité conservés, recherche et page réinitialisées. */
+/** Lien vers un dossier : tri, type, visibilité et récursivité conservés, recherche et page réinitialisées. */
 function folderLink(id: string | null) {
-  const { sort, visibility, recursive: withSubfolders } = route.query
-  return { query: { sort, visibility, recursive: withSubfolders, folder: id ?? undefined } }
+  const { sort, kind, visibility, recursive: withSubfolders } = route.query
+  return { query: { sort, kind, visibility, recursive: withSubfolders, folder: id ?? undefined } }
 }
 
 async function onFoldersChanged() {
@@ -103,6 +105,7 @@ async function onUploaded() {
 function applyFilters() {
   const query: Record<string, string> = {}
   if (filters.q) query.q = filters.q
+  if (filters.kind) query.kind = filters.kind
   if (filters.visibility) query.visibility = filters.visibility
   // Valeurs par défaut omises de l'URL (tri « plus récents », médias actifs).
   if (filters.sort && filters.sort !== 'newest') query.sort = filters.sort
@@ -120,6 +123,11 @@ function pageLink(page: number) {
 
 const resetLink = computed(() => ({ query: inTrash.value ? { status: 'trash' } : { folder: folderId.value } }))
 
+/** Filtre par type, dès que l'installation accepte plusieurs genres (images, vidéos). */
+const kindOptions = computed(() => [
+  { value: '', label: t('media.filters.allKinds') },
+  ...Object.keys(rules.value?.acceptedTypes ?? {}).map(kind => ({ value: kind, label: t(`media.kinds.${kind}`) })),
+])
 const visibilityOptions = computed(() => [
   { value: '' as const, label: t('media.filters.allVisibilities') },
   ...MEDIA_VISIBILITIES.map(value => ({ value, label: t(`media.visibility.${value}.label`) })),
@@ -288,9 +296,20 @@ async function fileSelected() {
       <AdminMediaUploader :rules="rules" :endpoint="uploadEndpoint" :fields="uploadFields" @done="onUploaded" />
     </section>
 
-    <form role="search" :aria-label="t('media.filters.label')" class="mb-6 grid gap-4 rounded-xl border border-border bg-surface p-4 sm:grid-cols-2 sm:items-end xl:grid-cols-[minmax(0,1fr)_11rem_11rem_11rem_auto]" @submit.prevent="applyFilters">
+    <form
+      role="search"
+      :aria-label="t('media.filters.label')"
+      :class="cn(
+        'mb-6 grid gap-4 rounded-xl border border-border bg-surface p-4 sm:grid-cols-2 sm:items-end',
+        kindOptions.length > 2 ? 'xl:grid-cols-[minmax(0,1fr)_9rem_9rem_10rem_9rem_auto]' : 'xl:grid-cols-[minmax(0,1fr)_11rem_11rem_11rem_auto]',
+      )"
+      @submit.prevent="applyFilters"
+    >
       <UiFormField v-slot="field" :label="t('media.filters.search')">
         <UiInput v-bind="field" v-model="filters.q" type="search" name="q" autocomplete="off" />
+      </UiFormField>
+      <UiFormField v-if="kindOptions.length > 2" v-slot="field" :label="t('media.filters.kind')">
+        <UiSelect v-bind="field" v-model="filters.kind" :options="kindOptions" name="kind" />
       </UiFormField>
       <UiFormField v-slot="field" :label="t('media.filters.visibility')">
         <UiSelect v-bind="field" v-model="filters.visibility" :options="visibilityOptions" name="visibility" />
@@ -310,7 +329,7 @@ async function fileSelected() {
           {{ t('media.filters.reset') }}
         </UiButton>
       </div>
-      <label v-if="filters.status !== 'trash'" class="flex cursor-pointer items-center gap-2 text-sm text-foreground sm:col-span-2 xl:col-span-5">
+      <label v-if="filters.status !== 'trash'" :class="cn('flex cursor-pointer items-center gap-2 text-sm text-foreground sm:col-span-2', kindOptions.length > 2 ? 'xl:col-span-6' : 'xl:col-span-5')">
         <input v-model="filters.recursive" type="checkbox" name="recursive" class="size-4 accent-primary">
         {{ t('media.filters.recursive') }}
       </label>
