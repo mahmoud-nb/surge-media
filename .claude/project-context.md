@@ -18,9 +18,10 @@
 > transformation unitaires et par lot ; point d'intérêt dans la fiche média, § 9.18), 14 = **C4** (générateur d'adresses de la
 > fiche média : aperçu à la volée non enregistré, adresses signées si nécessaire, extraits HTML, § 9.19), 16 = **rôle Gestionnaire**
 > (`MANAGER` : administre ses projets, invite développeurs et éditeurs ; bibliothèque gérée par l'ADMIN seul). **Les phases B et C sont
-> terminées** (`.claude/architecture-phase-c.md` : décisions CD1 à CD12, écarts en tête). **Prochaine étape** : **phase D = vidéos**,
-> demandée le 2026-10-05 (CRUD + diffusion directe d'abord, sans transcodage) ; proposition `.claude/architecture-phase-d.md`
-> (DD1 à DD14) **en attente de validation** — ne rien implémenter avant. **Correctifs du 2026-10-05** (non commités au moment de la
+> terminées** (`.claude/architecture-phase-c.md` : décisions CD1 à CD12, écarts en tête). **Phase D = vidéos** : architecture
+> `.claude/architecture-phase-d.md` (DD1 à DD14) **validée le 2026-10-05** ; **D1 faite** le 2026-10-05 (étape 20 : envoi, stockage,
+> CRUD, diffusion directe sans transcodage ; § 9.21), non commitée au moment de la rédaction. Suite (D2 : préparation sans réencodage,
+> sous-titres ; D3 : ffmpeg dans un processus séparé ; D4 : streaming adaptatif) **à proposer et faire valider**. **Correctifs du 2026-10-05** (non commités au moment de la
 > rédaction ; § 7.6, § 9.4, § 9.6, § 18) : fermeture des flux interrompus de `/m/`, corps JSON bornés (1 Mio, 30 s), envois arrêtés
 > après 60 s sans donnée. Architecture de la phase B :
 > `.claude/architecture-phase-b.md` (en-tête = écarts B1 à B5).
@@ -185,7 +186,9 @@ Couches serveur :
   `server/plugins/variant-keys.ts` (§ 9.16) ; C2 : **`transforms/service.ts`** (politique, préréglages, § 9.17), `server/utils/transforms.ts` ;
   C3 : **`api/{signature-plan,signed-urls}.ts`** (liens signés de l'API, § 9.18 ; réutilisés par l'administration en C4) ;
   2026-10-05 : **`http/{body,stream}.ts`** (purs, testés : `readLimitedBody`, `BodyReadError`, `BODY_MAX_SIZE`, `BODY_READ_TIMEOUT_MS` ;
-  `closeWithResponse`) ; C4 : routes
+  `closeWithResponse`) ; D1 : **`media/limits.ts`** (limites par genre, `UploadRules`, `uploadRules`, `useUploadSizes`), **`media/video/`**
+  (`source`, `isobmff`, `ebml`, `codecs`, `probe` : lecteur d'en-têtes pur, testé), `handlers/video.ts`, plugin `server/plugins/http-timeouts.ts`
+  (§ 9.21) ; C4 : routes
   `api/admin/media/[id]/{transform.get,links.post}.ts` (§ 9.19). Les nouveaux modules **importent explicitement** les utilitaires de
   `#shared/utils/*` (un auto-import non injecté a causé un `ReferenceError` en production, voir § 18).
   Les **types** exportés de `server/utils` (ex. `Space`) s'importent explicitement (`import type { Space } from '../../utils/access'`).
@@ -205,7 +208,10 @@ Couches serveur :
   `utils/auth.ts` (`REAUTH_WINDOW_SECONDS` = 600, `AUTH_ERROR_CODES`, `isRecentlyVerified` ; étape 17 : `TRUSTED_DEVICE_DEFAULT_DAYS`,
   `TRUSTED_DEVICE_MAX_DAYS`, `trustedDeviceDays`, `TRUSTED_DEVICE_SCOPES`), `utils/audit.ts` (`AUDIT_ACTIONS`, `AUDIT_CATEGORIES`, `auditCategory`) — auto-importés.
 - `utils/users.ts` (USER_STATUSES, userStatus, USER_ERROR_CODES) — auto-importé.
-- `utils/media.ts` (MEDIA_KINDS, MEDIA_VISIBILITIES, ACCEPTED_MEDIA_TYPES, ENABLED_MEDIA_KINDS, mediaKindForMime, extensionForMime, SIGNED_URL_DURATIONS, SIGNED_URL_MAX_TTL, MEDIA_ERROR_CODES) — auto-importé.
+- `utils/media.ts` (MEDIA_KINDS, MEDIA_VISIBILITIES, ACCEPTED_MEDIA_TYPES (+ VIDEO depuis D1), ACCEPTED_MIME_TYPES, MEDIA_SIZE_CEILING, DEFAULT_UPLOAD_SIZES,
+  UploadSizes, ENABLED_MEDIA_KINDS, mediaKindForMime, extensionForMime, SIGNED_URL_DURATIONS, SIGNED_URL_MAX_TTL, MEDIA_ERROR_CODES) — auto-importé ;
+  `utils/video.ts` (D1 : `VideoMetadata`, `videoPlayback`, `codecLabel`, `videoMetadata`, `videoSourceType`, `VIDEO_MAX_DIMENSION` — importer
+  explicitement `#shared/utils/video` dans les composants) ; `utils/snippets.ts` + `videoSnippet` (D1).
 - `utils/api.ts` (`API_ERRORS` catalogue code → statut + titre, `API_CREDENTIAL_TYPES` (+ `DELEGATED`, type `ApiCredentialType`),
   `API_MEDIA_SORTS`, limites, `API_LINK_TTL` 3600 / `API_LINK_BUCKET` 900, `API_SIGNED_URL_TARGETS` (C3 : + `transform`),
   `API_SIGNED_URLS_MAX` 100, `API_DEFAULT_TRANSFORM_FORMAT` `webp` ; B4 : `DELEGATED_TOKEN_PREFIX`,
@@ -290,7 +296,9 @@ Ne jamais modifier une migration publiée.
 | `NUXT_BOOTSTRAP_ADMIN_EMAIL` / `_PASSWORD` | — | compte d'amorçage (§ 7.5) |
 | `NUXT_SITE_URL` | demandée par `db:init` (`--site-url`) | URL publique de l'installation ; vide = origine de la requête (avertissement en prod) |
 | `NUXT_MEDIA_PUBLIC_URL` | vide (= `NUXT_SITE_URL`) | base des URL de diffusion (CDN, sous-domaine) ; `mediaBaseUrl(event)` |
-| `NUXT_MEDIA_MAX_UPLOAD_SIZE` | 26214400 (25 Mio) | taille max d'un envoi |
+| `NUXT_MEDIA_MAX_UPLOAD_SIZE` | 26214400 (25 Mio) | taille max d'une **image** envoyée |
+| `NUXT_MEDIA_MAX_VIDEO_UPLOAD_SIZE` | 536870912 (512 Mio) | taille max d'une **vidéo** (D1), plafonnée à 2147483647 (`MEDIA_SIZE_CEILING`) |
+| `NUXT_MEDIA_UPLOAD_TIMEOUT` | 3600 | secondes : `server.requestTimeout` de Node relevé par `http-timeouts.ts` (D1) |
 | `NUXT_MEDIA_SIGNING_SECRET` | généré par `db:init` | HMAC des liens signés ; repli : dérivé du secret de session |
 | `NUXT_MEDIA_PREVIOUS_SIGNING_SECRET` | vide | ancien secret accepté pendant une rotation (sélection par `kid`) |
 | `NUXT_MEDIA_STORAGE_DRIVER` | `local` | `local` \| `s3` |
@@ -515,7 +523,8 @@ URL signées, visibilité, normalisation des clés anti-traversée.
   × pages ≤ 100 Mpx` → `DIMENSIONS_TOO_LARGE` ; illisible → `UNREADABLE_FILE` ; orientation EXIF 5–8 = dimensions permutées ;
   metadata JSON : `format, orientation, space, hasAlpha, pages, animated, density, hasExif, hasIccProfile`.
   Aperçu : première image, `rotate()`, `resize` 480×480 `inside` sans agrandissement, WebP q72, **sans métadonnées**.
-- Ajouter un genre (vidéo, document) : signature dans `sniff.ts` + types dans `ACCEPTED_MEDIA_TYPES` + gestionnaire au registre
+- **Vidéo (D1, § 9.21)** : MP4, WebM, MOV ; gestionnaire sans `transform` (`hasDerivedFiles` faux : ni aperçu, ni dérivé), `queued: false`.
+- Ajouter un genre (audio, document) : signature dans `sniff.ts` + types et limite dans `shared/utils/media.ts` + gestionnaire au registre
   (+ Range dans `MediaStorage` pour la vidéo).
 
 ### 9.4 Envoi (`server/lib/media/upload.ts` + `service.ts`)
@@ -1030,6 +1039,40 @@ Référence d'exploitation : `setup.md` § 8.4. Aucune migration. Écarts : en-t
 - **Tests** : `tests/dashboard.test.ts` ; scénarios `dashboard-test.mjs` (38) : valeurs attendues recalculées en SQL avec les mêmes
   définitions pour 4 rôles (exactes malgré les données de l'utilisateur).
 
+### 9.21 Vidéos : envoi, stockage, diffusion directe (phase D1, étape 20)
+
+Architecture validée : `.claude/architecture-phase-d.md` (DD1–DD14, écarts de D1 en tête). Référence d'exploitation : `setup.md` § 7.7.
+
+- **Détection** (`sniff.ts`, `detectMimeType(header)` pure) : `ftyp` (AVIF d'abord ; HEIF, 3GP, audio M4A/M4B refusés ; `qt  ` → MOV ;
+  marques MP4 vidéo connues → MP4) ; EBML `DocType` = `webm` (Matroska refusé). `SNIFF_HEADER_BYTES` = 256.
+- **Lecteur d'en-têtes** (`server/lib/media/video/`, purs, testés) : `ByteSource` (lectures par positions ; ≤ 20 000 lectures, ≤ 1 Mio par
+  lecture), `VideoProbeError` (`unreadable` | `no-video`). ISO BMFF (`isobmff.ts`) : `mvhd`, `tkhd` (identifiant, matrice → rotation,
+  dimensions 16.16), `mdhd`, `hdlr` (QuickTime `mhlr` compris), `stsd` (avcC, hvcC, av1C, vpcC, esds — y compris dans `wave` —, versions
+  de la description du son QuickTime), lieu (`©xyz`, `loci`, clé `location.ISO6709`, élément `©xyz` d'`ilst`) ; parcours de premier niveau
+  arrêté dès que `moov` et la position des données sont connus ; `mdat` tronqué toléré ; **MP4 fragmenté** (`mvex`) : `mehd`, sinon fin
+  du **dernier `moof`** (`fragmentEnds` : `tfdt` + durées des `trun`, défaut `tfhd` puis `trex`, parcours ≤ 8000 boîtes, jamais
+  d'erreur → null) — les durées de `mvhd`/pistes n'y sont pas utilisées (enregistrements `MediaRecorder` : `mvhd` = 0). EBML (`ebml.ts`) :
+  `Segment` de taille inconnue, `Info` (TimecodeScale, Duration), `Tracks` (CodecID, CodecPrivate, Pixel/Display), arrêt au premier
+  `Cluster` (≤ 16 Mio). `codecs.ts` : chaînes RFC 6381. `probe.ts` : dimensions affichées (quart de tour → permutées), bornes
+  1–16 384, durée 3 décimales, débit, `playback`.
+- **Métadonnées** (`Media.metadata`, `VideoMetadata`) : `container, videoCodec, audioCodec, codecs, hasAudio, rotation, bitrate, faststart
+  (null en WebM), hasLocation, playback (broad | variable)`. `Media.duration` (s, null si inconnue). Aucune migration.
+- **Envoi** : `receiveUpload(event, UploadRules)` (§ 9.4) ; `analyze` : gestionnaire `queued: false` → hors `runProcessing` ; `UNSUPPORTED_TYPE`
+  d'un gestionnaire (sans piste vidéo) → 415 avec `accepted` et `detail` (`problemDetail` les combine). Remplacement : `expectedKind`
+  (admin `[id]/file.put`, v1 `withApiUpload(…, media.kind)`) → 422 `KIND_MISMATCH` dès les premiers octets.
+- **Diffusion** : `/m/` inchangé (original, `Range`, 304, HEAD ; dérivés → 404) ; `adminMediaPaths` : vidéo **6 h** (tranche 1 h).
+- **API v1** : contrat inchangé (`kind`, `duration`, `previewUrl`/`urlTemplate` null), OpenAPI : section « Vidéos »/« Videos » d'`INFO_FR`/`EN`,
+  descriptions de `uploadMedia`, `replaceMediaFile`, champs `width`, `height`, `duration`, `url`, `previewUrl`.
+- **Interface** : `AdminMediaUploader` (prop `kinds`, aide par genre `media.upload.constraintsByKind.*`, `beforeunload` pendant un envoi,
+  icône `Upload`), `useMediaUpload` (`kindsOf`, `maxSizeFor`, `CLIENT_TYPE_ALIASES` `video/x-m4v`, `image/jpg` ; `FILE_TOO_LARGE` avec
+  `data.maxSize`), `AdminMediaBrowser` (filtre `kind` dans l'URL et les liens de dossier, une colonne de plus à partir de `xl`), `AdminMediaCard`
+  (icône `Film` sur `bg-muted`, pastille de durée `aria-hidden` + durée en toutes lettres `sr-only`), fiche (`<video controls
+  preload="metadata" playsinline>`, `aria-label` = titre, `aria-describedby` = description, repli + lien ; durée `formatClock`/`formatDuration`,
+  codecs `codecLabel`, débit `formatBitrate` ; avertissements `media.video.notices.*` ; « Description courte » ; extrait `videoSnippet` dans la
+  section des adresses — public, ou après un lien temporaire), tableau de bord (`admin.dashboard.stats.videos`). i18n : 1250 clés.
+- **Écarts à la proposition** : durée des MP4 fragmentés calculée depuis les fragments (non prévu ; découvert avec `MediaRecorder`) ;
+  refus anticipé aussi pour un remplacement d'un autre genre (422) ; vidange du corps refusé (connexion réutilisable en production).
+
 ## 10. Référence des API
 
 Format d'erreur (h3) : `{ statusCode, statusMessage, message, data? }` ; **codes métier dans `data.code`** (lus côté client par
@@ -1058,7 +1101,7 @@ Format d'erreur (h3) : `{ statusCode, statusMessage, message, data? }` ; **codes
 | GET `/api/admin/config/mail` | `users:invite` | — | `{ enabled }` |
 | POST `/api/admin/users/:id/password-link` | `users:invite` (gestionnaire : invitation non acceptée de ses invités) | — | `{ path, purpose, expiresAt }` · 409 si inactif (sans code) · 409 `INVITATION_ACCEPTED` · 404 |
 | DELETE `/api/admin/users/:id/sessions` | `users:manage` | — | `{ revoked }` |
-| GET `/api/admin/config/media` | session | — | `{ maxUploadSize, acceptedTypes, signedUrlDurations }` |
+| GET `/api/admin/config/media` | session | — | `{ maxUploadSize (la plus grande), maxUploadSizes { IMAGE, VIDEO }, acceptedTypes, signedUrlDurations }` |
 | GET `/api/admin/spaces` | session | `?scope=` (défaut `media:upload`) | `{ spaces: ({ type: 'library' } \| { type: 'project', id, name })[] }` |
 | GET `/api/admin/media` | `media:read` (espace) | `?project&folder&recursive=1&q&kind&visibility&status=active\|trash&sort=newest\|oldest\|name\|size&page` | `{ items: MediaSummary[], total, page, pageSize: 24, space, projectRole, scopes }` · 404 |
 | POST `/api/admin/media` | `media:upload` (espace) | `?project` + multipart `file` + `title?`, `altText?`, `visibility?` | 201 `{ media: MediaDetail }` · 400/403/404/413/415/422 |
@@ -1196,7 +1239,7 @@ Contrats de données :
 
 - `@nuxtjs/i18n`, stratégie `no_prefix`, cookie `surge-media-locale`, détection navigateur, repli `fr`. `useAppHead` synchronise
   `<html lang dir>`. Sélecteur `AppLocaleSwitcher` (bouton de divulgation, noms des langues dans leur langue, attribut `lang`).
-- Fichiers `i18n/locales/fr.json` (référence) et `en.json` — 961 clés (C2 : `transforms.*`, `settings.*` ; étape 10 : `apiDocs.*`, `admin.nav.apiDocs`, `permissions.api.docs`). Espaces de noms : `app, a11y, nav, footer, theme, locale, form,
+- Fichiers `i18n/locales/fr.json` (référence) et `en.json` — 1250 clés depuis D1 (C2 : `transforms.*`, `settings.*` ; étape 10 : `apiDocs.*`, `admin.nav.apiDocs`, `permissions.api.docs`). Espaces de noms : `app, a11y, nav, footer, theme, locale, form,
   validation, auth, common, landing, login, admin, roles, permissions, errors, pagination, users, password, media, projectRoles, space,
   projects, reauth, scopes, credentials, apiKeys, origins, tokens, audit, apiDocs`. Clés de portées : `scopes.<a>.<b>.{label,short,description}`
   (`scope.replace(':', '.')`) ; statuts accordés : `credentials.status.{key,token}.*` ; actions d'audit : `audit.actions.<catégorie>.<verbe>`.
@@ -1294,7 +1337,9 @@ Contrats de données :
 - Toute autorisation est **appliquée côté serveur** ; l'UI ne fait que masquer.
 - Un ADMIN ne peut pas agir sur son propre rôle/statut/compte ; il reste toujours au moins un ADMIN actif (hors course concurrente extrême).
 - Comptes créés uniquement par un administrateur ; e-mail immuable ; mot de passe 12–128 caractères ; e-mails en minuscules.
-- Médias : un seul fichier par envoi, 25 Mio par défaut, 100 Mpx max, types JPEG/PNG/WebP/AVIF/GIF ; nom d'origine = métadonnée seulement.
+- Médias : un seul fichier par envoi ; images JPEG/PNG/WebP/AVIF/GIF, 25 Mio par défaut, 100 Mpx max ; vidéos MP4/WebM/MOV (D1), 512 Mio par
+  défaut, 2 Gio − 1 au plus, servies telles qu'envoyées (ni aperçu, ni transformation, ni point d'intérêt), avec une piste vidéo, 16 384 px
+  par côté au plus ; type et taille contrôlés dès les premiers octets ; un remplacement garde le genre ; nom d'origine = métadonnée seulement.
 - Un média en corbeille n'est plus diffusé (sauf aperçu admin) et ne peut pas recevoir de lien signé ; purge seulement depuis la corbeille.
 - Lien signé lié à (média, version, dérivé, échéance) ; 7 jours maximum.
 - Longueurs de texte ≤ 191 (MySQL) ; tout texte d'API validé par zod partagé.
@@ -1440,6 +1485,16 @@ Contrats de données :
 - Délai global de Node `requestTimeout` (300 s, requête entière) toujours en place : un envoi de 25 Mio exige ≥ 0,7 Mbit/s ; à relever
   avec les vidéos (D1, `architecture-phase-d.md` § 6.2). Mesuré : un envoi de 512 Mio (busboy + SHA-256 + disque) ne retarde pas la
   boucle d'événements (pas de `worker_threads` pour les envois, DD14).
+- **Relais de développement de Nitro** (`httpxy` vers le processus de travail, `nitropack/dist/core`) : après une réponse anticipée (refus d'un
+  envoi avant la fin du corps), il cesse de transmettre le corps ; une connexion réutilisée reste bloquée ~6 s puis `ECONNRESET`. Dev seulement
+  (Node et h3 seuls : connexion réutilisée, `h3-early-refusal-bench.mjs`). Les scénarios envoient les gros envois refusés sur une connexion
+  dédiée (`agent: false`, `Connection: close`). Le relais garde aussi le délai de 300 s de Node (non relevé en dev).
+- **Modifier `nuxt.config.ts` pendant un `pnpm typecheck`** (même `.nuxt`) a fait tomber le `nuxt dev` de l'utilisateur le 2026-10-05 : lancer
+  typecheck et build dans la **copie isolée** quand un serveur de dev tourne.
+- **MP4 de `MediaRecorder`** (Chromium) : fragmenté, `mvhd` à 0, pistes de 0,036 s → durée tirée des fragments. **WebM de `MediaRecorder`** :
+  pas de durée. Chromium 152 enregistre MP4 (H.264/AAC) et WebM (VP8/VP9/Opus) : source de vraies vidéos de test sans téléchargement
+  (`tests/fixtures/video/`, panneau masqué : `setInterval` + `canvas.captureStream`).
+- `axe` signale `video-caption` « à vérifier » sur un `<video>` sans piste de sous-titres (attendu jusqu'à D2).
 - Pas d'outil de copie entre stockages, pas de nettoyage des fichiers orphelins ni des liens de mot de passe utilisés.
 - Originaux diffusés avec leurs EXIF (GPS possible).
 - Tests automatisés limités aux modules purs (Vitest, depuis B1) : API et interface vérifiées par scripts ad hoc et audits
@@ -1499,6 +1554,12 @@ Contrats de données :
   `image-transform` exécute le vrai pipeline sharp). Le reste (API, interface, axe) reste manuel
   (piste : tests d'intégration API + Playwright + @axe-core/playwright).
 - Viewport du navigateur intégré : 1024 px (DPR 1,25) ; les mises en page à 5 colonnes doivent attendre `xl`.
+- D1 (vidéos) : `tests/video.test.ts` (30, fichiers fabriqués boîte par boîte + 3 enregistrements réels) ; `video-test.mjs [base]` (60
+  scénarios, compte/projet/clé/jeton délégué jetables, nettoyage par identifiants) ; `keepalive-repro.mjs`, `v1-reset-repro.mjs`,
+  `v1-socket-repro.mjs`, `h3-early-refusal-bench.mjs <h3 dist>`, `early-response-bench.mjs`, `request-timeout-bench.mjs` (diagnostics) ;
+  `ui-account.mjs setup|cleanup [base]` + `ui-fixture-mov.mjs` (MOV HEVC privé pivoté avec lieu : tous les avertissements) ; axe fr/en ×
+  clair/sombre sur médiathèque, fiche vidéo, tableau de bord. Base de référence avant D1 : 5 comptes, 30 audit, 4 médias, 6 dérivés ; un
+  5e média (`18092026-dsc00532-1.jpg`, envoyé par l'utilisateur le 2026-10-05 à 17 h 48) et son aperçu sont à préserver.
 - Correctifs du 2026-10-05 : `tests/http.test.ts` (11) ; `body-limit-test.mjs [base]` (8 contrôles : 413 annoncé et fragmenté, 401
   inchangé, 408 à 30 s) ; `upload-guard-test.mjs [base] [pid…]` (28 : 413 admin et v1 en RFC 9457, envois normaux, plages, 40 requêtes
   abandonnées avec `HandleCount` des processus du serveur de dev — `nuxt.mjs dev` et ses deux enfants —, envois bloqués admin et v1 en
@@ -1586,9 +1647,10 @@ administration limitée à ses projets, bibliothèque gérée par l'ADMIN).
 - **B5 (faite)** : voir § 9.14 et `setup.md` étape 9.
 - **Phase C (terminée)** : `.claude/architecture-phase-c.md`. C1 : § 9.16 et `setup.md` étape 11 ; C2 : § 9.17, étape 12 ; C3 : § 9.18,
   étape 13 ; C4 : § 9.19, étape 14.
-- **Phase D (vidéos)** : demandée le 2026-10-05 ; proposition `.claude/architecture-phase-d.md` (D1 = envoi, stockage, CRUD,
-  diffusion directe sans transcodage ; D2–D4 et transverses étudiés ensuite), **à valider avant de commencer**. Audio et documents :
-  phases ultérieures (DD13). `@surge-media/client` + composants (Vue d'abord) : toujours en attente.
+- **Phase D (vidéos)** : architecture `.claude/architecture-phase-d.md` validée le 2026-10-05 ; **D1 faite** (§ 9.21, `setup.md` étape 20).
+  Suite à proposer et faire valider : D2 (faststart, retrait des métadonnées, affiche, sous-titres WebVTT), D3 (ffmpeg dans un processus
+  séparé, rendus compatibles), D4 (HLS) ; transverses : envois reprenables / directs vers S3, `BigInt` au-delà de 2 Gio, délestage de la
+  diffusion, `<SmVideo>`. Audio et documents : phases ultérieures (DD13). `@surge-media/client` + composants (Vue d'abord) : en attente.
 - Pistes étape 19 : widgets masquables / réordonnables (préférence par compte), cache des agrégats pour de très grandes
   bibliothèques, médias récents en vignettes, journal par projet pour les propriétaires.
 - Pistes étape 18 : « Envoyer un e-mail de test » (Réglages ou CLI), envoi automatique à la création d'un compte, file d'envoi, alerte à

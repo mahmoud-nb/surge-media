@@ -44,7 +44,12 @@ const cards = computed<Card[]>(() => {
       icon: Images,
       label: t('admin.dashboard.stats.media'),
       value: n(d.media.total),
-      detail: [formatBytes(d.media.size, locale.value), plural('admin.dashboard.stats.images', d.media.kinds.IMAGE.count), plural('admin.dashboard.stats.private', d.media.private)].join(' · '),
+      detail: [
+        formatBytes(d.media.size, locale.value),
+        plural('admin.dashboard.stats.images', d.media.kinds.IMAGE.count),
+        plural('admin.dashboard.stats.videos', d.media.kinds.VIDEO.count),
+        plural('admin.dashboard.stats.private', d.media.private),
+      ].join(' · '),
       to: can('library:read') ? '/admin/media' : '/admin/projects',
     })
   }

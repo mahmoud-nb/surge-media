@@ -62,7 +62,7 @@
     "hero": {
       "eyebrow": "Open source · self-hosted",
       "title": "Your media, under your control.",
-      "description": "Centralise the images of all your projects, crop, resize and optimise them on demand, then deliver them to your applications through a secure API, on your own infrastructure.",
+      "description": "Centralise the images and videos of all your projects, crop, resize and optimise images on demand, then deliver your media to your applications through a secure API, on your own infrastructure.",
       "ctaLogin": "Go to the administration",
       "ctaAdmin": "Open the administration"
     },
@@ -169,6 +169,7 @@
         "title": "Statistics",
         "media": "Media",
         "images": "no images | {count} image | {count} images",
+        "videos": "no videos | {count} video | {count} videos",
         "private": "none private | {count} private | {count} private",
         "projects": "Active projects",
         "archived": "none archived | {count} archived | {count} archived",
@@ -498,6 +499,11 @@
   },
   "media": {
     "dimensions": "{width} × {height} px",
+    "kinds": {
+      "IMAGE": "Images",
+      "VIDEO": "Videos"
+    },
+    "durationLabel": "Duration: {duration}",
     "visibility": {
       "PUBLIC": {
         "label": "Public",
@@ -518,7 +524,7 @@
       "trashDescription": "Media removed from delivery. Restore them or delete them permanently.",
       "count": "No media | {count} media item | {count} media items",
       "gridLabel": "Media",
-      "empty": "No media yet: upload your first images above.",
+      "empty": "No media yet: upload your first images or videos above.",
       "emptyFiltered": "No media match these filters.",
       "emptyTrash": "The trash is empty.",
       "loadError": "Unable to load media.",
@@ -531,6 +537,8 @@
       "search": "Name, title or alternative text",
       "visibility": "Visibility",
       "allVisibilities": "All",
+      "kind": "Type",
+      "allKinds": "All",
       "sort": "Sort by",
       "sorts": {
         "newest": "Newest",
@@ -546,12 +554,15 @@
       "recursive": "Include subfolders"
     },
     "upload": {
-      "title": "Upload images",
-      "dropHint": "Drag and drop your images here, or",
-      "dropHintSingle": "Drag and drop the new image here, or",
+      "title": "Upload media",
+      "dropHint": "Drag and drop your files here, or",
+      "dropHintSingle": "Drag and drop the new file here, or",
       "choose": "Choose files",
       "chooseSingle": "Choose a file",
-      "constraints": "Accepted formats: {types}. Maximum size: {max} per file.",
+      "constraintsByKind": {
+        "IMAGE": "Images: {types}, up to {max} per file.",
+        "VIDEO": "Videos: {types}, up to {max} per file."
+      },
       "visibility": "Visibility of uploaded files",
       "queue": "Ongoing and completed uploads",
       "progress": "Upload progress of {name}",
@@ -580,6 +591,13 @@
       "infoTitle": "Information",
       "format": "Format",
       "dimensions": "Dimensions",
+      "duration": "Duration",
+      "unknownDuration": "Unknown",
+      "codecs": "Codecs",
+      "videoTrack": "Video: {codec}",
+      "audioTrack": "Sound: {codec}",
+      "noAudio": "No sound",
+      "bitrate": "Average bitrate",
       "size": "Size",
       "version": "File version",
       "uploadedBy": "Uploaded by",
@@ -605,7 +623,37 @@
       "titleHint": "Optional. Also used for the readable name in the file address.",
       "altText": "Alternative text",
       "altTextHint": "Describe what the image shows for people who cannot see it (about 125 characters). Leave empty if the image is purely decorative.",
+      "videoDescription": "Short description",
+      "videoDescriptionHint": "Identifies the video for people who cannot see it (subject and context, about 125 characters). It is attached to the video player.",
       "visibility": "Visibility"
+    },
+    "video": {
+      "fallback": "Your browser cannot play this video.",
+      "download": "Download the file",
+      "notices": {
+        "variable": {
+          "title": "Playback varies across browsers",
+          "text": "{codec} codec: some browsers or devices will not play this video. To play everywhere, upload it as H.264 (MP4) or VP9 (WebM)."
+        },
+        "faststart": {
+          "title": "Slower playback start",
+          "text": "The index of the video is at the end of the file: the browser has to fetch it before playback starts. Most export tools offer an “optimise for web” (faststart) option."
+        },
+        "duration": {
+          "title": "Unknown duration",
+          "text": "The file does not state its duration (a recording made in a browser, for example): the progress bar may be inaccurate."
+        },
+        "location": {
+          "title": "Shooting location in the file",
+          "text": "This video contains the coordinates of where it was shot. It is served as is: anyone who downloads it can read them."
+        }
+      },
+      "snippet": {
+        "title": "Embed the video",
+        "description": "Example for a web page: native player with its controls, no autoplay; only the metadata is loaded in advance.",
+        "copy": "Copy the video player example",
+        "privateNote": "Example built with the temporary link: the video will no longer play after it expires."
+      }
     },
     "links": {
       "title": "File address",

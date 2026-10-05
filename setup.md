@@ -237,7 +237,9 @@ Le fichier `packages/core/.env` est créé par `pnpm db:init` à partir de `.env
 | `SURGE_MEDIA_LANG` | locale système, sinon `fr` | langue de la CLI |
 | `NUXT_SITE_URL` | demandée par `db:init` | URL publique de l'installation ; sans valeur, déduite de chaque requête (avertissement au démarrage en production) |
 | `NUXT_MEDIA_PUBLIC_URL` | — (= `NUXT_SITE_URL`) | base des adresses de diffusion `/m/…` si elle diffère : CDN, sous-domaine dédié (§ 7.4) |
-| `NUXT_MEDIA_MAX_UPLOAD_SIZE` | `26214400` (25 Mio) | taille maximale d'un fichier envoyé, en octets |
+| `NUXT_MEDIA_MAX_UPLOAD_SIZE` | `26214400` (25 Mio) | taille maximale d'une **image** envoyée, en octets |
+| `NUXT_MEDIA_MAX_VIDEO_UPLOAD_SIZE` | `536870912` (512 Mio) | taille maximale d'une **vidéo** envoyée, en octets ; `2147483647` (2 Gio − 1) au plus, plafond de la colonne `Media.size` (§ 7.7) |
+| `NUXT_MEDIA_UPLOAD_TIMEOUT` | `3600` | délai (secondes) pour recevoir un envoi entier ; Node coupe sinon toute requête non reçue en 300 s (§ 7.7) |
 | `NUXT_MEDIA_SIGNING_SECRET` | généré par `db:init` | secret des liens signés des médias privés (le changer invalide les liens partagés) |
 | `NUXT_MEDIA_PREVIOUS_SIGNING_SECRET` | — | ancien secret, encore accepté pendant une rotation (7 jours suffisent) |
 | `NUXT_MEDIA_STORAGE_DRIVER` | `local` | stockage des fichiers : `local` ou `s3` (§ 7) |
@@ -312,17 +314,18 @@ Ne modifiez jamais une migration déjà publiée.
           ▼                 ▼                      ▼
   handlers/ (par genre)   Prisma : Media,      server/lib/storage — interface MediaStorage
   image (sharp) ;         MediaVariant           ├─ local : Flydrive fs → NUXT_MEDIA_STORAGE_ROOT
-  vidéo, document…                               └─ s3    : Flydrive s3 → AWS, R2, MinIO, OVH…
+  vidéo (en-têtes)                               └─ s3    : Flydrive s3 → AWS, R2, MinIO, OVH…
 ```
 
 - **Métier et stockage séparés** : la base porte les données métier, le fichier vit sous une
   **clé opaque générée par le serveur** (`originals/2026/09/<128 bits aléatoires>.jpg`,
   dérivés `variants/<id>/v<version>-<hash>.webp`). Jamais le nom envoyé, jamais exposée.
 - **Genres extensibles** : les types acceptés sont déclarés dans `shared/utils/media.ts`
-  (`ACCEPTED_MEDIA_TYPES`, v1 : JPEG, PNG, WebP, AVIF, GIF ; SVG exclu car il peut contenir du
-  script). Chaque genre a son gestionnaire (`server/lib/media/handlers/`) : `inspect()`
-  (dimensions, durée, métadonnées) et `preview()`. Ajouter la vidéo : signature dans `sniff.ts`,
-  types dans `ACCEPTED_MEDIA_TYPES`, gestionnaire inscrit au registre.
+  (`ACCEPTED_MEDIA_TYPES` : images JPEG, PNG, WebP, AVIF, GIF — SVG exclu car il peut contenir du
+  script — et, depuis la phase D1, **vidéos MP4, WebM, QuickTime**). Chaque genre a son gestionnaire
+  (`server/lib/media/handlers/`) : `inspect()` (dimensions, durée, métadonnées) et, pour les images,
+  `transform()` (aperçu, dérivés). Une limite d'envoi par genre. Ajouter un genre : signature dans
+  `sniff.ts`, types et limite dans `shared/utils/media.ts`, gestionnaire inscrit au registre.
 - **Stockage interchangeable** : `MediaStorage` (put/getStream/copy/stat/delete/deletePrefix en flux)
   implémentée au-dessus de Flydrive. Nouveau backend = un `case` dans `server/lib/storage/index.ts`.
 - **Espaces** : chaque média appartient à un seul espace, la **bibliothèque de l'organisation** ou
@@ -355,24 +358,27 @@ la diffusion passe toujours par surgeMedia. `GET /api/health` vérifie que le st
 ### 7.3 Envoi (pipeline et sécurité)
 
 1. Session + portée `media:upload` dans l'espace visé (`?project=<id>`, sinon bibliothèque).
-2. Lecture multipart **en flux** (busboy) : un seul fichier, taille plafonnée pendant la lecture
-   (`NUXT_MEDIA_MAX_UPLOAD_SIZE`) → 413 sans jamais charger le fichier en mémoire. Aucune donnée reçue
-   pendant **60 s** (réseau perdu sans fermeture) → 408 `UPLOAD_TIMEOUT`, connexion fermée, fichier
-   temporaire supprimé.
+2. Lecture multipart **en flux** (busboy) : un seul fichier, jamais chargé en mémoire. Le **type est reconnu
+   dès les 256 premiers octets** : type non accepté → 415 aussitôt ; puis la **limite du genre** s'applique
+   pendant la lecture (images `NUXT_MEDIA_MAX_UPLOAD_SIZE`, vidéos `NUXT_MEDIA_MAX_VIDEO_UPLOAD_SIZE`) → 413
+   (`data.maxSize` = limite du genre). Après un refus, la suite du corps est lue sans être écrite (la réponse
+   part aussitôt, la connexion reste utilisable). Aucune donnée reçue pendant **60 s** (réseau perdu sans
+   fermeture) → 408 `UPLOAD_TIMEOUT`, connexion fermée, fichier temporaire supprimé.
 3. Fichier temporaire + empreinte SHA-256 et taille calculées au fil de l'eau (toujours supprimé).
 4. **Type réel** d'après la signature binaire (`server/lib/media/sniff.ts`, liste d'autorisation) ;
    nom et type annoncés par le client ignorés → 415.
-5. Analyse par le gestionnaire (sharp) : fichier illisible → 422 `UNREADABLE_FILE` ; plus de
-   100 Mpx (bombe de décompression) → 422 `DIMENSIONS_TOO_LARGE`.
+5. Analyse par le gestionnaire : image (sharp) illisible → 422 `UNREADABLE_FILE`, plus de 100 Mpx (bombe
+   de décompression) → 422 `DIMENSIONS_TOO_LARGE` ; vidéo : lecture des seuls en-têtes (§ 7.7), structure
+   incohérente → 422 `UNREADABLE_FILE`, sans piste vidéo → 415.
 6. Écriture dans le stockage puis en base ; l'échec de l'un annule l'autre.
 7. **Aperçu pré-généré** en tâche de fond (le premier affichage n'attend pas), aussi après un
    remplacement ou une duplication ; ignoré si des traitements attendent déjà (généré alors à la
    première demande).
 
-L'analyse (étape 5) et la génération des dérivés passent par une **file bornée** (§ 8) : au-delà,
-503 `SERVER_BUSY` avec `Retry-After`. Les mêmes étapes servent l'administration et l'API v1 (§ 9.10).
+L'analyse d'une image (étape 5) et la génération des dérivés passent par une **file bornée** (§ 8) : au-delà,
+503 `SERVER_BUSY` avec `Retry-After` (l'analyse d'une vidéo, quelques lectures, n'y passe pas). Les mêmes étapes servent l'administration et l'API v1 (§ 9.10).
 
-Remplacement (`PUT …/file`) : nouvelle clé, version + 1, mise à jour conditionnée à la version lue
+Remplacement (`PUT …/file`) : même genre seulement (422 `KIND_MISMATCH` dès les premiers octets), nouvelle clé, version + 1, mise à jour conditionnée à la version lue
 (409 `VERSION_CONFLICT` si un remplacement concurrent est passé), ancien fichier et anciens dérivés
 supprimés. Corbeille : `deletedAt` (plus diffusé, restaurable) ; suppression définitive depuis la
 corbeille uniquement (enregistrement, original et dérivés).
@@ -470,17 +476,57 @@ Codes d'erreur (`data.code`, `shared/utils/media.ts`) : `NO_FILE`, `MULTIPART_RE
 - `/admin/media` : **bibliothèque** de l'organisation ; `/admin/projects/:id/media` : médias d'un
   projet. Même composant (`AdminMediaBrowser`) : **dossiers** (fil d'Ariane, sous-dossiers, créer,
   renommer, déplacer, supprimer), envoi par bouton ou glisser-déposer dans le dossier affiché (si la
-  portée le permet), progression annoncée aux lecteurs d'écran, filtres dans l'URL (dont « Inclure les
-  sous-dossiers »), grille, sélection pour ranger plusieurs médias, corbeille.
+  portée le permet ; formats et taille maximale indiqués par genre ; quitter la page pendant un envoi demande
+  confirmation), progression annoncée aux lecteurs d'écran, filtres dans l'URL (dont « Type » : images ou
+  vidéos, et « Inclure les sous-dossiers »), grille (vidéo : icône et durée, pas d'aperçu), sélection pour
+  ranger plusieurs médias, corbeille.
 - `/admin/media/:id` : fiche d'un média (aperçu, informations dont l'espace et la provenance — compte,
   identifiant d'API, utilisateur de l'application pour un envoi par jeton délégué —, titre, texte alternatif,
   visibilité, **point d'intérêt** et **générateur d'adresses** d'une image (§ 8.3, § 8.4), adresse publique ou
   lien temporaire, remplacement,
-  **dupliquer ou déplacer** vers un espace et un dossier, corbeille).
+  **dupliquer ou déplacer** vers un espace et un dossier, corbeille). Vidéo : lecteur natif (sans lecture
+  automatique), durée, codecs, débit, avertissements (§ 7.7), « Description courte » à la place du texte
+  alternatif, extrait `<video>` à copier.
 - `/admin/projects/:id/transforms` : onglet **Transformations** d'un projet (politique, préréglages,
   limites du serveur) ; `/admin/settings` : **Réglages** de l'installation (ADMIN : politique de la
   bibliothèque, préréglages globaux) — § 8.2.
   Sans droit d'écriture (ou projet archivé), la fiche passe en lecture seule.
+
+### 7.7 Vidéos (phase D1)
+
+Architecture : `.claude/architecture-phase-d.md` (décisions DD1 à DD14, validées le 2026-10-05). Les vidéos sont
+des médias comme les autres (espaces, dossiers, visibilité, corbeille, remplacement, duplication, API v1) :
+**stockées et servies telles qu'envoyées**, sans transcodage ni aperçu.
+
+| Point | Règle |
+| --- | --- |
+| Formats | **MP4**, **WebM**, **QuickTime (MOV)**, reconnus d'après le contenu (`server/lib/media/sniff.ts`). MKV, AVI, 3GP, MPEG-TS, OGV, audio seul (M4A) : 415 |
+| Analyse | lecteur d'en-têtes maison, sans ffmpeg (`server/lib/media/video/` : ISO BMFF pour MP4/MOV, EBML pour WebM) : dimensions affichées (rotation des vidéos de téléphone appliquée), durée (MP4 fragmenté : fin du dernier fragment), codecs (chaîne RFC 6381), son, débit, « faststart », lieu de tournage. Quelques Kio lus, hors file des traitements |
+| Taille | `NUXT_MEDIA_MAX_VIDEO_UPLOAD_SIZE` (512 Mio), 2 Gio − 1 au plus (colonne `Media.size` sur 32 bits : au-delà, migration en `BigInt` à prévoir) |
+| Diffusion | `/m/<id>/v<n>/<nom>.mp4|webm|mov` : requêtes partielles (`Range` → 206), cache immuable si public, liens signés si privé. Aperçus et transformations : 404 |
+| Administration | liens signés des vidéos privées valables **6 h** (tranche d'1 h) : une longue vidéo ne s'arrête pas en cours de lecture |
+| API v1 | contrat `Media` inchangé : `kind: "video"`, `width`, `height`, `duration`, `previewUrl` et `urlTemplate` à `null` ; filtre `?kind=video` ; pour une longue vidéo privée, demander un lien (`signed-url`) d'une durée au moins égale à celle de la vidéo |
+| Compatibilité | aucun codec refusé ; « lecture variable » signalée hors H.264 (MP4, MOV) et VP8/VP9 (WebM) : HEVC des iPhone, AV1, ProRes… |
+| Confidentialité | fichier servi tel quel, **métadonnées comprises** : le lieu de tournage (vidéos de téléphone) est détecté et signalé dans la fiche, pas retiré |
+
+**Envois longs** : Node coupe toute requête non reçue en entier en 300 s ; le greffon `server/plugins/http-timeouts.ts`
+porte ce délai à `NUXT_MEDIA_UPLOAD_TIMEOUT` (3600 s) — les en-têtes restent limités à 60 s, les corps JSON à
+30 s, et un envoi sans donnée pendant 60 s est arrêté. **Espace temporaire** : chaque envoi est écrit dans le
+dossier temporaire du système (`TMPDIR`/`TEMP`) avant d'aller au stockage : prévoir (envois simultanés × taille
+maximale) d'espace libre.
+
+**Mandataire inverse** (nginx) pour les vidéos :
+
+```nginx
+client_max_body_size 520m;        # au moins NUXT_MEDIA_MAX_VIDEO_UPLOAD_SIZE (1 Mo par défaut !)
+proxy_request_buffering off;      # transmettre l'envoi au fil de l'eau (sinon tout est stocké par nginx d'abord)
+client_body_timeout 120s;         # inactivité côté client
+proxy_read_timeout 3600s;         # envoi long jusqu'à la réponse
+proxy_send_timeout 3600s;
+```
+
+Un **CDN** ou un cache devant `NUXT_MEDIA_PUBLIC_URL` est fortement recommandé en production : servir de la vidéo
+depuis Node consomme connexions et bande passante ; les URL publiques sont immuables et les CDN gèrent les plages.
 
 ## 8. Traitement d'images (sharp)
 
@@ -1150,8 +1196,8 @@ Navigateur                    Serveur du client (sm_sk_…)                 surg
   mobile, serveur) : accepté. Débit : 300 requêtes par minute par émetteur et par IP
   (`NUXT_API_RATE_LIMIT_DELEGATED`).
 - Contraintes d'envoi, vérifiées côté serveur : `maxFiles` (fichiers acceptés, envois et remplacements ;
-  un envoi refusé n'est pas décompté ; 403 `UPLOAD_LIMIT_REACHED` au-delà), `maxSize` (bornée par
-  `NUXT_MEDIA_MAX_UPLOAD_SIZE`), `types` (détectés d'après le contenu), `visibility` et `folderId`
+  un envoi refusé n'est pas décompté ; 403 `UPLOAD_LIMIT_REACHED` au-delà), `maxSize` (bornée par la
+  limite du genre détecté), `types` (détectés d'après le contenu, vidéos comprises), `visibility` et `folderId`
   imposés aux nouveaux médias.
 - Interdit avec un jeton délégué : émettre d'autres jetons, dupliquer (403 `CREDENTIAL_NOT_ALLOWED`),
   lien signé de plus d'une heure (400). Permis : lecture des médias privés du projet s'il a
@@ -1435,6 +1481,8 @@ pnpm start                          # node --env-file-if-exists=.env .output/ser
   leurs propres limites (`NUXT_MEDIA_MAX_UPLOAD_SIZE`, 60 s sans donnée). Un mandataire inverse applique
   souvent une limite plus basse aux envois : nginx refuse par défaut les corps de plus de 1 Mo
   (`client_max_body_size`, à porter au moins à la taille maximale d'un envoi).
+- **Vidéos** (§ 7.7) : régler le mandataire (`client_max_body_size`, `proxy_request_buffering off`, délais), l'espace
+  du dossier temporaire et, idéalement, un CDN devant les adresses de diffusion.
 - Placer un CDN ou un cache devant `/m/` est possible : les URL publiques sont immuables et la
   diffusion n'utilise pas de cookie. Limite : passer un média public en privé ou le mettre à la
   corbeille n'efface pas les copies déjà en cache (navigateurs, CDN).
@@ -1507,6 +1555,12 @@ pnpm start                          # node --env-file-if-exists=.env .output/ser
 | Fichiers S3 corrompus (entourés de `x-amz-checksum`) | service compatible S3 ne gérant pas `aws-chunked` : réglage `WHEN_REQUIRED` déjà appliqué ; vérifier la version du service |
 | `Cannot find module …/strtok3/lib/index.js` après build | dépendance à exports conditionnels mal tracée par Nitro avec pnpm : c'est pourquoi `file-type` a été remplacé ; tester tout nouveau paquet **après `pnpm build`** |
 | Envoi refusé 415 alors que le fichier est une image | format non accepté (HEIC, TIFF, SVG…) ou fichier renommé : seuls JPEG, PNG, WebP, AVIF et GIF sont reconnus |
+| Vidéo refusée 415 | conteneur non accepté (MKV, AVI, 3GP, MPEG-TS, OGV, QuickTime ancien sans `ftyp`) ou fichier sans piste vidéo (audio seul) : convertir en MP4 (H.264/AAC) ou WebM (VP9/Opus) |
+| Vidéo acceptée mais illisible dans un navigateur | codec non lu par ce navigateur (HEVC, AV1, ProRes : avertissement « lecture variable » sur la fiche) ; aucun transcodage en phase D1 |
+| La lecture d'une vidéo démarre lentement | index (`moov`) en fin de fichier (avertissement sur la fiche) : réexporter avec l'option « optimiser pour le web » / faststart |
+| Durée « inconnue » d'une vidéo WebM | enregistrement fait dans un navigateur (`MediaRecorder`) : le fichier n'indique pas sa durée ; la lecture fonctionne |
+| Envoi de vidéo coupé (408) après exactement 5 min | délai de Node non relevé : vérifier `NUXT_MEDIA_UPLOAD_TIMEOUT` et les délais du mandataire (§ 7.7). En développement (`pnpm dev`), le relais de Nitro garde ses propres délais |
+| En développement : requête bloquée puis `ECONNRESET` juste après un envoi refusé (415, 413, 422) | relais de développement de Nitro (`httpxy`, vers le processus de travail) : il cesse de transmettre le corps refusé et la connexion réutilisée reste bloquée ~6 s. Absent en production (vérifié avec Node et h3 seuls) |
 | Média introuvable (404) juste après sa mise à la corbeille | normal : un média en corbeille n'est plus diffusé (sauf aperçu dans l'administration) |
 | `An Application Control policy has blocked this file` (`…binding-win32-x64-msvc…node`) au lancement de Nuxt | Windows (« Contrôle intelligent des applications ») refuse un module natif non signé : voir l'override `oxc-transform` (§ 13) ; pour un autre paquet, tester une version voisine ou débloquer le fichier côté Windows |
 | Projet introuvable (404) alors qu'il existe | l'utilisateur n'en est pas membre (seuls les ADMIN voient tous les projets) |
@@ -2509,3 +2563,51 @@ relevé avec les vidéos (D1), un envoi de 25 Mio exigeant aujourd'hui au moins 
 ```bash
 pnpm install          # aucune nouvelle dépendance, aucune migration
 ```
+
+### Étape 20 — 2026-10-05 — Phase D1 : vidéos (envoi, stockage, diffusion directe)
+
+**Cadre** : demande de l'utilisateur : accepter, stocker et distribuer des vidéos, d'abord en CRUD simple et
+diffusion directe, **sans transcodage ni traitement avancé** ; les traitements (miniatures, transcodage,
+formats adaptatifs) seront étudiés ensuite, sans nuire aux performances. Proposition
+`.claude/architecture-phase-d.md` (DD1 à DD14) **validée** le 2026-10-05.
+
+**Ajouté**
+- Formats **MP4, WebM, MOV** (`ACCEPTED_MEDIA_TYPES`), détection pure `detectMimeType` (`sniff.ts` : marques ISO,
+  `DocType` EBML ; AVIF, HEIF, 3GP, M4A, Matroska distingués).
+- **Lecteur d'en-têtes vidéo** `server/lib/media/video/` (`source`, `isobmff`, `ebml`, `codecs`, `probe`), sans
+  dépendance ; gestionnaire `handlers/video.ts` (`queued: false` : hors file des traitements d'images) ;
+  métadonnées `shared/utils/video.ts` (compatibilité, libellés des codecs, type de source).
+- **Limites par genre** (`server/lib/media/limits.ts`, `NUXT_MEDIA_MAX_VIDEO_UPLOAD_SIZE`) appliquées **pendant la
+  réception** : type et taille contrôlés dès les premiers octets (415, 413, 422 `KIND_MISMATCH` pour un
+  remplacement), suite du corps vidangée ; jetons délégués bornés par genre ; `GET /api/admin/config/media` →
+  `maxUploadSizes`.
+- Greffon `http-timeouts.ts` (`NUXT_MEDIA_UPLOAD_TIMEOUT`, 3600 s) ; liens signés des vidéos dans l'administration : 6 h.
+- Interface : filtre « Type », cartes vidéo (icône, durée), fiche avec lecteur natif, durée, codecs, débit,
+  avertissements, « Description courte », extrait `<video>` (`videoSnippet`), remplacement limité au genre,
+  avertissement en quittant la page pendant un envoi, carte « Médias » du tableau de bord avec les vidéos.
+- Documentation de l'API (section « Vidéos », envois, contrat `Media`), `.env.example`, `.gitattributes`
+  (`*.mp4`, `*.webm`, `*.mov` binaires).
+- Tests : `tests/video.test.ts` (30 : détection, codecs RFC 6381, MP4/MOV/WebM fabriqués boîte par boîte —
+  rotation, fragmenté, index en fin, lieu, fichiers hostiles —, limites, et **trois enregistrements réels**
+  `tests/fixtures/video/` produits par `MediaRecorder` dans Chromium 152).
+
+**Vérifié** : typecheck, 255 tests Vitest, i18n (1250 clés), migrations (aucune), build de production (copie
+isolée) ; **60 scénarios HTTP** (`video-test.mjs` : envois admin et API v1, vraies vidéos, MOV pivoté avec lieu,
+refus anticipés avant la fin de l'envoi, 413 par genre, diffusion par plages, 304, HEAD, 404 des dérivés, vidéo
+privée et lien de 6 h, remplacements, filtres, duplication, tableau de bord, jeton délégué limité par type et
+taille, OpenAPI) ; scénarios des étapes précédentes rejoués (rôles 79, appareils 37, B2, B4 94, C2 58, C4 45,
+tableau de bord 38, correctifs 28 + 8) ; mécanisme du délai Node vérifié par un banc ; interface : axe-core 0
+violation en fr/en × clair/sombre (médiathèque filtrée, fiche vidéo avec avertissements et extrait, tableau de
+bord), pas de défilement horizontal en largeur de téléphone.
+
+**Limites connues / suites** : pas d'aperçu ni de vignette, pas de transcodage (lecture selon les codecs), pas de
+retrait des métadonnées, pas de sous-titres (axe signale `video-caption` « à vérifier ») : étapes D2 à D4 de
+l'architecture ; WebM de navigateur sans durée ; 2 Gio au plus ; en développement, relais de Nitro (voir § 14) ;
+délai de 300 s du relais de développement non relevé ; S3 réel non testé avec de gros fichiers.
+
+**Après `git pull`**
+```bash
+pnpm install          # aucune nouvelle dépendance, aucune migration
+```
+Facultatif : `NUXT_MEDIA_MAX_VIDEO_UPLOAD_SIZE` et `NUXT_MEDIA_UPLOAD_TIMEOUT` dans `.env` ; régler le mandataire
+inverse (§ 7.7).

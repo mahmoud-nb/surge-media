@@ -9,6 +9,12 @@ export type MediaVariantName = 'preview'
 /** Aperçus de l'administration : liens valables 1 h, échéance alignée sur le quart d'heure. */
 const ADMIN_LINK_TTL = 3600
 const ADMIN_LINK_BUCKET = 900
+/**
+ * Vidéos de l'administration : 6 h, échéance alignée sur l'heure. Le lecteur redemande des plages avec
+ * la même URL pendant toute la lecture : un lien d'une heure couperait une longue vidéo privée.
+ */
+const ADMIN_VIDEO_LINK_TTL = 6 * 3600
+const ADMIN_VIDEO_LINK_BUCKET = 3600
 
 interface UrlSource {
   id: string
@@ -68,17 +74,23 @@ export function signedMediaPath(media: UrlSource, ttlSeconds: number, variant?: 
 /**
  * Chemins affichés dans l'administration. Un média public (hors corbeille) garde son URL
  * permanente ; un média privé ou dans la corbeille reçoit un lien signé « admin » d'environ 1 h,
- * identique pendant chaque quart d'heure (le navigateur réutilise les images en cache).
+ * identique pendant chaque quart d'heure (le navigateur réutilise les images en cache) — 6 h, par
+ * tranche d'une heure, pour une vidéo.
  */
 export function adminMediaPaths(
-  media: UrlSource & { visibility: string, deletedAt: Date | null },
+  media: UrlSource & { kind: string, visibility: string, deletedAt: Date | null },
   withPreview: boolean,
 ): { url: string, previewUrl: string | null } {
   const url = mediaPath(media)
   const previewUrl = withPreview ? mediaPath(media, 'preview') : null
   if (media.visibility === 'PUBLIC' && !media.deletedAt) return { url, previewUrl }
 
-  const expires = alignedExpiry(Math.floor(Date.now() / 1000), ADMIN_LINK_TTL, ADMIN_LINK_BUCKET)
+  const video = media.kind === 'VIDEO'
+  const expires = alignedExpiry(
+    Math.floor(Date.now() / 1000),
+    video ? ADMIN_VIDEO_LINK_TTL : ADMIN_LINK_TTL,
+    video ? ADMIN_VIDEO_LINK_BUCKET : ADMIN_LINK_BUCKET,
+  )
   const query = signMediaAccess(media, { scope: 'admin' }, expires)
   return { url: `${url}?${query}`, previewUrl: previewUrl && `${previewUrl}?${query}` }
 }

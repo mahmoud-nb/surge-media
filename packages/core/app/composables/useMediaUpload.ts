@@ -4,8 +4,20 @@ export interface MediaUploadResult {
 }
 
 export interface MediaRules {
+  /** Plus grande limite (compatibilité). */
   maxUploadSize: number
+  /** Limite par genre (IMAGE, VIDEO). */
+  maxUploadSizes?: Partial<Record<string, number>>
   acceptedTypes: Partial<Record<string, Record<string, string>>>
+}
+
+/**
+ * Types annoncés par certains systèmes pour des formats acceptés (le serveur reconnaît le contenu,
+ * pas ce type) : pris en compte par le pré-contrôle et le sélecteur de fichiers.
+ */
+const CLIENT_TYPE_ALIASES: Record<string, string> = {
+  'video/x-m4v': 'video/mp4',
+  'image/jpg': 'image/jpeg',
 }
 
 /**
@@ -44,36 +56,53 @@ export function useMediaUpload() {
     })
   }
 
-  /** Types acceptés, pour l'attribut `accept` et les textes d'aide. */
-  function acceptedMimeTypes(rules: MediaRules): string[] {
-    return Object.values(rules.acceptedTypes).flatMap(types => Object.keys(types ?? {}))
+  /** Genres retenus : tous ceux de l'installation, ou ceux demandés (remplacement : le genre du média). */
+  function kindsOf(rules: MediaRules, kinds?: readonly string[]): string[] {
+    return Object.keys(rules.acceptedTypes).filter(kind => !kinds || kinds.includes(kind))
   }
 
-  function acceptedExtensions(rules: MediaRules): string {
-    return [...new Set(Object.values(rules.acceptedTypes).flatMap(types => Object.values(types ?? {})))]
+  /** Types acceptés, pour l'attribut `accept` et les textes d'aide. */
+  function acceptedMimeTypes(rules: MediaRules, kinds?: readonly string[]): string[] {
+    const types = kindsOf(rules, kinds).flatMap(kind => Object.keys(rules.acceptedTypes[kind] ?? {}))
+    const aliases = Object.entries(CLIENT_TYPE_ALIASES).filter(([, type]) => types.includes(type)).map(([alias]) => alias)
+    return [...types, ...aliases]
+  }
+
+  /** Extensions acceptées (« JPG, PNG… »), pour un genre ou tous. */
+  function acceptedExtensions(rules: MediaRules, kinds?: readonly string[]): string {
+    return [...new Set(kindsOf(rules, kinds).flatMap(kind => Object.values(rules.acceptedTypes[kind] ?? {})))]
       .map(extension => extension.toUpperCase())
       .join(', ')
   }
 
-  /** Contrôle immédiat dans le navigateur (le serveur reste seul juge). */
-  function precheck(file: File, rules: MediaRules): string | null {
-    if (file.size > rules.maxUploadSize) {
-      return t('media.errors.FILE_TOO_LARGE', { max: formatBytes(rules.maxUploadSize, locale.value) })
-    }
-    if (file.type && !acceptedMimeTypes(rules).includes(file.type)) {
-      return t('media.errors.UNSUPPORTED_TYPE', { types: acceptedExtensions(rules) })
-    }
+  /** Limite d'envoi d'un genre. */
+  function maxSizeFor(rules: MediaRules, kind: string): number {
+    return rules.maxUploadSizes?.[kind] ?? rules.maxUploadSize
+  }
+
+  /** Contrôle immédiat dans le navigateur d'après le type annoncé (le serveur reste seul juge du contenu). */
+  function precheck(file: File, rules: MediaRules, kinds?: readonly string[]): string | null {
+    const type = CLIENT_TYPE_ALIASES[file.type] ?? file.type
+    const allowed = kindsOf(rules, kinds)
+    const kind = type ? allowed.find(candidate => type in (rules.acceptedTypes[candidate] ?? {})) : undefined
+    if (type && !kind) return t('media.errors.UNSUPPORTED_TYPE', { types: acceptedExtensions(rules, kinds) })
+    // Type inconnu du navigateur : la plus grande limite (le serveur appliquera celle du genre reconnu).
+    const max = kind ? maxSizeFor(rules, kind) : Math.max(0, ...allowed.map(candidate => maxSizeFor(rules, candidate)))
+    if (file.size > max) return t('media.errors.FILE_TOO_LARGE', { max: formatBytes(max, locale.value) })
     return null
   }
 
   /** Message traduit d'une réponse d'erreur de l'API médias. */
-  function errorMessage(result: MediaUploadResult | null, rules?: MediaRules): string {
-    const data = (result?.body as { data?: { code?: string } } | null)?.data
+  function errorMessage(result: MediaUploadResult | null, rules?: MediaRules, kinds?: readonly string[]): string {
+    const data = (result?.body as { data?: { code?: string, maxSize?: unknown } } | null)?.data
     switch (data?.code) {
-      case 'FILE_TOO_LARGE':
-        return t('media.errors.FILE_TOO_LARGE', { max: rules ? formatBytes(rules.maxUploadSize, locale.value) : '' })
+      case 'FILE_TOO_LARGE': {
+        // Limite du genre reconnu par le serveur, sinon la plus grande.
+        const max = typeof data.maxSize === 'number' ? data.maxSize : rules?.maxUploadSize
+        return t('media.errors.FILE_TOO_LARGE', { max: max ? formatBytes(max, locale.value) : '' })
+      }
       case 'UNSUPPORTED_TYPE':
-        return t('media.errors.UNSUPPORTED_TYPE', { types: rules ? acceptedExtensions(rules) : '' })
+        return t('media.errors.UNSUPPORTED_TYPE', { types: rules ? acceptedExtensions(rules, kinds) : '' })
       case 'UNREADABLE_FILE':
       case 'DIMENSIONS_TOO_LARGE':
       case 'KIND_MISMATCH':
@@ -91,5 +120,5 @@ export function useMediaUpload() {
     }
   }
 
-  return { send, precheck, errorMessage, acceptedMimeTypes, acceptedExtensions }
+  return { send, precheck, errorMessage, acceptedMimeTypes, acceptedExtensions, kindsOf, maxSizeFor }
 }

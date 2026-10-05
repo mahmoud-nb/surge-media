@@ -142,6 +142,9 @@ Les clés secrètes et les jetons personnels sont **refusés depuis un navigateu
 ## Diffusion des médias
 Les champs \`url\` et \`previewUrl\` sont des adresses absolues, utilisables telles quelles (\`<img src>\`) : permanentes et mises en cache pour un média public, signées et temporaires pour un média privé. Un lien signé à la demande s'obtient avec \`POST …/signed-url\` (ou \`POST …/signed-urls\` pour tout un lot).
 
+## Vidéos
+Les vidéos MP4, WebM et QuickTime (MOV) sont stockées et servies **telles qu'envoyées** : ni aperçu (\`previewUrl\` et \`urlTemplate\` valent \`null\`), ni transformation, ni transcodage. \`width\` et \`height\` sont les dimensions affichées (rotation des vidéos de téléphone appliquée), \`duration\` la durée en secondes (\`null\` si le fichier ne l'indique pas). \`url\` se lit directement dans \`<video src>\` : la diffusion accepte les requêtes partielles (\`Range\` → \`206\`) et un média public est mis en cache sans limite (CDN). La lecture dépend des codecs du fichier : H.264 (MP4, MOV) et VP8/VP9 (WebM) sont lus partout, HEVC ou AV1 selon le navigateur. L'\`url\` d'une vidéo privée est signée pour environ une heure et le lecteur la réutilise pendant toute la lecture : pour une longue vidéo, demandez un lien plus durable (\`POST …/signed-url\`, \`expiresIn\` au moins égal à la durée, 7 jours au plus).
+
 ## Transformations d'images
 Chaque image se décline par son URL de diffusion, dont \`urlTemplate\` donne le gabarit :
 
@@ -187,6 +190,9 @@ Secret keys and personal tokens are **rejected from a browser** (\`SECRET_IN_BRO
 
 ## Media delivery
 The \`url\` and \`previewUrl\` fields are absolute addresses, usable as is (\`<img src>\`): permanent and cached for a public media item, signed and temporary for a private one. An on-demand signed link comes from \`POST …/signed-url\` (or \`POST …/signed-urls\` for a whole batch).
+
+## Videos
+MP4, WebM and QuickTime (MOV) videos are stored and served **as uploaded**: no preview (\`previewUrl\` and \`urlTemplate\` are \`null\`), no transformation, no transcoding. \`width\` and \`height\` are the displayed dimensions (rotation of phone videos applied), \`duration\` the duration in seconds (\`null\` when the file does not say). \`url\` plays directly in \`<video src>\`: delivery accepts partial requests (\`Range\` → \`206\`) and a public media item is cached without limit (CDN). Playback depends on the codecs of the file: H.264 (MP4, MOV) and VP8/VP9 (WebM) play everywhere, HEVC or AV1 depending on the browser. The \`url\` of a private video is signed for about one hour and the player reuses it during the whole playback: for a long video, request a longer-lived link (\`POST …/signed-url\`, \`expiresIn\` at least equal to the duration, 7 days at most).
 
 ## Image transformations
 Every image can be derived through its delivery URL, whose template is given by \`urlTemplate\`:

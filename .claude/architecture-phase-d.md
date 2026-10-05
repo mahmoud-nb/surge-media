@@ -1,7 +1,23 @@
 # Phase D — Vidéos : envoi, stockage, gestion et diffusion directe
 
-> **Statut : PROPOSITION (2026-10-05) — à valider.** Décisions DD1 à DD14 récapitulées au § 13. Aucune ligne de code
-> vidéo écrite. Sous-étape proposée : **D1** (= étape 20 de `setup.md`).
+> **Statut : VALIDÉE (2026-10-05) — décisions DD1 à DD14 acceptées par l'utilisateur. D1 FAITE (2026-10-05)** : `setup.md`
+> étape 20 et § 7.7, `.claude/project-context.md` § 9.21. Suite (D2 à D4, transverses : § 14) à proposer et faire valider.
+>
+> Écarts et précisions de D1 :
+> - **MP4 fragmenté** (enregistrements `MediaRecorder` des navigateurs, CMAF) : `mvhd` et les pistes n'annoncent qu'une durée nulle
+>   ou minime ; la durée est tirée de `mehd`, sinon de la **fin du dernier fragment** (`tfdt` + durées des `trun`, parcours borné,
+>   jamais de refus du fichier). Les WebM de `MediaRecorder` restent sans durée (« inconnue »).
+> - **Remplacement** : un fichier d'un autre genre est refusé dès les premiers octets (422 `KIND_MISMATCH`), comme un type non
+>   accepté (415) ou une taille dépassée (413). Après un refus, la suite du corps est **vidangée** (lue sans être écrite) : la
+>   réponse part aussitôt et la connexion reste réutilisable (vérifié avec Node et h3 seuls). En développement, le relais de
+>   Nitro (`httpxy`) ne transmet plus le corps après une réponse anticipée : la connexion réutilisée se bloque (dev seulement).
+> - **Délai de Node** (DD5) : relevé par `server/plugins/http-timeouts.ts` (mécanisme vérifié par un banc) ; en développement, le relais
+>   de Nitro garde ses propres 300 s.
+> - **Analyse** : chaînes RFC 6381 aussi pour H.265 (`hvcC`), AV1, VP9 ; lieu de tournage aussi dans `ilst` (`©xyz`) ; dimensions
+>   bornées à 16 384 px ; vidéo sans piste vidéo → 415 avec la précision « No video track. ».
+> - **Interface** : extrait `<video>` dans la section des adresses (média public, ou après un lien temporaire) ; aide de l'envoi par
+>   genre ; carte « Médias » du tableau de bord avec le nombre de vidéos.
+> - Vrais fichiers de test produits par `MediaRecorder` (Chromium 152) dans le navigateur intégré : `tests/fixtures/video/` (68 Ko).
 >
 > **Déjà livré (2026-10-05, à la demande de l'utilisateur, indépendant de la vidéo)** : fermeture des flux de `/m/`
 > interrompus par le client (§ 8), limite et délai de lecture des corps JSON, délai d'inactivité des envois (§ 6.2).

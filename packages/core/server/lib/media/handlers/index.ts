@@ -1,5 +1,6 @@
 import type { MediaKind } from '#shared/utils/media'
 import { imageHandler } from './image'
+import { videoHandler } from './video'
 import type { MediaTypeHandler } from './types'
 
 export type { InspectedMedia, MediaTypeHandler, RenderedVariant } from './types'
@@ -10,6 +11,7 @@ export type { InspectedMedia, MediaTypeHandler, RenderedVariant } from './types'
  */
 const HANDLERS: Partial<Record<MediaKind, MediaTypeHandler>> = {
   IMAGE: imageHandler,
+  VIDEO: videoHandler,
 }
 
 export function handlerFor(kind: MediaKind): MediaTypeHandler | undefined {

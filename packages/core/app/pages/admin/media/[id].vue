@@ -1,6 +1,8 @@
 <script setup lang="ts">
 import { ArchiveRestore, ArrowLeft, Copy, FolderInput, Link2, Trash2 } from '@lucide/vue'
 import { MEDIA_TEXT_MAX_LENGTH, mediaMetadataSchema } from '#shared/schemas/media'
+import { videoSnippet } from '#shared/utils/snippets'
+import { codecLabel, videoMetadata } from '#shared/utils/video'
 
 // Accès décidé par l'espace du média (bibliothèque ou projet) : vérifié par l'API (404 sinon).
 definePageMeta({ layout: 'admin' })
@@ -25,6 +27,35 @@ const { data: rules } = await useApiFetch('/api/admin/config/media')
 const media = computed(() => data.value?.media)
 const displayName = computed(() => media.value?.title || media.value?.originalName || '')
 const inTrash = computed(() => Boolean(media.value?.deletedAt))
+
+// ─── Vidéo (phase D1 : fichier servi tel qu'envoyé) ──────────────────────────
+
+const isVideo = computed(() => media.value?.kind === 'VIDEO')
+const video = computed(() => (isVideo.value ? videoMetadata(media.value?.metadata) : null))
+const videoDescriptionId = useId()
+
+/** Codecs lisibles (« Vidéo : H.264 », « Son : AAC » ou « Sans son »). */
+const codecLines = computed(() => {
+  const meta = video.value
+  if (!meta) return []
+  return [
+    t('media.detail.videoTrack', { codec: codecLabel(meta.videoCodec) }),
+    meta.audioCodec ? t('media.detail.audioTrack', { codec: codecLabel(meta.audioCodec) }) : t('media.detail.noAudio'),
+  ]
+})
+
+/** Points d'attention d'une vidéo servie telle quelle : compatibilité, lieu de tournage, index, durée. */
+const videoNotices = computed(() => {
+  const meta = video.value
+  const value = media.value
+  if (!meta || !value) return []
+  const notices: { key: string, variant: 'info' | 'warning', text: string }[] = []
+  if (meta.playback === 'variable') notices.push({ key: 'variable', variant: 'warning', text: t('media.video.notices.variable.text', { codec: codecLabel(meta.videoCodec) }) })
+  if (meta.hasLocation) notices.push({ key: 'location', variant: value.visibility === 'PUBLIC' ? 'warning' : 'info', text: t('media.video.notices.location.text') })
+  if (meta.faststart === false) notices.push({ key: 'faststart', variant: 'info', text: t('media.video.notices.faststart.text') })
+  if (value.duration === null) notices.push({ key: 'duration', variant: 'info', text: t('media.video.notices.duration.text') })
+  return notices
+})
 
 /** Compte à l'origine de l'envoi ; sans compte, une application (clé d'API) ou un auteur supprimé. */
 const uploaderName = computed(() => {
@@ -126,6 +157,22 @@ async function generateLink() {
     generating.value = false
   }
 }
+
+/** Extrait <video> : adresse publique, ou lien temporaire une fois créé (média privé). */
+const snippet = computed(() => {
+  const value = media.value
+  if (!value || !video.value) return null
+  const url = value.visibility === 'PUBLIC' ? publicUrl.value : link.value?.url
+  if (!url) return null
+  return videoSnippet({
+    url,
+    mimeType: value.mimeType,
+    codecs: video.value.codecs,
+    width: value.width,
+    height: value.height,
+    label: value.altText || value.title || '',
+  })
+})
 
 /** Nouveau point d'intérêt = nouvelle version : adresses rechargées, lien temporaire périmé. */
 async function onFocalSaved() {
@@ -335,15 +382,43 @@ const pageFlash = flash.consume()
       <div class="grid gap-6 xl:grid-cols-[minmax(0,2fr)_minmax(0,3fr)]">
         <!-- Aperçu et informations -->
         <div class="grid content-start gap-6">
-          <figure class="bg-checker overflow-hidden rounded-xl border border-border">
+          <figure :class="cn('overflow-hidden rounded-xl border border-border', isVideo ? 'bg-muted' : 'bg-checker')">
+            <!-- Lecteur natif : commandes au clavier, jamais de lecture automatique (WCAG 1.4.2), métadonnées seules chargées. -->
+            <video
+              v-if="isVideo"
+              :src="media.url"
+              controls
+              preload="metadata"
+              playsinline
+              :width="media.width ?? undefined"
+              :height="media.height ?? undefined"
+              :aria-label="displayName"
+              :aria-describedby="media.altText ? videoDescriptionId : undefined"
+              class="mx-auto block h-auto max-h-[28rem] w-auto max-w-full"
+            >
+              <p class="p-4 text-sm text-foreground">
+                {{ t('media.video.fallback') }}
+                <a :href="media.url" class="text-primary underline underline-offset-4">{{ t('media.video.download') }}</a>
+              </p>
+            </video>
             <img
+              v-else
               :src="media.url"
               :alt="media.altText ?? ''"
               :width="media.width ?? undefined"
               :height="media.height ?? undefined"
               class="mx-auto max-h-[28rem] w-auto object-contain"
             >
+            <p v-if="isVideo && media.altText" :id="videoDescriptionId" class="sr-only">
+              {{ media.altText }}
+            </p>
           </figure>
+
+          <div v-if="videoNotices.length > 0" class="grid gap-3">
+            <UiAlert v-for="notice in videoNotices" :key="notice.key" :variant="notice.variant" :title="t(`media.video.notices.${notice.key}.title`)">
+              {{ notice.text }}
+            </UiAlert>
+          </div>
 
           <section aria-labelledby="info-title" class="rounded-xl border border-border bg-surface p-6 shadow-xs">
             <h2 id="info-title" class="text-lg font-semibold text-foreground">
@@ -398,6 +473,36 @@ const pageFlash = flash.consume()
                 </dt>
                 <dd class="font-medium text-foreground">
                   {{ t('media.dimensions', { width: media.width, height: media.height }) }}
+                </dd>
+              </div>
+              <div v-if="isVideo" class="grid gap-0.5">
+                <dt class="text-muted-foreground">
+                  {{ t('media.detail.duration') }}
+                </dt>
+                <dd class="font-medium text-foreground">
+                  <template v-if="media.duration !== null">
+                    <span aria-hidden="true">{{ formatClock(media.duration) }}</span>
+                    <span class="sr-only">{{ formatDuration(media.duration, locale) }}</span>
+                  </template>
+                  <template v-else>
+                    {{ t('media.detail.unknownDuration') }}
+                  </template>
+                </dd>
+              </div>
+              <div v-if="codecLines.length > 0" class="grid gap-0.5">
+                <dt class="text-muted-foreground">
+                  {{ t('media.detail.codecs') }}
+                </dt>
+                <dd class="font-medium text-foreground">
+                  <span v-for="line in codecLines" :key="line" class="block">{{ line }}</span>
+                </dd>
+              </div>
+              <div v-if="video?.bitrate" class="grid gap-0.5">
+                <dt class="text-muted-foreground">
+                  {{ t('media.detail.bitrate') }}
+                </dt>
+                <dd class="font-medium text-foreground">
+                  {{ formatBitrate(video.bitrate, locale) }}
                 </dd>
               </div>
               <div class="grid gap-0.5">
@@ -479,7 +584,7 @@ const pageFlash = flash.consume()
               </div>
               <div class="grid gap-0.5">
                 <dt class="text-muted-foreground">
-                  {{ t('media.fields.altText') }}
+                  {{ isVideo ? t('media.fields.videoDescription') : t('media.fields.altText') }}
                 </dt>
                 <dd class="font-medium break-words text-foreground">
                   {{ media.altText || '—' }}
@@ -501,7 +606,13 @@ const pageFlash = flash.consume()
               <UiFormField v-slot="field" :id="FIELD_IDS.title" :label="t('media.fields.title')" :hint="t('media.fields.titleHint')" :error="message('title')">
                 <UiInput v-bind="field" v-model="form.title" name="title" autocomplete="off" :maxlength="MEDIA_TEXT_MAX_LENGTH" @input="clear('title')" />
               </UiFormField>
-              <UiFormField v-slot="field" :id="FIELD_IDS.altText" :label="t('media.fields.altText')" :hint="t('media.fields.altTextHint')" :error="message('altText')">
+              <UiFormField
+                v-slot="field"
+                :id="FIELD_IDS.altText"
+                :label="isVideo ? t('media.fields.videoDescription') : t('media.fields.altText')"
+                :hint="isVideo ? t('media.fields.videoDescriptionHint') : t('media.fields.altTextHint')"
+                :error="message('altText')"
+              >
                 <UiInput v-bind="field" v-model="form.altText" name="altText" autocomplete="off" :maxlength="MEDIA_TEXT_MAX_LENGTH" @input="clear('altText')" />
               </UiFormField>
               <UiRadioCards
@@ -585,6 +696,21 @@ const pageFlash = flash.consume()
                 </p>
               </div>
             </div>
+            <div v-if="snippet" class="mt-5 grid gap-2 border-t border-border pt-5">
+              <div class="flex flex-wrap items-center justify-between gap-2">
+                <h3 class="text-sm font-semibold text-foreground">
+                  {{ t('media.video.snippet.title') }}
+                </h3>
+                <UiCopyButton :value="snippet" :label="t('media.video.snippet.copy')" />
+              </div>
+              <p class="text-sm text-muted-foreground">
+                {{ t('media.video.snippet.description') }}
+                <template v-if="media.visibility === 'PRIVATE'">
+                  {{ t('media.video.snippet.privateNote') }}
+                </template>
+              </p>
+              <pre class="rounded-lg border border-border bg-muted p-3 font-mono text-xs break-all whitespace-pre-wrap text-foreground"><code>{{ snippet }}</code></pre>
+            </div>
           </section>
 
           <!-- Remplacement -->
@@ -604,6 +730,7 @@ const pageFlash = flash.consume()
               method="PUT"
               :multiple="false"
               :with-visibility="false"
+              :kinds="[media.kind]"
               @uploaded="onReplaced"
             />
           </section>
