@@ -407,6 +407,14 @@ model Media {
   /// transformations ; le changer incrémente la version (architecture phase C, CD8)
   focalX            Float?
   focalY            Float?
+  /// Image d'affiche d'une vidéo (phase D2) : fichier JPEG normalisé, source des dérivés de la vidéo
+  /// (aperçu, transformations) ; la remplacer ou la retirer incrémente la version
+  posterKey         String?    @unique
+  posterWidth       Int?
+  posterHeight      Int?
+  posterSize        Int?
+  /// Instant de la vidéo capturé (secondes), null pour une image envoyée
+  posterTime        Float?
   uploadedById      String?
   /// Identifiant d'API ayant envoyé le média (API v1 ; émetteur pour un jeton délégué)
   uploadedByTokenId String?
@@ -420,13 +428,14 @@ model Media {
   deletedAt         DateTime?
 
   /// Restrict : supprimer un projet exige de traiter ses médias avant (aucun fichier orphelin)
-  project         Project?       @relation(fields: [projectId], references: [id], onDelete: Restrict)
-  folder          Folder?        @relation(fields: [folderId], references: [id], onDelete: SetNull)
-  uploadedBy      User?          @relation("MediaUploadedBy", fields: [uploadedById], references: [id], onDelete: SetNull)
-  uploadedByToken AccessToken?   @relation("MediaUploadedByToken", fields: [uploadedByTokenId], references: [id], onDelete: SetNull)
-  duplicatedFrom  Media?         @relation("MediaDuplicates", fields: [duplicatedFromId], references: [id], onDelete: SetNull)
-  duplicates      Media[]        @relation("MediaDuplicates")
+  project         Project?         @relation(fields: [projectId], references: [id], onDelete: Restrict)
+  folder          Folder?          @relation(fields: [folderId], references: [id], onDelete: SetNull)
+  uploadedBy      User?            @relation("MediaUploadedBy", fields: [uploadedById], references: [id], onDelete: SetNull)
+  uploadedByToken AccessToken?     @relation("MediaUploadedByToken", fields: [uploadedByTokenId], references: [id], onDelete: SetNull)
+  duplicatedFrom  Media?           @relation("MediaDuplicates", fields: [duplicatedFromId], references: [id], onDelete: SetNull)
+  duplicates      Media[]          @relation("MediaDuplicates")
   variants        MediaVariant[]
+  textTracks      MediaTextTrack[]
 
   @@index([projectId, deletedAt, createdAt])
   @@index([projectId, checksum])
@@ -454,4 +463,40 @@ model MediaVariant {
   media Media @relation(fields: [mediaId], references: [id], onDelete: Cascade)
 
   @@unique([mediaId, transformation])
+}
+
+/// Type d'une piste de texte (élément HTML <track>) : sous-titres, sous-titres pour sourds et
+/// malentendants, descriptions, chapitres
+enum TextTrackKind {
+  SUBTITLES
+  CAPTIONS
+  DESCRIPTIONS
+  CHAPTERS
+}
+
+/// Piste de texte WebVTT d'une vidéo (phase D2). Fichier immuable (le remplacer crée une nouvelle
+/// piste) ; type, langue, libellé et « par défaut » modifiables sans changer le fichier ni son URL.
+model MediaTextTrack {
+  id           String        @id @default(cuid())
+  mediaId      String
+  kind         TextTrackKind
+  /// Langue (étiquette BCP 47 canonique : fr, en-GB, pt-BR…)
+  language     String
+  /// Libellé proposé par le lecteur (100 caractères au plus)
+  label        String
+  /// Piste choisie par défaut : une au plus par groupe (sous-titres, descriptions, chapitres)
+  isDefault    Boolean       @default(false)
+  /// Clé du fichier WebVTT normalisé (variants/<média>/track-<aléa>.vtt)
+  storageKey   String        @unique
+  size         Int
+  checksum     String
+  cueCount     Int
+  /// Format envoyé : vtt, ou srt (converti en WebVTT)
+  sourceFormat String
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+
+  media Media @relation(fields: [mediaId], references: [id], onDelete: Cascade)
+
+  @@index([mediaId])
 }

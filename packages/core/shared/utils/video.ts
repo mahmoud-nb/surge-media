@@ -18,6 +18,14 @@ export type VideoPlayback = (typeof VIDEO_PLAYBACK_LEVELS)[number]
 /** Côté maximal accepté (contrôle de cohérence : rien n'est décodé). */
 export const VIDEO_MAX_DIMENSION = 16_384
 
+/**
+ * Préparation des MP4/MOV à l'envoi (phase D2, sans réencodage) : `faststart` = index placé avant les
+ * données ; `metadata` = métadonnées d'origine retirées (lieu de tournage, appareil). Réglage serveur :
+ * NUXT_MEDIA_VIDEO_PREPARE. Architecture : .claude/architecture-phase-d.md § 18.
+ */
+export const VIDEO_PREPARATIONS = ['faststart', 'metadata'] as const
+export type VideoPreparation = (typeof VIDEO_PREPARATIONS)[number]
+
 /** Métadonnées d'une vidéo (colonne `Media.metadata`). */
 export interface VideoMetadata {
   container: VideoContainer
@@ -34,9 +42,16 @@ export interface VideoMetadata {
   bitrate: number | null
   /** MP4/MOV : index (`moov`) avant les données ; false = une requête de plus avant la lecture. WebM : null. */
   faststart: boolean | null
-  /** Lieu de tournage présent dans les métadonnées (servies telles quelles). */
+  /** Lieu de tournage présent dans les métadonnées du fichier servi. */
   hasLocation: boolean
   playback: VideoPlayback
+  /**
+   * Préparation à l'envoi : opérations faites sur le fichier servi ; `[]` = examiné, rien à faire ou
+   * préparation impossible (MP4 fragmenté…) ; null = jamais examiné (envoyé avant D2, ou préparation désactivée).
+   */
+  prepared: VideoPreparation[] | null
+  /** Durée absente du fichier, estimée d'après la fin des données (WebM des navigateurs). */
+  durationEstimated: boolean
 }
 
 const BROAD_VIDEO: Record<VideoContainer, readonly string[]> = {
@@ -108,6 +123,10 @@ export function videoMetadata(metadata: unknown): VideoMetadata | null {
     faststart: typeof value.faststart === 'boolean' ? value.faststart : null,
     hasLocation: value.hasLocation === true,
     playback: value.playback === 'broad' ? 'broad' : 'variable',
+    prepared: Array.isArray(value.prepared)
+      ? VIDEO_PREPARATIONS.filter(operation => (value.prepared as unknown[]).includes(operation))
+      : null,
+    durationEstimated: value.durationEstimated === true,
   }
 }
 

@@ -1,10 +1,11 @@
 import type { ApiSignedUrlBody } from '#shared/schemas/api'
 import { API_DEFAULT_TRANSFORM_FORMAT } from '#shared/utils/api'
 import { transformationSegment, type TransformPolicy } from '#shared/utils/transforms'
-import type { Media } from '../../generated/prisma/client'
+import { apiProblem } from './problem'
 import { mediaError } from '../media/errors'
 import { signMediaAccess } from '../media/signing'
-import { derivedPath, mediaPath } from '../media/urls'
+import { derivedPath, mediaPath, trackPath } from '../media/urls'
+import type { ApiMediaRecord } from './serializers'
 import { hasDerivedFiles } from '../media/variants'
 import { resolveTransformRequest } from '../transforms/service'
 import { signaturePlan, type SignedFile } from './signature-plan'
@@ -41,8 +42,12 @@ export interface SignedUrlResult {
  * Fichier demandé : format activé, transformation canonisée (vide = préréglage `full`), préréglage
  * de l'espace (intégré, du projet ou global ; l'aperçu par défaut).
  */
-async function resolveSignedFile(media: Media, request: SignedUrlRequest): Promise<SignedFile> {
+async function resolveSignedFile(media: ApiMediaRecord, request: SignedUrlRequest): Promise<SignedFile> {
   if (request.target === 'file') return { kind: 'file' }
+  if (request.target === 'track') {
+    if (!media.textTracks.some(track => track.id === request.trackId)) throw apiProblem('TRACK_NOT_FOUND')
+    return { kind: 'track', trackId: request.trackId! }
+  }
   if (!hasDerivedFiles(media)) throw createError({ statusCode: 400, statusMessage: 'This media item has no derived files (images only).' })
 
   const format = request.format ?? API_DEFAULT_TRANSFORM_FORMAT
@@ -56,7 +61,7 @@ async function resolveSignedFile(media: Media, request: SignedUrlRequest): Promi
  * Lien vers un média actif du projet, signé selon sa visibilité et la politique du projet
  * (`signaturePlan`) ; 403 TRANSFORM_NOT_ALLOWED pour une transformation libre en politique `presets`.
  */
-export async function issueSignedUrl(media: Media, request: SignedUrlRequest, options: SignedUrlOptions): Promise<SignedUrlResult> {
+export async function issueSignedUrl(media: ApiMediaRecord, request: SignedUrlRequest, options: SignedUrlOptions): Promise<SignedUrlResult> {
   const file = await resolveSignedFile(media, request)
   const plan = signaturePlan(file, request.target === 'derived', {
     visibility: media.visibility,
@@ -67,7 +72,7 @@ export async function issueSignedUrl(media: Media, request: SignedUrlRequest, op
 
   const path = file.kind === 'file'
     ? mediaPath(media)
-    : derivedPath(media, file.kind === 'preset' ? file.name : transformationSegment(file.canonical), file.format)
+    : file.kind === 'track' ? trackPath(media, file.trackId) : derivedPath(media, file.kind === 'preset' ? file.name : transformationSegment(file.canonical), file.format)
   const url = `${options.base}${path}`
   if (plan.type === 'none') return { url, query: '', expiresAt: null }
   if (plan.type === 'permanent') {

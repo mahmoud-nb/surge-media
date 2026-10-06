@@ -616,7 +616,15 @@
       "credential": "API credential",
       "subject": "Application user",
       "folder": "Folder",
-      "noFolder": "None (root)"
+      "noFolder": "None (root)",
+      "estimatedDuration": "{duration} (estimated)",
+      "preparation": "Preparation",
+      "preparationValues": {
+        "none": "Not prepared",
+        "unchanged": "No change needed",
+        "faststart": "Index moved to the start of the file",
+        "metadata": "Original metadata removed (location, device)"
+      }
     },
     "fields": {
       "title": "Title",
@@ -637,7 +645,7 @@
         },
         "faststart": {
           "title": "Slower playback start",
-          "text": "The index of the video is at the end of the file: the browser has to fetch it before playback starts. Most export tools offer an “optimise for web” (faststart) option."
+          "text": "The index of the video is at the end of the file: the browser has to fetch it before playback starts."
         },
         "duration": {
           "title": "Unknown duration",
@@ -645,7 +653,19 @@
         },
         "location": {
           "title": "Shooting location in the file",
-          "text": "This video contains the coordinates of where it was shot. It is served as is: anyone who downloads it can read them."
+          "text": "This video contains the coordinates of where it was shot: anyone who downloads it can read them."
+        },
+        "estimated": {
+          "title": "Estimated duration",
+          "text": "The file does not state its duration (a recording made in a browser): it was estimated from its last frames. The player discovers it during playback."
+        },
+        "device": {
+          "title": "Device information",
+          "text": "This video was uploaded before automatic preparation: it may still contain information about the device that recorded it (model, software, settings)."
+        },
+        "captions": {
+          "title": "No captions",
+          "text": "This video has sound but no subtitle track: add one (below) for deaf and hard-of-hearing viewers, and for playback without sound (WCAG 1.2.2)."
         }
       },
       "snippet": {
@@ -653,6 +673,13 @@
         "description": "Example for a web page: native player with its controls, no autoplay; only the metadata is loaded in advance.",
         "copy": "Copy the video player example",
         "privateNote": "Example built with the temporary link: the video will no longer play after it expires."
+      },
+      "prepare": {
+        "title": "Optimise the video",
+        "description": "Moves the index to the start of the file and removes the original metadata (shooting location, device), without re-encoding or quality loss. Creates a new version: old addresses redirect to the new one.",
+        "button": "Optimise the video",
+        "done": "Video optimised: version {version}.",
+        "unchanged": "Nothing to change: the video is already ready for online playback."
       }
     },
     "links": {
@@ -833,6 +860,84 @@
           "width": "Area width (px)",
           "height": "Area height (px)"
         }
+      }
+    },
+    "poster": {
+      "title": "Poster image",
+      "description": "Shown before playback and used as the thumbnail (library, API). Replacing or removing it creates a new version: old addresses redirect to the new one.",
+      "none": "No poster image",
+      "captured": "Frame captured at {time}",
+      "uploaded": "Uploaded image",
+      "capture": "Use the displayed frame",
+      "upload": "Upload an image…",
+      "remove": "Remove the poster",
+      "hint": "Pause the video where you want, then use the displayed frame; or upload a JPEG, PNG, WebP, AVIF or GIF image. It is stored as JPEG, without its metadata.",
+      "removeTitle": "Remove the poster image?",
+      "removeDescription": "The video will no longer have a thumbnail or an image before playback. A new version is created.",
+      "removeConfirm": "Remove the poster",
+      "saved": "Poster image saved.",
+      "removed": "Poster image removed.",
+      "captureFailed": "The frame could not be captured: the video is not loaded yet, or your browser cannot decode it. Start playback and try again, or upload an image.",
+      "errors": {
+        "unsupported": "This file is not an accepted image (JPEG, PNG, WebP, AVIF or GIF).",
+        "tooLarge": "The image exceeds the maximum size ({max}).",
+        "unreadable": "This image is unreadable or its dimensions are too large."
+      }
+    },
+    "tracks": {
+      "title": "Subtitles and text tracks",
+      "description": "Tracks offered by the player (captions button): WebVTT or SRT files, 1 MB at most, {max} tracks at most. Each file is checked then rewritten as WebVTT.",
+      "none": "No track yet.",
+      "default": "Default",
+      "cues": "{count} cue | {count} cue | {count} cues",
+      "download": "Download",
+      "edit": "Edit",
+      "delete": "Delete",
+      "replace": "Replace the file",
+      "add": "Add a track",
+      "addTitle": "Add a text track",
+      "addDescription": "WebVTT (.vtt) or SubRip (.srt) file; an SRT file is converted to WebVTT, accents of old Windows files are recognised.",
+      "editTitle": "Edit the track",
+      "added": "Track added.",
+      "updated": "Track updated.",
+      "replaced": "File of the “{label}” track replaced.",
+      "removed": "“{label}” track deleted.",
+      "removeTitle": "Delete this track?",
+      "removeDescription": "The “{label}” track will no longer be offered by the player.",
+      "kinds": {
+        "SUBTITLES": "Subtitles",
+        "CAPTIONS": "Captions (deaf and hard of hearing)",
+        "DESCRIPTIONS": "Descriptions",
+        "CHAPTERS": "Chapters"
+      },
+      "kindHints": {
+        "SUBTITLES": "Translation or transcription of the dialogue, for viewers who hear the sound.",
+        "CAPTIONS": "Dialogue and meaningful sounds (music, noises, speakers), for viewers who do not hear the sound.",
+        "DESCRIPTIONS": "Text description of the images, for viewers who do not see them.",
+        "CHAPTERS": "Titles of the parts of the video, to navigate through it."
+      },
+      "fields": {
+        "file": "File",
+        "fileHint": "WebVTT (.vtt) or SRT, 1 MB at most.",
+        "kind": "Kind",
+        "language": "Language",
+        "otherLanguage": "Other language…",
+        "languageCode": "Language code",
+        "languageCodeHint": "BCP 47 tag, for example “eu”, “es-MX” or “zh-Hant”.",
+        "label": "Label",
+        "labelHint": "Name offered by the player, preferably in the language of the track.",
+        "default": "Default track",
+        "defaultHint": "Shown without any user action (one per group: subtitles, descriptions, chapters)."
+      },
+      "errors": {
+        "fileRequired": "Choose a file.",
+        "language": "Invalid language code (BCP 47 tag expected, for example “fr” or “en-GB”).",
+        "label": "The label must not contain control characters.",
+        "invalid": "This file is not a valid subtitle file (WebVTT or SRT).",
+        "invalidLine": "Invalid subtitle file at line {line}: check the timings and the format (WebVTT or SRT).",
+        "limit": "This video already has {max} tracks: delete one to add another.",
+        "tooLarge": "The file exceeds 1 MB.",
+        "fields": "Check the kind, language and label of the track."
       }
     }
   },

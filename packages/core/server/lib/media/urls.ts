@@ -56,6 +56,16 @@ export function derivedPath(media: UrlSource, segment: string, format: Transform
   return `/m/${media.id}/v${media.version}/${segment}/${urlSlug(media.title || media.originalName)}.${format}`
 }
 
+/** Piste de texte d'une vidéo (élément `<track>`) : fichier WebVTT, identifié par la piste. */
+export function trackPath(media: Pick<UrlSource, 'id' | 'version'>, trackId: string): string {
+  return `/m/${media.id}/v${media.version}/tracks/${trackId}.vtt`
+}
+
+/** Affiche d'une vidéo (attribut `poster` de `<video>`, balises `og:image`) : préréglage `full`, en JPEG. */
+export function posterPath(media: UrlSource): string {
+  return derivedPath(media, 'full', 'jpg')
+}
+
 /**
  * Gabarit des chemins de dérivés (API, `urlTemplate`) : `{transform}` = préréglage ou paramètres,
  * `{format}` = format de sortie, à remplacer par l'application.
@@ -78,12 +88,16 @@ export function signedMediaPath(media: UrlSource, ttlSeconds: number, variant?: 
  * tranche d'une heure, pour une vidéo.
  */
 export function adminMediaPaths(
-  media: UrlSource & { kind: string, visibility: string, deletedAt: Date | null },
+  media: UrlSource & { kind: string, visibility: string, deletedAt: Date | null, posterKey?: string | null },
   withPreview: boolean,
-): { url: string, previewUrl: string | null } {
+  trackIds: readonly string[] = [],
+): { url: string, previewUrl: string | null, posterUrl: string | null, trackUrls: string[] } {
   const url = mediaPath(media)
   const previewUrl = withPreview ? mediaPath(media, 'preview') : null
-  if (media.visibility === 'PUBLIC' && !media.deletedAt) return { url, previewUrl }
+  // Affiche d'une vidéo (attribut `poster`) : image entière réencodée, en JPEG.
+  const posterUrl = media.posterKey ? posterPath(media) : null
+  const trackUrls = trackIds.map(id => trackPath(media, id))
+  if (media.visibility === 'PUBLIC' && !media.deletedAt) return { url, previewUrl, posterUrl, trackUrls }
 
   const video = media.kind === 'VIDEO'
   const expires = alignedExpiry(
@@ -92,7 +106,12 @@ export function adminMediaPaths(
     video ? ADMIN_VIDEO_LINK_BUCKET : ADMIN_LINK_BUCKET,
   )
   const query = signMediaAccess(media, { scope: 'admin' }, expires)
-  return { url: `${url}?${query}`, previewUrl: previewUrl && `${previewUrl}?${query}` }
+  return {
+    url: `${url}?${query}`,
+    previewUrl: previewUrl && `${previewUrl}?${query}`,
+    posterUrl: posterUrl && `${posterUrl}?${query}`,
+    trackUrls: trackUrls.map(path => `${path}?${query}`),
+  }
 }
 
 /**

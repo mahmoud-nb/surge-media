@@ -1,7 +1,8 @@
 <script setup lang="ts">
-import { ArchiveRestore, ArrowLeft, Copy, FolderInput, Link2, Trash2 } from '@lucide/vue'
+import { ArchiveRestore, ArrowLeft, Camera, Copy, FolderInput, ImageUp, Link2, Trash2 } from '@lucide/vue'
 import { MEDIA_TEXT_MAX_LENGTH, mediaMetadataSchema } from '#shared/schemas/media'
 import { videoSnippet } from '#shared/utils/snippets'
+import { htmlTrackKind } from '#shared/utils/text-tracks'
 import { codecLabel, videoMetadata } from '#shared/utils/video'
 
 // Accès décidé par l'espace du média (bibliothèque ou projet) : vérifié par l'API (404 sinon).
@@ -28,11 +29,22 @@ const media = computed(() => data.value?.media)
 const displayName = computed(() => media.value?.title || media.value?.originalName || '')
 const inTrash = computed(() => Boolean(media.value?.deletedAt))
 
-// ─── Vidéo (phase D1 : fichier servi tel qu'envoyé) ──────────────────────────
+// ─── Vidéo (phase D : servie telle qu'envoyée, MP4/MOV préparés à l'envoi) ───
 
 const isVideo = computed(() => media.value?.kind === 'VIDEO')
 const video = computed(() => (isVideo.value ? videoMetadata(media.value?.metadata) : null))
 const videoDescriptionId = useId()
+/** MP4/MOV : seuls formats préparés (index en tête, métadonnées d'origine retirées). */
+const preparable = computed(() => video.value?.container === 'mp4' || video.value?.container === 'mov')
+const preparation = computed<readonly string[]>(() => rules.value?.videoPreparation ?? [])
+
+/** État de la préparation : jamais examinée, rien à faire, ou opérations faites. */
+const preparationLabel = computed(() => {
+  const prepared = video.value?.prepared
+  if (prepared === null || prepared === undefined) return t('media.detail.preparationValues.none')
+  if (prepared.length === 0) return t('media.detail.preparationValues.unchanged')
+  return prepared.map(operation => t(`media.detail.preparationValues.${operation}`)).join(' · ')
+})
 
 /** Codecs lisibles (« Vidéo : H.264 », « Son : AAC » ou « Sans son »). */
 const codecLines = computed(() => {
@@ -52,9 +64,24 @@ const videoNotices = computed(() => {
   const notices: { key: string, variant: 'info' | 'warning', text: string }[] = []
   if (meta.playback === 'variable') notices.push({ key: 'variable', variant: 'warning', text: t('media.video.notices.variable.text', { codec: codecLabel(meta.videoCodec) }) })
   if (meta.hasLocation) notices.push({ key: 'location', variant: value.visibility === 'PUBLIC' ? 'warning' : 'info', text: t('media.video.notices.location.text') })
+  // Envoyée avant la préparation automatique : l'appareil peut figurer dans le fichier.
+  else if (canPrepare.value && preparation.value.includes('metadata')) notices.push({ key: 'device', variant: 'info', text: t('media.video.notices.device.text') })
   if (meta.faststart === false) notices.push({ key: 'faststart', variant: 'info', text: t('media.video.notices.faststart.text') })
+  // Son sans sous-titres : WCAG 1.2.2 (sous-titres des contenus préenregistrés).
+  if (meta.hasAudio && !value.textTracks.some(track => track.kind === 'SUBTITLES' || track.kind === 'CAPTIONS')) {
+    notices.push({ key: 'captions', variant: 'info', text: t('media.video.notices.captions.text') })
+  }
   if (value.duration === null) notices.push({ key: 'duration', variant: 'info', text: t('media.video.notices.duration.text') })
+  else if (meta.durationEstimated) notices.push({ key: 'estimated', variant: 'info', text: t('media.video.notices.estimated.text') })
   return notices
+})
+
+/** Source de l'aperçu et des dérivés : l'image elle-même, ou l'affiche d'une vidéo. */
+const derivedSize = computed(() => {
+  const value = media.value
+  if (!value) return null
+  if (value.kind === 'VIDEO') return value.poster ? { width: value.poster.width, height: value.poster.height } : null
+  return value.width && value.height ? { width: value.width, height: value.height } : null
 })
 
 /** Compte à l'origine de l'envoi ; sans compte, une application (clé d'API) ou un auteur supprimé. */
@@ -73,6 +100,8 @@ const project = computed(() => space.value?.project ?? null)
 const scopes = computed<readonly string[]>(() => data.value?.scopes ?? [])
 const canWrite = computed(() => scopes.value.includes('media:write'))
 const canDelete = computed(() => scopes.value.includes('media:delete'))
+/** « Optimiser » : vidéo MP4/MOV jamais examinée (envoyée avant D2), préparation activée sur le serveur. */
+const canPrepare = computed(() => canWrite.value && !inTrash.value && preparable.value && preparation.value.length > 0 && video.value?.prepared === null)
 const spaceLabel = computed(() => (project.value ? t('space.project', { name: project.value.name }) : t('space.library')))
 
 /** Liste d'où l'on vient : médias du projet ou bibliothèque (corbeille le cas échéant). */
@@ -139,7 +168,7 @@ const durationId = useId()
 const duration = ref(String(SIGNED_URL_DURATIONS[0]))
 const DURATION_KEYS: Record<(typeof SIGNED_URL_DURATIONS)[number], string> = { 3600: 'hour', 86400: 'day', 604800: 'week' }
 const durationOptions = computed(() => SIGNED_URL_DURATIONS.map(seconds => ({ value: String(seconds), label: t(`media.links.durations.${DURATION_KEYS[seconds]}`) })))
-const link = ref<{ url: string, expiresAt: string } | null>(null)
+const link = ref<{ url: string, expiresAt: string, posterUrl: string | null, tracks: { id: string, url: string }[] } | null>(null)
 const linkError = ref<string>()
 const generating = ref(false)
 
@@ -148,7 +177,7 @@ async function generateLink() {
   generating.value = true
   try {
     const result = await $api(`/api/admin/media/${mediaId.value}/signed-url`, { method: 'POST', body: { expiresIn: Number(duration.value) } })
-    link.value = { url: result.url, expiresAt: String(result.expiresAt) }
+    link.value = { url: result.url, expiresAt: String(result.expiresAt), posterUrl: result.posterUrl, tracks: result.tracks }
   }
   catch {
     linkError.value = t('common.unexpectedError')
@@ -162,8 +191,11 @@ async function generateLink() {
 const snippet = computed(() => {
   const value = media.value
   if (!value || !video.value) return null
-  const url = value.visibility === 'PUBLIC' ? publicUrl.value : link.value?.url
+  const isPublic = value.visibility === 'PUBLIC'
+  const url = isPublic ? publicUrl.value : link.value?.url
   if (!url) return null
+  // Adresses absolues des pistes : permanentes (public) ou signées avec le lien temporaire (privé).
+  const trackUrls = new Map((isPublic ? data.value?.publicTrackUrls : link.value?.tracks)?.map(track => [track.id, track.url]) ?? [])
   return videoSnippet({
     url,
     mimeType: value.mimeType,
@@ -171,6 +203,14 @@ const snippet = computed(() => {
     width: value.width,
     height: value.height,
     label: value.altText || value.title || '',
+    poster: isPublic ? data.value?.publicPosterUrl : link.value?.posterUrl,
+    tracks: value.textTracks.filter(track => trackUrls.has(track.id)).map(track => ({
+      src: trackUrls.get(track.id)!,
+      kind: htmlTrackKind(track.kind),
+      srclang: track.language,
+      label: track.label,
+      default: track.isDefault,
+    })),
   })
 })
 
@@ -178,6 +218,118 @@ const snippet = computed(() => {
 async function onFocalSaved() {
   await refresh()
   link.value = null
+}
+
+// ─── Image d'affiche (vidéos, phase D2) ──────────────────────────────────────
+
+const player = useTemplateRef<HTMLVideoElement>('player')
+const posterInput = useTemplateRef<HTMLInputElement>('posterInput')
+const posterStatusEl = useTemplateRef<HTMLElement>('posterStatusEl')
+const posterStatus = ref<StatusMessage | null>(null)
+const posterBusy = ref<'capture' | 'upload' | 'remove' | null>(null)
+const removePosterOpen = ref(false)
+const posterAccept = computed(() => Object.keys(rules.value?.acceptedTypes.IMAGE ?? {}).join(','))
+
+class PosterError extends Error {}
+
+/** Message d'un refus du serveur (type, taille, fichier illisible) ou d'une capture impossible. */
+function posterErrorMessage(error: unknown): string {
+  if (error instanceof PosterError) return error.message
+  const status = (error as { statusCode?: number } | null)?.statusCode
+  if (status === 415) return t('media.poster.errors.unsupported')
+  if (status === 413) return t('media.poster.errors.tooLarge', { max: formatBytes(rules.value?.maxUploadSizes.IMAGE ?? 0, locale.value) })
+  if (status === 422) return t('media.poster.errors.unreadable')
+  return t('common.unexpectedError')
+}
+
+async function posterAction(kind: 'capture' | 'upload' | 'remove', task: () => Promise<string>) {
+  posterStatus.value = null
+  posterBusy.value = kind
+  try {
+    const message = await task()
+    await refresh()
+    link.value = null
+    posterStatus.value = { variant: 'success', message }
+  }
+  catch (error) {
+    posterStatus.value = { variant: 'error', message: posterErrorMessage(error) }
+  }
+  finally {
+    posterBusy.value = null
+    // Le bouton utilisé a pu disparaître (« Retirer ») : le focus va au message de résultat.
+    await nextTick()
+    posterStatusEl.value?.focus()
+  }
+}
+
+async function sendPoster(blob: Blob, filename: string, time: number | null) {
+  const form = new FormData()
+  if (time !== null) form.append('time', String(Math.round(time * 1000) / 1000))
+  form.append('file', blob, filename)
+  await $api(`/api/admin/media/${mediaId.value}/poster`, { method: 'PUT', body: form })
+}
+
+/** Image affichée par le lecteur (mis en pause à l'endroit voulu). */
+function useDisplayedFrame() {
+  return posterAction('capture', async () => {
+    const frame = player.value ? await captureCurrentFrame(player.value) : null
+    if (!frame) throw new PosterError(t('media.poster.captureFailed'))
+    await sendPoster(frame.blob, 'poster.jpg', frame.time)
+    return t('media.poster.saved')
+  })
+}
+
+function onPosterFile(event: Event) {
+  const input = event.target as HTMLInputElement
+  const chosen = input.files?.[0]
+  input.value = ''
+  if (!chosen) return
+  posterAction('upload', async () => {
+    await sendPoster(chosen, chosen.name, null)
+    return t('media.poster.saved')
+  })
+}
+
+function removePoster() {
+  removePosterOpen.value = false
+  posterAction('remove', async () => {
+    await $api(`/api/admin/media/${mediaId.value}/poster`, { method: 'DELETE' })
+    return t('media.poster.removed')
+  })
+}
+
+/** Pistes modifiées : média rechargé (lecteur, extrait), lien temporaire à refaire. */
+async function onTracksChanged() {
+  await refresh()
+  link.value = null
+}
+
+// ─── Préparation d'une vidéo envoyée avant D2 ────────────────────────────────
+
+const prepareStatus = ref<StatusMessage | null>(null)
+const preparing = ref(false)
+const prepareStatusEl = useTemplateRef<HTMLElement>('prepareStatusEl')
+
+async function prepareVideo() {
+  prepareStatus.value = null
+  preparing.value = true
+  const before = media.value?.version
+  try {
+    const result = await $api(`/api/admin/media/${mediaId.value}/prepare`, { method: 'POST' })
+    await refresh()
+    link.value = null
+    const version = result.media.version
+    prepareStatus.value = { variant: 'success', message: version === before ? t('media.video.prepare.unchanged') : t('media.video.prepare.done', { version }) }
+  }
+  catch {
+    prepareStatus.value = { variant: 'error', message: t('common.unexpectedError') }
+  }
+  finally {
+    preparing.value = false
+    // Le bouton utilisé a pu disparaître (vidéo préparée) : le focus va au message de résultat.
+    await nextTick()
+    prepareStatusEl.value?.focus()
+  }
 }
 
 // ─── Remplacement, corbeille ─────────────────────────────────────────────────
@@ -386,7 +538,9 @@ const pageFlash = flash.consume()
             <!-- Lecteur natif : commandes au clavier, jamais de lecture automatique (WCAG 1.4.2), métadonnées seules chargées. -->
             <video
               v-if="isVideo"
+              ref="player"
               :src="media.url"
+              :poster="media.poster?.url ?? undefined"
               controls
               preload="metadata"
               playsinline
@@ -396,6 +550,15 @@ const pageFlash = flash.consume()
               :aria-describedby="media.altText ? videoDescriptionId : undefined"
               class="mx-auto block h-auto max-h-[28rem] w-auto max-w-full"
             >
+              <track
+                v-for="track in media.textTracks"
+                :key="track.id"
+                :kind="htmlTrackKind(track.kind)"
+                :srclang="track.language"
+                :label="track.label"
+                :src="track.url"
+                :default="track.isDefault"
+              >
               <p class="p-4 text-sm text-foreground">
                 {{ t('media.video.fallback') }}
                 <a :href="media.url" class="text-primary underline underline-offset-4">{{ t('media.video.download') }}</a>
@@ -414,11 +577,86 @@ const pageFlash = flash.consume()
             </p>
           </figure>
 
-          <div v-if="videoNotices.length > 0" class="grid gap-3">
+          <div v-if="videoNotices.length > 0 || prepareStatus" class="grid gap-3">
             <UiAlert v-for="notice in videoNotices" :key="notice.key" :variant="notice.variant" :title="t(`media.video.notices.${notice.key}.title`)">
               {{ notice.text }}
             </UiAlert>
+            <div v-if="prepareStatus" ref="prepareStatusEl" tabindex="-1" class="rounded-lg">
+              <UiAlert :variant="prepareStatus.variant" :live="prepareStatus.variant === 'error' ? 'assertive' : 'polite'">
+                {{ prepareStatus.message }}
+              </UiAlert>
+            </div>
           </div>
+
+          <!-- Image d'affiche : vignette, attribut poster, source des dérivés de la vidéo. -->
+          <section v-if="isVideo && !inTrash" aria-labelledby="poster-title" class="grid gap-4 rounded-xl border border-border bg-surface p-5 shadow-xs">
+            <div>
+              <h2 id="poster-title" class="text-base font-semibold text-foreground">
+                {{ t('media.poster.title') }}
+              </h2>
+              <p class="mt-1 text-sm text-muted-foreground">
+                {{ t('media.poster.description') }}
+              </p>
+            </div>
+            <div class="flex flex-wrap items-center gap-4">
+              <img
+                v-if="media.poster && media.previewUrl"
+                :src="media.previewUrl"
+                alt=""
+                class="h-24 w-auto max-w-40 rounded-md border border-border bg-muted object-contain"
+              >
+              <div v-else class="flex h-24 w-40 items-center justify-center rounded-md border border-dashed border-input bg-muted px-2 text-center text-xs text-muted-foreground">
+                {{ t('media.poster.none') }}
+              </div>
+              <p v-if="media.poster" class="text-sm text-foreground">
+                {{ media.poster.time === null ? t('media.poster.uploaded') : t('media.poster.captured', { time: formatClock(Math.floor(media.poster.time)) }) }}
+                <span class="block text-muted-foreground">{{ t('media.dimensions', { width: media.poster.width, height: media.poster.height }) }}</span>
+              </p>
+            </div>
+            <div v-if="posterStatus" ref="posterStatusEl" tabindex="-1" class="rounded-lg">
+              <UiAlert :variant="posterStatus.variant" :live="posterStatus.variant === 'error' ? 'assertive' : 'polite'">
+                {{ posterStatus.message }}
+              </UiAlert>
+            </div>
+            <template v-if="canWrite">
+              <div class="flex flex-wrap gap-2">
+                <UiButton variant="secondary" :loading="posterBusy === 'capture'" :disabled="posterBusy !== null" @click="useDisplayedFrame">
+                  <Camera aria-hidden="true" />
+                  {{ t('media.poster.capture') }}
+                </UiButton>
+                <UiButton variant="outline" :loading="posterBusy === 'upload'" :disabled="posterBusy !== null" @click="posterInput?.click()">
+                  <ImageUp aria-hidden="true" />
+                  {{ t('media.poster.upload') }}
+                </UiButton>
+                <UiButton v-if="media.poster" variant="outline" :loading="posterBusy === 'remove'" :disabled="posterBusy !== null" @click="removePosterOpen = true">
+                  <Trash2 aria-hidden="true" />
+                  {{ t('media.poster.remove') }}
+                </UiButton>
+              </div>
+              <input ref="posterInput" type="file" class="hidden" :accept="posterAccept" @change="onPosterFile">
+              <p class="text-xs text-muted-foreground">
+                {{ t('media.poster.hint') }}
+              </p>
+            </template>
+          </section>
+
+          <!-- Sous-titres et pistes de texte (WCAG 1.2.2). -->
+          <AdminTextTracksPanel v-if="isVideo && !inTrash" :media-id="media.id" :tracks="media.textTracks" :can-write="canWrite" @changed="onTracksChanged" />
+
+          <!-- Vidéo envoyée avant la préparation automatique : même traitement à la demande. -->
+          <section v-if="canPrepare" aria-labelledby="prepare-title" class="grid gap-3 rounded-xl border border-border bg-surface p-5 shadow-xs">
+            <h2 id="prepare-title" class="text-base font-semibold text-foreground">
+              {{ t('media.video.prepare.title') }}
+            </h2>
+            <p class="text-sm text-muted-foreground">
+              {{ t('media.video.prepare.description') }}
+            </p>
+            <div>
+              <UiButton variant="secondary" :loading="preparing" @click="prepareVideo">
+                {{ t('media.video.prepare.button') }}
+              </UiButton>
+            </div>
+          </section>
 
           <section aria-labelledby="info-title" class="rounded-xl border border-border bg-surface p-6 shadow-xs">
             <h2 id="info-title" class="text-lg font-semibold text-foreground">
@@ -481,8 +719,8 @@ const pageFlash = flash.consume()
                 </dt>
                 <dd class="font-medium text-foreground">
                   <template v-if="media.duration !== null">
-                    <span aria-hidden="true">{{ formatClock(media.duration) }}</span>
-                    <span class="sr-only">{{ formatDuration(media.duration, locale) }}</span>
+                    <span aria-hidden="true">{{ video?.durationEstimated ? t('media.detail.estimatedDuration', { duration: formatClock(media.duration) }) : formatClock(media.duration) }}</span>
+                    <span class="sr-only">{{ video?.durationEstimated ? t('media.detail.estimatedDuration', { duration: formatDuration(media.duration, locale) }) : formatDuration(media.duration, locale) }}</span>
                   </template>
                   <template v-else>
                     {{ t('media.detail.unknownDuration') }}
@@ -495,6 +733,14 @@ const pageFlash = flash.consume()
                 </dt>
                 <dd class="font-medium text-foreground">
                   <span v-for="line in codecLines" :key="line" class="block">{{ line }}</span>
+                </dd>
+              </div>
+              <div v-if="preparable" class="grid gap-0.5 sm:col-span-2">
+                <dt class="text-muted-foreground">
+                  {{ t('media.detail.preparation') }}
+                </dt>
+                <dd class="font-medium text-foreground">
+                  {{ preparationLabel }}
                 </dd>
               </div>
               <div v-if="video?.bitrate" class="grid gap-0.5">
@@ -631,13 +877,13 @@ const pageFlash = flash.consume()
             </form>
           </section>
 
-          <!-- Point d'intérêt (images) : sa modification crée une nouvelle version. -->
+          <!-- Point d'intérêt (images, affiche d'une vidéo) : sa modification crée une nouvelle version. -->
           <AdminFocalPointEditor
-            v-if="!inTrash && media.previewUrl && media.width && media.height"
+            v-if="!inTrash && media.previewUrl && derivedSize"
             :media-id="media.id"
             :src="media.previewUrl"
-            :width="media.width"
-            :height="media.height"
+            :width="derivedSize.width"
+            :height="derivedSize.height"
             :focal-point="media.focalPoint"
             :can-edit="canWrite"
             @saved="onFocalSaved"
@@ -645,12 +891,12 @@ const pageFlash = flash.consume()
 
           <!-- Générateur d'adresses (images) : aperçu à la volée, adresse signée si nécessaire, extraits HTML. -->
           <AdminUrlGenerator
-            v-if="!inTrash && data?.transforms && media.previewUrl && media.width && media.height"
+            v-if="!inTrash && data?.transforms && media.previewUrl && derivedSize"
             :media-id="media.id"
             :version="media.version"
             :src="media.previewUrl"
-            :width="media.width"
-            :height="media.height"
+            :width="derivedSize.width"
+            :height="derivedSize.height"
             :alt-text="media.altText"
             :visibility="media.visibility"
             :options="data.transforms"
@@ -795,6 +1041,21 @@ const pageFlash = flash.consume()
           </section>
         </div>
       </div>
+
+      <UiDialog
+        v-model:open="removePosterOpen"
+        :title="t('media.poster.removeTitle')"
+        :description="t('media.poster.removeDescription')"
+      >
+        <template #actions>
+          <UiButton variant="outline" autofocus @click="removePosterOpen = false">
+            {{ t('common.cancel') }}
+          </UiButton>
+          <UiButton variant="destructive" @click="removePoster">
+            {{ t('media.poster.removeConfirm') }}
+          </UiButton>
+        </template>
+      </UiDialog>
 
       <UiDialog
         v-model:open="purgeOpen"

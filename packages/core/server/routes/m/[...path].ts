@@ -17,7 +17,8 @@ import { mediaError } from '../../lib/media/errors'
 import { BUSY_RETRY_AFTER } from '../../lib/media/processing'
 import { resolveRange } from '../../lib/media/range'
 import { useTransformSettings } from '../../lib/media/transform-settings'
-import { derivedPath, mediaPath } from '../../lib/media/urls'
+import { resolveTrackDeliverable } from '../../lib/media/tracks'
+import { derivedPath, mediaPath, trackPath } from '../../lib/media/urls'
 import { resolveDeliverable, type DerivedRequest } from '../../lib/media/variants'
 import { useMediaStorage } from '../../lib/storage'
 import { resolvePreset, spaceTransformPolicy } from '../../lib/transforms/service'
@@ -26,7 +27,8 @@ import { resolvePreset, spaceTransformPolicy } from '../../lib/transforms/servic
 const generations = createTokenBucketLimiter()
 
 /**
- * GET|HEAD /m/<id>/v<version>/[<préréglage>|<paramètres>/]<nom> — diffusion d'un média.
+ * GET|HEAD /m/<id>/v<version>/[<préréglage>|<paramètres>/]<nom> — diffusion d'un média ;
+ * /m/<id>/v<version>/tracks/<piste>.vtt — piste de texte d'une vidéo (phase D2, droit signé `track:<piste>`).
  *
  * Original, préréglage (intégré `preview`/`full`, du projet ou global) ou transformation libre
  * (`w_800,h_600,q_75`), format de sortie donné par l'extension (phase C). Une transformation non
@@ -79,12 +81,14 @@ export default defineEventHandler(async (event) => {
   if (target.version !== media.version) {
     if (media.deletedAt) throw createError({ statusCode: 404, statusMessage: 'Not Found' })
     setResponseHeader(event, 'Cache-Control', 'no-cache')
-    const current = target.kind === 'original' ? mediaPath(media) : derivedPath(media, derivedSegment(target), target.format)
+    const current = target.kind === 'original'
+      ? mediaPath(media)
+      : target.kind === 'track' ? trackPath(media, target.trackId) : derivedPath(media, derivedSegment(target), target.format)
     return sendRedirect(event, current, 302)
   }
 
   const access = await authorizeDelivery(event, media, target)
-  const { request, mutable } = await derivedRequest(media, target, access, () => {
+  const { request, mutable } = target.kind === 'track' ? { request: { track: target.trackId }, mutable: false } : await derivedRequest(media, target, access, () => {
     if (!generationRateLimited(access) || settings.rateLimit === 0) return
     const result = generations.take(`gen:${getRequestIP(event) ?? 'unknown'}`, settings.rateLimit)
     if (!result.allowed) {
@@ -94,7 +98,7 @@ export default defineEventHandler(async (event) => {
       })
     }
   })
-  const object = await resolveDeliverable(media, request).catch((error: unknown) => {
+  const object = await (typeof request === 'object' && 'track' in request ? resolveTrackDeliverable(media, request.track) : resolveDeliverable(media, request)).catch((error: unknown) => {
     // File des traitements pleine, ou débit atteint : réessayer plus tard.
     const data = (error as { data?: { code?: string, retryAfter?: number } } | null)?.data
     if (data?.code === 'SERVER_BUSY') setResponseHeader(event, 'Retry-After', BUSY_RETRY_AFTER)
@@ -164,7 +168,7 @@ export default defineEventHandler(async (event) => {
  */
 async function derivedRequest(
   media: Media,
-  target: DeliveryTarget,
+  target: Exclude<DeliveryTarget, { kind: 'track' }>,
   access: DeliveryAccess,
   beforeGenerate: () => void,
 ): Promise<{ request: 'original' | DerivedRequest, mutable: boolean }> {

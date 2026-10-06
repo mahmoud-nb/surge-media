@@ -79,6 +79,10 @@ export interface VideoSnippetInput {
   height?: number | null
   /** Nom accessible du lecteur (texte alternatif ou titre), vide = aucun. */
   label: string
+  /** Image d'affiche (attribut `poster`), absente = aucune. */
+  poster?: string | null
+  /** Pistes de texte (éléments `<track>`) : adresses absolues, signées si le média est privé. */
+  tracks?: readonly { src: string, kind: string, srclang: string, label: string, default: boolean }[]
 }
 
 /**
@@ -92,8 +96,13 @@ export function videoSnippet(input: VideoSnippetInput): string {
     'preload="metadata"',
     'playsinline',
     ...(input.width && input.height ? [`width="${input.width}"`, `height="${input.height}"`, 'style="max-width: 100%; height: auto"'] : []),
+    ...(input.poster ? [`poster="${htmlAttribute(input.poster)}"`] : []),
+    // Pistes servies par un autre domaine que la page : lues seulement en mode CORS.
+    ...(input.tracks?.length ? ['crossorigin="anonymous"'] : []),
     ...(input.label ? [`aria-label="${htmlAttribute(input.label)}"`] : []),
   ]
   const type = input.codecs ? `${input.mimeType}; codecs="${input.codecs.split(',').join(', ')}"` : input.mimeType
-  return `<video ${attributes.join(' ')}>\n  <source src="${htmlAttribute(input.url)}" type="${htmlAttribute(type)}">\n</video>`
+  const tracks = (input.tracks ?? []).map(track =>
+    `\n  <track kind="${htmlAttribute(track.kind)}" srclang="${htmlAttribute(track.srclang)}" label="${htmlAttribute(track.label)}" src="${htmlAttribute(track.src)}"${track.default ? ' default' : ''}>`)
+  return `<video ${attributes.join(' ')}>\n  <source src="${htmlAttribute(input.url)}" type="${htmlAttribute(type)}">${tracks.join('')}\n</video>`
 }

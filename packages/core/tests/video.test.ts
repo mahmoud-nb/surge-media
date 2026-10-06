@@ -6,6 +6,9 @@ import { codecLabel, videoMetadata, videoPlayback, videoSourceType } from '../sh
 import { largestSize, resolveUploadSizes, rulesFor } from '../server/lib/media/limits'
 import { detectMimeType } from '../server/lib/media/sniff'
 import { av1CodecString, avcCodecString, hevcCodecString, mpeg4AudioCodec, vp9CodecString } from '../server/lib/media/video/codecs'
+import { lastClusterEnd } from '../server/lib/media/video/ebml'
+import { XMP_UUID } from '../server/lib/media/video/isobmff'
+import { parseVideoPreparation, plannedSource, type PreparationOptions, type PreparationPlan, preparedStream, prepareVideo } from '../server/lib/media/video/prepare'
 import { probeVideo, probeVideoFile, VideoProbeError } from '../server/lib/media/video/probe'
 import { bufferSource } from '../server/lib/media/video/source'
 
@@ -204,6 +207,8 @@ describe('probeVideo — MP4 et MOV', () => {
       faststart: true,
       hasLocation: false,
       playback: 'broad',
+      prepared: null,
+      durationEstimated: false,
     })
   })
 
@@ -244,6 +249,15 @@ describe('probeVideo — MP4 et MOV', () => {
     const ilst = box('ilst', box('©xyz', box('data', u32(1), u32(0), text('+48.85+002.29/'))))
     expect((await probe(mp4({ extra: [box('udta', fullBox('meta', 0, 0, hdlr('mdir'), ilst))] }))).metadata.hasLocation).toBe(true)
     expect((await probe(mp4({ extra: [box('udta', box('©too', text('encoder')))] }))).metadata.hasLocation).toBe(false)
+  })
+
+  it('lieu de tournage dans un paquet XMP (boîte « uuid » de premier niveau, « udta/XMP_ »)', async () => {
+    const packet = text('<x:xmpmeta><rdf:Description exif:GPSLatitude="48,51.4N" exif:GPSLongitude="2,21.1E"/></x:xmpmeta>')
+    const top = Buffer.concat([mp4({ moovFirst: false }), box('uuid', XMP_UUID, packet)])
+    expect((await probe(top)).metadata.hasLocation).toBe(true)
+    expect((await probe(mp4({ extra: [box('udta', box('XMP_', packet))] }))).metadata.hasLocation).toBe(true)
+    const noGps = Buffer.concat([mp4(), box('uuid', XMP_UUID, text('<x:xmpmeta xmp:CreatorTool="Editor"/>'))])
+    expect((await probe(noGps)).metadata.hasLocation).toBe(false)
   })
 
   it('index en fin de fichier : faststart faux', async () => {
@@ -350,7 +364,7 @@ describe('probeVideo — WebM', () => {
 
   it('durée absente (MediaRecorder) : null', async () => {
     const result = await probe(webm({ duration: null, tracks: [webmVideoTrack('V_VP8', 640, 480)] }), 'video/webm')
-    expect(result).toMatchObject({ width: 640, duration: null, metadata: { videoCodec: 'vp8', hasAudio: false, codecs: 'vp8', bitrate: null } })
+    expect(result).toMatchObject({ width: 640, duration: null, metadata: { videoCodec: 'vp8', hasAudio: false, codecs: 'vp8', bitrate: null, durationEstimated: false } })
   })
 
   it('taille d\'affichage, AV1 et H.264 (CodecPrivate)', async () => {
@@ -430,7 +444,9 @@ describe('métadonnées vidéo (partagées)', () => {
     expect(codecLabel('xyz1')).toBe('XYZ1')
     expect(videoMetadata(null)).toBeNull()
     expect(videoMetadata({ format: 'jpeg' })).toBeNull()
-    expect(videoMetadata({ container: 'webm', videoCodec: 'vp8', playback: 'oops' })).toMatchObject({ audioCodec: null, rotation: 0, faststart: null, playback: 'variable' })
+    expect(videoMetadata({ container: 'webm', videoCodec: 'vp8', playback: 'oops' })).toMatchObject({ audioCodec: null, rotation: 0, faststart: null, playback: 'variable', prepared: null, durationEstimated: false })
+    expect(videoMetadata({ container: 'mp4', videoCodec: 'avc1', prepared: ['metadata', 'oops', 'faststart'] })?.prepared).toEqual(['faststart', 'metadata'])
+    expect(videoMetadata({ container: 'mp4', videoCodec: 'avc1', prepared: [] })?.prepared).toEqual([])
     expect(videoSourceType('video/mp4', 'avc1.64001F,mp4a.40.2')).toBe('video/mp4; codecs="avc1.64001F, mp4a.40.2"')
     expect(videoSourceType('video/webm', null)).toBe('video/webm')
   })
@@ -450,13 +466,17 @@ describe('enregistrements réels de navigateur', () => {
     const file = await fixture('recorder-vp9-opus.webm')
     expect(detectMimeType(file.subarray(0, 256))).toBe('video/webm')
     const result = await probe(file, 'video/webm')
-    expect(result).toMatchObject({ width: 160, height: 90, duration: null })
-    expect(result.metadata).toMatchObject({ videoCodec: 'vp9', audioCodec: 'opus', codecs: 'vp9,opus', playback: 'broad' })
+    expect(result).toMatchObject({ width: 160, height: 90 })
+    // Pas de durée dans le fichier : estimée par le dernier « Cluster » (2 s enregistrées).
+    expect(result.duration).toBeCloseTo(1.985, 3)
+    expect(result.metadata).toMatchObject({ videoCodec: 'vp9', audioCodec: 'opus', codecs: 'vp9,opus', playback: 'broad', durationEstimated: true })
   })
 
   it('WebM VP8 sans son', async () => {
     const result = await probe(await fixture('recorder-vp8.webm'), 'video/webm')
-    expect(result).toMatchObject({ width: 160, height: 90, metadata: { videoCodec: 'vp8', hasAudio: false, codecs: 'vp8' } })
+    expect(result).toMatchObject({ width: 160, height: 90, metadata: { videoCodec: 'vp8', hasAudio: false, codecs: 'vp8', durationEstimated: true } })
+    // Une seule grappe, de taille inconnue, faite de « BlockGroup ».
+    expect(result.duration).toBeCloseTo(1.96, 3)
   })
 
   it('MP4 fragmenté H.264 + AAC : durée tirée des fragments', async () => {
@@ -466,5 +486,283 @@ describe('enregistrements réels de navigateur', () => {
     expect(result).toMatchObject({ width: 160, height: 90 })
     expect(result.duration).toBeCloseTo(2, 0)
     expect(result.metadata).toMatchObject({ videoCodec: 'avc1', audioCodec: 'mp4a', codecs: 'avc1.42C00C,mp4a.40.2', faststart: true, playback: 'broad' })
+    // Fragmenté : index déjà en tête, gardé tel quel par la préparation.
+    expect(await prepareVideo(bufferSource(file), 'video/mp4', { faststart: true, metadata: true })).toEqual({ status: 'skipped', reason: 'fragmented file' })
+  })
+})
+
+// ─── Préparation à l'envoi (phase D2) ────────────────────────────────────────
+
+const stco = (offsets: number[]) => fullBox('stco', 0, 0, u32(offsets.length), ...offsets.map(u32))
+const co64 = (offsets: number[]) => fullBox('co64', 0, 0, u32(offsets.length), ...offsets.map(u64))
+const dref = (flags = 1) => fullBox('dref', 0, 0, u32(1), fullBox('url ', 0, flags))
+
+interface ChunkTrackOptions {
+  id?: number
+  width?: number
+  height?: number
+  rotation?: number
+  wide?: boolean
+  stbl?: Buffer[]
+  drefFlags?: number
+  udta?: Buffer[]
+}
+function chunkTrack(handler: string, entry: Buffer, offsets: number[], { id = 1, width = 0, height = 0, rotation = 0, wide = false, stbl = [], drefFlags = 1, udta = [] }: ChunkTrackOptions = {}): Buffer {
+  return box('trak',
+    tkhd(width, height, { rotation, id }),
+    box('mdia', mdhd(30000, 300000), hdlr(handler), box('minf',
+      box('dinf', dref(drefFlags)),
+      box('stbl', stsd(entry), fullBox('stts', 0, 0, u32(0)), wide ? co64(offsets) : stco(offsets), ...stbl))),
+    ...udta)
+}
+
+/** Élément d'une liste QuickTime (`ilst` d'un `meta` de clés) : numéro de clé, valeur texte. */
+function keyItem(index: number, value: string): Buffer {
+  const data = box('data', u32(1), u32(0), text(value))
+  return Buffer.concat([u32(8 + data.length), u32(index), data])
+}
+/** `meta` QuickTime à clés (`mdta`), sans version : chaque clé a sa valeur. */
+function keysMeta(entries: [string, string][]): Buffer {
+  const keys = fullBox('keys', 0, 0, u32(entries.length), ...entries.map(([name]) => box('mdta', text(name))))
+  return box('meta', hdlr('mdta'), keys, box('ilst', ...entries.map(([, value], i) => keyItem(i + 1, value))))
+}
+const itunesItem = (type: string, value: string) => box(type, box('data', u32(1), u32(0), text(value)))
+const GPS_XMP = text('<x:xmpmeta><rdf:Description exif:GPSLatitude="48,51.4N"/></x:xmpmeta>')
+
+interface PhoneOptions {
+  moovFirst?: boolean
+  wide?: boolean
+  largeMdat?: boolean
+  metadata?: boolean
+  brand?: string[]
+  padding?: boolean
+  track?: ChunkTrackOptions
+  movie?: Buffer[]
+}
+/**
+ * Vidéo « de téléphone » : index en fin de fichier, données distinctes par bloc (3 blocs vidéo, 3 audio),
+ * lieu, appareil et logiciel dans `udta`, `meta` (clés) et un paquet XMP de premier niveau.
+ */
+function phoneFile({ moovFirst = false, wide = false, largeMdat = false, metadata = true, brand = ['isom', 'isom', 'mp42'], padding = false, track = {}, movie = [] }: PhoneOptions = {}): Buffer {
+  const samples = Buffer.alloc(6 * 512)
+  for (let i = 0; i < samples.length; i++) samples[i] = (i * 31 + 7) & 0xFF
+  const mdat = largeMdat
+    ? Buffer.concat([u32(1), text('mdat'), u64(16 + samples.length), samples])
+    : box('mdat', samples)
+  const mdatHeader = largeMdat ? 16 : 8
+  const [major, ...compatible] = brand
+  const head = ftyp(major!, ...compatible)
+  const before = [
+    ...(metadata ? [box('uuid', XMP_UUID, GPS_XMP)] : []),
+    ...(padding ? [box('free', Buffer.alloc(32))] : []),
+  ]
+  const udta = box('udta',
+    box('©xyz', text('+48.8566+002.3522/')),
+    box('auth', text('Galaxy S25 Ultra')),
+    box('smta', text('mdlnSM-S938B')),
+    box('©nam', text('Vacances')),
+    fullBox('meta', 0, 0, hdlr('mdir'), box('ilst', itunesItem('©nam', 'Titre iTunes'), itunesItem('©too', 'Lavf61'), itunesItem('©xyz', '+48.8566+002.3522/'))))
+  const meta = keysMeta([
+    ['com.apple.quicktime.location.ISO6709', '+48.8566+002.3522+035.000/'],
+    ['com.apple.quicktime.title', 'Mon titre'],
+    ['com.apple.quicktime.make', 'Apple'],
+    ['com.android.version', '16'],
+  ])
+  const moov = (dataStart: number) => box('moov',
+    mvhd(1000, 12_345),
+    chunkTrack('vide', videoEntry('avc1', 1920, 1080, avcC()), [0, 1, 2].map(k => dataStart + k * 1024), { width: 1920, height: 1080, rotation: 90, wide, ...track }),
+    chunkTrack('soun', audioEntry('mp4a', 0, esds()), [0, 1, 2].map(k => dataStart + k * 1024 + 512), { id: 2, wide }),
+    ...(metadata ? [udta, meta, box('uuid', Buffer.alloc(16, 0x42), text('vendor'))] : []),
+    ...movie)
+  const prefix = head.length + before.reduce((total, part) => total + part.length, 0)
+  if (!moovFirst) return Buffer.concat([head, ...before, mdat, moov(prefix + mdatHeader)])
+  const size = moov(0).length
+  return Buffer.concat([head, ...before, moov(prefix + size + mdatHeader), mdat])
+}
+
+/** Types des boîtes de premier niveau. */
+function topLevelTypes(file: Buffer): string[] {
+  const types: string[] = []
+  for (let offset = 0; offset + 8 <= file.length;) {
+    let size = file.readUInt32BE(offset)
+    if (size === 1) size = Number(file.readBigUInt64BE(offset + 8))
+    types.push(file.toString('latin1', offset + 4, offset + 8))
+    offset += size
+  }
+  return types
+}
+
+const BOTH: PreparationOptions = { faststart: true, metadata: true }
+const prepare = (file: Buffer, options = BOTH, mimeType = 'video/mp4') => prepareVideo(bufferSource(file), mimeType, options)
+async function prepared(file: Buffer, options = BOTH, mimeType = 'video/mp4'): Promise<{ plan: PreparationPlan, bytes: Buffer, result: Awaited<ReturnType<typeof probeVideo>> }> {
+  const outcome = await prepare(file, options, mimeType)
+  if (outcome.status !== 'prepared') throw new Error(`préparation attendue : ${JSON.stringify(outcome)}`)
+  const bytes = await plannedSource(bufferSource(file), outcome.plan).read(0, outcome.plan.size)
+  return { plan: outcome.plan, bytes, result: outcome.probe }
+}
+/** Chaque bloc d'échantillons : mêmes octets à la nouvelle position. */
+function expectChunksMoved(file: Buffer, bytes: Buffer, plan: PreparationPlan): void {
+  expect(plan.chunks).toHaveLength(6)
+  for (const { from, to } of plan.chunks) expect(bytes.subarray(to, to + 512).equals(file.subarray(from, from + 512))).toBe(true)
+}
+
+describe('préparation des MP4/MOV (D2)', () => {
+  it('index en tête, lieu et appareil retirés, données déplacées sans erreur, idempotente', async () => {
+    const file = phoneFile()
+    expect((await probe(file)).metadata).toMatchObject({ faststart: false, hasLocation: true })
+    const { plan, bytes, result } = await prepared(file)
+    expect(plan.operations).toEqual(['faststart', 'metadata'])
+    expect(plan.removed).toEqual(expect.arrayContaining([
+      'uuid(XMP)',
+      'moov/udta/©xyz',
+      'moov/udta/auth',
+      'moov/udta/smta',
+      'moov/udta/meta/ilst/©too',
+      'moov/udta/meta/ilst/©xyz',
+      'moov/meta/keys:com.apple.quicktime.location.ISO6709',
+      'moov/meta/keys:com.apple.quicktime.make',
+      'moov/meta/keys:com.android.version',
+      'moov/uuid',
+    ]))
+    expect(topLevelTypes(bytes)).toEqual(['ftyp', 'moov', 'mdat'])
+    expect(bytes.length).toBe(plan.size)
+    expect(plan.size).toBeLessThan(file.length)
+    expectChunksMoved(file, bytes, plan)
+    expect(result).toMatchObject({ width: 1080, height: 1920, duration: 12.345 })
+    expect(result.metadata).toMatchObject({ faststart: true, hasLocation: false, rotation: 90, codecs: 'avc1.64001F,mp4a.40.2', prepared: ['faststart', 'metadata'] })
+
+    // Conservés : titres (udta, iTunes, clé QuickTime renumérotée) ; plus rien de l'appareil ni du lieu.
+    for (const kept of ['Vacances', 'Titre iTunes', 'com.apple.quicktime.title', 'Mon titre']) expect(bytes.includes(text(kept))).toBe(true)
+    for (const gone of ['Galaxy', 'SM-S938B', 'Lavf61', '+48.8566', 'GPSLatitude', 'com.apple.quicktime.make', 'com.android.version', 'vendor']) expect(bytes.includes(text(gone))).toBe(false)
+    const ilst = bytes.lastIndexOf(text('ilst')) - 4
+    expect(bytes.readUInt32BE(ilst + 12)).toBe(1) // clé « title » : 2 → 1
+    expect(bytes.readUInt32BE(ilst)).toBe(8 + bytes.readUInt32BE(ilst + 8))
+
+    expect(await prepare(bytes)).toEqual({ status: 'unchanged' })
+  })
+
+  it('faststart seul : métadonnées gardées, taille identique', async () => {
+    const file = phoneFile()
+    const { plan, bytes, result } = await prepared(file, { faststart: true, metadata: false })
+    expect(plan).toMatchObject({ operations: ['faststart'], removed: [], size: file.length })
+    expect(topLevelTypes(bytes)).toEqual(['ftyp', 'uuid', 'moov', 'mdat'])
+    expectChunksMoved(file, bytes, plan)
+    expect(result.metadata).toMatchObject({ faststart: true, hasLocation: true, prepared: ['faststart'] })
+  })
+
+  it('métadonnées seules : index laissé en fin de fichier', async () => {
+    const file = phoneFile()
+    const { plan, bytes, result } = await prepared(file, { faststart: false, metadata: true })
+    expect(plan.operations).toEqual(['metadata'])
+    expect(topLevelTypes(bytes)).toEqual(['ftyp', 'mdat', 'moov'])
+    expectChunksMoved(file, bytes, plan)
+    expect(result.metadata).toMatchObject({ faststart: false, hasLocation: false, prepared: ['metadata'] })
+  })
+
+  it('rien à faire : index en tête, sans métadonnées (bourrage gardé), ou préparation désactivée', async () => {
+    expect(await prepare(phoneFile({ moovFirst: true, metadata: false, padding: true }))).toEqual({ status: 'unchanged' })
+    expect(await prepare(phoneFile(), { faststart: false, metadata: false })).toEqual({ status: 'unchanged' })
+    // Réécrit pour une autre raison : le bourrage part aussi, sans compter comme une métadonnée.
+    const { plan, bytes } = await prepared(phoneFile({ metadata: false, padding: true }))
+    expect(plan).toMatchObject({ operations: ['faststart'], removed: ['free'] })
+    expect(topLevelTypes(bytes)).toEqual(['ftyp', 'moov', 'mdat'])
+  })
+
+  it('décalages 64 bits (co64), données de taille 64 bits (largesize)', async () => {
+    const file = phoneFile({ wide: true, largeMdat: true })
+    const { plan, bytes, result } = await prepared(file)
+    expectChunksMoved(file, bytes, plan)
+    expect(result.metadata).toMatchObject({ faststart: true, hasLocation: false })
+    expect(bytes.readUInt32BE(bytes.indexOf(text('mdat')) - 4)).toBe(1)
+  })
+
+  it('MOV : marque de fin de « udta », noms de pistes et chapitres conservés', async () => {
+    const trackUdta = Buffer.concat([u32(8 + 12 + 4), text('udta'), box('name', text('Main')), u32(0)])
+    const file = phoneFile({ brand: ['qt  ', 'qt  '], track: { udta: [trackUdta] }, movie: [box('udta', box('chpl', u32(0)), box('©mak', text('Apple')))] })
+    const { bytes, result, plan } = await prepared(file, BOTH, 'video/quicktime')
+    expect(result.metadata).toMatchObject({ container: 'mov', faststart: true, hasLocation: false })
+    expect(plan.removed).toContain('moov/udta/©mak')
+    const kept = bytes.indexOf(text('name')) - 4
+    expect(bytes.subarray(kept - 8, kept + 16).equals(trackUdta)).toBe(true)
+    expect(bytes.includes(text('chpl'))).toBe(true)
+  })
+
+  it('fichiers gardés tels quels : fragmenté, données externes, chiffré, décalage hors données, deux index', async () => {
+    const skipped = async (file: Buffer, mimeType = 'video/mp4') => {
+      const outcome = await prepare(file, BOTH, mimeType)
+      return outcome.status === 'skipped' ? outcome.reason : outcome.status
+    }
+    expect(await skipped(phoneFile({ movie: [box('mvex', fullBox('trex', 0, 0, Buffer.alloc(20)))] }))).toBe('fragmented file')
+    expect(await skipped(phoneFile({ track: { drefFlags: 0 } }))).toBe('external data reference')
+    expect(await skipped(phoneFile({ track: { stbl: [fullBox('saio', 0, 0, u32(1), u32(0))] } }))).toBe('auxiliary information offsets (encrypted file)')
+    expect(await skipped(Buffer.concat([phoneFile(), box('moov', mvhd(1000, 1))]))).toBe('several moov boxes')
+    expect(await skipped(webm(), 'video/webm')).toBe('not an ISO BMFF file')
+    // Bloc pointant hors des données (dans `ftyp`) : rien n'est déplacé.
+    const file = phoneFile()
+    const table = file.lastIndexOf(text('stco')) + 12
+    file.writeUInt32BE(4, table)
+    expect(await skipped(file)).toBe('chunk offset outside media data')
+  })
+
+  it('le flux écrit exactement la sortie vérifiée', async () => {
+    const file = phoneFile({ padding: true })
+    const directory = await mkdtemp(join(tmpdir(), 'surge-media-prepare-'))
+    try {
+      const path = join(directory, 'phone.mp4')
+      await writeFile(path, file)
+      const { plan, bytes } = await prepared(file)
+      const chunks: Buffer[] = []
+      for await (const chunk of preparedStream(path, plan)) chunks.push(chunk as Buffer)
+      expect(Buffer.concat(chunks).equals(bytes)).toBe(true)
+    }
+    finally {
+      await rm(directory, { recursive: true, force: true })
+    }
+  })
+
+  it('réglage NUXT_MEDIA_VIDEO_PREPARE', () => {
+    const warnings: string[] = []
+    const warn = (message: string) => warnings.push(message)
+    expect(parseVideoPreparation(undefined, warn)).toEqual(BOTH)
+    expect(parseVideoPreparation('faststart, metadata', warn)).toEqual(BOTH)
+    expect(parseVideoPreparation('FASTSTART', warn)).toEqual({ faststart: true, metadata: false })
+    expect(parseVideoPreparation('none', warn)).toEqual({ faststart: false, metadata: false })
+    expect(parseVideoPreparation('', warn)).toEqual({ faststart: false, metadata: false })
+    expect(parseVideoPreparation(['metadata'], warn)).toEqual({ faststart: false, metadata: true })
+    expect(warnings).toEqual([])
+    expect(parseVideoPreparation('faststart,location', warn)).toEqual({ faststart: true, metadata: false })
+    expect(warnings).toHaveLength(1)
+  })
+})
+
+// ─── Durée estimée des WebM (phase D2) ───────────────────────────────────────
+
+/** Bloc WebM : piste 1, décalage signé (unités de la grappe), image clé. */
+const simpleBlock = (offset: number) => el(0xA3, u8(0x81), u16(offset & 0xFFFF), u8(0x80), Buffer.alloc(24, 9))
+const blockGroup = (offset: number, duration: number) => el(0xA0, el(0xA1, u8(0x81), u16(offset & 0xFFFF), u8(0x00), Buffer.alloc(16, 9)), uintEl(0x9B, duration))
+const cluster = (timecode: number, ...children: Buffer[]) => Buffer.concat([idBytes(0x1F43B675), UNKNOWN_SIZE, uintEl(0xE7, timecode), ...children])
+
+describe('durée estimée des WebM sans durée (D2)', () => {
+  it('fin du dernier « Cluster » : blocs simples, groupes avec durée, grappe de taille connue', () => {
+    expect(lastClusterEnd(cluster(1000, simpleBlock(0), simpleBlock(480)))).toBe(1480)
+    expect(lastClusterEnd(Buffer.concat([cluster(0, simpleBlock(20)), cluster(2000, blockGroup(500, 40), simpleBlock(520))]))).toBe(2540)
+    const known = el(0x1F43B675, uintEl(0xE7, 3000), simpleBlock(-20), simpleBlock(10))
+    expect(lastClusterEnd(Buffer.concat([known, el(0x1C53BB6B, Buffer.alloc(8))]))).toBe(3010)
+  })
+
+  it('identifiant trouvé dans des données, grappe coupée par la fin du tampon, rien de lisible', () => {
+    const decoy = el(0xA3, u8(0x81), u16(900), u8(0x80), Buffer.from([0x1F, 0x43, 0xB6, 0x75, 0x85, 0x55, 0x55]))
+    expect(lastClusterEnd(cluster(1000, simpleBlock(100), decoy))).toBe(1900)
+    const whole = cluster(1000, simpleBlock(100), simpleBlock(200))
+    expect(lastClusterEnd(whole.subarray(0, whole.length - 10))).toBe(1100)
+    expect(lastClusterEnd(Buffer.alloc(64, 1))).toBeNull()
+  })
+
+  it('WebM sans durée : estimée et signalée', async () => {
+    const info = el(0x1549A966, uintEl(0x2AD7B1, 1_000_000))
+    const file = Buffer.concat([ebmlHeader(), idBytes(0x18538067), UNKNOWN_SIZE, info, el(0x1654AE6B, webmVideoTrack()), cluster(0, simpleBlock(0)), cluster(4000, simpleBlock(0), simpleBlock(1250))])
+    const result = await probe(file, 'video/webm')
+    expect(result.duration).toBe(5.25)
+    expect(result.metadata).toMatchObject({ durationEstimated: true, bitrate: Math.round(file.length * 8 / 5.25) })
   })
 })

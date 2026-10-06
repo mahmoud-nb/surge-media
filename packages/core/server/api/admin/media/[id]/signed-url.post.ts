@@ -1,12 +1,15 @@
 import { signedUrlSchema } from '#shared/schemas/media'
 import { mediaError } from '../../../../lib/media/errors'
 import { findMedia } from '../../../../lib/media/service'
-import { mediaBaseUrl, mediaPath, signedMediaPath } from '../../../../lib/media/urls'
+import { signMediaAccess } from '../../../../lib/media/signing'
+import { mediaBaseUrl, mediaPath, posterPath, signedMediaPath, trackPath } from '../../../../lib/media/urls'
 
 /**
  * POST /api/admin/media/:id/signed-url — { expiresIn: secondes (60 à 7 jours) } → lien
  * temporaire absolu vers un média privé, utilisable directement (balise <img>, partage).
- * Pour un média public, renvoie son URL permanente (expiresAt: null). 409 IN_TRASH.
+ * Pour un média public, renvoie son URL permanente (expiresAt: null). Vidéo : aussi l'affiche
+ * (`posterUrl`) et les pistes de texte (`tracks`), signées jusqu'à la même échéance (extrait <video>
+ * complet). 409 IN_TRASH.
  */
 export default defineEventHandler(async (event) => {
   const { media } = await requireMediaAccess(event, () => findMedia(getRouterParam(event, 'id') ?? ''), 'media:read')
@@ -14,7 +17,15 @@ export default defineEventHandler(async (event) => {
   if (media.deletedAt) throw mediaError(409, 'IN_TRASH')
 
   const base = mediaBaseUrl(event)
-  if (media.visibility === 'PUBLIC') return { url: `${base}${mediaPath(media)}`, expiresAt: null }
-  const { path, expiresAt } = signedMediaPath(media, expiresIn)
-  return { url: `${base}${path}`, expiresAt }
+  const isPublic = media.visibility === 'PUBLIC'
+  const { path, expiresAt } = isPublic ? { path: mediaPath(media), expiresAt: null } : signedMediaPath(media, expiresIn)
+  const expires = expiresAt ? Math.floor(expiresAt.getTime() / 1000) : null
+  /** Adresse absolue, signée pour `variant` jusqu'à la même échéance si le média est privé. */
+  const link = (relative: string, variant: string) => `${base}${relative}${expires === null ? '' : `?${signMediaAccess(media, { variant }, expires)}`}`
+  return {
+    url: `${base}${path}`,
+    expiresAt,
+    posterUrl: media.posterKey ? link(posterPath(media), 'full') : null,
+    tracks: media.textTracks.map(track => ({ id: track.id, url: link(trackPath(media, track.id), `track:${track.id}`) })),
+  }
 })

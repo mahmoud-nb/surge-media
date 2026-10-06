@@ -22,3 +22,17 @@ export function variantKey(mediaId: string, version: number, transformation: str
   const hash = createHash('sha256').update(transformation).digest('hex').slice(0, 16)
   return `${variantPrefix(mediaId)}v${version}-${hash}.${extension}`
 }
+
+/**
+ * Fichiers associés à une vidéo (phase D2), rangés avec ses dérivés (supprimés avec eux à la purge), mais
+ * hors des préfixes de version (« v3- ») : un remplacement du fichier vidéo les garde.
+ *   affiche : variants/<mediaId>/poster-Qx7…Kp.jpg
+ *   piste   : variants/<mediaId>/track-Qx7…Kp.vtt
+ */
+export function posterKey(mediaId: string): string {
+  return `${variantPrefix(mediaId)}poster-${randomBytes(12).toString('base64url')}.jpg`
+}
+
+export function trackKey(mediaId: string): string {
+  return `${variantPrefix(mediaId)}track-${randomBytes(12).toString('base64url')}.vtt`
+}

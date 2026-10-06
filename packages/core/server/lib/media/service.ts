@@ -1,20 +1,25 @@
+import { createHash } from 'node:crypto'
 import { createReadStream } from 'node:fs'
+import { Readable } from 'node:stream'
 import type { MediaListQuery, MediaMetadataInput } from '#shared/schemas/media'
 import { MEDIA_PAGE_SIZE } from '#shared/schemas/media'
-import { ACCEPTED_MIME_TYPES, extensionForMime, mediaKindForMime, type MediaKind } from '#shared/utils/media'
+import { ACCEPTED_MEDIA_TYPES, ACCEPTED_MIME_TYPES, extensionForMime, mediaKindForMime, type MediaKind } from '#shared/utils/media'
 import { mediaSearchColumns, normalizeSearchText } from '#shared/utils/search'
 import { sameFocalPoint } from '#shared/utils/transforms'
-import type { AccessToken, Media, Prisma } from '../../generated/prisma/client'
+import type { AccessToken, Media, MediaTextTrack, Prisma } from '../../generated/prisma/client'
 import type { Space } from '../../utils/access'
 import { folderWhere, requireFolderInSpace } from '../folders/service'
 import { useMediaStorage } from '../storage'
 import { mediaChanged } from './cache'
 import { mediaError } from './errors'
 import { handlerFor, type InspectedMedia } from './handlers'
-import { originalKey, variantPrefix } from './keys'
+import { imageHandler, normalizePoster } from './handlers/image'
+import type { PreparedMedia } from './handlers/types'
+import { originalKey, posterKey, variantPrefix } from './keys'
 import { sniffMimeType } from './sniff'
 import { runProcessing } from './processing'
-import type { ReceivedUpload } from './upload'
+import { type ReceivedUpload, temporaryCopy } from './upload'
+import { copyTextTracks, TEXT_TRACK_ORDER } from './tracks'
 import { adminMediaPaths } from './urls'
 import { hasDerivedFiles, mediaFocalPoint, pregenerateVariants } from './variants'
 
@@ -29,18 +34,22 @@ import { hasDerivedFiles, mediaFocalPoint, pregenerateVariants } from './variant
  *
  * Toute écriture passe par `mediaChanged` (cache de diffusion invalidé, révision de l'espace
  * incrémentée pour les ETag de l'API) et tient à jour les colonnes de recherche normalisées. Les
- * analyses de fichiers passent par la file bornée des traitements ; l'aperçu d'un nouveau fichier
- * est pré-généré en tâche de fond. La version (dans toutes les URL) change avec le fichier et avec
+ * analyses de fichiers passent par la file bornée des traitements ; un fichier peut être **préparé**
+ * avant d'être stocké (vidéos : index en tête, métadonnées d'origine retirées) ; l'aperçu d'un nouveau
+ * fichier est pré-généré en tâche de fond. La version (dans toutes les URL) change avec le fichier et avec
  * le point d'intérêt : un cache ne sert jamais un fichier ou un recadrage périmé.
  */
 
 const MEDIA_INCLUDE = {
   uploadedBy: { select: { id: true, name: true, email: true } },
   uploadedByToken: { select: { id: true, name: true, type: true, prefix: true } },
+  textTracks: TEXT_TRACK_ORDER,
 } as const
 type MediaWithUploader = Media & {
   uploadedBy: { id: string, name: string | null, email: string } | null
   uploadedByToken: { id: string, name: string, type: AccessToken['type'], prefix: string } | null
+  /** Pistes de texte d'une vidéo (phase D2), dans leur ordre d'ajout. */
+  textTracks: MediaTextTrack[]
 }
 
 /**
@@ -70,7 +79,7 @@ function provenanceData(provenance: MediaProvenance) {
 
 /** Représentation pour l'administration (chemins relatifs, signés si privé ou en corbeille). */
 export function toMediaSummary(media: MediaWithUploader) {
-  const paths = adminMediaPaths(media, Boolean(handlerFor(media.kind)?.transform))
+  const paths = adminMediaPaths(media, hasDerivedFiles(media))
   return {
     id: media.id,
     projectId: media.projectId,
@@ -92,6 +101,10 @@ export function toMediaSummary(media: MediaWithUploader) {
     /** Chemins de diffusion ; signés (droit « admin ») pour un média privé ou dans la corbeille. */
     url: paths.url,
     previewUrl: paths.previewUrl,
+    /** Image d'affiche d'une vidéo (source de l'aperçu et des dérivés) ; `url` : image entière en JPEG. */
+    poster: media.posterKey && media.posterWidth && media.posterHeight
+      ? { url: paths.posterUrl, width: media.posterWidth, height: media.posterHeight, time: media.posterTime }
+      : null,
     uploadedBy: media.uploadedBy,
     /** Identifiant d'API ayant envoyé le média (null : interface, ou identifiant supprimé depuis). */
     uploadedByToken: media.uploadedByToken,
@@ -103,7 +116,26 @@ export function toMediaSummary(media: MediaWithUploader) {
 }
 
 export function toMediaDetail(media: MediaWithUploader) {
-  return { ...toMediaSummary(media), checksum: media.checksum, metadata: media.metadata, duplicatedFromId: media.duplicatedFromId }
+  const { trackUrls } = adminMediaPaths(media, false, media.textTracks.map(track => track.id))
+  return {
+    ...toMediaSummary(media),
+    checksum: media.checksum,
+    metadata: media.metadata,
+    duplicatedFromId: media.duplicatedFromId,
+    /** Pistes de texte d'une vidéo ; `url` signée (droit « admin ») si le média est privé ou dans la corbeille. */
+    textTracks: media.textTracks.map((track, index) => ({
+      id: track.id,
+      kind: track.kind,
+      language: track.language,
+      label: track.label,
+      isDefault: track.isDefault,
+      size: track.size,
+      cueCount: track.cueCount,
+      sourceFormat: track.sourceFormat,
+      url: trackUrls[index]!,
+      createdAt: track.createdAt,
+    })),
+  }
 }
 
 // ─── Lecture ─────────────────────────────────────────────────────────────────
@@ -202,26 +234,62 @@ async function analyze(upload: ReceivedUpload, options: UploadOptions = {}): Pro
   return { kind, mimeType, extension: extensionForMime(mimeType)!, inspected }
 }
 
-async function storeOriginal(upload: ReceivedUpload, analyzed: AnalyzedUpload): Promise<string> {
-  const storage = await useMediaStorage()
-  const key = originalKey(analyzed.extension)
-  await storage.put(key, createReadStream(upload.path), { contentType: analyzed.mimeType, size: upload.size })
-  return key
+/** Préparation du gestionnaire (vidéos), ou fichier reçu stocké tel quel. */
+async function prepareOriginal(upload: ReceivedUpload, analyzed: AnalyzedUpload): Promise<PreparedMedia> {
+  const handler = handlerFor(analyzed.kind)
+  if (!handler?.prepare) return { inspected: analyzed.inspected, file: null }
+  return handler.prepare(upload.path, analyzed.mimeType, analyzed.inspected)
 }
 
-function fileData(upload: ReceivedUpload, analyzed: AnalyzedUpload, storageKey: string) {
+/** Fichier écrit dans le stockage : clé, taille et empreinte du fichier **stocké** (préparé ou non). */
+interface StoredOriginal {
+  key: string
+  size: number
+  checksum: string
+  inspected: InspectedMedia
+}
+
+async function storeOriginal(upload: ReceivedUpload, analyzed: AnalyzedUpload, prepared?: PreparedMedia): Promise<StoredOriginal> {
+  const { inspected, file } = prepared ?? await prepareOriginal(upload, analyzed)
+  const storage = await useMediaStorage()
+  const key = originalKey(analyzed.extension)
+  if (!file) {
+    await storage.put(key, createReadStream(upload.path), { contentType: analyzed.mimeType, size: upload.size })
+    return { key, size: upload.size, checksum: upload.checksum, inspected }
+  }
+
+  // Fichier préparé : empreinte calculée pendant l'écriture (même passage que la copie).
+  const hash = createHash('sha256')
+  let written = 0
+  const content = file.open()
+  async function* hashed() {
+    for await (const chunk of content) {
+      written += (chunk as Buffer).length
+      hash.update(chunk as Buffer)
+      yield chunk
+    }
+  }
+  await storage.put(key, Readable.from(hashed()), { contentType: analyzed.mimeType, size: file.size })
+  if (written !== file.size) {
+    await storage.delete(key)
+    throw new Error(`[surge-media] Fichier préparé incomplet (${written} octets écrits sur ${file.size}).`)
+  }
+  return { key, size: file.size, checksum: hash.digest('hex'), inspected }
+}
+
+function fileData(upload: ReceivedUpload, analyzed: AnalyzedUpload, stored: StoredOriginal) {
   return {
     kind: analyzed.kind,
-    storageKey,
+    storageKey: stored.key,
     originalName: upload.filename,
     searchName: normalizeSearchText(upload.filename),
     mimeType: analyzed.mimeType,
-    size: upload.size,
-    checksum: upload.checksum,
-    width: analyzed.inspected.width,
-    height: analyzed.inspected.height,
-    duration: analyzed.inspected.duration,
-    metadata: analyzed.inspected.metadata,
+    size: stored.size,
+    checksum: stored.checksum,
+    width: stored.inspected.width,
+    height: stored.inspected.height,
+    duration: stored.inspected.duration,
+    metadata: stored.inspected.metadata as Prisma.InputJsonValue,
   }
 }
 
@@ -237,14 +305,14 @@ export async function createMedia(
   if (folderId) await requireFolderInSpace(space, folderId)
   const analyzed = await analyze(upload, options)
   const storage = await useMediaStorage()
-  const key = await storeOriginal(upload, analyzed)
+  const stored = await storeOriginal(upload, analyzed)
   try {
     const prisma = await usePrisma()
     const title = input.title ?? null
     const altText = input.altText ?? null
     const created = await prisma.media.create({
       data: {
-        ...fileData(upload, analyzed, key),
+        ...fileData(upload, analyzed, stored),
         ...mediaSearchColumns({ originalName: upload.filename, title, altText }),
         projectId: projectIdOf(space),
         folderId,
@@ -260,7 +328,7 @@ export async function createMedia(
     return created
   }
   catch (error) {
-    await storage.delete(key)
+    await storage.delete(stored.key)
     throw error
   }
 }
@@ -273,26 +341,64 @@ export async function createMedia(
 export async function replaceMediaFile(media: Media, upload: ReceivedUpload, options: UploadOptions = {}): Promise<MediaWithUploader> {
   const analyzed = await analyze(upload, options)
   if (analyzed.kind !== media.kind) throw mediaError(422, 'KIND_MISMATCH')
+  const stored = await storeOriginal(upload, analyzed)
+  return commitNewFile(media, fileData(upload, analyzed, stored))
+}
 
+/**
+ * Enregistre le nouveau fichier d'un média (déjà écrit dans le stockage) : version incrémentée si
+ * personne ne l'a changée entre-temps (sinon 409 et nouveau fichier supprimé), puis suppression de
+ * l'ancien fichier et des dérivés de l'ancienne version.
+ */
+async function commitNewFile(media: Media, data: ReturnType<typeof fileData>): Promise<MediaWithUploader> {
   const storage = await useMediaStorage()
-  const key = await storeOriginal(upload, analyzed)
   const prisma = await usePrisma()
   const { count } = await prisma.media.updateMany({
     where: { id: media.id, version: media.version },
-    data: { ...fileData(upload, analyzed, key), version: { increment: 1 } },
+    data: { ...data, version: { increment: 1 } },
   })
   if (count !== 1) {
-    await storage.delete(key)
+    await storage.delete(data.storageKey)
     throw mediaError(409, 'VERSION_CONFLICT')
   }
 
-  // Ancien fichier et dérivés de l'ancienne version.
   await deleteVersionVariants(media)
   await storage.delete(media.storageKey)
   await mediaChanged([media.id], spaceOfMedia(media))
   const replaced = await findMediaOrFail(media.id)
   pregenerateVariants(replaced)
   return replaced
+}
+
+/**
+ * Prépare le fichier déjà stocké d'une vidéo (envoyée avant la phase D2, ou réglage changé depuis) :
+ * même chemin qu'un remplacement par le même fichier — nouvelle version, anciennes URL redirigées. Rien
+ * à faire : le média est seulement marqué comme examiné (`metadata.prepared = []`), même version.
+ */
+export async function prepareStoredMedia(media: Media): Promise<MediaWithUploader> {
+  if (media.deletedAt) throw mediaError(409, 'IN_TRASH')
+  const storage = await useMediaStorage()
+  const upload = await temporaryCopy(await storage.getStream(media.storageKey), media.originalName)
+  try {
+    const analyzed = await analyze(upload)
+    if (analyzed.kind !== media.kind) throw mediaError(422, 'KIND_MISMATCH')
+    const prepared = await prepareOriginal(upload, analyzed)
+    if (prepared.file) {
+      const stored = await storeOriginal(upload, analyzed, prepared)
+      return await commitNewFile(media, fileData(upload, analyzed, stored))
+    }
+    const prisma = await usePrisma()
+    const { count } = await prisma.media.updateMany({
+      where: { id: media.id, version: media.version },
+      data: { metadata: prepared.inspected.metadata as Prisma.InputJsonValue },
+    })
+    if (count !== 1) throw mediaError(409, 'VERSION_CONFLICT')
+    await mediaChanged([media.id], spaceOfMedia(media))
+    return await findMediaOrFail(media.id)
+  }
+  finally {
+    await upload.cleanup()
+  }
 }
 
 /** Dérivés d'une version qui n'est plus servie (lignes puis fichiers) : ses URL redirigent vers la nouvelle. */
@@ -318,7 +424,7 @@ export async function updateMediaMetadata(media: Media, input: MediaMetadataInpu
   const prisma = await usePrisma()
 
   if (focalPoint !== undefined && !sameFocalPoint(focalPoint, mediaFocalPoint(media))) {
-    if (!hasDerivedFiles(media)) throw createError({ statusCode: 400, statusMessage: 'Only images have a focal point.' })
+    if (!hasDerivedFiles(media)) throw createError({ statusCode: 400, statusMessage: 'Only images and videos with a poster image have a focal point.' })
     if (media.deletedAt) throw mediaError(409, 'IN_TRASH')
     const { count } = await prisma.media.updateMany({
       where: { id: media.id, version: media.version },
@@ -422,9 +528,12 @@ export async function duplicateMedia(media: Media, target: Space, provenance: Me
       },
       include: MEDIA_INCLUDE,
     })
+    if (media.kind === 'VIDEO') await copyTextTracks(media, copy.id)
+    const withPoster = media.posterKey ? await copyPoster(media, copy) : copy
+    const duplicate = media.kind === 'VIDEO' ? await findMediaOrFail(copy.id) : withPoster
     await mediaChanged([copy.id], target)
-    pregenerateVariants(copy)
-    return copy
+    pregenerateVariants(duplicate)
+    return duplicate
   }
   catch (error) {
     await storage.delete(key)
@@ -448,4 +557,107 @@ export async function moveMedia(media: Media, target: Space, folderId: string | 
   })
   await mediaChanged([media.id], spaceOfMedia(media), target)
   return moved
+}
+
+// ─── Image d'affiche (vidéos, phase D2) ──────────────────────────────────────
+
+/** Types d'image acceptés pour une affiche (normalisée ensuite en JPEG). */
+export const POSTER_TYPES: readonly string[] = Object.keys(ACCEPTED_MEDIA_TYPES.IMAGE ?? {})
+
+function requirePosterTarget(media: Media): void {
+  if (media.kind !== 'VIDEO') throw mediaError(422, 'KIND_MISMATCH', { detail: 'Only videos have a poster image.' })
+  if (media.deletedAt) throw mediaError(409, 'IN_TRASH')
+}
+
+/**
+ * Image d'affiche d'une vidéo (fichier reçu : une image) : normalisée en JPEG dans la file des traitements
+ * (orientation, 3840 px au plus, métadonnées retirées), puis source de l'aperçu et des dérivés de la vidéo.
+ * Première affiche : même version (aucun dérivé n'existait). Nouvelle affiche : nouvelle version, comme le
+ * point d'intérêt (anciennes URL redirigées, dérivés de l'ancienne version supprimés) — sinon un cache
+ * servirait l'ancienne image à la même URL. `time` : instant capturé (secondes), null pour une image envoyée.
+ */
+export async function setMediaPoster(media: Media, upload: ReceivedUpload, time: number | null): Promise<MediaWithUploader> {
+  requirePosterTarget(media)
+  const mimeType = await sniffMimeType(upload.path)
+  if (!mimeType || !POSTER_TYPES.includes(mimeType)) throw mediaError(415, 'UNSUPPORTED_TYPE', { accepted: POSTER_TYPES })
+  const poster = await runProcessing(async () => {
+    await imageHandler.inspect(upload.path, mimeType)
+    return normalizePoster(upload.path)
+  })
+
+  const storage = await useMediaStorage()
+  const key = posterKey(media.id)
+  await storage.put(key, Readable.from(poster.data), { contentType: 'image/jpeg', size: poster.data.length })
+  const replacing = media.posterKey !== null
+  const prisma = await usePrisma()
+  const { count } = await prisma.media.updateMany({
+    where: { id: media.id, version: media.version, posterKey: media.posterKey },
+    data: {
+      posterKey: key,
+      posterWidth: poster.width,
+      posterHeight: poster.height,
+      posterSize: poster.data.length,
+      posterTime: time,
+      ...(replacing ? { version: { increment: 1 } } : {}),
+    },
+  })
+  if (count !== 1) {
+    await storage.delete(key)
+    throw mediaError(409, 'VERSION_CONFLICT')
+  }
+  if (replacing) {
+    await deleteVersionVariants(media)
+    await storage.delete(media.posterKey!)
+  }
+  await mediaChanged([media.id], spaceOfMedia(media))
+  const updated = await findMediaOrFail(media.id)
+  pregenerateVariants(updated)
+  return updated
+}
+
+/** Retire l'affiche d'une vidéo : nouvelle version, dérivés et point d'intérêt supprimés. Sans affiche : rien. */
+export async function removeMediaPoster(media: Media): Promise<MediaWithUploader> {
+  requirePosterTarget(media)
+  if (!media.posterKey) return findMediaOrFail(media.id)
+  const prisma = await usePrisma()
+  const { count } = await prisma.media.updateMany({
+    where: { id: media.id, version: media.version, posterKey: media.posterKey },
+    data: { posterKey: null, posterWidth: null, posterHeight: null, posterSize: null, posterTime: null, focalX: null, focalY: null, version: { increment: 1 } },
+  })
+  if (count !== 1) throw mediaError(409, 'VERSION_CONFLICT')
+  await deleteVersionVariants(media)
+  const storage = await useMediaStorage()
+  await storage.delete(media.posterKey)
+  await mediaChanged([media.id], spaceOfMedia(media))
+  return findMediaOrFail(media.id)
+}
+
+/** Copie l'affiche d'une vidéo vers sa copie (duplication) ; un échec laisse la copie sans affiche (journalisé). */
+async function copyPoster(source: Media, copy: MediaWithUploader): Promise<MediaWithUploader> {
+  const storage = await useMediaStorage()
+  const key = posterKey(copy.id)
+  try {
+    await storage.copy(source.posterKey!, key)
+    const prisma = await usePrisma()
+    return await prisma.media.update({
+      where: { id: copy.id },
+      data: { posterKey: key, posterWidth: source.posterWidth, posterHeight: source.posterHeight, posterSize: source.posterSize, posterTime: source.posterTime },
+      include: MEDIA_INCLUDE,
+    })
+  }
+  catch (error) {
+    console.error(`[surge-media] Affiche du média ${source.id} non copiée vers ${copy.id} :`, error)
+    await storage.delete(key).catch(() => {})
+    return copy
+  }
+}
+
+/** Champ `time` d'un envoi d'affiche : secondes de la vidéo (image capturée), absent = image envoyée. 400 si invalide. */
+export function posterTimeField(raw: string | undefined, duration: number | null): number | null {
+  if (raw === undefined || raw.trim() === '') return null
+  const value = Number(raw)
+  if (!Number.isFinite(value) || value < 0 || (duration !== null && value > duration + 1)) {
+    throw createError({ statusCode: 400, statusMessage: 'The "time" field must be a number of seconds within the video.' })
+  }
+  return Math.round(value * 1000) / 1000
 }

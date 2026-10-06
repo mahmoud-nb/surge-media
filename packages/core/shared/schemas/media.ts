@@ -1,5 +1,6 @@
 import { z } from 'zod'
 import { ENABLED_MEDIA_KINDS, MEDIA_VISIBILITIES, SIGNED_URL_MAX_TTL } from '../utils/media'
+import { canonicalLanguage, TEXT_TRACK_KINDS, TEXT_TRACK_LABEL_MAX_LENGTH } from '../utils/text-tracks'
 import { roundFocalCoordinate } from '../utils/transforms'
 import { folderIdSchema } from './folders'
 
@@ -73,3 +74,45 @@ export const mediaTargetSchema = z.object({
 export const signedUrlSchema = z.object({
   expiresIn: z.number().int().min(60).max(SIGNED_URL_MAX_TTL),
 })
+
+// ─── Pistes de texte des vidéos (phase D2) ───────────────────────────────────
+
+const trackLanguageSchema = z
+  .string('validation.required')
+  .trim()
+  .min(1, 'validation.required')
+  .max(35, 'validation.tooLong')
+  .transform((value, ctx) => {
+    const canonical = canonicalLanguage(value)
+    if (!canonical) ctx.addIssue({ code: 'custom', message: 'media.tracks.errors.language' })
+    return canonical ?? value
+  })
+
+const trackLabelSchema = z
+  .string('validation.required')
+  .trim()
+  .min(1, 'validation.required')
+  .max(TEXT_TRACK_LABEL_MAX_LENGTH, 'validation.tooLong')
+  // eslint-disable-next-line no-control-regex
+  .refine(value => !/[\u0000-\u001F\u007F]/.test(value), 'media.tracks.errors.label')
+
+/** Booléen d'un champ de formulaire multipart (`true`/`false`) ou JSON. */
+const formBoolean = z.union([z.boolean(), z.enum(['true', 'false', '1', '0']).transform(value => value === 'true' || value === '1')])
+
+/** Métadonnées d'une piste de texte (création : champs du formulaire multipart avec le fichier). */
+export const textTrackInputSchema = z.object({
+  kind: z.enum(TEXT_TRACK_KINDS, 'validation.required'),
+  language: trackLanguageSchema,
+  label: trackLabelSchema,
+  isDefault: formBoolean.default(false),
+})
+export type TextTrackInput = z.output<typeof textTrackInputSchema>
+
+/** Modification d'une piste (le fichier ne change pas, ni son URL). */
+export const textTrackUpdateSchema = z.strictObject({
+  kind: z.enum(TEXT_TRACK_KINDS, 'validation.required'),
+  language: trackLanguageSchema,
+  label: trackLabelSchema,
+  isDefault: z.boolean(),
+}).partial()
+export type TextTrackUpdate = z.output<typeof textTrackUpdateSchema>

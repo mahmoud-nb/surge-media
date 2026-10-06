@@ -43,6 +43,42 @@ export function sanitizeFilename(name: string): string {
   return clean.slice(0, 191 - extension.length) + extension
 }
 
+/** Dossier temporaire d'un fichier reçu ; `cleanup` ne lève jamais. */
+async function temporaryDirectory(): Promise<{ directory: string, cleanup: () => Promise<void> }> {
+  const directory = await mkdtemp(join(tmpdir(), 'surge-media-upload-'))
+  // Ne fait jamais échouer la requête : un fichier temporaire resté en place (verrou passager
+  // sous Windows) est seulement signalé ; le système nettoie son dossier temporaire.
+  const cleanup = () => rm(directory, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 })
+    .catch((error: unknown) => console.warn(`[surge-media] Fichier temporaire non supprimé (${directory}) :`, error))
+  return { directory, cleanup }
+}
+
+/**
+ * Copie temporaire d'un fichier déjà stocké, présentée comme un fichier reçu (préparation d'une vidéo
+ * envoyée avant la phase D2 : même chemin qu'un remplacement).
+ */
+export async function temporaryCopy(source: Readable, filename: string): Promise<ReceivedUpload> {
+  const { directory, cleanup } = await temporaryDirectory()
+  try {
+    const path = join(directory, 'file')
+    const hash = createHash('sha256')
+    let size = 0
+    const meter = new Transform({
+      transform(chunk: Buffer, _encoding, callback) {
+        size += chunk.length
+        hash.update(chunk)
+        callback(null, chunk)
+      },
+    })
+    await pipeline(source, meter, createWriteStream(path))
+    return { path, size, checksum: hash.digest('hex'), filename, fields: {}, cleanup }
+  }
+  catch (error) {
+    await cleanup()
+    throw error
+  }
+}
+
 /**
  * Lit la suite d'un corps refusé sans l'écrire : la réponse part aussitôt et la connexion reste
  * utilisable (une connexion fermée avec des données non lues est souvent vue par le client comme une
@@ -102,11 +138,7 @@ export async function receiveUpload(event: H3Event, rules: UploadRules): Promise
     throw mediaError(413, 'FILE_TOO_LARGE', { maxSize: largest })
   }
 
-  const directory = await mkdtemp(join(tmpdir(), 'surge-media-upload-'))
-  // Ne fait jamais échouer la requête : un fichier temporaire resté en place (verrou passager
-  // sous Windows) est seulement signalé ; le système nettoie son dossier temporaire.
-  const cleanup = () => rm(directory, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 })
-    .catch((error: unknown) => console.warn(`[surge-media] Fichier temporaire non supprimé (${directory}) :`, error))
+  const { directory, cleanup } = await temporaryDirectory()
 
   try {
     return await new Promise<ReceivedUpload>((resolveUpload, rejectUpload) => {
@@ -238,4 +270,84 @@ export async function receiveUpload(event: H3Event, rules: UploadRules): Promise
     await cleanup()
     throw error
   }
+}
+
+/** Petit fichier reçu en mémoire (piste de sous-titres) : contenu, nom indicatif, champs du formulaire. */
+export interface ReceivedSmallFile {
+  data: Buffer
+  filename: string
+  fields: Record<string, string>
+}
+
+/**
+ * Reçoit un petit fichier en mémoire (multipart, champ « file », `maxSize` octets au plus : 413
+ * FILE_TOO_LARGE), sans fichier temporaire ni reconnaissance du type : le contenu est analysé ensuite
+ * (pistes de texte, text-track.ts). Même délai d'inactivité que les envois (408 UPLOAD_TIMEOUT).
+ */
+export async function receiveSmallUpload(event: H3Event, maxSize: number): Promise<ReceivedSmallFile> {
+  const headers = event.node.req.headers
+  if (!headers['content-type']?.toLowerCase().startsWith('multipart/form-data')) {
+    throw mediaError(400, 'MULTIPART_REQUIRED')
+  }
+  const declared = Number(headers['content-length'])
+  if (Number.isFinite(declared) && declared > maxSize + MULTIPART_OVERHEAD) {
+    throw mediaError(413, 'FILE_TOO_LARGE', { maxSize })
+  }
+
+  const request = event.node.req
+  return new Promise<ReceivedSmallFile>((resolve, reject) => {
+    const parser = busboy({ headers, defParamCharset: 'utf8', limits: { files: 1, fileSize: maxSize, fields: 10, fieldSize: 4096, parts: 12 } })
+    const fields: Record<string, string> = {}
+    const chunks: Buffer[] = []
+    let filename: string | null = null
+    let tooLarge = false
+    let settled = false
+    let idle: ReturnType<typeof setTimeout> | undefined
+    const finish = (error: unknown, value?: ReceivedSmallFile) => {
+      if (settled) return
+      settled = true
+      clearTimeout(idle)
+      request.off('data', touch)
+      if (error) {
+        request.unpipe(parser)
+        drainRequest(request, maxSize + MULTIPART_OVERHEAD)
+        reject(error)
+      }
+      else resolve(value!)
+    }
+    const touch = () => {
+      clearTimeout(idle)
+      idle = setTimeout(() => {
+        setResponseHeader(event, 'Connection', 'close')
+        finish(mediaError(408, 'UPLOAD_TIMEOUT', { timeout: UPLOAD_IDLE_TIMEOUT_MS / 1000 }))
+      }, UPLOAD_IDLE_TIMEOUT_MS)
+    }
+
+    parser.on('file', (name, stream, info) => {
+      if (name !== 'file' || filename !== null) {
+        stream.resume()
+        return
+      }
+      filename = sanitizeFilename(info.filename ?? '')
+      stream.on('data', (chunk: Buffer) => chunks.push(chunk))
+      stream.on('limit', () => {
+        tooLarge = true
+        finish(mediaError(413, 'FILE_TOO_LARGE', { maxSize }))
+      })
+    })
+    parser.on('field', (name, value) => {
+      fields[name] = value
+    })
+    parser.on('error', error => finish(error))
+    parser.on('close', () => {
+      if (tooLarge) return
+      const data = Buffer.concat(chunks)
+      if (filename === null || data.length === 0) return finish(mediaError(400, 'NO_FILE'))
+      finish(null, { data, filename, fields })
+    })
+    request.once('aborted', () => finish(createError({ statusCode: 400, statusMessage: 'Upload aborted' })))
+    request.pipe(parser)
+    request.on('data', touch)
+    touch()
+  })
 }

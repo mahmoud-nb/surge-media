@@ -188,6 +188,7 @@ describe('contrat Media v1', () => {
     id: 'cmmedia0001', projectId: 'p1', folderId: null, kind: 'IMAGE', visibility: 'PUBLIC', storageKey: 'originals/2026/09/x.jpg',
     version: 3, originalName: 'Affiche été.jpg', mimeType: 'image/jpeg', size: 1234, checksum: 'a'.repeat(64), width: 800, height: 600,
     duration: null, title: 'Affiche été', altText: 'Plage', searchTitle: null, searchName: '', searchAlt: null, metadata: null, focalX: null, focalY: null,
+    posterKey: null, posterWidth: null, posterHeight: null, posterSize: null, posterTime: null, textTracks: [],
     uploadedById: null, duplicatedFromId: null, createdAt: new Date('2026-09-29T10:00:00Z'), updatedAt: new Date('2026-09-29T11:00:00Z'), deletedAt: null,
   } as const
 
@@ -231,6 +232,32 @@ describe('contrat Media v1', () => {
     expect(derived.scope).toBe('derived')
     expect(checkSignature(['secret-de-test'], { mediaId: media.id, version: 3, variant: 't:w_800,h_450' }, derived, 1_900_000_000).status).toBe('valid')
     expect(checkSignature(['secret-de-test'], { mediaId: media.id, version: 3, variant: 'original' }, derived, 1_900_000_000).status).toBe('invalid')
+  })
+
+  it('vidéo : affiche (source des dérivés) et pistes de texte, signées pour un média privé', () => {
+    vi.stubGlobal('useRuntimeConfig', () => ({ media: { signingSecret: 'secret-de-test', previousSigningSecret: '' }, session: {} }))
+    const track = { id: 'cmtrack0001', kind: 'CAPTIONS', language: 'fr', label: 'Français (SME)', isDefault: true, storageKey: 'variants/x/track-a.vtt', size: 120, checksum: 'b'.repeat(64), cueCount: 3, sourceFormat: 'srt', createdAt: new Date('2026-10-05T10:00:00Z') }
+    const video = { ...media, kind: 'VIDEO', mimeType: 'video/mp4', duration: 14.1, posterKey: 'variants/x/poster-a.jpg', posterWidth: 1080, posterHeight: 1920, posterSize: 9000, posterTime: 1.41, textTracks: [track] }
+    const open = toApiMedia(video as never, 'https://media.example.com', 0)
+    expect(apiMediaSchema.parse(open)).toBeTruthy()
+    expect(open).toMatchObject({
+      kind: 'video',
+      previewUrl: 'https://media.example.com/m/cmmedia0001/v3/preview/affiche-ete.webp',
+      poster: { url: 'https://media.example.com/m/cmmedia0001/v3/full/affiche-ete.jpg', width: 1080, height: 1920, time: 1.41 },
+      textTracks: [{ id: 'cmtrack0001', kind: 'captions', language: 'fr', label: 'Français (SME)', default: true, url: 'https://media.example.com/m/cmmedia0001/v3/tracks/cmtrack0001.vtt', cueCount: 3 }],
+    })
+    expect(toApiMedia({ ...video, posterKey: null } as never, 'https://media.example.com', 0)).toMatchObject({ poster: null, previewUrl: null, urlTemplate: null })
+
+    const hidden = toApiMedia({ ...video, visibility: 'PRIVATE' } as never, 'https://media.example.com', 2_000_000_000)
+    const trackQuery = Object.fromEntries(new URL(hidden.textTracks[0]!.url).searchParams)
+    expect(checkSignature(['secret-de-test'], { mediaId: media.id, version: 3, variant: 'track:cmtrack0001' }, trackQuery, 1_900_000_000).status).toBe('valid')
+    // Le lien d'une piste n'ouvre ni l'original, ni une autre piste ; le droit « derived » ne couvre aucune piste.
+    expect(checkSignature(['secret-de-test'], { mediaId: media.id, version: 3, variant: 'original' }, trackQuery, 1_900_000_000).status).toBe('invalid')
+    expect(checkSignature(['secret-de-test'], { mediaId: media.id, version: 3, variant: 'track:cmtrack0002' }, trackQuery, 1_900_000_000).status).toBe('invalid')
+    const derived = Object.fromEntries(new URLSearchParams(hidden.urlTemplate!.split('?')[1]))
+    expect(checkSignature(['secret-de-test'], { mediaId: media.id, version: 3, variant: 'track:cmtrack0001' }, derived, 1_900_000_000).status).toBe('invalid')
+    const posterQuery = Object.fromEntries(new URL(hidden.poster!.url).searchParams)
+    expect(checkSignature(['secret-de-test'], { mediaId: media.id, version: 3, variant: 'full' }, posterQuery, 1_900_000_000).status).toBe('valid')
   })
 })
 

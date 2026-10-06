@@ -27,6 +27,10 @@ import {
   apiSignedUrlListSchema,
   apiSignedUrlSchema,
   apiSignedUrlsBodySchema,
+  apiTextTrackFieldsSchema,
+  apiTextTrackListSchema,
+  apiTextTrackSchema,
+  apiTextTrackUpdateSchema,
   apiUploadConstraintsSchema,
   delegatedTokenClaimsSchema,
 } from '#shared/schemas/api'
@@ -143,7 +147,26 @@ Les clés secrètes et les jetons personnels sont **refusés depuis un navigateu
 Les champs \`url\` et \`previewUrl\` sont des adresses absolues, utilisables telles quelles (\`<img src>\`) : permanentes et mises en cache pour un média public, signées et temporaires pour un média privé. Un lien signé à la demande s'obtient avec \`POST …/signed-url\` (ou \`POST …/signed-urls\` pour tout un lot).
 
 ## Vidéos
-Les vidéos MP4, WebM et QuickTime (MOV) sont stockées et servies **telles qu'envoyées** : ni aperçu (\`previewUrl\` et \`urlTemplate\` valent \`null\`), ni transformation, ni transcodage. \`width\` et \`height\` sont les dimensions affichées (rotation des vidéos de téléphone appliquée), \`duration\` la durée en secondes (\`null\` si le fichier ne l'indique pas). \`url\` se lit directement dans \`<video src>\` : la diffusion accepte les requêtes partielles (\`Range\` → \`206\`) et un média public est mis en cache sans limite (CDN). La lecture dépend des codecs du fichier : H.264 (MP4, MOV) et VP8/VP9 (WebM) sont lus partout, HEVC ou AV1 selon le navigateur. L'\`url\` d'une vidéo privée est signée pour environ une heure et le lecteur la réutilise pendant toute la lecture : pour une longue vidéo, demandez un lien plus durable (\`POST …/signed-url\`, \`expiresIn\` au moins égal à la durée, 7 jours au plus).
+Les vidéos MP4, WebM et QuickTime (MOV) sont stockées et servies sans transcodage. Un MP4 ou un MOV est **préparé à l'envoi**, sans réencodage ni perte de qualité : index placé en tête du fichier (la lecture commence sans aller chercher la fin) et métadonnées d'origine retirées (lieu de tournage, appareil, logiciel) ; \`size\` est la taille du fichier servi. \`width\` et \`height\` sont les dimensions affichées (rotation des vidéos de téléphone appliquée), \`duration\` la durée en secondes (estimée pour un WebM enregistré par un navigateur, \`null\` si elle reste inconnue). \`url\` se lit directement dans \`<video src>\` : la diffusion accepte les requêtes partielles (\`Range\` → \`206\`) et un média public est mis en cache sans limite (CDN). La lecture dépend des codecs du fichier : H.264 (MP4, MOV) et VP8/VP9 (WebM) sont lus partout, HEVC ou AV1 selon le navigateur. L'\`url\` d'une vidéo privée est signée pour environ une heure et le lecteur la réutilise pendant toute la lecture : pour une longue vidéo, demandez un lien plus durable (\`POST …/signed-url\`, \`expiresIn\` au moins égal à la durée, 7 jours au plus).
+
+**Image d'affiche** (\`PUT …/media/{mediaId}/poster\`) : une image, normalisée en JPEG, sert d'attribut \`poster\` (\`poster.url\`) et de source aux dérivés de la vidéo (\`previewUrl\`, \`urlTemplate\`) ; sans affiche, ils valent \`null\`. La première affiche garde la version ; la remplacer ou la retirer l'incrémente (nouvelles URL). Une application peut capturer l'image dans le navigateur, sans calcul côté serveur :
+
+\`\`\`js
+const video = document.createElement('video')
+video.muted = true
+video.src = URL.createObjectURL(file) // la vidéo choisie par l'utilisateur
+await new Promise(resolve => video.addEventListener('loadeddata', resolve, { once: true }))
+video.currentTime = Math.min(video.duration * 0.1, 5)
+await new Promise(resolve => video.addEventListener('seeked', resolve, { once: true }))
+const canvas = Object.assign(document.createElement('canvas'), { width: video.videoWidth, height: video.videoHeight })
+canvas.getContext('2d').drawImage(video, 0, 0)
+const form = new FormData()
+form.append('file', await new Promise(resolve => canvas.toBlob(resolve, 'image/jpeg', 0.9)), 'poster.jpg')
+form.append('time', String(video.currentTime))
+await fetch(\`\${api}/projects/\${projectId}/media/\${mediaId}/poster\`, { method: 'PUT', headers: { Authorization: \`Bearer \${token}\` }, body: form })
+\`\`\`
+
+**Sous-titres** (\`POST …/media/{mediaId}/tracks\`) : fichiers WebVTT ou SRT (convertis), vérifiés puis réécrits en WebVTT ; \`textTracks\` donne pour chacun \`kind\`, \`language\`, \`label\`, \`default\` et \`url\`, à reprendre dans des éléments \`<track>\`. Si les fichiers viennent d'un autre domaine que la page, ajoutez \`crossorigin="anonymous"\` à \`<video>\` (la diffusion autorise toutes les origines). Une piste privée se lit par son URL signée, ou par un lien plus durable (\`POST …/signed-url\`, cible \`track\`).
 
 ## Transformations d'images
 Chaque image se décline par son URL de diffusion, dont \`urlTemplate\` donne le gabarit :
@@ -192,7 +215,26 @@ Secret keys and personal tokens are **rejected from a browser** (\`SECRET_IN_BRO
 The \`url\` and \`previewUrl\` fields are absolute addresses, usable as is (\`<img src>\`): permanent and cached for a public media item, signed and temporary for a private one. An on-demand signed link comes from \`POST …/signed-url\` (or \`POST …/signed-urls\` for a whole batch).
 
 ## Videos
-MP4, WebM and QuickTime (MOV) videos are stored and served **as uploaded**: no preview (\`previewUrl\` and \`urlTemplate\` are \`null\`), no transformation, no transcoding. \`width\` and \`height\` are the displayed dimensions (rotation of phone videos applied), \`duration\` the duration in seconds (\`null\` when the file does not say). \`url\` plays directly in \`<video src>\`: delivery accepts partial requests (\`Range\` → \`206\`) and a public media item is cached without limit (CDN). Playback depends on the codecs of the file: H.264 (MP4, MOV) and VP8/VP9 (WebM) play everywhere, HEVC or AV1 depending on the browser. The \`url\` of a private video is signed for about one hour and the player reuses it during the whole playback: for a long video, request a longer-lived link (\`POST …/signed-url\`, \`expiresIn\` at least equal to the duration, 7 days at most).
+MP4, WebM and QuickTime (MOV) videos are stored and served without transcoding. An MP4 or MOV file is **prepared on upload**, without re-encoding or quality loss: index moved to the start of the file (playback starts without fetching the end) and original metadata removed (shooting location, device, software); \`size\` is the size of the served file. \`width\` and \`height\` are the displayed dimensions (rotation of phone videos applied), \`duration\` the duration in seconds (estimated for a WebM recorded by a browser, \`null\` when it remains unknown). \`url\` plays directly in \`<video src>\`: delivery accepts partial requests (\`Range\` → \`206\`) and a public media item is cached without limit (CDN). Playback depends on the codecs of the file: H.264 (MP4, MOV) and VP8/VP9 (WebM) play everywhere, HEVC or AV1 depending on the browser. The \`url\` of a private video is signed for about one hour and the player reuses it during the whole playback: for a long video, request a longer-lived link (\`POST …/signed-url\`, \`expiresIn\` at least equal to the duration, 7 days at most).
+
+**Poster image** (\`PUT …/media/{mediaId}/poster\`): an image, normalised to JPEG, serves as the \`poster\` attribute (\`poster.url\`) and as the source of the video's derivatives (\`previewUrl\`, \`urlTemplate\`); without a poster, they are \`null\`. The first poster keeps the version; replacing or removing it increments it (new URLs). An application can capture the frame in the browser, with no server-side processing:
+
+\`\`\`js
+const video = document.createElement('video')
+video.muted = true
+video.src = URL.createObjectURL(file) // the video chosen by the user
+await new Promise(resolve => video.addEventListener('loadeddata', resolve, { once: true }))
+video.currentTime = Math.min(video.duration * 0.1, 5)
+await new Promise(resolve => video.addEventListener('seeked', resolve, { once: true }))
+const canvas = Object.assign(document.createElement('canvas'), { width: video.videoWidth, height: video.videoHeight })
+canvas.getContext('2d').drawImage(video, 0, 0)
+const form = new FormData()
+form.append('file', await new Promise(resolve => canvas.toBlob(resolve, 'image/jpeg', 0.9)), 'poster.jpg')
+form.append('time', String(video.currentTime))
+await fetch(\`\${api}/projects/\${projectId}/media/\${mediaId}/poster\`, { method: 'PUT', headers: { Authorization: \`Bearer \${token}\` }, body: form })
+\`\`\`
+
+**Subtitles** (\`POST …/media/{mediaId}/tracks\`): WebVTT or SRT files (converted), checked then rewritten as WebVTT; \`textTracks\` gives for each one \`kind\`, \`language\`, \`label\`, \`default\` and \`url\`, to use in \`<track>\` elements. If the files come from another domain than the page, add \`crossorigin="anonymous"\` to \`<video>\` (delivery allows any origin). A private track is read through its signed URL, or a longer-lived link (\`POST …/signed-url\`, target \`track\`).
 
 ## Image transformations
 Every image can be derived through its delivery URL, whose template is given by \`urlTemplate\`:
@@ -292,12 +334,55 @@ function multipartBody(withFields: boolean, description: Json): Json {
   }
 }
 
+/** Corps multipart d'une image d'affiche : l'image et l'instant capturé (facultatif). */
+function posterBody(): Json {
+  return {
+    required: true,
+    ...t('Image d\'affiche et instant capturé.', 'Poster image and captured moment.'),
+    content: {
+      'multipart/form-data': {
+        schema: {
+          type: 'object',
+          required: ['file'],
+          properties: {
+            file: { type: 'string', format: 'binary', ...t('Image JPEG, PNG, WebP, AVIF ou GIF (première image) ; type détecté d\'après son contenu.', 'JPEG, PNG, WebP, AVIF or GIF image (first frame); type detected from its contents.') },
+            time: { type: 'number', minimum: 0, ...t('Instant de la vidéo représenté, en secondes (image capturée dans la vidéo).', 'Moment of the video shown, in seconds (frame captured from the video).') },
+          },
+        },
+      },
+    },
+  }
+}
+
+/** Corps multipart d'une piste de texte : le fichier WebVTT ou SRT et ses champs. */
+function trackBody(): Json {
+  const fields = (inputSchema(apiTextTrackFieldsSchema) as { properties?: Json, required?: string[] })
+  return {
+    required: true,
+    ...t('Fichier de sous-titres et champs de la piste.', 'Subtitle file and track fields.'),
+    content: {
+      'multipart/form-data': {
+        schema: {
+          type: 'object',
+          required: ['file', ...(fields.required ?? [])],
+          properties: {
+            file: { type: 'string', format: 'binary', ...t('Fichier WebVTT (`.vtt`) ou SubRip (`.srt`), 1 Mio au plus.', 'WebVTT (`.vtt`) or SubRip (`.srt`) file, 1 MiB at most.') },
+            ...(fields.properties ?? {}),
+          },
+        },
+      },
+    },
+  }
+}
+
 // ─── Composants ──────────────────────────────────────────────────────────────
 
 function buildComponents() {
   const registry = z.registry<{ id: string }>()
   registry.add(apiMediaSchema, { id: 'Media' })
   registry.add(apiMediaListSchema, { id: 'MediaList' })
+  registry.add(apiTextTrackSchema, { id: 'TextTrack' })
+  registry.add(apiTextTrackListSchema, { id: 'TextTrackList' })
   registry.add(apiFolderSchema, { id: 'Folder' })
   registry.add(apiFolderListSchema, { id: 'FolderList' })
   registry.add(apiProjectSchema, { id: 'Project' })
@@ -338,6 +423,7 @@ function buildComponents() {
       projectId: { name: 'projectId', in: 'path', required: true, ...t('Identifiant du projet.', 'Project id.'), schema: { type: 'string' } },
       mediaId: { name: 'mediaId', in: 'path', required: true, ...t('Identifiant du média.', 'Media item id.'), schema: { type: 'string' } },
       folderId: { name: 'folderId', in: 'path', required: true, ...t('Identifiant du dossier.', 'Folder id.'), schema: { type: 'string' } },
+      trackId: { name: 'trackId', in: 'path', required: true, ...t('Identifiant de la piste de texte.', 'Text track id.'), schema: { type: 'string' } },
     },
     headers: {
       ETag: { ...t('Étiquette de version (faible), à renvoyer dans `If-None-Match`.', 'Weak version tag, to send back in `If-None-Match`.'), schema: { type: 'string' } },
@@ -348,6 +434,9 @@ function buildComponents() {
     requestBodies: {
       MediaUpload: multipartBody(true, t('Fichier et champs du nouveau média.', 'File and fields of the new media item.')),
       FileReplace: multipartBody(false, t('Nouveau fichier.', 'New file.')),
+      PosterUpload: posterBody(),
+      TrackUpload: trackBody(),
+      TrackUpdate: jsonBody(apiTextTrackUpdateSchema, true, t('Champs de la piste à modifier.', 'Track fields to update.')),
       MediaUpdate: jsonBody(apiMediaUpdateSchema, true, t('Champs à modifier.', 'Fields to update.')),
       MediaDuplicate: jsonBody(apiDuplicateBodySchema, false, t('Destination de la copie (facultative).', 'Destination of the copy (optional).')),
       SignedUrlRequest: jsonBody(apiSignedUrlBodySchema, false, t('Cible, format et durée du lien (facultatifs : original, 1 h).', 'Target, format and lifetime of the link (optional: original, 1 h).')),
@@ -363,6 +452,9 @@ function buildComponents() {
       MediaList: json('MediaList', t('Page de médias.', 'Page of media.'), etag),
       Media: json('Media', t('Média.', 'Media item.'), etag),
       MediaCreated: json('Media', t('Média créé.', 'Media item created.'), { ...etag, Location: ref('headers', 'Location') }),
+      TextTrack: json('TextTrack', t('Piste de texte.', 'Text track.')),
+      TextTrackCreated: json('TextTrack', t('Piste de texte créée.', 'Text track created.')),
+      TextTrackList: json('TextTrackList', t('Pistes de texte de la vidéo.', 'Text tracks of the video.')),
       MediaCopy: json('Media', t('Copie créée (en-tête `Location` si elle est dans un projet).', 'Copy created (`Location` header when it is in a project).'), { ...etag, Location: ref('headers', 'Location') }),
       FolderList: json('FolderList', t('Dossiers du projet.', 'Folders of the project.'), etag),
       Folder: json('Folder', t('Dossier.', 'Folder.')),
@@ -391,7 +483,7 @@ function authErrors(credentials: ApiCredentialType[]): ApiErrorCode[] {
 }
 
 /** Corps de fichier lus en flux (multipart) ; tout autre corps est lu en mémoire, borné (server/lib/http/body.ts). */
-const UPLOAD_BODIES = new Set(['MediaUpload', 'FileReplace'])
+const UPLOAD_BODIES = new Set(['MediaUpload', 'FileReplace', 'PosterUpload', 'TrackUpload'])
 
 /** Erreurs de lecture du corps : envoi interrompu par inactivité, ou corps JSON trop volumineux ou trop lent. */
 function bodyErrors(requestBody: unknown): ApiErrorCode[] {

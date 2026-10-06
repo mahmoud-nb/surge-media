@@ -12,7 +12,9 @@ import type { Media } from '../../generated/prisma/client'
 import { useMediaStorage } from '../storage'
 import { variantCache } from './cache'
 import { mediaError } from './errors'
-import { handlerFor, type MediaTypeHandler } from './handlers'
+import { handlerFor } from './handlers'
+import { imageHandler } from './handlers/image'
+import type { MediaTypeHandler } from './handlers/types'
 import { variantKey } from './keys'
 import { runProcessing, useMediaProcessing } from './processing'
 import { planTransform, type TransformPlan, type TransformSource } from './transform-plan'
@@ -26,6 +28,9 @@ import { useTransformSettings } from './transform-settings'
  * (processing.ts) ; les paramètres libres sont en plus soumis à un quota de dérivés par version et
  * au débit de nouvelles générations (garde-fous, architecture phase C § 6). L'aperçu est
  * **pré-généré** en tâche de fond après un envoi, un remplacement ou une duplication.
+ *
+ * Source des dérivés : l'original d'une image ; l'**image d'affiche** d'une vidéo (phase D2), traitée par
+ * le gestionnaire des images. Une vidéo sans affiche n'a pas de dérivés.
  */
 
 export interface DeliverableObject {
@@ -63,9 +68,43 @@ export function previewRequest(): DerivedRequest {
   return { transformation: builtinPresetTransformation('preview')!, format: 'webp', free: false }
 }
 
-/** Le genre de ce média produit-il des dérivés (transformations, aperçu) ? */
-export function hasDerivedFiles(media: Pick<Media, 'kind'>): boolean {
+/** Ce média produit-il des dérivés (transformations, aperçu) ? Image, ou vidéo avec une affiche. */
+export function hasDerivedFiles(media: Pick<Media, 'kind' | 'posterKey'>): boolean {
+  if (media.kind === 'VIDEO') return Boolean(media.posterKey)
   return Boolean(handlerFor(media.kind)?.transform)
+}
+
+/** Fichier source des dérivés d'un média et gestionnaire qui les produit. */
+interface DerivedSource {
+  key: string
+  transform: NonNullable<MediaTypeHandler['transform']>
+  /** Empreinte de la source, pour les ETag des dérivés. */
+  tag: string
+  /** Dimensions orientées, transparence, point d'intérêt. */
+  source: TransformSource
+}
+
+function derivedSource(media: Media): DerivedSource | null {
+  const focal = mediaFocalPoint(media)
+  if (media.kind === 'VIDEO') {
+    if (!media.posterKey || !media.posterWidth || !media.posterHeight) return null
+    return {
+      key: media.posterKey,
+      transform: imageHandler.transform!,
+      tag: createHash('sha256').update(media.posterKey).digest('hex').slice(0, 24),
+      // Affiche normalisée en JPEG : orientation appliquée, sans transparence.
+      source: { width: media.posterWidth, height: media.posterHeight, hasAlpha: false, focal },
+    }
+  }
+  const transform = handlerFor(media.kind)?.transform
+  if (!transform || !media.width || !media.height) return null
+  const metadata = media.metadata as { hasAlpha?: unknown } | null
+  return {
+    key: media.storageKey,
+    transform,
+    tag: media.checksum.slice(0, 24),
+    source: { width: media.width, height: media.height, hasAlpha: metadata?.hasAlpha === true, focal },
+  }
 }
 
 /** Point d'intérêt enregistré (fractions 0 à 1 de l'image orientée), ou null. */
@@ -73,11 +112,9 @@ export function mediaFocalPoint(media: Pick<Media, 'focalX' | 'focalY'>): FocalP
   return media.focalX === null || media.focalY === null ? null : { x: media.focalX, y: media.focalY }
 }
 
-/** Source d'une transformation : dimensions orientées, transparence, point d'intérêt. */
+/** Source d'une transformation : dimensions orientées, transparence, point d'intérêt (image ou affiche). */
 export function transformSource(media: Media): TransformSource | null {
-  if (!media.width || !media.height) return null
-  const metadata = media.metadata as { hasAlpha?: unknown } | null
-  return { width: media.width, height: media.height, hasAlpha: metadata?.hasAlpha === true, focal: mediaFocalPoint(media) }
+  return derivedSource(media)?.source ?? null
 }
 
 /** Fichier à servir : l'original, ou un dérivé généré à la première demande puis conservé. */
@@ -86,17 +123,16 @@ export async function resolveDeliverable(media: Media, request: 'original' | Der
     return { key: media.storageKey, mimeType: media.mimeType, size: media.size, etag: media.checksum.slice(0, 32) }
   }
 
-  const handler = handlerFor(media.kind)
-  const source = transformSource(media)
-  if (!handler?.transform || !source) throw createError({ statusCode: 404, statusMessage: 'Not Found' })
-  const planned = planTransform(request.transformation, source, request.format, useTransformSettings().maxDimension)
+  const derived = derivedSource(media)
+  if (!derived) throw createError({ statusCode: 404, statusMessage: 'Not Found' })
+  const planned = planTransform(request.transformation, derived.source, request.format, useTransformSettings().maxDimension)
   if (!planned.ok) throw mediaError(400, 'INVALID_TRANSFORM', { detail: planned.message })
   const { plan } = planned
 
   // Un dérivé par version et par opération effective (« v3/size_800x533,q_80.webp ») : un
-  // remplacement n'en réutilise aucun.
+  // remplacement (du fichier ou de l'affiche) n'en réutilise aucun.
   const transformation = `v${media.version}/${plan.key}`
-  const etag = `${media.checksum.slice(0, 24)}-${createHash('sha256').update(plan.key).digest('hex').slice(0, 10)}`
+  const etag = `${derived.tag}-${createHash('sha256').update(plan.key).digest('hex').slice(0, 10)}`
   const cacheKey = `${media.id}:${transformation}`
   const cached = variantCache.get(cacheKey)
   if (cached) return { ...cached, etag }
@@ -120,7 +156,7 @@ export async function resolveDeliverable(media: Media, request: 'original' | Der
         await assertVariantQuota(media)
         request.beforeGenerate?.()
       }
-      return renderVariant(media, handler, plan, transformation, etag)
+      return renderVariant(media, derived, plan, transformation, etag)
     })().finally(() => pendingVariants.delete(cacheKey))
     pendingVariants.set(cacheKey, pending)
   }
@@ -141,15 +177,14 @@ async function assertVariantQuota(media: Media): Promise<void> {
 
 async function renderVariant(
   media: Media,
-  handler: MediaTypeHandler,
+  derived: DerivedSource,
   plan: TransformPlan,
   transformation: string,
   etag: string,
 ): Promise<DeliverableObject> {
-  const transform = handler.transform!
   const storage = await useMediaStorage()
   // Le fichier source n'est ouvert qu'une fois la place obtenue dans la file.
-  const rendered = await runProcessing(async () => transform(await storage.getStream(media.storageKey), plan))
+  const rendered = await runProcessing(async () => derived.transform(await storage.getStream(derived.key), plan))
   const key = variantKey(media.id, media.version, transformation, rendered.extension)
   await storage.put(key, Readable.from(rendered.data), { contentType: rendered.mimeType, size: rendered.data.length })
 
@@ -190,14 +225,12 @@ export interface TransientRender {
  * (503 SERVER_BUSY) ; mêmes bornes et même opération effective que la diffusion.
  */
 export async function renderTransient(media: Media, transformation: Transformation, format: TransformFormat): Promise<TransientRender> {
-  const handler = handlerFor(media.kind)
-  const source = transformSource(media)
-  if (!handler?.transform || !source) throw createError({ statusCode: 400, statusMessage: 'This media item has no derived files.' })
-  const planned = planTransform(transformation, source, format, useTransformSettings().maxDimension)
+  const derived = derivedSource(media)
+  if (!derived) throw createError({ statusCode: 400, statusMessage: 'This media item has no derived files.' })
+  const planned = planTransform(transformation, derived.source, format, useTransformSettings().maxDimension)
   if (!planned.ok) throw mediaError(400, 'INVALID_TRANSFORM', { detail: planned.message })
-  const transform = handler.transform
   const storage = await useMediaStorage()
-  const rendered = await runProcessing(async () => transform(await storage.getStream(media.storageKey), planned.plan))
+  const rendered = await runProcessing(async () => derived.transform(await storage.getStream(derived.key), planned.plan))
   return { data: rendered.data, mimeType: rendered.mimeType, width: rendered.width, height: rendered.height, operation: planned.plan.key }
 }
 

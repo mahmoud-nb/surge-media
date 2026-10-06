@@ -8,6 +8,7 @@ import {
   API_MEDIA_SORTS,
   API_SIGNED_URL_TARGETS,
   API_SIGNED_URLS_MAX,
+  API_TEXT_TRACK_KINDS,
   DELEGATED_MAX_FILES,
   DELEGATED_MAX_TYPES,
   DELEGATED_SUBJECT_MAX_LENGTH,
@@ -20,6 +21,7 @@ import { FOLDER_NAME_MAX_LENGTH } from '../utils/folders'
 import { ACCEPTED_MEDIA_TYPES, ENABLED_MEDIA_KINDS, MEDIA_VISIBILITIES, SIGNED_URL_MAX_TTL } from '../utils/media'
 import { isWildcardOrigin, normalizeOrigin } from '../utils/origins'
 import { TOKEN_SCOPES } from '../utils/permissions'
+import { TEXT_TRACK_LABEL_MAX_LENGTH } from '../utils/text-tracks'
 import { PRESET_NAME_PATTERN, TRANSFORM_FORMATS, TRANSFORM_SEGMENT_MAX_LENGTH } from '../utils/transforms'
 import { isValidFolderName } from './folders'
 import { focalPointSchema } from './media'
@@ -85,8 +87,8 @@ export const apiOpenApiQuerySchema = z.object({
 /** Fichier visé par un lien signé (unitaire ou par lot). */
 const signedUrlTargetShape = {
   target: z.enum(API_SIGNED_URL_TARGETS).default('file').meta(doc(
-    '`file` : l\'original ; `preset` : un préréglage utilisable dans le projet ; `transform` : une transformation libre ; `derived` : signature valable pour tout dérivé de la version (une pour tout un srcset), l\'URL renvoyée étant celle de `preset` ou `transform` (l\'aperçu par défaut).',
-    '`file`: the original; `preset`: a preset usable in the project; `transform`: a free transformation; `derived`: a signature valid for any derivative of the version (one for a whole srcset), the returned URL being that of `preset` or `transform` (the preview by default).',
+    '`file` : l\'original ; `preset` : un préréglage utilisable dans le projet ; `transform` : une transformation libre ; `derived` : signature valable pour tout dérivé de la version (une pour tout un srcset), l\'URL renvoyée étant celle de `preset` ou `transform` (l\'aperçu par défaut) ; `track` : une piste de texte d\'une vidéo (`trackId`).',
+    '`file`: the original; `preset`: a preset usable in the project; `transform`: a free transformation; `derived`: a signature valid for any derivative of the version (one for a whole srcset), the returned URL being that of `preset` or `transform` (the preview by default); `track`: a text track of a video (`trackId`).',
   )),
   preset: z.string().regex(PRESET_NAME_PATTERN).optional()
     .meta(doc('Nom du préréglage (`GET …/presets`), avec la cible `preset` ou `derived`.', 'Preset name (`GET …/presets`), with target `preset` or `derived`.')),
@@ -98,11 +100,21 @@ const signedUrlTargetShape = {
     `Format de sortie d'un dérivé (\`${API_DEFAULT_TRANSFORM_FORMAT}\` par défaut), parmi ceux activés sur le serveur.`,
     `Output format of a derivative (\`${API_DEFAULT_TRANSFORM_FORMAT}\` by default), among those enabled on the server.`,
   )),
+  trackId: z.string().regex(ID_PATTERN).optional()
+    .meta(doc('Identifiant de la piste de texte (`textTracks[].id`), avec la cible `track`.', 'Id of the text track (`textTracks[].id`), with target `track`.')),
 }
 
 /** Combinaisons cohérentes : `preset` et `transform` selon la cible, jamais ensemble ; rien de plus pour l'original. */
-function refineSignedUrlTarget(body: { target: string, preset?: string, transform?: string, format?: string }, ctx: z.RefinementCtx) {
+function refineSignedUrlTarget(body: { target: string, preset?: string, transform?: string, format?: string, trackId?: string }, ctx: z.RefinementCtx) {
   const issue = (path: string, message: string) => ctx.addIssue({ code: 'custom', path: [path], message })
+  if (body.target === 'track') {
+    if (body.trackId === undefined) issue('trackId', 'Required when target is "track".')
+    for (const key of ['preset', 'transform', 'format'] as const) {
+      if (body[key] !== undefined) issue(key, 'Only for derivatives: not allowed when target is "track".')
+    }
+    return
+  }
+  if (body.trackId !== undefined) issue('trackId', 'Only with target "track".')
   if (body.target === 'file') {
     for (const key of ['preset', 'transform', 'format'] as const) {
       if (body[key] !== undefined) issue(key, 'Only for derivatives: not allowed when target is "file".')
@@ -274,6 +286,57 @@ export const apiFolderDeleteQuerySchema = z.strictObject({
 
 const isoDate = z.iso.datetime({ offset: true })
 
+/** Piste de texte d'une vidéo (phase D2) : élément `<track>`. */
+export const apiTextTrackSchema = z.object({
+  id: z.string(),
+  kind: z.enum(API_TEXT_TRACK_KINDS).meta(doc(
+    'Attribut `kind` de `<track>` : `subtitles` (traduction), `captions` (sous-titres pour sourds et malentendants : paroles et sons), `descriptions` (description textuelle des images), `chapters` (titres des chapitres).',
+    '`kind` attribute of `<track>`: `subtitles` (translation), `captions` (for deaf and hard-of-hearing viewers: dialogue and sounds), `descriptions` (text description of the images), `chapters` (chapter titles).',
+  )),
+  language: z.string().meta(doc('Langue (étiquette BCP 47 canonique : `fr`, `en-GB`…), attribut `srclang`.', 'Language (canonical BCP 47 tag: `fr`, `en-GB`…), `srclang` attribute.')),
+  label: z.string().meta(doc('Libellé proposé par le lecteur, attribut `label`.', 'Label offered by the player, `label` attribute.')),
+  default: z.boolean().meta(doc('Piste choisie par défaut (attribut `default`) : une au plus par groupe (sous-titres, descriptions, chapitres).', 'Track chosen by default (`default` attribute): one at most per group (subtitles, descriptions, chapters).')),
+  url: z.url().meta(doc('URL du fichier WebVTT ; signée pour un média privé. Fichier immuable : le remplacer crée une nouvelle piste.', 'URL of the WebVTT file; signed for a private media item. Immutable file: replacing it creates a new track.')),
+  size: z.number().int(),
+  cueCount: z.number().int().meta(doc('Nombre de répliques.', 'Number of cues.')),
+  createdAt: isoDate,
+})
+export type ApiTextTrack = z.input<typeof apiTextTrackSchema>
+
+const trackKindField = z.enum(API_TEXT_TRACK_KINDS)
+const trackLanguageField = z.string().trim().min(1).max(35).meta(doc('Langue, étiquette BCP 47 (`fr`, `en-GB`) ; mise sous forme canonique.', 'Language, BCP 47 tag (`fr`, `en-GB`); canonicalised.'))
+const trackLabelField = z.string().trim().min(1).max(TEXT_TRACK_LABEL_MAX_LENGTH)
+
+/** Champs texte d'un envoi de piste (multipart/form-data, avec le fichier `file`). Champ inconnu → 400. */
+export const apiTextTrackFieldsSchema = z.strictObject({
+  kind: trackKindField,
+  language: trackLanguageField,
+  label: trackLabelField,
+  default: z.enum(['true', 'false']).default('false').meta(doc('`true` : piste choisie par défaut (les autres pistes du groupe perdent cette indication).', '`true`: track chosen by default (the other tracks of the group lose it).')),
+})
+
+/** Modification d'une piste (JSON) : le fichier et son URL ne changent pas. */
+export const apiTextTrackUpdateSchema = z.strictObject({
+  kind: trackKindField.optional(),
+  language: trackLanguageField.optional(),
+  label: trackLabelField.optional(),
+  default: z.boolean().optional(),
+})
+export type ApiTextTrackUpdate = z.output<typeof apiTextTrackUpdateSchema>
+
+export const apiTextTrackListSchema = z.object({ items: z.array(apiTextTrackSchema) })
+
+/** Image d'affiche d'une vidéo (phase D2). */
+export const apiPosterSchema = z.object({
+  url: z.url().meta(doc(
+    'URL de l\'affiche entière en JPEG (préréglage `full`), pour l\'attribut `poster` de `<video>` ou une balise `og:image` ; signée pour un média privé. Autres tailles et formats : `urlTemplate`.',
+    'URL of the whole poster image as JPEG (`full` preset), for the `poster` attribute of `<video>` or an `og:image` tag; signed for a private media item. Other sizes and formats: `urlTemplate`.',
+  )),
+  width: z.number().int(),
+  height: z.number().int(),
+  time: z.number().nullable().meta(doc('Instant de la vidéo capturé, en secondes ; null pour une image envoyée.', 'Captured moment of the video, in seconds; null for an uploaded image.')),
+})
+
 export const apiMediaSchema = z.object({
   id: z.string(),
   projectId: z.string().nullable().meta(doc('Projet du média ; null = bibliothèque de l\'organisation (copie créée par duplication).', 'Project of the media item; null = organization library (copy created by duplication).')),
@@ -288,17 +351,19 @@ export const apiMediaSchema = z.object({
   width: z.number().int().nullable().meta(doc('Largeur affichée, en pixels (orientation EXIF d\'une image, rotation d\'une vidéo appliquées).', 'Displayed width in pixels (EXIF orientation of an image, rotation of a video applied).')),
   height: z.number().int().nullable().meta(doc('Hauteur affichée, en pixels.', 'Displayed height in pixels.')),
   duration: z.number().nullable().meta(doc('Durée d\'une vidéo en secondes (3 décimales) ; null pour une image ou si le fichier ne l\'indique pas.', 'Duration of a video in seconds (3 decimals); null for an image or when the file does not say.')),
-  version: z.number().int().meta(doc('Incrémentée à chaque remplacement du fichier ou changement du point d\'intérêt ; fait partie des URL.', 'Incremented each time the file is replaced or the focal point changes; part of the URLs.')),
+  version: z.number().int().meta(doc('Incrémentée à chaque remplacement du fichier, de l\'image d\'affiche, ou changement du point d\'intérêt ; fait partie des URL.', 'Incremented each time the file or the poster image is replaced, or the focal point changes; part of the URLs.')),
   folderId: z.string().nullable(),
   url: z.url().meta(doc('URL absolue du fichier original ; signée (temporaire) pour un média privé. Vidéo : à lire dans `<video src>` (requêtes partielles acceptées).', 'Absolute URL of the original file; signed (temporary) for a private media item. Video: play it in `<video src>` (partial requests accepted).')),
-  previewUrl: z.url().nullable().meta(doc('URL de l\'aperçu (WebP, 480 px) ; signée pour un média privé ; null pour une vidéo (pas d\'aperçu).', 'Preview URL (WebP, 480 px); signed for a private media item; null for a video (no preview).')),
+  previewUrl: z.url().nullable().meta(doc('URL de l\'aperçu (WebP, 480 px) ; signée pour un média privé. Vidéo : tiré de son image d\'affiche, null sans affiche.', 'Preview URL (WebP, 480 px); signed for a private media item. Video: taken from its poster image, null without a poster.')),
   urlTemplate: z.string().nullable().meta(doc(
-    'Gabarit des URL de dérivés d\'une image : remplacer `{transform}` par un préréglage (`preview`, `full`, ceux de `GET …/presets`) ou des paramètres (`w_800,h_450`), et `{format}` par `jpg`, `png`, `webp` ou `avif`. Média privé : porte une signature valable pour tout dérivé jusqu\'à `urlExpiresAt`. Média public d\'un projet en politique `signed` : paramètres libres seulement par un lien signé (`POST …/signed-url`). `null` hors images.',
-    'Template of the derivative URLs of an image: replace `{transform}` with a preset (`preview`, `full`, those of `GET …/presets`) or parameters (`w_800,h_450`), and `{format}` with `jpg`, `png`, `webp` or `avif`. Private media item: carries a signature valid for any derivative until `urlExpiresAt`. Public media item of a project with the `signed` policy: free parameters through a signed link only (`POST …/signed-url`). `null` for non-images.',
+    'Gabarit des URL de dérivés d\'une image : remplacer `{transform}` par un préréglage (`preview`, `full`, ceux de `GET …/presets`) ou des paramètres (`w_800,h_450`), et `{format}` par `jpg`, `png`, `webp` ou `avif`. Média privé : porte une signature valable pour tout dérivé jusqu\'à `urlExpiresAt`. Média public d\'un projet en politique `signed` : paramètres libres seulement par un lien signé (`POST …/signed-url`). Vidéo : dérivés de son image d\'affiche ; `null` sans affiche.',
+    'Template of the derivative URLs of an image: replace `{transform}` with a preset (`preview`, `full`, those of `GET …/presets`) or parameters (`w_800,h_450`), and `{format}` with `jpg`, `png`, `webp` or `avif`. Private media item: carries a signature valid for any derivative until `urlExpiresAt`. Public media item of a project with the `signed` policy: free parameters through a signed link only (`POST …/signed-url`). Video: derivatives of its poster image; `null` without a poster.',
   )),
+  poster: apiPosterSchema.nullable().meta(doc('Image d\'affiche d\'une vidéo ; null pour une image ou une vidéo sans affiche.', 'Poster image of a video; null for an image or a video without a poster.')),
+  textTracks: z.array(apiTextTrackSchema).meta(doc('Pistes de texte d\'une vidéo (sous-titres, chapitres…), dans leur ordre d\'ajout ; vide pour une image.', 'Text tracks of a video (subtitles, chapters…), in the order they were added; empty for an image.')),
   focalPoint: z.object({ x: z.number(), y: z.number() }).nullable().meta(doc(
-    'Point d\'intérêt (fractions 0 à 1 de la largeur et de la hauteur, depuis le coin haut gauche) : centre des recadrages `fit_cover` ; `null` = centre de l\'image.',
-    'Focal point (fractions 0 to 1 of the width and height, from the top left corner): center of `fit_cover` crops; `null` = center of the image.',
+    'Point d\'intérêt (fractions 0 à 1 de la largeur et de la hauteur, depuis le coin haut gauche ; image d\'affiche pour une vidéo) : centre des recadrages `fit_cover` ; `null` = centre de l\'image.',
+    'Focal point (fractions 0 to 1 of the width and height, from the top left corner; poster image for a video): center of `fit_cover` crops; `null` = center of the image.',
   )),
   urlExpiresAt: isoDate.nullable().meta(doc('Échéance des URL signées ; null pour un média public (URL permanentes).', 'Expiry of the signed URLs; null for a public media item (permanent URLs).')),
   createdAt: isoDate,

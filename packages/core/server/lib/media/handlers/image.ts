@@ -13,9 +13,33 @@ const MAX_PIXELS = 100_000_000
 /** Effort d'encodage AVIF (0 à 9, défaut de sharp : 4) : réduit, l'AVIF étant coûteux en calcul. */
 const AVIF_EFFORT = 2
 
+/** Côté maximal d'une image d'affiche de vidéo (phase D2) : au-delà, réduite. */
+export const POSTER_MAX_DIMENSION = 3840
+const POSTER_QUALITY = 90
+
 // Cache d'opérations libvips désactivé : il garde les fichiers d'entrée ouverts (verrouillés
 // sous Windows, ce qui empêche la suppression des fichiers temporaires) pour un gain nul ici.
 sharp.cache(false)
+
+/**
+ * Image d'affiche d'une vidéo (phase D2) : première image, orientation appliquée, 3840 px au plus,
+ * transparence aplatie sur du noir, JPEG sans métadonnées (EXIF, GPS d'une photo). Le fichier a déjà
+ * été vérifié par `inspect` (dimensions) ; à appeler dans la file des traitements.
+ */
+export async function normalizePoster(path: string): Promise<{ data: Buffer, width: number, height: number }> {
+  try {
+    const { data, info } = await sharp(path, { limitInputPixels: MAX_PIXELS })
+      .autoOrient()
+      .resize({ width: POSTER_MAX_DIMENSION, height: POSTER_MAX_DIMENSION, fit: 'inside', withoutEnlargement: true })
+      .flatten({ background: '#000000' })
+      .jpeg({ quality: POSTER_QUALITY, mozjpeg: true })
+      .toBuffer({ resolveWithObject: true })
+    return { data, width: info.width, height: info.height }
+  }
+  catch {
+    throw mediaError(422, 'UNREADABLE_FILE')
+  }
+}
 
 export const imageHandler: MediaTypeHandler = {
   kind: 'IMAGE',
