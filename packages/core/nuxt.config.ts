@@ -87,6 +87,25 @@ export default defineNuxtConfig({
         authFailures: 30, // échecs d'authentification par IP — NUXT_API_RATE_LIMIT_AUTH_FAILURES
       },
     },
+    // Rôle du processus : web | worker (processus de travail des vidéos : exécute les tâches, ne sert que
+    // /api/health) — NUXT_SERVER_ROLE
+    serverRole: 'web',
+    // Binaires ffmpeg et ffprobe du système (phase D3) — NUXT_FFMPEG_PATH / NUXT_FFPROBE_PATH
+    ffmpegPath: 'ffmpeg',
+    ffprobePath: 'ffprobe',
+    // Traitement des vidéos par ffmpeg (phase D3) — variables NUXT_VIDEO_* (voir .env.example et setup.md § 7.7).
+    // Sans rapport avec NUXT_MEDIA_PROCESSING_* (traitements d'images, sharp).
+    video: {
+      processing: 'off', // off | embedded | external — NUXT_VIDEO_PROCESSING
+      concurrency: 1, // tâches simultanées par processus — NUXT_VIDEO_CONCURRENCY
+      threads: 0, // fils par ffmpeg, 0 = moitié des cœurs — NUXT_VIDEO_THREADS
+      rendition: 'auto', // rendu H.264 : auto | always | never — NUXT_VIDEO_RENDITION
+      preset: 'veryfast', // préréglage x264 — NUXT_VIDEO_PRESET
+      crf: 23, // qualité x264 (0–51, plus bas = meilleur) — NUXT_VIDEO_CRF
+      av1: false, // rendu AV1 en plus (on/off) — NUXT_VIDEO_AV1
+      maxDuration: 10800, // s : au-delà, pas de conversion (échec TOO_LONG) — NUXT_VIDEO_MAX_DURATION
+      memoryLimit: 4096, // Mio par ffmpeg (Linux, prlimit), 0 = sans limite — NUXT_VIDEO_MEMORY_LIMIT
+    },
     // Médias — variables NUXT_MEDIA_* (voir .env.example et setup.md § 7).
     media: {
       maxUploadSize: 25 * 1024 * 1024, // images, octets — NUXT_MEDIA_MAX_UPLOAD_SIZE
