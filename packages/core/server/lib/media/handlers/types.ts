@@ -9,7 +9,22 @@ export interface InspectedMedia {
   /** Durée en secondes (vidéo, audio). */
   duration: number | null
   /** Métadonnées techniques propres au genre (format, orientation, pages…), stockées en JSON. */
-  metadata: Record<string, string | number | boolean | null>
+  metadata: Record<string, string | number | boolean | null | readonly string[]>
+}
+
+/** Fichier à stocker à la place du fichier reçu (vidéo préparée, phase D2). */
+export interface PreparedFile {
+  /** Taille connue d'avance (stockage S3 en une requête). */
+  size: number
+  /** Flux du fichier préparé, ouvert une seule fois au moment de l'écrire dans le stockage. */
+  open: () => Readable
+}
+
+/** Résultat de la préparation : caractéristiques du fichier stocké, et fichier de remplacement éventuel. */
+export interface PreparedMedia {
+  inspected: InspectedMedia
+  /** null : le fichier reçu est stocké tel quel. */
+  file: PreparedFile | null
 }
 
 /** Dérivé produit par un gestionnaire (préréglage ou transformation libre). */
@@ -38,6 +53,11 @@ export interface MediaTypeHandler {
    * Lève une erreur métier (422) si le fichier est illisible ou hors limites.
    */
   inspect: (path: string, mimeType: string) => Promise<InspectedMedia>
+  /**
+   * Prépare le fichier analysé avant son stockage, sans le modifier en place (vidéo : index en tête,
+   * métadonnées d'origine retirées). Absent : fichier stocké tel quel.
+   */
+  prepare?: (path: string, mimeType: string, inspected: InspectedMedia) => Promise<PreparedMedia>
   /**
    * Applique une transformation déjà résolue (transform-plan.ts) : aperçu, préréglages, paramètres
    * libres. Absent si le genre ne produit pas de dérivés (aucune transformation, aucun aperçu).

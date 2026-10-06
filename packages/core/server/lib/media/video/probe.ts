@@ -39,6 +39,7 @@ interface Analysis {
   audio: Stream | null
   faststart: boolean | null
   hasLocation: boolean
+  durationEstimated: boolean
 }
 
 async function analyzeIsoBmff(source: ByteSource): Promise<Analysis> {
@@ -61,6 +62,7 @@ async function analyzeIsoBmff(source: ByteSource): Promise<Analysis> {
     audio: audio && { codec: audio.codec!, codecString: audio.codecString },
     faststart: movie.faststart,
     hasLocation: movie.hasLocation,
+    durationEstimated: false,
   }
 }
 
@@ -79,6 +81,7 @@ async function analyzeWebm(source: ByteSource): Promise<Analysis> {
     audio,
     faststart: null,
     hasLocation: false,
+    durationEstimated: file.durationEstimated,
   }
 }
 
@@ -113,6 +116,9 @@ export async function probeVideo(source: ByteSource, mimeType: string): Promise<
       faststart: analysis.faststart,
       hasLocation: analysis.hasLocation,
       playback: videoPlayback(container, analysis.video.codec, audio?.codec ?? null),
+      // Renseigné par la préparation à l'envoi (prepare.ts), après cette analyse.
+      prepared: null,
+      durationEstimated: duration !== null && analysis.durationEstimated,
     },
   }
 }

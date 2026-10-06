@@ -3,11 +3,11 @@
  * Vignette de la médiathèque. Toute la carte est cliquable (lien « étiré » sur le titre),
  * mais le lien n'a pour nom que le titre du média ; le focus est rendu sur la carte entière.
  * L'aperçu est décoratif (alt vide) : le titre, juste en dessous, identifie le média.
- * Vidéo : pas d'aperçu (phase D1, aucun traitement), une icône et la durée ; jamais d'élément
- * <video> dans la grille (chaque carte chargerait les métadonnées du fichier).
+ * Vidéo : aperçu tiré de son image d'affiche (phase D2) et pastille « vidéo », sinon une icône ; la
+ * durée ; jamais d'élément <video> dans la grille (chaque carte chargerait les métadonnées du fichier).
  * En mode sélection (`selectable`), une case à cocher passe au-dessus du lien étiré.
  */
-import { Film, Lock } from '@lucide/vue'
+import { Film, Lock, Play } from '@lucide/vue'
 
 const props = defineProps<{
   media: {
@@ -56,6 +56,12 @@ const details = computed(() => [
       <div v-else-if="isVideo" class="absolute inset-0 flex items-center justify-center">
         <Film class="size-10 text-muted-foreground" aria-hidden="true" />
       </div>
+      <!-- Vidéo avec affiche : la vignette seule ressemblerait à une image. -->
+      <span
+        v-if="isVideo && media.previewUrl"
+        class="absolute bottom-2 left-2 flex rounded-md border border-border bg-surface p-1 text-foreground shadow-xs"
+        aria-hidden="true"
+      ><Play class="size-3.5" /></span>
       <span
         v-if="isVideo && duration"
         class="absolute right-2 bottom-2 rounded-md border border-border bg-surface px-1.5 py-0.5 text-xs font-medium text-foreground tabular-nums shadow-xs"

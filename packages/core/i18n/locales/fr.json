@@ -616,7 +616,15 @@
       "credential": "Identifiant d'API",
       "subject": "Utilisateur de l'application",
       "folder": "Dossier",
-      "noFolder": "Aucun (racine)"
+      "noFolder": "Aucun (racine)",
+      "estimatedDuration": "{duration} (estimée)",
+      "preparation": "Préparation",
+      "preparationValues": {
+        "none": "Non préparée",
+        "unchanged": "Aucune modification nécessaire",
+        "faststart": "Index placé en tête du fichier",
+        "metadata": "Métadonnées d'origine retirées (lieu, appareil)"
+      }
     },
     "fields": {
       "title": "Titre",
@@ -637,7 +645,7 @@
         },
         "faststart": {
           "title": "Démarrage de la lecture plus lent",
-          "text": "L'index de la vidéo se trouve en fin de fichier : le navigateur doit le récupérer avant de lancer la lecture. La plupart des logiciels d'export proposent l'option « optimiser pour le web » (faststart)."
+          "text": "L'index de la vidéo se trouve en fin de fichier : le navigateur doit le récupérer avant de lancer la lecture."
         },
         "duration": {
           "title": "Durée inconnue",
@@ -645,7 +653,19 @@
         },
         "location": {
           "title": "Lieu de tournage dans le fichier",
-          "text": "Cette vidéo contient les coordonnées de son lieu de tournage. Elle est servie telle quelle : toute personne qui la télécharge peut les lire."
+          "text": "Cette vidéo contient les coordonnées de son lieu de tournage : toute personne qui la télécharge peut les lire."
+        },
+        "estimated": {
+          "title": "Durée estimée",
+          "text": "Le fichier n'indique pas sa durée (enregistrement fait dans un navigateur) : elle a été estimée d'après ses dernières images. Le lecteur la découvre en cours de lecture."
+        },
+        "device": {
+          "title": "Informations sur l'appareil",
+          "text": "Cette vidéo a été envoyée avant la préparation automatique : elle peut encore contenir des informations sur l'appareil qui l'a filmée (modèle, logiciel, réglages)."
+        },
+        "captions": {
+          "title": "Pas de sous-titres",
+          "text": "Cette vidéo a du son mais aucune piste de sous-titres : ajoutez-en (ci-dessous) pour les personnes sourdes ou malentendantes, et pour les lectures sans le son (WCAG 1.2.2)."
         }
       },
       "snippet": {
@@ -653,6 +673,13 @@
         "description": "Exemple pour une page web : lecteur natif avec ses commandes, sans lecture automatique ; seules les métadonnées sont chargées à l'avance.",
         "copy": "Copier l'exemple de lecteur vidéo",
         "privateNote": "Exemple construit avec le lien temporaire : la vidéo ne sera plus lue après son échéance."
+      },
+      "prepare": {
+        "title": "Optimiser la vidéo",
+        "description": "Place l'index en tête du fichier et retire les métadonnées d'origine (lieu de tournage, appareil), sans réencodage ni perte de qualité. Crée une nouvelle version : les anciennes adresses redirigent vers la nouvelle.",
+        "button": "Optimiser la vidéo",
+        "done": "Vidéo optimisée : version {version}.",
+        "unchanged": "Rien à modifier : la vidéo est déjà prête pour la lecture en ligne."
       }
     },
     "links": {
@@ -833,6 +860,84 @@
           "width": "Largeur de la zone (px)",
           "height": "Hauteur de la zone (px)"
         }
+      }
+    },
+    "poster": {
+      "title": "Image d'affiche",
+      "description": "Affichée avant la lecture et utilisée comme vignette (médiathèque, API). La remplacer ou la retirer crée une nouvelle version : les anciennes adresses redirigent vers la nouvelle.",
+      "none": "Aucune image d'affiche",
+      "captured": "Image capturée à {time}",
+      "uploaded": "Image envoyée",
+      "capture": "Utiliser l'image affichée",
+      "upload": "Envoyer une image…",
+      "remove": "Retirer l'affiche",
+      "hint": "Mettez la vidéo en pause à l'endroit voulu, puis utilisez l'image affichée ; ou envoyez une image JPEG, PNG, WebP, AVIF ou GIF. Elle est enregistrée en JPEG, sans ses métadonnées.",
+      "removeTitle": "Retirer l'image d'affiche ?",
+      "removeDescription": "La vidéo n'aura plus de vignette ni d'image avant la lecture. Une nouvelle version est créée.",
+      "removeConfirm": "Retirer l'affiche",
+      "saved": "Image d'affiche enregistrée.",
+      "removed": "Image d'affiche retirée.",
+      "captureFailed": "Impossible de capturer l'image : la vidéo n'est pas encore chargée, ou votre navigateur ne sait pas la décoder. Lancez la lecture puis réessayez, ou envoyez une image.",
+      "errors": {
+        "unsupported": "Ce fichier n'est pas une image acceptée (JPEG, PNG, WebP, AVIF ou GIF).",
+        "tooLarge": "L'image dépasse la taille maximale ({max}).",
+        "unreadable": "Cette image est illisible ou ses dimensions sont trop grandes."
+      }
+    },
+    "tracks": {
+      "title": "Sous-titres et pistes de texte",
+      "description": "Pistes proposées par le lecteur (bouton des sous-titres) : fichiers WebVTT ou SRT, 1 Mo au plus, {max} pistes au plus. Chaque fichier est vérifié puis réécrit en WebVTT.",
+      "none": "Aucune piste pour l'instant.",
+      "default": "Par défaut",
+      "cues": "{count} réplique | {count} réplique | {count} répliques",
+      "download": "Télécharger",
+      "edit": "Modifier",
+      "delete": "Supprimer",
+      "replace": "Remplacer le fichier",
+      "add": "Ajouter une piste",
+      "addTitle": "Ajouter une piste de texte",
+      "addDescription": "Fichier WebVTT (.vtt) ou SubRip (.srt) ; un SRT est converti en WebVTT, les accents des anciens fichiers Windows sont reconnus.",
+      "editTitle": "Modifier la piste",
+      "added": "Piste ajoutée.",
+      "updated": "Piste modifiée.",
+      "replaced": "Fichier de la piste « {label} » remplacé.",
+      "removed": "Piste « {label} » supprimée.",
+      "removeTitle": "Supprimer cette piste ?",
+      "removeDescription": "La piste « {label} » ne sera plus proposée par le lecteur.",
+      "kinds": {
+        "SUBTITLES": "Sous-titres",
+        "CAPTIONS": "Sous-titres pour sourds et malentendants",
+        "DESCRIPTIONS": "Descriptions",
+        "CHAPTERS": "Chapitres"
+      },
+      "kindHints": {
+        "SUBTITLES": "Traduction ou transcription des paroles, pour qui entend le son.",
+        "CAPTIONS": "Paroles et sons utiles (musique, bruits, intervenants), pour qui n'entend pas le son.",
+        "DESCRIPTIONS": "Description textuelle des images, pour qui ne les voit pas.",
+        "CHAPTERS": "Titres des parties de la vidéo, pour s'y déplacer."
+      },
+      "fields": {
+        "file": "Fichier",
+        "fileHint": "WebVTT (.vtt) ou SRT, 1 Mo au plus.",
+        "kind": "Type",
+        "language": "Langue",
+        "otherLanguage": "Autre langue…",
+        "languageCode": "Code de la langue",
+        "languageCodeHint": "Étiquette BCP 47, par exemple « eu », « es-MX » ou « zh-Hant ».",
+        "label": "Libellé",
+        "labelHint": "Nom proposé par le lecteur, dans la langue de la piste de préférence.",
+        "default": "Piste par défaut",
+        "defaultHint": "Affichée sans action de l'utilisateur (une seule par groupe : sous-titres, descriptions, chapitres)."
+      },
+      "errors": {
+        "fileRequired": "Choisissez un fichier.",
+        "language": "Code de langue invalide (étiquette BCP 47 attendue, par exemple « fr » ou « en-GB »).",
+        "label": "Le libellé ne doit pas contenir de caractères de contrôle.",
+        "invalid": "Ce fichier n'est pas un fichier de sous-titres valide (WebVTT ou SRT).",
+        "invalidLine": "Fichier de sous-titres invalide à la ligne {line} : vérifiez les temps et le format (WebVTT ou SRT).",
+        "limit": "Cette vidéo a déjà {max} pistes : supprimez-en une pour en ajouter une autre.",
+        "tooLarge": "Le fichier dépasse 1 Mo.",
+        "fields": "Vérifiez le type, la langue et le libellé de la piste."
       }
     }
   },

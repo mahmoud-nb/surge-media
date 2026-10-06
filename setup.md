@@ -240,6 +240,7 @@ Le fichier `packages/core/.env` est créé par `pnpm db:init` à partir de `.env
 | `NUXT_MEDIA_MAX_UPLOAD_SIZE` | `26214400` (25 Mio) | taille maximale d'une **image** envoyée, en octets |
 | `NUXT_MEDIA_MAX_VIDEO_UPLOAD_SIZE` | `536870912` (512 Mio) | taille maximale d'une **vidéo** envoyée, en octets ; `2147483647` (2 Gio − 1) au plus, plafond de la colonne `Media.size` (§ 7.7) |
 | `NUXT_MEDIA_UPLOAD_TIMEOUT` | `3600` | délai (secondes) pour recevoir un envoi entier ; Node coupe sinon toute requête non reçue en 300 s (§ 7.7) |
+| `NUXT_MEDIA_VIDEO_PREPARE` | `faststart,metadata` | préparation des MP4/MOV à l'envoi, sans réencodage : `faststart` (index en tête du fichier), `metadata` (lieu de tournage et informations de l'appareil retirés), les deux, ou `none` (§ 7.7) |
 | `NUXT_MEDIA_SIGNING_SECRET` | généré par `db:init` | secret des liens signés des médias privés (le changer invalide les liens partagés) |
 | `NUXT_MEDIA_PREVIOUS_SIGNING_SECRET` | — | ancien secret, encore accepté pendant une rotation (7 jours suffisent) |
 | `NUXT_MEDIA_STORAGE_DRIVER` | `local` | stockage des fichiers : `local` ou `s3` (§ 7) |
@@ -492,22 +493,27 @@ Codes d'erreur (`data.code`, `shared/utils/media.ts`) : `NO_FILE`, `MULTIPART_RE
   bibliothèque, préréglages globaux) — § 8.2.
   Sans droit d'écriture (ou projet archivé), la fiche passe en lecture seule.
 
-### 7.7 Vidéos (phase D1)
+### 7.7 Vidéos (phases D1 et D2)
 
-Architecture : `.claude/architecture-phase-d.md` (décisions DD1 à DD14, validées le 2026-10-05). Les vidéos sont
-des médias comme les autres (espaces, dossiers, visibilité, corbeille, remplacement, duplication, API v1) :
-**stockées et servies telles qu'envoyées**, sans transcodage ni aperçu.
+Architecture : `.claude/architecture-phase-d.md` (D1 : DD1 à DD14 ; D2 : DD15 à DD24, validées le 2026-10-05). Les
+vidéos sont des médias comme les autres (espaces, dossiers, visibilité, corbeille, remplacement, duplication, API
+v1), **sans transcodage** : un MP4 ou un MOV est seulement **préparé** à l'envoi (D2), une image d'affiche et des
+sous-titres peuvent leur être associés.
 
 | Point | Règle |
 | --- | --- |
 | Formats | **MP4**, **WebM**, **QuickTime (MOV)**, reconnus d'après le contenu (`server/lib/media/sniff.ts`). MKV, AVI, 3GP, MPEG-TS, OGV, audio seul (M4A) : 415 |
 | Analyse | lecteur d'en-têtes maison, sans ffmpeg (`server/lib/media/video/` : ISO BMFF pour MP4/MOV, EBML pour WebM) : dimensions affichées (rotation des vidéos de téléphone appliquée), durée (MP4 fragmenté : fin du dernier fragment), codecs (chaîne RFC 6381), son, débit, « faststart », lieu de tournage. Quelques Kio lus, hors file des traitements |
 | Taille | `NUXT_MEDIA_MAX_VIDEO_UPLOAD_SIZE` (512 Mio), 2 Gio − 1 au plus (colonne `Media.size` sur 32 bits : au-delà, migration en `BigInt` à prévoir) |
-| Diffusion | `/m/<id>/v<n>/<nom>.mp4|webm|mov` : requêtes partielles (`Range` → 206), cache immuable si public, liens signés si privé. Aperçus et transformations : 404 |
+| Préparation (D2) | MP4/MOV non fragmentés : index (`moov`) placé en tête et **métadonnées d'origine retirées** (lieu de tournage, appareil, logiciel, réglages de la caméra, décalage horaire ; une liste de ce qui est **conservé** : noms et rôles des pistes, chapitres, titre, description, commentaire, droits d'auteur), sans réencodage, pendant la copie vers le stockage (`server/lib/media/video/prepare.ts`) ; sortie **réanalysée et comparée octet par octet** avant écriture, sinon fichier gardé tel qu'envoyé (journal serveur) ; `NUXT_MEDIA_VIDEO_PREPARE`. Empreinte et taille = celles du fichier servi ; vidéos envoyées avant D2 : bouton « Optimiser la vidéo » de la fiche (nouvelle version) |
+| Affiche (D2) | image associée à la vidéo (`PUT …/poster`) : **capturée dans le navigateur** à l'envoi (10 % de la durée, 5 s au plus, en évitant une image noire) ou depuis le lecteur de la fiche, ou image envoyée ; normalisée en JPEG (orientation, 3840 px au plus, sans métadonnées), stockée dans `variants/<média>/poster-….jpg`, **source des dérivés** de la vidéo (vignette, `previewUrl`, préréglages, transformations, point d'intérêt) ; attribut `poster` : préréglage `full` en JPEG. Première affiche : même version ; nouvelle affiche ou retrait : nouvelle version |
+| Sous-titres (D2) | pistes WebVTT (`MediaTextTrack`, 20 par vidéo) : sous-titres, sous-titres pour sourds et malentendants, descriptions, chapitres ; fichiers **VTT ou SRT** (converti), UTF-8, UTF-16 avec BOM ou Windows-1252, 1 Mio au plus, **vérifiés puis réécrits** (`server/lib/media/text-track.ts`, refus avec le numéro de ligne) ; une piste par défaut par groupe ; fichier immuable (le remplacer crée une nouvelle piste) |
+| Diffusion | `/m/<id>/v<n>/<nom>.mp4|webm|mov` : requêtes partielles (`Range` → 206), cache immuable si public, liens signés si privé. Pistes : `/m/<id>/v<n>/tracks/<piste>.vtt` (`text/vtt`, droit signé `track:<piste>`, nom de préréglage `tracks` réservé). Sans affiche, aperçus et transformations : 404 |
 | Administration | liens signés des vidéos privées valables **6 h** (tranche d'1 h) : une longue vidéo ne s'arrête pas en cours de lecture |
-| API v1 | contrat `Media` inchangé : `kind: "video"`, `width`, `height`, `duration`, `previewUrl` et `urlTemplate` à `null` ; filtre `?kind=video` ; pour une longue vidéo privée, demander un lien (`signed-url`) d'une durée au moins égale à celle de la vidéo |
+| API v1 | `kind: "video"`, `width`, `height`, `duration` ; D2 ajoute `poster` et `textTracks` (`previewUrl` et `urlTemplate` tirés de l'affiche, `null` sans affiche) et les routes `…/poster` (PUT, DELETE) et `…/tracks` (GET, POST, PATCH, DELETE) ; lien signé d'une piste : cible `track` ; pour une longue vidéo privée, demander un lien (`signed-url`) d'une durée au moins égale à celle de la vidéo |
 | Compatibilité | aucun codec refusé ; « lecture variable » signalée hors H.264 (MP4, MOV) et VP8/VP9 (WebM) : HEVC des iPhone, AV1, ProRes… |
-| Confidentialité | fichier servi tel quel, **métadonnées comprises** : le lieu de tournage (vidéos de téléphone) est détecté et signalé dans la fiche, pas retiré |
+| Confidentialité | MP4/MOV préparés : lieu et appareil retirés. Non couverts : WebM (seul le nom du logiciel d'enregistrement y figure) et positions enregistrées **dans les données** d'une piste de métadonnées (GoPro, drones, caméras embarquées), à traiter avec ffmpeg (D3) |
+| Durée des WebM (D2) | enregistrements de navigateur sans durée : **estimée** d'après le dernier `Cluster` (fin du fichier, 16 Mio lus au plus), signalée « estimée » dans la fiche |
 
 **Envois longs** : Node coupe toute requête non reçue en entier en 300 s ; le greffon `server/plugins/http-timeouts.ts`
 porte ce délai à `NUXT_MEDIA_UPLOAD_TIMEOUT` (3600 s) — les en-têtes restent limités à 60 s, les corps JSON à
@@ -1557,8 +1563,13 @@ pnpm start                          # node --env-file-if-exists=.env .output/ser
 | Envoi refusé 415 alors que le fichier est une image | format non accepté (HEIC, TIFF, SVG…) ou fichier renommé : seuls JPEG, PNG, WebP, AVIF et GIF sont reconnus |
 | Vidéo refusée 415 | conteneur non accepté (MKV, AVI, 3GP, MPEG-TS, OGV, QuickTime ancien sans `ftyp`) ou fichier sans piste vidéo (audio seul) : convertir en MP4 (H.264/AAC) ou WebM (VP9/Opus) |
 | Vidéo acceptée mais illisible dans un navigateur | codec non lu par ce navigateur (HEVC, AV1, ProRes : avertissement « lecture variable » sur la fiche) ; aucun transcodage en phase D1 |
-| La lecture d'une vidéo démarre lentement | index (`moov`) en fin de fichier (avertissement sur la fiche) : réexporter avec l'option « optimiser pour le web » / faststart |
-| Durée « inconnue » d'une vidéo WebM | enregistrement fait dans un navigateur (`MediaRecorder`) : le fichier n'indique pas sa durée ; la lecture fonctionne |
+| La lecture d'une vidéo démarre lentement | index (`moov`) en fin de fichier : vidéo envoyée avant D2, ou préparation désactivée (`NUXT_MEDIA_VIDEO_PREPARE`) ou impossible ; bouton « Optimiser la vidéo » de la fiche |
+| Journal : « Vidéo gardée telle qu'envoyée (préparation impossible : …) » | structure non gérée (fichier chiffré, données externes, index de plus de 64 Mio…) ou vérification en échec : le fichier est stocké intact, rien n'est perdu |
+| Durée « inconnue » ou « estimée » d'une vidéo WebM | enregistrement fait dans un navigateur (`MediaRecorder`) : le fichier n'indique pas sa durée, elle est estimée par sa fin (sinon inconnue) ; le lecteur la découvre en cours de lecture |
+| Pas d'image d'affiche après l'envoi d'une vidéo | le navigateur ne sait pas décoder la vidéo (HEVC, ProRes selon le système) ou l'envoi vient de l'API : choisir l'image depuis la fiche (lecteur ou image envoyée) |
+| Sous-titres refusés (422 `INVALID_TEXT_TRACK`) | fichier ni WebVTT ni SRT, temps illisibles ou fin avant le début : le message donne la ligne en cause |
+| Sous-titres absents sur un autre site | `<track>` venant d'un autre domaine : ajouter `crossorigin="anonymous"` à `<video>` (l'extrait de la fiche le fait) |
+| `pnpm db:migrate` : « database is locked » (SQLite) | un serveur (`pnpm dev`) garde la base ouverte : l'arrêter le temps de la migration, puis le relancer |
 | Envoi de vidéo coupé (408) après exactement 5 min | délai de Node non relevé : vérifier `NUXT_MEDIA_UPLOAD_TIMEOUT` et les délais du mandataire (§ 7.7). En développement (`pnpm dev`), le relais de Nitro garde ses propres délais |
 | En développement : requête bloquée puis `ECONNRESET` juste après un envoi refusé (415, 413, 422) | relais de développement de Nitro (`httpxy`, vers le processus de travail) : il cesse de transmettre le corps refusé et la connexion réutilisée reste bloquée ~6 s. Absent en production (vérifié avec Node et h3 seuls) |
 | Média introuvable (404) juste après sa mise à la corbeille | normal : un média en corbeille n'est plus diffusé (sauf aperçu dans l'administration) |
@@ -2611,3 +2622,62 @@ pnpm install          # aucune nouvelle dépendance, aucune migration
 ```
 Facultatif : `NUXT_MEDIA_MAX_VIDEO_UPLOAD_SIZE` et `NUXT_MEDIA_UPLOAD_TIMEOUT` dans `.env` ; régler le mandataire
 inverse (§ 7.7).
+
+### Étape 21 — 2026-10-06 — Phase D2 : préparation des vidéos, image d'affiche, sous-titres
+
+**Cadre** : suite de la phase D, proposition `.claude/architecture-phase-d.md` § 17 à § 27 (DD15 à DD24)
+**validée** le 2026-10-05 avec un ajout de l'utilisateur : retirer aussi les **métadonnées de l'appareil**. Toujours
+sans ffmpeg ni tâche de fond. Essais préalables sur deux vidéos réelles de l'utilisateur (téléphone Samsung en HEVC
+avec lieu, export Windows avec index en fin), sur des copies : § 18.5 de l'architecture.
+
+**Ajouté**
+- **Préparation des MP4/MOV** (`server/lib/media/video/prepare.ts`, étape `prepare` des gestionnaires) : index en
+  tête, métadonnées d'origine retirées par une liste de ce qui est conservé (`udta`, clés QuickTime, liste
+  iTunes, `uuid`/XMP, boîtes de premier niveau), décalages `stco`/`co64` recalculés, sortie réanalysée et
+  comparée avant écriture, fichiers non gérés gardés intacts ; flux de morceaux écrit directement dans le stockage,
+  empreinte calculée au passage ; `NUXT_MEDIA_VIDEO_PREPARE` ; `metadata.prepared` ; détection du lieu étendue au
+  XMP ; `POST /api/admin/media/:id/prepare` et bouton « Optimiser la vidéo » (vidéos envoyées avant D2).
+- **Durée estimée des WebM** sans durée (dernier `Cluster`, `metadata.durationEstimated`).
+- **Image d'affiche** : colonnes `Media.poster*`, normalisation JPEG (`normalizePoster`), source des dérivés
+  (`variants.ts`), `PUT|DELETE /api/admin/media/:id/poster` et `…/v1/…/poster`, copie à la duplication ; capture
+  dans le navigateur (`app/utils/video-frame.ts`) à l'envoi et depuis la fiche ; vignettes vidéo dans la
+  médiathèque (pastille « lecture »), point d'intérêt et générateur d'adresses sur l'affiche.
+- **Sous-titres** : table `MediaTextTrack`, analyseur WebVTT/SRT (`text-track.ts`), service (`tracks.ts`),
+  réception en mémoire (`receiveSmallUpload`), diffusion `/m/…/tracks/<piste>.vtt` (droit `track:<piste>`),
+  routes admin (`/api/admin/media/:id/tracks`) et v1 (`…/tracks`, cible `track` des liens signés), panneau
+  « Sous-titres et pistes de texte » (`AdminTextTracksPanel`), `<track>` dans le lecteur de la fiche,
+  avertissement « Pas de sous-titres » (WCAG 1.2.2), extrait `<video>` avec affiche, pistes et `crossorigin`
+  (aussi pour une vidéo privée : lien temporaire étendu à l'affiche et aux pistes).
+- API v1 : `Media.poster`, `Media.textTracks`, schémas `TextTrack`, corps `PosterUpload`, `TrackUpload`,
+  `TrackUpdate`, erreurs `TRACK_NOT_FOUND`, `TRACK_LIMIT_REACHED`, `INVALID_TEXT_TRACK`, section « Vidéos » avec
+  un exemple de capture d'affiche.
+- Migration `20261005215018_video_poster_tracks` (SQLite, PostgreSQL, MySQL).
+- Tests : `video.test.ts` (préparation, XMP, durée WebM), `text-track.test.ts`, `tracks-delivery.test.ts`,
+  `storage.test.ts`, contrat `Media` (affiche, pistes signées).
+
+**Corrigé** : sur le stockage local, la suppression des dérivés d'une ancienne version (`deletePrefix`
+« variants/<média>/v3- ») ne supprimait rien — Flydrive y attend un dossier — : les dérivés des anciennes
+versions restaient sur le disque (remplacement, point d'intérêt). Les fichiers d'un dossier sont désormais listés
+et filtrés. Les fichiers déjà laissés ainsi ne sont pas supprimés automatiquement.
+
+**Vérifié** : typecheck et build de production (copie isolée), 281 tests Vitest, i18n (1331 clés), migration sur les trois bases ; **100 scénarios HTTP**
+(`d2-test.mjs` : vraies vidéos préparées octet pour octet identiques à la référence, « Optimiser », affiche
+— versions, normalisation, droits, duplication, purge, jetons délégués — et pistes — SRT Windows-1252, VTT, par
+défaut par groupe, erreurs avec ligne, 413, limite de 20, liens signés, 302, corbeille, duplication, API v1) ;
+scénarios précédents rejoués ; images décodées identiques avant et après préparation (navigateur intégré) ; gain
+de démarrage mesuré (§ 18.5 de l'architecture) ; interface : capture d'affiche à l'envoi et depuis le lecteur,
+pistes lues par le navigateur, axe-core 0 violation en fr/en × clair/sombre (fiches, médiathèque, boîte d'ajout
+de piste), focus après chaque action, largeur de téléphone.
+
+**Limites connues / suites** : lieu enregistré dans les données d'une piste de métadonnées (GoPro, drones) ni
+détecté ni retiré ; WebM non préparés ; affiche impossible à capturer quand le navigateur ne décode pas la vidéo ;
+dérivés laissés par d'anciennes versions avant le correctif ; D3 (ffmpeg dans un processus séparé : affiches côté
+serveur, rendus compatibles, réparation des WebM) et D4 (HLS) à proposer.
+
+**Après `git pull`**
+```bash
+pnpm install          # aucune nouvelle dépendance
+pnpm db:migrate       # colonnes d'affiche, table MediaTextTrack (arrêter « pnpm dev » avant, avec SQLite)
+```
+Facultatif : `NUXT_MEDIA_VIDEO_PREPARE` dans `.env` (`faststart,metadata` par défaut). Les vidéos déjà envoyées
+gardent leur fichier : bouton « Optimiser la vidéo » dans leur fiche.

@@ -3,12 +3,15 @@
  * Envoi de médias (images, vidéos) : bouton « Choisir des fichiers » (champ natif, utilisable au
  * clavier et par les lecteurs d'écran) et glisser-déposer en complément. Envois un par un avec
  * progression ; chaque résultat est annoncé (role="status"). Formats et taille maximale indiqués par
- * genre ; quitter la page pendant un envoi demande une confirmation (envoi de vidéo long).
+ * genre ; quitter la page pendant un envoi demande une confirmation (envoi de vidéo long). Vidéo
+ * créée : une image d'affiche est capturée dans le navigateur pendant l'envoi puis jointe au média
+ * (phase D2) ; si le navigateur ne sait pas décoder la vidéo, elle reste sans affiche.
  *
  *   création     : <AdminMediaUploader :rules="rules" @uploaded="refresh" />
  *   remplacement : <AdminMediaUploader :rules="rules" :endpoint="`/api/admin/media/${id}/file`" method="PUT" :multiple="false" :kinds="[kind]" />
  */
 import { CircleAlert, CircleCheck, Upload } from '@lucide/vue'
+import type { CapturedFrame } from '~/utils/video-frame'
 
 interface QueueItem {
   key: number
@@ -43,6 +46,7 @@ const emit = defineEmits<{
 }>()
 
 const { t, locale } = useI18n()
+const { $api } = useNuxtApp()
 const { send, precheck, errorMessage, acceptedMimeTypes, acceptedExtensions, kindsOf, maxSizeFor } = useMediaUpload()
 
 const inputId = useId()
@@ -54,6 +58,25 @@ const queue = ref<QueueItem[]>([])
 const announcement = ref('')
 const busy = computed(() => queue.value.some(item => item.status === 'pending' || item.status === 'uploading'))
 let nextKey = 0
+
+/** Affiche capturée pour les vidéos créées (pas pour un remplacement : l'affiche existante est gardée). */
+const capturesPoster = computed(() => props.method === 'POST')
+const isVideoFile = (file: File) => file.type.startsWith('video/') || /.(?:mp4|m4v|mov|webm)$/i.test(file.name)
+
+/** Joint l'image capturée au média créé ; un échec laisse la vidéo sans affiche (ajoutable depuis sa fiche). */
+async function attachPoster<T extends { id: string }>(media: T, capture: Promise<CapturedFrame | null>): Promise<T> {
+  const frame = await capture
+  if (!frame) return media
+  const form = new FormData()
+  form.append('time', String(Math.round(frame.time * 1000) / 1000))
+  form.append('file', frame.blob, 'poster.jpg')
+  try {
+    return (await $api<{ media: T }>(`/api/admin/media/${media.id}/poster`, { method: 'PUT', body: form })).media
+  }
+  catch {
+    return media
+  }
+}
 
 const accept = computed(() => acceptedMimeTypes(props.rules, props.kinds).join(','))
 /** Une ligne par genre : formats et taille maximale. */
@@ -80,13 +103,17 @@ async function enqueue(files: File[]) {
       continue
     }
     item.status = 'uploading'
+    // Capture en parallèle de l'envoi : rien n'est envoyé pour la faire.
+    const poster = capturesPoster.value && isVideoFile(file) ? captureVideoFile(file) : null
     try {
       const fields: Record<string, string> = { ...props.fields, ...(props.withVisibility ? { visibility: visibility.value } : {}) }
       const result = await send(props.endpoint, file, fields, { method: props.method, onProgress: percent => (item.progress = percent) })
       if (result.status >= 200 && result.status < 300) {
+        let media = (result.body as { media: { id: string, originalName: string } }).media
+        if (poster) media = await attachPoster(media, poster)
         Object.assign(item, { status: 'done', progress: 100 })
         announcement.value = t('media.upload.succeeded', { name: item.name })
-        emit('uploaded', (result.body as { media: { id: string, originalName: string } }).media)
+        emit('uploaded', media)
       }
       else {
         const message = errorMessage(result, props.rules, props.kinds)

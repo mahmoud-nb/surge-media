@@ -8,7 +8,7 @@ import { folderWhere } from '../folders/service'
 import { getProjectState } from '../projects/state'
 import { type Cursor, decodeCursor, encodeCursor } from './cursor'
 import { apiProblem } from './problem'
-import type { ApiProjectSource } from './serializers'
+import { API_MEDIA_INCLUDE, type ApiMediaRecord, type ApiProjectSource } from './serializers'
 
 /**
  * Lectures de l'API v1. Les requêtes partent toujours du périmètre imposé par le serveur (projet de
@@ -48,7 +48,7 @@ function decodeMediaCursor(raw: string, sort: ApiMediaSort): { cursor: Cursor, v
 }
 
 export interface MediaPage {
-  items: Media[]
+  items: ApiMediaRecord[]
   nextCursor: string | null
   total?: number
 }
@@ -71,9 +71,9 @@ export async function listApiMedia(projectId: string, query: ApiMediaListQuery, 
 
   // Réhydratation d'une sélection : ces médias, dans l'ordre demandé, sans pagination.
   if (query.ids) {
-    const found = await prisma.media.findMany({ where: { ...base, id: { in: query.ids } } })
+    const found = await prisma.media.findMany({ where: { ...base, id: { in: query.ids } }, include: API_MEDIA_INCLUDE })
     const byId = new Map(found.map(media => [media.id, media]))
-    const items = query.ids.map(id => byId.get(id)).filter((media): media is Media => Boolean(media))
+    const items = query.ids.map(id => byId.get(id)).filter((media): media is ApiMediaRecord => Boolean(media))
     return { items, nextCursor: null, ...(query.withTotal ? { total: items.length } : {}) }
   }
 
@@ -97,6 +97,7 @@ export async function listApiMedia(projectId: string, query: ApiMediaListQuery, 
       where: pageWhere,
       orderBy: [{ [field]: direction }, { id: direction }],
       take: query.limit + 1,
+      include: API_MEDIA_INCLUDE,
     }),
     query.withTotal ? prisma.media.count({ where }) : Promise.resolve(undefined),
   ])
@@ -109,18 +110,18 @@ export async function listApiMedia(projectId: string, query: ApiMediaListQuery, 
 }
 
 /** Média actif d'un projet (et public pour une clé publique), ou null. */
-export async function findApiMedia(projectId: string, id: string, publicOnly: boolean): Promise<Media | null> {
+export async function findApiMedia(projectId: string, id: string, publicOnly: boolean): Promise<ApiMediaRecord | null> {
   const prisma = await usePrisma()
-  const media = await prisma.media.findUnique({ where: { id } })
+  const media = await prisma.media.findUnique({ where: { id }, include: API_MEDIA_INCLUDE })
   if (!media || media.projectId !== projectId || media.deletedAt) return null
   if (publicOnly && media.visibility !== 'PUBLIC') return null
   return media
 }
 
 /** Médias actifs d'un projet parmi `ids` (lot de liens signés), par identifiant ; les autres sont absents. */
-export async function findApiMediaByIds(projectId: string, ids: readonly string[]): Promise<Map<string, Media>> {
+export async function findApiMediaByIds(projectId: string, ids: readonly string[]): Promise<Map<string, ApiMediaRecord>> {
   const prisma = await usePrisma()
-  const items = await prisma.media.findMany({ where: { id: { in: [...new Set(ids)] }, projectId, deletedAt: null } })
+  const items = await prisma.media.findMany({ where: { id: { in: [...new Set(ids)] }, projectId, deletedAt: null }, include: API_MEDIA_INCLUDE })
   return new Map(items.map(media => [media.id, media]))
 }
 

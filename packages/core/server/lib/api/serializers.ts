@@ -1,12 +1,13 @@
 import { createHash } from 'node:crypto'
-import type { ApiFolder, ApiMedia, ApiPreset, ApiProject } from '#shared/schemas/api'
+import type { ApiFolder, ApiMedia, ApiPreset, ApiProject, ApiTextTrack } from '#shared/schemas/api'
 import { API_LINK_BUCKET, API_LINK_TTL } from '#shared/utils/api'
 import { extensionForMime } from '#shared/utils/media'
 import type { TokenScope } from '#shared/utils/permissions'
 import type { TransformPolicy } from '#shared/utils/transforms'
-import type { Media } from '../../generated/prisma/client'
+import type { Media, MediaTextTrack } from '../../generated/prisma/client'
 import { alignedExpiry, signMediaAccess, type SignedAccess } from '../media/signing'
-import { derivedPathTemplate, mediaPath } from '../media/urls'
+import { TEXT_TRACK_ORDER } from '../media/tracks'
+import { derivedPathTemplate, mediaPath, posterPath, trackPath } from '../media/urls'
 import { hasDerivedFiles, mediaFocalPoint } from '../media/variants'
 import type { PresetSummary } from '../transforms/service'
 
@@ -16,6 +17,11 @@ import type { PresetSummary } from '../transforms/service'
  * clé de stockage, d'e-mail ni d'empreinte.
  */
 
+/** Média lu pour l'API : avec ses pistes de texte (vidéos). */
+export type ApiMediaRecord = Media & { textTracks: MediaTextTrack[] }
+/** `include` Prisma des médias de l'API. */
+export const API_MEDIA_INCLUDE = { textTracks: TEXT_TRACK_ORDER } as const
+
 /** Échéance des URL signées incluses dans les réponses : ~1 h, alignée sur le quart d'heure. */
 export function apiLinkExpiry(nowMs = Date.now()): number {
   return alignedExpiry(Math.floor(nowMs / 1000), API_LINK_TTL, API_LINK_BUCKET)
@@ -23,10 +29,10 @@ export function apiLinkExpiry(nowMs = Date.now()): number {
 
 /**
  * Média v1 : URL permanentes pour un média public ; pour un média privé, URL signées (fichier,
- * aperçu, et gabarit des dérivés avec le droit « derived ») valables jusqu'à `expires`, identiques
- * pendant chaque quart d'heure.
+ * aperçu, affiche d'une vidéo, et gabarit des dérivés avec le droit « derived ») valables jusqu'à
+ * `expires`, identiques pendant chaque quart d'heure.
  */
-export function toApiMedia(media: Media, base: string, expires: number): ApiMedia {
+export function toApiMedia(media: ApiMediaRecord, base: string, expires: number): ApiMedia {
   const signed = media.visibility === 'PRIVATE'
   const signature = (access: SignedAccess) => (signed ? `?${signMediaAccess(media, access, expires)}` : '')
   const hasPreview = hasDerivedFiles(media)
@@ -49,10 +55,30 @@ export function toApiMedia(media: Media, base: string, expires: number): ApiMedi
     url: `${base}${mediaPath(media)}${signature({ variant: 'original' })}`,
     previewUrl: hasPreview ? `${base}${mediaPath(media, 'preview')}${signature({ variant: 'preview' })}` : null,
     urlTemplate: hasPreview ? `${base}${derivedPathTemplate(media)}${signature({ scope: 'derived' })}` : null,
+    poster: media.posterKey && media.posterWidth && media.posterHeight
+      ? { url: `${base}${posterPath(media)}${signature({ variant: 'full' })}`, width: media.posterWidth, height: media.posterHeight, time: media.posterTime }
+      : null,
+    textTracks: media.textTracks.map(track => toApiTextTrack(media, track, base, expires)),
     focalPoint: mediaFocalPoint(media),
     urlExpiresAt: signed ? new Date(expires * 1000).toISOString() : null,
     createdAt: media.createdAt.toISOString(),
     updatedAt: media.updatedAt.toISOString(),
+  }
+}
+
+/** Piste de texte v1 : URL signée (droit `track:<piste>`) pour un média privé. */
+export function toApiTextTrack(media: Media, track: MediaTextTrack, base: string, expires: number): ApiTextTrack {
+  const query = media.visibility === 'PRIVATE' ? `?${signMediaAccess(media, { variant: `track:${track.id}` }, expires)}` : ''
+  return {
+    id: track.id,
+    kind: track.kind.toLowerCase() as ApiTextTrack['kind'],
+    language: track.language,
+    label: track.label,
+    default: track.isDefault,
+    url: `${base}${trackPath(media, track.id)}${query}`,
+    size: track.size,
+    cueCount: track.cueCount,
+    createdAt: track.createdAt.toISOString(),
   }
 }
 

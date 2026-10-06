@@ -61,7 +61,20 @@ export function createFlydriveStorage(driver: string, disk: Disk, prefix = '', r
 
     async deletePrefix(keyPrefix) {
       try {
-        await disk.deleteAll(full(keyPrefix))
+        // Dossier entier (« variants/<média>/ ») : suppression directe.
+        if (keyPrefix.endsWith('/')) return await disk.deleteAll(full(keyPrefix))
+        // Début d'un nom de fichier (« variants/<média>/v3- ») : le pilote fs ne supprime que des dossiers
+        // (`deleteAll` y viserait un chemin inexistant, sans erreur ni effet) → fichiers du dossier listés.
+        const prefix = full(keyPrefix)
+        const folder = prefix.slice(0, prefix.lastIndexOf('/') + 1)
+        let paginationToken: string | undefined
+        do {
+          const page = await disk.listAll(folder, { recursive: false, paginationToken })
+          for (const object of page.objects) {
+            if (object.isFile && object.key.startsWith(prefix)) await disk.delete(object.key)
+          }
+          paginationToken = page.paginationToken
+        } while (paginationToken)
       }
       catch (error) {
         if (!isNotFound(error)) throw error

@@ -1,7 +1,24 @@
 # Phase D — Vidéos : envoi, stockage, gestion et diffusion directe
 
 > **Statut : VALIDÉE (2026-10-05) — décisions DD1 à DD14 acceptées par l'utilisateur. D1 FAITE (2026-10-05)** : `setup.md`
-> étape 20 et § 7.7, `.claude/project-context.md` § 9.21. Suite (D2 à D4, transverses : § 14) à proposer et faire valider.
+> étape 20 et § 7.7, `.claude/project-context.md` § 9.21. **D2 VALIDÉE (2026-10-05)** : § 17 à § 27, décisions DD15
+> à DD24, avec un ajout de l'utilisateur : retirer aussi les **métadonnées de l'appareil** (§ 18.3). **D2 FAITE
+> (2026-10-06)** : `setup.md` étape 21 et § 7.7, `.claude/project-context.md` § 9.22. D3, D4 et transverses (§ 14) : à
+> proposer plus tard.
+>
+> Écarts et précisions de D2 :
+> - **Appareil** : retrait par une liste de ce qui est conservé (§ 18.3), y compris boîtes de premier niveau (`uuid` portant la
+>   version de Windows, XMP) ; le bourrage (`free`, `skip`, `wide`) n'est retiré que si le fichier est réécrit pour une autre raison.
+> - **Préparation** : refus étendus (`cmov`, `rmra`) ; vérification = pistes, durées, dimensions, codecs identiques et 32 octets comparés
+>   pour 8 blocs ; `metadata.prepared` = `[]` pour « examiné, rien à faire ».
+> - **Durée WebM** : fin du fichier lue par paliers (1, 4 puis 16 Mio) pour les grappes volumineuses (4K).
+> - **Affiche** : le retrait efface aussi le point d'intérêt ; le lien temporaire de l'administration couvre aussi l'affiche et les pistes
+>   (extrait `<video>` d'une vidéo privée) ; le générateur d'adresses de la fiche s'applique à l'affiche.
+> - **Pistes** : remplacement du fichier = nouvelle piste ; réception en mémoire (`receiveSmallUpload`) ; ordre d'ajout.
+> - **Correctif hors périmètre** : `deletePrefix` du stockage local ne supprimait jamais les dérivés des anciennes versions (Flydrive
+>   attend un dossier) ; corrigé, sans nettoyage automatique des fichiers déjà laissés.
+> - **Migration de la base de dev** appliquée à la main (même SQL, même empreinte) : `migrate deploy` restait « database is locked »
+>   tant que le serveur de dev tournait.
 >
 > Écarts et précisions de D1 :
 > - **MP4 fragmenté** (enregistrements `MediaRecorder` des navigateurs, CMAF) : `mvhd` et les pistes n'annoncent qu'une durée nulle
@@ -351,3 +368,363 @@ Ordre proposé du moins coûteux au plus coûteux, chaque étape facultative et 
   (ou un mandataire avec cache) devant `NUXT_MEDIA_PUBLIC_URL` est fortement recommandé (documenté).
 - **S3 réel** toujours non testé (seulement `s3rver`) : `Range` sur de gros objets à vérifier chez l'utilisateur.
 - **MySQL/MariaDB** : inchangé (aucune migration en D1).
+
+---
+
+# D2 — Préparation des vidéos, image d'affiche, sous-titres (VALIDÉE, FAITE le 2026-10-06)
+
+> Proposée le 2026-10-05 à la demande de l'utilisateur (« on peut continuer sur D2 ») ; **validée le même jour** avec
+> le retrait des métadonnées de l'appareil en plus de celles du lieu (§ 18.3).
+> Toujours **sans ffmpeg, sans file ni tâche de fond** : seulement des lectures d'en-têtes, une copie déjà existante
+> réordonnée, et des calculs faits dans le navigateur de l'administrateur.
+
+## 17. Résumé de D2 en 10 points
+
+1. **Préparation à l'envoi** des MP4/MOV : index (`moov`) placé **en tête** (« faststart »), **lieu de tournage et
+   métadonnées de l'appareil retirés**, sans réencodage, **pendant la copie vers le stockage qui existe déjà** (aucun passage supplémentaire sur le
+   fichier).
+2. La sortie est **vérifiée avant d'être écrite** (réanalyse + comparaison d'octets) ; au moindre doute, le fichier est
+   stocké tel qu'envoyé. Désactivable (`NUXT_MEDIA_VIDEO_PREPARE`).
+3. Vidéos déjà envoyées (dont votre `v1.mp4`, index en fin de fichier) : action **« Optimiser »** dans la fiche
+   (nouvelle version, comme un remplacement).
+4. **Image d'affiche** : une image associée à la vidéo, **capturée dans le navigateur** au moment de l'envoi (première
+   image significative) ou choisie dans la fiche (image affichée par le lecteur, ou fichier envoyé).
+5. L'affiche devient la **source des dérivés** de la vidéo : vignette dans la médiathèque, `previewUrl`, préréglages,
+   transformations, point d'intérêt — exactement comme une image. Attribut `poster` de `<video>`.
+6. **Sous-titres et pistes de texte** (WebVTT, `<track>`) : sous-titres, sous-titres pour sourds et malentendants,
+   descriptions, chapitres ; plusieurs langues ; fichiers **VTT ou SRT** (converti), vérifiés puis réécrits proprement.
+7. Pistes servies par `/m/<id>/v<n>/tracks/<piste>.vtt` avec les mêmes règles que les fichiers (cache, signatures,
+   CORS, corbeille).
+8. **Durée des WebM** enregistrés par les navigateurs (aujourd'hui « inconnue ») : estimée en lisant la fin du fichier.
+9. API v1 : champs **ajoutés** à `Media` (`poster`, `textTracks`) et nouvelles routes (affiche, pistes) ; rien de
+   supprimé ni de renommé.
+10. **Migration** de base (colonnes d'affiche sur `Media`, table `MediaTextTrack`). Livraison : étape 21 de
+    `setup.md`, en trois parties testées l'une après l'autre (préparation, affiche, pistes).
+
+## 18. Préparation à l'envoi : index en tête, lieu et appareil (DD15 à DD17)
+
+### 18.1 Pourquoi
+
+- **Index en fin de fichier** (`faststart: false`, cas de votre `v1.mp4` : `ftyp`, `uuid`, `mdat`, puis `moov`) : le
+  lecteur doit d'abord aller chercher la fin du fichier avant de pouvoir afficher la première image (requêtes et
+  allers-retours supplémentaires, sensibles sur mobile), et les outils qui ne font pas de requêtes partielles (aperçus
+  des réseaux sociaux, certains lecteurs) téléchargent tout le fichier. C'est le cas de beaucoup d'exports (logiciels de
+  montage, captures d'écran, caméras).
+- **Lieu de tournage** (DD11) : les vidéos de téléphone l'enregistrent ; un média public le diffuse à tout le monde.
+  D1 le signale seulement.
+
+### 18.2 Fonctionnement : un seul passage
+
+Aujourd'hui, `storeOriginal` copie le fichier temporaire vers le stockage. Pour une vidéo MP4/MOV à préparer, cette
+copie devient une **suite de morceaux** :
+
+```
+entrée : [ftyp][uuid][mdat ……………………………………][moov]
+sortie : [ftyp][uuid][moov′][mdat ……………………………………]
+```
+
+- `moov′` = `moov` lu en mémoire (seule partie lue en plus : en général moins de 1 % du fichier, **64 Mio au plus**),
+  métadonnées de lieu et d'appareil retirées, **décalages des échantillons** (`stco`/`co64`) recalculés : chaque boîte de premier niveau
+  garde son contenu, seule sa position change, et chaque décalage est déplacé d'autant. Le plafond de 2 Gio (DD4)
+  garantit que les décalages tiennent toujours dans `stco` (32 bits).
+- Taille de sortie connue d'avance (≤ taille envoyée) : `PutObject` S3 inchangé ; SHA-256 calculé au fil de l'écriture.
+- Fichier déjà en tête et sans métadonnées à retirer, MP4 **fragmenté** (enregistrements `MediaRecorder`, index déjà en tête), WebM : **aucune
+  modification**, copie identique à aujourd'hui.
+
+### 18.3 Ce qui est retiré : lieu de tournage et appareil
+
+Proposé : le lieu seulement. **Validé : le lieu et les métadonnées de l'appareil** (marque, modèle, logiciel et version
+du système, réglages de la caméra, décalage horaire, identifiants propres aux fabricants). Chaque fabricant a ses
+propres boîtes (Samsung `smta`, `cami`, `SDLN` ; Apple clés `com.apple.quicktime.*` ; Windows `Xtra` et une boîte `uuid`
+portant la version du système ; Canon `CNCV`, `CNMN` ; GoPro `GPMF`…) : une liste de boîtes à retirer en oublierait
+toujours. La règle est donc une **liste de ce qui est conservé** ; tout le reste des métadonnées descriptives est retiré.
+
+| Emplacement | Conservé | Retiré (exemples) |
+| --- | --- | --- |
+| Premier niveau du fichier | `ftyp`, `moov`, `mdat` | `uuid` (XMP, version de Windows…), `free`/`skip`/`wide` (bourrage), toute autre boîte |
+| `udta` (film et pistes) | `name`, `kind`, `tsel` (noms et rôles des pistes), `chpl` (chapitres), titre, description, commentaire, droits d'auteur (`©nam`, `©des`, `©cmt`, `cprt`, `©cpy`, `titl`, `dscp`) | `©xyz`, `loci`, `©mak`, `©mod`, `©swr`, `©day`, `auth`, `XMP_`, `Xtra`, `smta`, `cami`, `SDLN`… |
+| `meta` (clés QuickTime `mdta`) | titre, description, commentaire, droits d'auteur (`com.apple.quicktime.title`…) | lieu, marque, modèle, logiciel, date de création, `com.android.*`, `com.samsung.*`… (clés retirées de `keys`, éléments de `ilst` renumérotés) |
+| `meta` (liste iTunes `ilst`) | `©nam`, `desc`, `©des`, `ldes`, `©cmt`, `cprt` | `©xyz`, `©too` (logiciel), tout le reste |
+| `uuid` dans `moov` ou une piste | — | retiré |
+
+- Une boîte `meta` ou `udta` vide après filtrage est retirée.
+- Restent seulement les **informations nécessaires à la lecture** (pistes, codecs, rotation, durée) et les **dates
+  techniques des en-têtes** (`mvhd`, `tkhd`, `mdhd`, en temps universel, sans décalage horaire). Le nom du gestionnaire de
+  piste (`hdlr`, ex. « VideoHandle ») et celui du codeur dans la description des échantillons sont conservés (structure).
+- La **détection** (`hasLocation`) couvre aussi le XMP.
+- **Non couvert** (documenté) : positions ou informations enregistrées **dans les données** d'une piste de
+  métadonnées (GoPro `gpmd`, `camm`, drones DJI, caméras embarquées, piste `mebx` des iPhone) : ni détectées ni retirées
+  sans ffmpeg (D3 : ne garder que l'image et le son). WebM : non modifié (seuls `MuxingApp`/`WritingApp` y désignent le
+  navigateur ou le logiciel).
+
+### 18.4 Garde-fous et vérification
+
+- **Préparation sautée** (fichier stocké tel quel, comme en D1) si : MP4 fragmenté, plusieurs `moov`, `moov` > 64 Mio,
+  un décalage hors d'une boîte `mdat`, décalages absolus ailleurs (`saio` des fichiers chiffrés), données dans un autre
+  fichier (`dref` non autonome).
+- **Vérification de la sortie avant toute écriture** : la sortie (virtuelle : en-têtes en mémoire + plages du fichier
+  temporaire) est **réanalysée par le lecteur de D1** — mêmes dimensions, durée, codecs et pistes ; index en tête ; plus
+  de lieu — et, pour chaque piste, les premiers octets du premier et du dernier bloc d'échantillons sont **comparés**
+  entre l'ancienne et la nouvelle position (quelques Kio lus). Un écart → fichier stocké tel qu'envoyé, journal serveur,
+  l'avertissement reste dans la fiche.
+- Préparer un fichier déjà préparé ne change rien (opération idempotente, testée).
+
+### 18.5 Essais sur de vrais fichiers (2026-10-05, prototype hors du projet)
+
+Prototype (`prepare-proto.mjs`, dossier temporaire de la session) appliqué à des **copies** des deux vidéos envoyées par
+l'utilisateur (originaux jamais modifiés) :
+
+| Fichier | Avant | Après |
+| --- | --- | --- |
+| Téléphone Samsung Galaxy S25 Ultra (projet « My Phone ») : HEVC 1080×1920 (rotation 90°), AAC, 14,1 s, 16,8 Mo, `co64` | `ftyp mdat moov`, lieu dans `udta/©xyz` | `ftyp moov mdat`, `©xyz` retiré (30 octets de moins), 29 blocs retrouvés à leur nouvelle place |
+| `v1.mp4` (bibliothèque) : H.264 + AAC, 1,6 s | `ftyp uuid mdat moov` | `ftyp uuid moov mdat`, 12 blocs |
+
+- Lecteur de D1 sur les sorties : mêmes dimensions, durée, codecs ; `faststart: true` ; `hasLocation: false`. `mdat`
+  identique octet pour octet ; aucune coordonnée ISO 6709 restante dans le fichier ; second passage sans effet.
+- Navigateur intégré (Chromium 152, décodage HEVC matériel sur ce poste) : **images décodées identiques** au pixel près
+  (6 instants pour le téléphone, 5 pour `v1.mp4`).
+- Temps jusqu'à la première image (serveur de test, latence et débit simulés, médiane de 5 essais) :
+
+  | Réseau | Original (3 requêtes) | Préparé (1 requête) |
+  | --- | --- | --- |
+  | latence 300 ms, 50 Mbit/s | métadonnées 1 020 ms, image 1 181 ms | métadonnées 516 ms, image 881 ms |
+  | latence 150 ms, 8 Mbit/s (3 essais) | image 990 ms | image 744 ms |
+  | latence 40 ms, 20 Mbit/s | image 392 ms | image 345 ms |
+  | local, sans limite | image 213 ms | image 282 ms |
+
+  Le gain vient des allers-retours évités : net dès que la latence est sensible (mobile, serveur lointain), nul sur un
+  réseau local. Les outils qui ne font pas de requêtes partielles téléchargent en plus tout le fichier quand l'index est
+  à la fin.
+- Restaient dans le fichier du téléphone avec la règle proposée (lieu seulement) : modèle de l'appareil (`auth`, `smta`),
+  réglages de la caméra (`cami`), version d'Android, décalage horaire (`com.samsung.android.utc_offset`) — d'où l'ajout
+  de l'utilisateur à la validation (§ 18.3). `v1.mp4` porte la version de Windows (boîte `uuid` de premier niveau) et une
+  boîte `Xtra` (propriétés Windows).
+- **Capture d'affiche** (§ 19.3) sur la vidéo du téléphone servie par `/m/` depuis un autre domaine : 1080×1920 à 1,41 s
+  (10 % de la durée), JPEG 183 Ko, environ 1,4 s ; sans `crossorigin="anonymous"`, `<canvas>` inutilisable (erreur de
+  sécurité), avec : correct.
+
+### 18.6 Empreinte, réglage, vidéos existantes
+
+- **Empreinte** (`checksum`, affichée dans la fiche, ETag de `/m/`) = SHA-256 du **fichier stocké et servi** ; `size`
+  = sa taille. `metadata.prepared` liste les opérations faites (`faststart`, `metadata`) : la fiche affiche « Optimisée
+  pour la lecture en ligne » et « Métadonnées d'origine retirées (lieu, appareil) ».
+- `NUXT_MEDIA_VIDEO_PREPARE` : `faststart,metadata` par défaut ; `faststart` seul conserve les métadonnées ; `metadata`
+  seul laisse l'index à sa place ; `none` désactive.
+- **Action « Optimiser »** (fiche, avec les avertissements « démarrage lent » et « lieu de tournage ») :
+  `POST /api/admin/media/:id/prepare` relit le fichier stocké et le fait passer par le chemin d'un **remplacement**
+  (nouvelle version, anciennes URL redirigées). Mêmes droits que le remplacement. Pas d'équivalent dans l'API v1 (un
+  `PUT …/file` avec le même fichier produit le même résultat).
+
+## 19. Image d'affiche (DD18, DD19)
+
+### 19.1 Modèle et stockage
+
+- Colonnes de `Media` : `posterKey String? @unique`, `posterWidth Int?`, `posterHeight Int?`, `posterSize Int?`,
+  `posterTime Float?` (instant capturé dans la vidéo ; `null` = image envoyée). L'affiche fait partie du média, comme
+  le point d'intérêt : pas de jointure pour la diffusion ni pour les listes.
+- Fichier : `variants/<média>/poster-<aléa>.jpg` (supprimé avec les dérivés à la purge).
+- **Normalisée à la réception** (file des traitements, 503 si pleine) : types d'image acceptés (JPEG, PNG, WebP, AVIF,
+  GIF → première image), limite des images (25 Mio), orientation appliquée, **métadonnées retirées** (EXIF/GPS d'une
+  photo utilisée comme affiche), 3840 px au plus, **JPEG** qualité 90.
+- Réservée aux vidéos (422 `KIND_MISMATCH` sinon).
+
+### 19.2 Diffusion et versions
+
+- L'affiche est la **source des dérivés de la vidéo** : `previewUrl` (aperçu WebP 480 px : cartes de la médiathèque,
+  API), préréglages, transformations libres, `urlTemplate`, liens signés, **point d'intérêt** — le code des images, avec
+  une autre source. Sans affiche : comme en D1 (`previewUrl` null, dérivés en 404).
+- Attribut `poster` : préréglage intégré `full` en JPEG (`/m/<id>/v<n>/full/<nom>.jpg`), compatible partout (balises
+  `og:image` comprises) ; les autres formats et tailles par `urlTemplate`.
+- **Versions** : la **première** affiche ne change pas la version (aucun dérivé n'existait) ; la **remplacer** ou la
+  **retirer** crée une nouvelle version, comme le point d'intérêt (CD8) — sinon un cache servirait l'ancienne image à
+  la même URL. Un remplacement du fichier vidéo **garde** l'affiche et les pistes.
+- Duplication : affiche (et pistes) copiées. Déplacement, corbeille, restauration : rien de particulier.
+
+### 19.3 Capture dans le navigateur
+
+- **À l'envoi** (formulaire de l'administration) : pendant l'envoi, le navigateur ouvre le fichier local dans un
+  `<video muted>` caché (rien n'est envoyé pour cela), se place à 10 % de la durée (5 s au plus ; si l'image est presque
+  noire, essaie un peu plus loin), dessine l'image sur un `<canvas>` à sa taille réelle (3840 px au plus) et l'envoie
+  comme affiche **après** la création du média (`PUT …/poster` avec `time`). Aucun calcul serveur autre que la
+  normalisation.
+- Codec que le navigateur ne sait pas décoder (HEVC sur certains systèmes, ProRes…) : pas d'affiche, carte avec l'icône
+  comme en D1 ; affiche ajoutable ensuite (image envoyée), ou côté serveur en D3.
+- **Dans la fiche** : section « Image d'affiche » : aperçu, « Utiliser l'image affichée » (image courante du lecteur,
+  mis en pause à l'endroit voulu), « Envoyer une image… », « Retirer » (confirmation). Le lecteur porte
+  `crossorigin="anonymous"` quand les fichiers sont servis depuis un autre domaine (`NUXT_MEDIA_PUBLIC_URL`), sinon le
+  `<canvas>` serait inutilisable.
+- **Applications clientes** (API) : même principe, extrait JavaScript dans la documentation OpenAPI (section « Vidéos »).
+
+## 20. Sous-titres et pistes de texte (DD20, DD21)
+
+### 20.1 Modèle
+
+```prisma
+enum TextTrackKind { SUBTITLES CAPTIONS DESCRIPTIONS CHAPTERS }
+
+model MediaTextTrack {
+  id           String        @id @default(cuid())
+  mediaId      String
+  kind         TextTrackKind
+  language     String        // BCP 47 canonique (fr, en-GB, pt-BR…)
+  label        String        // 100 caractères au plus
+  isDefault    Boolean       @default(false)
+  storageKey   String        @unique   // variants/<média>/track-<aléa>.vtt
+  size         Int
+  checksum     String
+  cueCount     Int
+  sourceFormat String        // vtt | srt
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+  media        Media         @relation(fields: [mediaId], references: [id], onDelete: Cascade)
+  @@index([mediaId])
+}
+```
+
+- **Vidéos seulement**, **20 pistes** au plus par vidéo, **1 Mio** par fichier.
+- **Fichier immuable** : le remplacer crée une nouvelle piste (l'interface garde type, langue, libellé et « par défaut »
+  et retire l'ancienne dans la même opération) ; type, langue, libellé et « par défaut » sont modifiables sans changer le
+  fichier ni son URL.
+- **Une piste par défaut au plus par groupe** (sous-titres et sous-titres SME ensemble ; descriptions ; chapitres), comme
+  l'exige HTML : en désigner une retire l'indication des autres.
+- Toute modification met à jour `Media.updatedAt` (ETag de l'API) et passe par `mediaChanged`. Pas d'entrée de journal
+  (comme le titre ou le texte alternatif).
+
+### 20.2 Formats acceptés et vérification
+
+- **WebVTT** (`.vtt`) et **SubRip** (`.srt`, converti) ; encodage **UTF-8** (avec ou sans BOM), UTF-16 avec BOM, sinon
+  **Windows-1252** (fréquent pour les anciens SRT français).
+- Le fichier est **analysé puis réécrit** en WebVTT normalisé (UTF-8, fins de ligne LF, horodatages complets) :
+  répliques (identifiant, temps, réglages `position`/`line`/`size`/`align`/`vertical`/`region`, texte avec les balises
+  WebVTT `c i b u v lang ruby rt` et horodatages internes), blocs `REGION` et `STYLE` conservés, commentaires `NOTE`
+  retirés. SRT : `<i> <b> <u>` conservés, `<font>` et balises ASS (`{\an8}`…) retirées.
+- Refus **422 `INVALID_TEXT_TRACK`** avec le numéro de ligne : en-tête absent, temps illisibles ou fin ≤ début, fichier
+  vide ; au plus 20 000 répliques et 2 000 caractères par réplique.
+- Le texte des répliques n'est jamais interprété comme du HTML (analyseur WebVTT des navigateurs ; affiché comme texte
+  dans l'administration).
+
+### 20.3 Diffusion
+
+- `/m/<id>/v<n>/tracks/<piste>.vtt`, `Content-Type: text/vtt; charset=utf-8`, mêmes règles que l'original : média
+  public = cache immuable ; privé = lien signé (nouveau droit `track:<piste>`, couvert par le droit `admin`, pas par
+  `derived`) ou Bearer ; corbeille → 404 ; ancienne version → 302. `tracks` devient un nom de préréglage réservé (aucun
+  préréglage ne porte ce nom aujourd'hui, vérifié).
+- Domaine différent du site (CDN, site client) : `<track>` exige `crossorigin="anonymous"` sur `<video>` ; `/m/` envoie
+  déjà `Access-Control-Allow-Origin: *`. L'extrait HTML l'ajoute dès qu'il y a une piste.
+
+### 20.4 Interface
+
+- Fiche, section « Sous-titres et pistes de texte » : liste (langue, libellé, type, par défaut, nombre de répliques) ;
+  ajouter (fichier `.vtt`/`.srt`, type, langue avec noms via `Intl.DisplayNames` et saisie d'un code, libellé
+  pré-rempli avec le nom de la langue dans cette langue — « Français », « English » —, par défaut) ; modifier ;
+  remplacer le fichier ; télécharger ; supprimer (confirmation).
+- Lecteur de la fiche : un `<track>` par piste → bouton des sous-titres des commandes natives. L'audit axe
+  `video-caption` (« incomplet » en D1) est résolu quand une piste `captions` existe ; un avertissement propose
+  d'ajouter des sous-titres quand la vidéo a du son et aucune piste (WCAG 1.2.2).
+- Extrait `<video>` : `poster`, `crossorigin` si besoin, une balise `<track>` par piste.
+
+## 21. Durée des WebM sans durée (DD23)
+
+- Les WebM de `MediaRecorder` n'annoncent pas de durée. Le serveur lit la **fin du fichier** (4 Mio au plus), y
+  retrouve le dernier `Cluster` (recherche de l'identifiant puis analyse cohérente jusqu'à la fin) et estime l'instant
+  de fin : `duration` rempli, `metadata.durationEstimated: true`. Le fichier n'est pas modifié.
+- Limite : le lecteur du navigateur continue de découvrir la durée en lisant (pas d'index dans le fichier). Réparer le
+  fichier (durée + index des repères) exige de le lire en entier : D3 (ffmpeg, copie sans réencodage).
+
+## 22. Contrats (DD22)
+
+**Administration** (ajouts) :
+- `MediaSummary` : `previewUrl` rempli pour une vidéo avec affiche ; `poster: { width, height, time } | null`.
+- `MediaDetail` : `posterUrl` (JPEG `full`, lien signé « admin » si privé) ; `textTracks[]` (`id`, `kind`, `language`,
+  `label`, `default`, `size`, `cueCount`, `url`, `createdAt`).
+- Routes : `PUT|DELETE /api/admin/media/:id/poster`, `POST /api/admin/media/:id/tracks`,
+  `PATCH|DELETE /api/admin/media/:id/tracks/:trackId`, `POST /api/admin/media/:id/prepare`. Droits = ceux de la
+  modification du média (bibliothèque : ADMIN ; projets : selon le rôle).
+
+**API v1** (ajouts seulement) :
+- `Media` : `poster: { url, width, height, time } | null` (URL JPEG `full`, signée si privé) ; `textTracks: TextTrack[]`
+  (`[]` pour une image ; `url` signée si privé). Pour une vidéo avec affiche, `previewUrl` et `urlTemplate` désignent
+  des images tirées de l'affiche.
+- `PUT|DELETE …/media/{mediaId}/poster` (multipart `file`, champ `time` facultatif) → `Media` ;
+  `GET|POST …/media/{mediaId}/tracks`, `PATCH|DELETE …/media/{mediaId}/tracks/{trackId}`. Portée `media:write` (lecture :
+  `media:read`), identifiants secret / personnel / délégué comme `PATCH` ; affiche et pistes ne comptent pas dans
+  `maxFiles` d'un jeton délégué et ne sont pas soumises à ses `types`.
+- `signed-url` et le lot `signed-urls` : nouvelle cible `track` (+ `trackId`), pour des liens de 7 jours au plus comme
+  pour le fichier.
+- Erreurs : `KIND_MISMATCH` (422, pas une vidéo), `TRACK_NOT_FOUND` (404), `TRACK_LIMIT_REACHED` (409),
+  `INVALID_TEXT_TRACK` (422, `detail` avec la ligne). OpenAPI fr/en, section « Vidéos » complétée.
+
+## 23. Performance (DD24)
+
+| Opération | Coût | Où |
+| --- | --- | --- |
+| Préparation | aucun passage supplémentaire (copie existante réordonnée) + lecture de `moov` (quelques Mio, 64 Mio au plus) + SHA-256 de la sortie (≈ 1 s de calcul par Gio, réparti par blocs de 64 Kio, comme l'empreinte de l'envoi mesurée en DD14) | requête d'envoi |
+| Vérification | réanalyse d'en-têtes en mémoire + quelques Kio comparés | requête d'envoi |
+| Affiche | capture dans le navigateur ; côté serveur un encodage JPEG par affiche + aperçu pré-généré, comme pour une image | file des traitements |
+| Pistes | texte ≤ 1 Mio analysé en quelques millisecondes | requête |
+| Durée WebM | lecture de 4 Mio au plus | requête d'envoi |
+
+Toujours ni ffmpeg, ni nouvelle file, ni tâche de fond. Les fichiers qui n'ont besoin de rien ne coûtent rien de plus
+qu'en D1.
+
+## 24. Décisions à valider (D2)
+
+| # | Décision proposée | Alternative |
+| --- | --- | --- |
+| DD15 | **Préparation automatique** des MP4/MOV à l'envoi : index en tête + retrait du lieu **et de l'appareil (ajout de l'utilisateur, liste de ce qui est conservé)**, en un passage, sortie vérifiée sinon fichier gardé tel quel ; `NUXT_MEDIA_VIDEO_PREPARE` (défaut `faststart,metadata`) | lieu conservé par défaut ; choix à chaque envoi ; garder aussi le fichier d'origine (double stockage) |
+| DD16 | Empreinte et taille = **fichier stocké** ; opérations listées dans `metadata.prepared` | empreinte du fichier envoyé |
+| DD17 | Action **« Optimiser »** pour les vidéos déjà envoyées (nouvelle version, administration seulement) | remplacer le fichier à la main |
+| DD18 | **Affiche** = colonnes de `Media`, normalisée en JPEG (orientation, métadonnées retirées, 3840 px), **source des dérivés** de la vidéo ; 1ʳᵉ affiche sans nouvelle version, remplacement ou retrait = nouvelle version | affiche = média image distinct lié (visible ou à cacher dans toutes les listes) ; révision d'affiche séparée dans l'URL |
+| DD19 | Affiche **capturée dans le navigateur** (envoi et fiche) ou image envoyée ; aucune extraction serveur avant D3 | attendre D3 (ffmpeg) |
+| DD20 | **Pistes WebVTT** (4 types, BCP 47, par défaut par groupe), VTT et SRT, UTF-8 / UTF-16 / Windows-1252, **analysées et réécrites**, 1 Mio et 20 pistes, fichier immuable | stocker tel quel ; VTT seulement |
+| DD21 | Pistes servies par `/m/<id>/v<n>/tracks/<piste>.vtt`, mêmes règles de cache et d'accès, droit signé `track:<piste>`, nom `tracks` réservé | URL sans version |
+| DD22 | API v1 : `poster` et `textTracks` **ajoutés** à `Media`, routes affiche et pistes (`media:write`, jetons délégués compris hors quota), cible signée `track` | objet `video {}` / `sources[]` dès maintenant (prévu en D3) |
+| DD23 | Durée des WebM **estimée** par la fin du fichier (4 Mio au plus) ; réparation du fichier en D3 | rien avant D3 |
+| DD24 | Coûts du § 23 ; toujours ni ffmpeg ni tâche de fond ; étape 21 en trois parties (préparation, affiche, pistes) | — |
+
+## 25. Plan de vérification de D2
+
+- **Vitest** :
+  - préparation sur des fichiers **synthétiques** : `moov` en fin, plusieurs `mdat`, `co64`, `wide`/`free`, lieu dans
+    `udta`, `meta`/`keys`/`ilst` et XMP ;
+  - cas laissés intacts : fichiers fragmentés, chiffrés, à références externes ;
+  - idempotence, comparaison des octets des échantillons avant/après, fichiers hostiles ;
+  - VTT/SRT : encodages, BOM, CRLF, balises, balises ASS, temps invalides, limites, normalisation stable ;
+  - durée WebM sur les fichiers `MediaRecorder` ; chemins `/tracks/` ; signatures `track:`.
+- **Vrais fichiers** :
+  - votre `v1.mp4` (index en fin), **copié en lecture seule** dans le dossier temporaire de la session, jamais modifié ni
+    ajouté au dépôt : préparation, lecture dans le navigateur intégré, **images comparées avant/après** (`<canvas>`) ;
+  - fichiers `MediaRecorder` du dépôt ;
+  - une vidéo de téléphone avec lieu **si vous pouvez en fournir une**.
+- **Scénario HTTP** `d2-test.mjs` :
+  - préparation : admin et v1, empreinte et taille, action `prepare` ;
+  - affiche : admin, v1, jeton délégué ; règles de version ; aperçu, `full`, transformations ; privé signé, corbeille ;
+  - pistes : création, modification, suppression, limites, erreurs ; diffusion publique, signée et Bearer ; CORS ; 302 ;
+    404 en corbeille ;
+  - duplication (affiche et pistes copiées), purge (fichiers supprimés), OpenAPI.
+- **Non-régression** :
+  - scénarios précédents, et `video-test.mjs` adapté (empreinte et taille des MP4 préparés) ;
+  - `pnpm typecheck`, `pnpm test`, `pnpm i18n:check`, `db:migration --check` ;
+  - build de production dans une copie isolée.
+- **Interface** :
+  - capture à l'envoi, section affiche, section pistes, lecteur avec sous-titres ;
+  - axe fr/en × clair/sombre, clavier, 375 px.
+
+## 26. Risques et limites de D2
+
+- **Fichier envoyé non conservé tel quel** quand il est préparé : une erreur du réécriveur abîmerait le seul exemplaire.
+  Parades : vérification avant écriture, repli sur le fichier intact, tests sur fichiers synthétiques et réels,
+  désactivation par `NUXT_MEDIA_VIDEO_PREPARE=none`.
+- Lieu dans les **données** des pistes de métadonnées (GoPro, drones, caméras embarquées) : ni détecté ni retiré (D3).
+- Capture d'affiche impossible quand le navigateur ne décode pas le codec : image à envoyer, ou D3.
+- Une piste ou une affiche retirée d'un média public reste dans les caches (CDN) jusqu'à leur échéance, comme tout
+  fichier public déjà diffusé.
+- Migration sur les trois bases (SQLite, PostgreSQL, MySQL) : colonnes ajoutées sans valeur par défaut obligatoire,
+  nouvelle table.
+
+## 27. Hors D2 (pour mémoire)
+
+Extraction d'affiches et de vignettes côté serveur, réparation des WebM, transcodage, formats refusés en D1 (D3) ;
+vignettes de survol de la barre de lecture (`thumbnails` VTT), HLS (D4) ; sous-titres automatiques (reconnaissance de la
+parole) ; retrait des autres métadonnées (date, appareil) ; retrait du GPS des **originaux d'images** (même logique,
+proposable ensuite) ; envois reprenables, fichiers > 2 Gio ; composant `<SmVideo>`.

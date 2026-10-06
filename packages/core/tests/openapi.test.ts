@@ -71,7 +71,13 @@ describe('spécification OpenAPI générée depuis les routes', () => {
       'DELETE /projects/{projectId}/media/{mediaId}',
       'POST /projects/{projectId}/media/{mediaId}/duplicate',
       'PUT /projects/{projectId}/media/{mediaId}/file',
+      'PUT /projects/{projectId}/media/{mediaId}/poster',
+      'DELETE /projects/{projectId}/media/{mediaId}/poster',
       'POST /projects/{projectId}/media/{mediaId}/signed-url',
+      'GET /projects/{projectId}/media/{mediaId}/tracks',
+      'POST /projects/{projectId}/media/{mediaId}/tracks',
+      'PATCH /projects/{projectId}/media/{mediaId}/tracks/{trackId}',
+      'DELETE /projects/{projectId}/media/{mediaId}/tracks/{trackId}',
       'GET /projects/{projectId}/presets',
       'POST /projects/{projectId}/signed-urls',
     ])
@@ -87,7 +93,7 @@ describe('spécification OpenAPI générée depuis les routes', () => {
     expect(Object.keys(upload.properties)).toEqual(['file', 'title', 'altText', 'visibility', 'folderId'])
     expect(Object.keys(fr.components.schemas).sort()).toEqual([
       'DelegatedToken', 'DelegatedTokenClaims', 'ErrorCatalog', 'Folder', 'FolderList', 'Me', 'Media', 'MediaList', 'Preset', 'PresetList', 'Problem',
-      'Project', 'ProjectList', 'SignedUrl', 'SignedUrlError', 'SignedUrlList', 'UploadConstraints',
+      'Project', 'ProjectList', 'SignedUrl', 'SignedUrlError', 'SignedUrlList', 'TextTrack', 'TextTrackList', 'UploadConstraints',
     ])
   })
 

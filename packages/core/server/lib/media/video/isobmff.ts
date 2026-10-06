@@ -58,6 +58,11 @@ const LOCATION_KEY = Buffer.from('location.ISO6709')
 const LOCATION_ITEM = Buffer.from([0xA9, 0x78, 0x79, 0x7A])
 /** Boîtes de lieu de tournage : QuickTime `©xyz`, 3GPP `loci`. */
 const LOCATION_BOXES = new Set(['©xyz', 'loci'])
+/** Identifiant de la boîte `uuid` d'un paquet XMP (Adobe) ; coordonnées GPS dans un paquet XMP. */
+export const XMP_UUID = Buffer.from('BE7ACFCB97A942E89C71999491E3AFAC', 'hex')
+export const XMP_GPS = /GPS(?:Latitude|Longitude)/
+/** Boîtes de premier niveau examinées au plus après l'index et les données (XMP placé en fin de fichier). */
+const TRAILING_BOX_SCAN = 64
 
 interface Context {
   source: ByteSource
@@ -272,7 +277,10 @@ function metaChildrenOffset(body: Buffer): number {
   return body.length >= 12 && body.readUInt32BE(0) === 0 && body.toString('latin1', 8, 12) === 'hdlr' ? 4 : 0
 }
 
-/** Lieu de tournage dans `udta` (`©xyz`, `loci`) ou une boîte `meta` (clé `com.apple.quicktime.location.ISO6709`). */
+/**
+ * Lieu de tournage dans `udta` (`©xyz`, `loci`, paquet XMP `XMP_` avec des coordonnées GPS) ou une boîte
+ * `meta` (clé `com.apple.quicktime.location.ISO6709`, élément `©xyz`).
+ */
 async function hasLocationIn(context: Context, box: Box): Promise<boolean> {
   if (box.end - box.body > MAX_READ_LENGTH) return false
   const body = await readBody(context, box)
@@ -282,6 +290,7 @@ async function hasLocationIn(context: Context, box: Box): Promise<boolean> {
     if (size < 8 || offset + size > body.length) return false
     const type = body.toString('latin1', offset + 4, offset + 8)
     if (LOCATION_BOXES.has(type)) return true
+    if (type === 'XMP_' && XMP_GPS.test(body.toString('latin1', offset + 8, offset + size))) return true
     if (type === 'meta') {
       const meta = body.subarray(offset + 8, offset + size)
       const items = meta.subarray(metaChildrenOffset(meta))
@@ -290,6 +299,13 @@ async function hasLocationIn(context: Context, box: Box): Promise<boolean> {
     offset += size
   }
   return false
+}
+
+/** Boîte `uuid` de premier niveau : paquet XMP contenant des coordonnées GPS ? */
+async function isXmpWithLocation(context: Context, box: Box): Promise<boolean> {
+  if (box.end - box.body < 16 || box.end - box.body > MAX_READ_LENGTH) return false
+  const body = await readBody(context, box)
+  return body.subarray(0, 16).equals(XMP_UUID) && XMP_GPS.test(body.toString('latin1', 16))
 }
 
 /** Sous-boîtes d'un tampon déjà lu (structure vérifiée : une incohérence arrête le parcours). */
@@ -381,6 +397,8 @@ export async function probeIsoBmff(source: ByteSource): Promise<IsoMovie> {
   let ftypBrand: string | null = null
   let firstMdat: number | null = null
   let firstFragment: number | null = null
+  let xmpLocation = false
+  let trailing = 0
 
   for await (const box of children(context, 0, source.size, true)) {
     if (box.type === 'ftyp' && ftypBrand === null) {
@@ -389,10 +407,12 @@ export async function probeIsoBmff(source: ByteSource): Promise<IsoMovie> {
     }
     else if (box.type === 'moov' && !moov) moov = box
     else if (box.type === 'mdat' && firstMdat === null) firstMdat = box.start
+    else if (box.type === 'uuid' && !xmpLocation) xmpLocation = await isXmpWithLocation(context, box)
     if (box.type === 'moof' && firstFragment === null) firstFragment = box.start
-    // Index trouvé et position des données connue : inutile de parcourir le reste (fragments d'un MP4
-    // fragmenté, par milliers).
-    if (moov && (firstMdat !== null || box.type === 'moof')) break
+    // MP4 fragmenté : inutile de parcourir les fragments (par milliers). Sinon, quelques boîtes de plus
+    // après l'index et les données (paquet XMP en fin de fichier).
+    if (moov && box.type === 'moof') break
+    if (moov && firstMdat !== null && ++trailing > TRAILING_BOX_SCAN) break
   }
   if (!moov) throw unreadable('No movie header (moov).')
 
@@ -402,7 +422,7 @@ export async function probeIsoBmff(source: ByteSource): Promise<IsoMovie> {
     fragmented: false,
     tracks: [],
     faststart: firstMdat === null || moov.start < firstMdat,
-    hasLocation: false,
+    hasLocation: xmpLocation,
   }
   let fragmentDuration: number | null = null
   let timescale = 0

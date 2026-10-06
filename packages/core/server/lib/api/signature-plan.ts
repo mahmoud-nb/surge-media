@@ -9,6 +9,7 @@ import type { SignedAccess } from '../media/signing'
 /** Fichier demandé, une fois la transformation canonisée et le préréglage trouvé. */
 export type SignedFile =
   | { kind: 'file' }
+  | { kind: 'track', trackId: string }
   | { kind: 'preset', name: string, format: TransformFormat }
   | { kind: 'transform', canonical: string, format: TransformFormat }
 
@@ -29,9 +30,10 @@ export type SignaturePlan =
   /** L'URL ne serait jamais servie (403 TRANSFORM_NOT_ALLOWED). */
   | { type: 'refused', detail: string }
 
-/** Droit signé désignant un fichier précis (signing.ts, `targetGrant`) : `original`, préréglage, `t:<canonique>`. */
+/** Droit signé désignant un fichier précis (signing.ts, `targetGrant`) : `original`, préréglage, `t:<canonique>`, `track:<piste>`. */
 export function signedVariant(file: SignedFile): string {
   if (file.kind === 'file') return 'original'
+  if (file.kind === 'track') return `track:${file.trackId}`
   return file.kind === 'preset' ? file.name : `t:${file.canonical}`
 }
 
@@ -48,6 +50,8 @@ export function signaturePlan(file: SignedFile, derived: boolean, context: Signa
   }
   const access: SignedAccess = derived ? { scope: 'derived' } : { variant: signedVariant(file) }
   if (context.visibility === 'PRIVATE') return { type: 'expiring', access }
+  // Piste de texte d'un média public : URL publique, quelle que soit la politique des transformations.
+  if (file.kind === 'track') return { type: 'none' }
   if (context.policy !== 'SIGNED') return { type: 'none' }
   if (derived) return { type: 'expiring', access }
   if (file.kind !== 'transform') return { type: 'none' }

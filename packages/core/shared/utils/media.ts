@@ -88,5 +88,8 @@ export const MEDIA_ERROR_CODES = [
   'INVALID_TRANSFORM', // transformation d'URL invalide, hors bornes ou zone hors de l'image (400)
   'TRANSFORM_QUOTA', // quota de dérivés de la version ou débit de nouvelles générations atteint (429)
   'TRANSFORM_NOT_ALLOWED', // transformation libre refusée par la politique de l'espace (403)
+  'TRACK_NOT_FOUND', // piste de texte inconnue pour cette vidéo (404)
+  'TRACK_LIMIT_REACHED', // nombre maximal de pistes de texte atteint pour cette vidéo (409)
+  'INVALID_TEXT_TRACK', // fichier de sous-titres illisible (422, data.line, data.detail)
 ] as const
 export type MediaErrorCode = (typeof MEDIA_ERROR_CODES)[number]

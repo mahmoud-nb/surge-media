@@ -29,7 +29,8 @@ const MAX_READS = 20_000
 /** Taille maximale d'une lecture (boîtes ou éléments lus en entier : `stsd`, `udta`, `CodecPrivate`…). */
 export const MAX_READ_LENGTH = 1024 * 1024
 
-function guarded(size: number, read: (offset: number, length: number) => Promise<Buffer>): ByteSource {
+/** Source bornée (nombre et taille des lectures) au-dessus d'une fonction de lecture. */
+export function guardedSource(size: number, read: (offset: number, length: number) => Promise<Buffer>): ByteSource {
   let reads = 0
   return {
     size,
@@ -43,7 +44,7 @@ function guarded(size: number, read: (offset: number, length: number) => Promise
 }
 
 export function bufferSource(buffer: Buffer): ByteSource {
-  return guarded(buffer.length, async (offset, length) => buffer.subarray(offset, offset + length))
+  return guardedSource(buffer.length, async (offset, length) => buffer.subarray(offset, offset + length))
 }
 
 /** Ouvre un fichier en lecture le temps de `task`. */
@@ -51,7 +52,7 @@ export async function withFileSource<T>(path: string, task: (source: ByteSource)
   const handle = await open(path, 'r')
   try {
     const { size } = await handle.stat()
-    return await task(guarded(size, async (offset, length) => {
+    return await task(guardedSource(size, async (offset, length) => {
       const buffer = Buffer.alloc(length)
       const { bytesRead } = await handle.read(buffer, 0, length, offset)
       return buffer.subarray(0, bytesRead)

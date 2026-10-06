@@ -20,6 +20,8 @@ export interface WebmTrack {
 
 export interface WebmFile {
   duration: number | null
+  /** Durée absente des en-têtes, estimée d'après le dernier `Cluster` (enregistrements des navigateurs). */
+  durationEstimated: boolean
   tracks: WebmTrack[]
 }
 
@@ -143,16 +145,130 @@ function text(body: Buffer): string {
   return body.toString('latin1').replace(/\0+$/, '')
 }
 
-async function readInfo(context: Context, info: Element): Promise<number | null> {
+/** Durée (secondes) en unités de `scale` nanosecondes ; null si nulle ou absurde. */
+function scaled(value: number, scale: number): number | null {
+  if (!Number.isFinite(value) || value <= 0) return null
+  const seconds = value * scale / 1e9
+  return seconds < 1e8 ? seconds : null
+}
+
+async function readInfo(context: Context, info: Element): Promise<{ duration: number | null, scale: number }> {
   let scale = 1_000_000
   let duration: number | null = null
   for await (const element of elements(context, info.body, info.end!)) {
     if (element.id === ID.TimecodeScale) scale = unsigned(await readBody(context, element)) || 1_000_000
     else if (element.id === ID.Duration) duration = float(await readBody(context, element))
   }
-  if (duration === null || !Number.isFinite(duration) || duration <= 0) return null
-  const value = duration * scale / 1e9
-  return value < 1e8 ? value : null
+  return { duration: duration === null ? null : scaled(duration, scale), scale }
+}
+
+// ─── Durée estimée (fichiers sans durée) ─────────────────────────────────────
+
+/** Fin du fichier lue pour trouver le dernier `Cluster` : 1 Mio, puis 4, puis 16 au plus (grappes de 4K). */
+const DURATION_TAILS = [1, 4, 16].map(mebibytes => mebibytes * 1024 * 1024)
+const CLUSTER_ID = Buffer.from([0x1F, 0x43, 0xB6, 0x75])
+const CLUSTER = {
+  Timecode: 0xE7,
+  SimpleBlock: 0xA3,
+  BlockGroup: 0xA0,
+  Block: 0xA1,
+  BlockDuration: 0x9B,
+  Position: 0xA7,
+  PrevSize: 0xAB,
+  Void: 0xEC,
+  CRC32: 0xBF,
+} as const
+const CLUSTER_CHILDREN = new Set<number>(Object.values(CLUSTER))
+/** Éléments de premier niveau qui peuvent suivre un `Cluster` de taille inconnue. */
+const SEGMENT_CHILDREN = new Set([ID.Cluster, 0x1C53BB6B /* Cues */, 0x1254C367 /* Tags */, 0x1043A770 /* Chapters */, 0x1941A469 /* Attachments */])
+
+/** Décalage (signé, unités du `Cluster`) d'un bloc `SimpleBlock` ou `Block`. */
+function blockOffset(buffer: Buffer, body: number, end: number): number {
+  const track = vint(buffer, body, false)
+  if (body + track.length + 3 > end) throw unreadable('Truncated block.')
+  return buffer.readInt16BE(body + track.length)
+}
+
+/**
+ * Fin (unités de `TimecodeScale`) des blocs du `Cluster` qui commence à `at`, null si ce n'est pas un
+ * `Cluster` cohérent (identifiant trouvé par hasard dans des données). Un bloc coupé par la fin du
+ * tampon arrête le parcours.
+ */
+function clusterEnd(buffer: Buffer, at: number): number | null {
+  let end: number | null = null
+  try {
+    let offset = at + CLUSTER_ID.length
+    const size = vint(buffer, offset, false)
+    offset += size.length
+    const limit = size.unknown ? buffer.length : Math.min(buffer.length, offset + size.value)
+    let timecode: number | null = null
+    while (limit - offset >= 2) {
+      const id = vint(buffer, offset, true)
+      if (SEGMENT_CHILDREN.has(id.value as never)) break
+      // `Timecode` d'abord (seuls CRC-32 et Void peuvent le précéder), puis des éléments connus.
+      if (!CLUSTER_CHILDREN.has(id.value)) return end
+      if (timecode === null && id.value !== CLUSTER.Timecode && id.value !== CLUSTER.CRC32 && id.value !== CLUSTER.Void) return null
+      const length = vint(buffer, offset + id.length, false)
+      if (length.unknown) return end
+      const body = offset + id.length + length.length
+      const childEnd = body + length.value
+      if (childEnd > limit) break
+      if (id.value === CLUSTER.Timecode) timecode = unsigned(buffer.subarray(body, childEnd))
+      else if (id.value === CLUSTER.SimpleBlock && timecode !== null) {
+        end = Math.max(end ?? 0, timecode + blockOffset(buffer, body, childEnd))
+      }
+      else if (id.value === CLUSTER.BlockGroup && timecode !== null) {
+        let start: number | null = null
+        let duration = 0
+        for (let child = body; childEnd - child >= 2;) {
+          const childId = vint(buffer, child, true)
+          const childLength = vint(buffer, child + childId.length, false)
+          const childBody = child + childId.length + childLength.length
+          const next = childBody + childLength.value
+          if (childLength.unknown || next > childEnd) break
+          if (childId.value === CLUSTER.Block) start = timecode + blockOffset(buffer, childBody, next)
+          else if (childId.value === CLUSTER.BlockDuration) duration = unsigned(buffer.subarray(childBody, next))
+          child = next
+        }
+        if (start !== null) end = Math.max(end ?? 0, start + duration)
+      }
+      offset = childEnd
+    }
+    return end
+  }
+  catch {
+    // Élément coupé par la fin du tampon (ou données incohérentes) : blocs déjà lus seulement.
+    return end
+  }
+}
+
+/** Fin des données d'après le dernier `Cluster` cohérent d'un tampon (fin du fichier). Pure, testée. */
+export function lastClusterEnd(tail: Buffer): number | null {
+  for (let at = tail.lastIndexOf(CLUSTER_ID); at >= 0; at = at > 0 ? tail.lastIndexOf(CLUSTER_ID, at - 1) : -1) {
+    const end = clusterEnd(tail, at)
+    if (end !== null) return end
+  }
+  return null
+}
+
+/** Durée (secondes) estimée par la fin du fichier ; null si introuvable (jamais d'erreur). */
+async function estimatedDuration(source: ByteSource, dataStart: number, scale: number): Promise<number | null> {
+  try {
+    for (const length of DURATION_TAILS) {
+      const start = Math.max(dataStart, source.size - length)
+      const parts: Buffer[] = []
+      for (let offset = start; offset < source.size; offset += MAX_READ_LENGTH) {
+        parts.push(await source.read(offset, Math.min(MAX_READ_LENGTH, source.size - offset)))
+      }
+      const end = lastClusterEnd(Buffer.concat(parts))
+      if (end !== null) return scaled(end, scale)
+      if (start === dataStart) return null
+    }
+    return null
+  }
+  catch {
+    return null
+  }
 }
 
 async function readTrack(context: Context, entry: Element): Promise<WebmTrack> {
@@ -224,22 +340,31 @@ export async function probeWebm(source: ByteSource): Promise<WebmFile> {
   }
   if (!segment) throw unreadable('Missing WebM segment.')
 
-  const file: WebmFile = { duration: null, tracks: [] }
+  const file: WebmFile = { duration: null, durationEstimated: false, tracks: [] }
   const segmentEnd = segment.end ?? source.size
   const scanLimit = Math.min(segmentEnd, segment.body + MAX_HEADER_SCAN)
   let sawTracks = false
+  let scale = 1_000_000
+  let dataStart = segment.body
   for await (const element of elements(context, segment.body, segmentEnd)) {
+    // `dataStart` : début du premier `Cluster` (fin de l'élément précédent).
     if (element.id === ID.Cluster || element.body > scanLimit) break
     // Autre élément de taille inconnue avant les données : rien ne permet de le sauter.
     if (element.end === null) break
-    if (element.id === ID.Info) file.duration = await readInfo(context, element)
+    if (element.id === ID.Info) ({ duration: file.duration, scale } = await readInfo(context, element))
     else if (element.id === ID.Tracks) {
       sawTracks = true
       for await (const entry of elements(context, element.body, element.end)) {
         if (entry.id === ID.TrackEntry) file.tracks.push(await readTrack(context, entry))
       }
     }
+    dataStart = element.end
   }
   if (!sawTracks) throw unreadable('No WebM tracks before the media data.')
+  if (file.duration === null) {
+    // Enregistrement d'un navigateur : pas de durée dans les en-têtes, estimée par la fin des données.
+    file.duration = await estimatedDuration(source, dataStart, scale)
+    file.durationEstimated = file.duration !== null
+  }
   return file
 }

@@ -29,6 +29,7 @@ export const API_ERRORS = {
   MEDIA_NOT_FOUND: { status: 404, title: 'Media not found' },
   FOLDER_NOT_FOUND: { status: 404, title: 'Folder not found' },
   PRESET_NOT_FOUND: { status: 404, title: 'Preset not found' },
+  TRACK_NOT_FOUND: { status: 404, title: 'Text track not found' },
   METHOD_NOT_ALLOWED: { status: 405, title: 'Method not allowed' },
   REQUEST_TIMEOUT: { status: 408, title: 'Request timeout' },
   UPLOAD_TIMEOUT: { status: 408, title: 'Upload timeout' },
@@ -36,12 +37,14 @@ export const API_ERRORS = {
   FOLDER_NAME_TAKEN: { status: 409, title: 'Folder name already used' },
   FOLDER_NOT_EMPTY: { status: 409, title: 'Folder not empty' },
   FOLDER_LIMIT_REACHED: { status: 409, title: 'Folder limit reached' },
+  TRACK_LIMIT_REACHED: { status: 409, title: 'Text track limit reached' },
   FILE_TOO_LARGE: { status: 413, title: 'File too large' },
   BODY_TOO_LARGE: { status: 413, title: 'Request body too large' },
   UNSUPPORTED_TYPE: { status: 415, title: 'Unsupported media type' },
   UNREADABLE_FILE: { status: 422, title: 'Unreadable file' },
   DIMENSIONS_TOO_LARGE: { status: 422, title: 'Image dimensions too large' },
   KIND_MISMATCH: { status: 422, title: 'Media kind mismatch' },
+  INVALID_TEXT_TRACK: { status: 422, title: 'Invalid text track' },
   FOLDER_DEPTH_EXCEEDED: { status: 422, title: 'Folder depth exceeded' },
   FOLDER_CYCLE: { status: 422, title: 'Folder cycle' },
   RATE_LIMITED: { status: 429, title: 'Too many requests' },
@@ -73,9 +76,14 @@ export const API_LINK_BUCKET = 900
 
 /**
  * Cibles d'un lien signé demandé à l'API : l'original (`file`), un préréglage, une transformation
- * libre, ou tout dérivé de la version (`derived`, une signature pour tout un srcset).
+ * libre, tout dérivé de la version (`derived`, une signature pour tout un srcset), ou une piste de
+ * texte d'une vidéo (`track`).
  */
-export const API_SIGNED_URL_TARGETS = ['file', 'preset', 'transform', 'derived'] as const
+export const API_SIGNED_URL_TARGETS = ['file', 'preset', 'transform', 'derived', 'track'] as const
+
+/** Types de pistes de texte tels qu'exposés par l'API (valeurs en minuscules, attribut HTML `kind`). */
+export const API_TEXT_TRACK_KINDS = ['subtitles', 'captions', 'descriptions', 'chapters'] as const
+export type ApiTextTrackKind = (typeof API_TEXT_TRACK_KINDS)[number]
 export type ApiSignedUrlTarget = (typeof API_SIGNED_URL_TARGETS)[number]
 
 /** Liens signés demandés en un appel (`POST /projects/{projectId}/signed-urls`) : une page entière de srcset. */

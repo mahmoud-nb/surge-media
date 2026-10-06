@@ -15,10 +15,14 @@ import {
  *   <id>/v<n>/<nom>                        original (extension indicative)
  *   <id>/v<n>/<préréglage>/<nom>.<format>  préréglage nommé
  *   <id>/v<n>/<paramètres>/<nom>.<format>  transformation libre (clé_valeur, …)
+ *   <id>/v<n>/tracks/<piste>.vtt            piste de texte d'une vidéo (phase D2)
  *
  * Une transformation ou une extension non canonique donne une redirection (301) vers la forme
  * canonique ; une transformation invalide, une erreur 400 ; tout autre chemin, null (404).
  */
+
+/** Segment des pistes de texte dans les chemins de diffusion. */
+export const TRACKS_SEGMENT = 'tracks'
 
 interface TargetBase {
   id: string
@@ -29,6 +33,7 @@ interface TargetBase {
 
 export type DeliveryTarget =
   | TargetBase & { kind: 'original' }
+  | TargetBase & { kind: 'track', trackId: string }
   | TargetBase & { kind: 'preset', preset: string, format: TransformFormat }
   | TargetBase & { kind: 'transform', transformation: Transformation, canonical: string, format: TransformFormat }
 
@@ -54,6 +59,11 @@ export function parseDeliveryPath(path: string, options: DeliveryPathOptions): D
   if (segments.length === 3) return { type: 'target', target: { ...base, kind: 'original' } }
 
   const segment = segments[2]!
+  // Piste de texte : « tracks » est un nom de préréglage réservé.
+  if (segment === TRACKS_SEGMENT) {
+    const track = /^([a-z0-9]{8,64})\.vtt$/i.exec(base.filename)
+    return track ? { type: 'target', target: { ...base, kind: 'track', trackId: track[1]! } } : null
+  }
   if (!isTransformationSegment(segment) && !isPresetName(segment)) return null
 
   const name = /^(.*)\.([a-z0-9]{1,8})$/i.exec(base.filename)
@@ -88,11 +98,12 @@ export function parseDeliveryPath(path: string, options: DeliveryPathOptions): D
  */
 export function deliveryVariant(target: DeliveryTarget): string {
   if (target.kind === 'original') return 'original'
+  if (target.kind === 'track') return `track:${target.trackId}`
   if (target.kind === 'preset') return target.preset
   return `t:${target.canonical}`
 }
 
 /** Segment de transformation d'une cible dérivée (préréglage ou paramètres canoniques). */
-export function derivedSegment(target: Exclude<DeliveryTarget, { kind: 'original' }>): string {
+export function derivedSegment(target: Exclude<DeliveryTarget, { kind: 'original' | 'track' }>): string {
   return target.kind === 'preset' ? target.preset : transformationSegment(target.canonical)
 }

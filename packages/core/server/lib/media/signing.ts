@@ -6,9 +6,10 @@ import { createHash, createHmac, timingSafeEqual } from 'node:crypto'
  * La signature couvre `v2:<média>:<version>:<droit>:<échéance>`, où le droit est :
  *   - la cible exacte (sans `scope`) : `file` pour l'original, `preset:<nom>` pour un préréglage,
  *     `t:<transformation canonique>` pour des paramètres libres — jamais le format de sortie (une
- *     signature couvre les sources AVIF, WebP et JPEG d'un même <picture>) ;
+ *     signature couvre les sources AVIF, WebP et JPEG d'un même <picture>) —, `track:<piste>` pour une
+ *     piste de texte (phase D2) ;
  *   - ou un droit élargi (`scope`) : `derived` = tout dérivé de cette version, jamais l'original
- *     (un seul lien pour construire un srcset) ; `admin` = tout fichier de cette version, même dans
+ *     ni une piste (un seul lien pour construire un srcset) ; `admin` = tout fichier de cette version, même dans
  *     la corbeille (aperçus de l'administration, qui n'utilise plus de cookie sur /m/).
  *
  * Signature **permanente** (sans `exp`, échéance signée `perm`) : cible exacte d'un dérivé, jamais
@@ -57,10 +58,15 @@ export function keyId(secret: string): string {
   return createHash('sha256').update(`surge-media:kid:${secret}`).digest('base64url').slice(0, 8)
 }
 
-/** Droit exigé pour un fichier : `file` (original), `preset:<nom>` ou `t:<transformation canonique>`. */
+/** Droit exigé pour un fichier : `file` (original), `preset:<nom>`, `t:<transformation canonique>` ou `track:<piste>`. */
 export function targetGrant(variant: string): string {
   if (variant === 'original') return 'file'
-  return variant.startsWith('t:') ? variant : `preset:${variant}`
+  return variant.startsWith('t:') || isTrackVariant(variant) ? variant : `preset:${variant}`
+}
+
+/** Cible « piste de texte » : ni le droit `derived`, ni une signature permanente ne la couvrent. */
+function isTrackVariant(variant: string): boolean {
+  return variant.startsWith('track:')
 }
 
 /** `expires` null : signature permanente. */
@@ -83,7 +89,7 @@ export function alignedExpiry(nowSeconds: number, ttlSeconds: number, bucketSeco
 export function buildSignatureQuery(secret: string, media: { id: string, version: number }, access: SignedAccess, expires: number | null): string {
   const scope = 'scope' in access ? access.scope : null
   const grant = scope ?? targetGrant((access as { variant: string }).variant)
-  if (expires === null && (scope || grant === 'file')) throw new Error('A permanent signature only covers an exact derived file.')
+  if (expires === null && (scope || grant === 'file' || isTrackVariant(grant))) throw new Error('A permanent signature only covers an exact derived file.')
   const sig = computeSignature(secret, media.id, media.version, grant, expires)
   return `${expires === null ? '' : `exp=${expires}&`}kid=${keyId(secret)}${scope ? `&scope=${scope}` : ''}&sig=${sig}`
 }
@@ -99,11 +105,11 @@ export function checkSignature(secrets: readonly string[], target: SignatureTarg
   if (query.scope !== undefined) {
     if (!SIGNATURE_SCOPES.includes(query.scope as SignatureScope)) return { status: 'invalid' }
     scope = query.scope as SignatureScope
-    // Le droit « derived » ne couvre jamais l'original.
-    if (scope === 'derived' && target.variant === 'original') return { status: 'invalid' }
+    // Le droit « derived » ne couvre jamais l'original ni une piste de texte.
+    if (scope === 'derived' && (target.variant === 'original' || isTrackVariant(target.variant))) return { status: 'invalid' }
   }
   // Une signature permanente ne vaut que pour un dérivé précis.
-  if (permanent && (scope || target.variant === 'original')) return { status: 'invalid' }
+  if (permanent && (scope || target.variant === 'original' || isTrackVariant(target.variant))) return { status: 'invalid' }
 
   const secret = secrets.find(candidate => keyId(candidate) === kid)
   if (!secret) return { status: 'invalid' }

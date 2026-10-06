@@ -1,6 +1,7 @@
 import type { H3Event } from 'h3'
 import { API_ERRORS, type ApiErrorCode } from '#shared/utils/api'
 import { FOLDER_MAX_DEPTH, FOLDERS_PER_SPACE_MAX } from '#shared/utils/folders'
+import { TEXT_TRACKS_MAX } from '#shared/utils/text-tracks'
 
 /**
  * Erreurs de l'API v1 au format RFC 9457 (« Problem Details », `application/problem+json`) :
@@ -55,7 +56,13 @@ function problemDetail(code: ApiErrorCode, data: Record<string, unknown>): strin
     case 'UPLOAD_TIMEOUT':
       return typeof data.timeout === 'number' ? `No data received for ${data.timeout} s: the upload was stopped.` : undefined
     case 'KIND_MISMATCH':
-      return 'The new file must be of the same kind as the original.'
+      return typeof data.detail === 'string' ? data.detail : 'The new file must be of the same kind as the original.'
+    case 'INVALID_TEXT_TRACK':
+      return typeof data.detail === 'string' ? data.detail : undefined
+    case 'TRACK_LIMIT_REACHED':
+      return `A video can have ${TEXT_TRACKS_MAX} text tracks at most.`
+    case 'TRACK_NOT_FOUND':
+      return 'No such text track for this video.'
     case 'VERSION_CONFLICT':
       return 'The file was replaced by another request in the meantime.'
     case 'FOLDER_NOT_FOUND':

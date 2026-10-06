@@ -20,8 +20,9 @@
 > (`MANAGER` : administre ses projets, invite développeurs et éditeurs ; bibliothèque gérée par l'ADMIN seul). **Les phases B et C sont
 > terminées** (`.claude/architecture-phase-c.md` : décisions CD1 à CD12, écarts en tête). **Phase D = vidéos** : architecture
 > `.claude/architecture-phase-d.md` (DD1 à DD14) **validée le 2026-10-05** ; **D1 faite** le 2026-10-05 (étape 20 : envoi, stockage,
-> CRUD, diffusion directe sans transcodage ; § 9.21), non commitée au moment de la rédaction. Suite (D2 : préparation sans réencodage,
-> sous-titres ; D3 : ffmpeg dans un processus séparé ; D4 : streaming adaptatif) **à proposer et faire valider**. **Correctifs du 2026-10-05** (non commités au moment de la
+> CRUD, diffusion directe sans transcodage ; § 9.21 ; commit `bda9cfb`) ; **D2 faite** le 2026-10-06 (DD15 à DD24 validées le 2026-10-05,
+> étape 21 : préparation des MP4/MOV — index en tête, lieu et appareil retirés —, image d'affiche, sous-titres WebVTT ; § 9.22), non
+> commitée au moment de la rédaction. Suite (D3 : ffmpeg dans un processus séparé ; D4 : streaming adaptatif) **à proposer et faire valider**. **Correctifs du 2026-10-05** (non commités au moment de la
 > rédaction ; § 7.6, § 9.4, § 9.6, § 18) : fermeture des flux interrompus de `/m/`, corps JSON bornés (1 Mio, 30 s), envois arrêtés
 > après 60 s sans donnée. Architecture de la phase B :
 > `.claude/architecture-phase-b.md` (en-tête = écarts B1 à B5).
@@ -188,7 +189,10 @@ Couches serveur :
   2026-10-05 : **`http/{body,stream}.ts`** (purs, testés : `readLimitedBody`, `BodyReadError`, `BODY_MAX_SIZE`, `BODY_READ_TIMEOUT_MS` ;
   `closeWithResponse`) ; D1 : **`media/limits.ts`** (limites par genre, `UploadRules`, `uploadRules`, `useUploadSizes`), **`media/video/`**
   (`source`, `isobmff`, `ebml`, `codecs`, `probe` : lecteur d'en-têtes pur, testé), `handlers/video.ts`, plugin `server/plugins/http-timeouts.ts`
-  (§ 9.21) ; C4 : routes
+  (§ 9.21) ; D2 : **`media/video/prepare.ts`** (préparation des MP4/MOV, pur, testé), **`media/text-track.ts`** (analyse et réécriture
+  WebVTT/SRT, pur, testé), **`media/tracks.ts`** (service des pistes), `media/keys.ts` (`posterKey`, `trackKey`), `api/tracks.ts`,
+  `shared/utils/text-tracks.ts`, `app/utils/video-frame.ts` (capture d'affiche), `AdminTextTracksPanel`, routes `[id]/{poster.put,poster.delete,
+  prepare.post}`, `[id]/tracks/**` et leurs équivalents v1 (§ 9.22) ; C4 : routes
   `api/admin/media/[id]/{transform.get,links.post}.ts` (§ 9.19). Les nouveaux modules **importent explicitement** les utilitaires de
   `#shared/utils/*` (un auto-import non injecté a causé un `ReferenceError` en production, voir § 18).
   Les **types** exportés de `server/utils` (ex. `Space`) s'importent explicitement (`import type { Space } from '../../utils/access'`).
@@ -249,7 +253,8 @@ Identifiants : `String @id @default(cuid())` partout. Horodatages `createdAt @de
 | **CacheRevision** (B3) | `scope @id` (`project:<id>` \| `library`), `revision Int`, `updatedAt` | aucune relation |
 | **AuditEvent** (B2) | `at`, `actorUserId?`, `tokenId?` (B3), `projectId?`, `action`, `targetType?`, `targetId?`, `ipAddress?`, `data Json?` (`label` lisible + détails) | **aucune clé étrangère** (survit aux suppressions) ; index (projectId, at), (actorUserId, at), at |
 | **Folder** | `projectId?` (null = bibliothèque), `parentId?`, `name` | projet (Cascade), arbre (`FolderTree`, Cascade : jamais déclenché, la suppression exige un dossier vide ou remonte le contenu), media (SetNull) ; index (projectId, parentId) — utilisé depuis B5 (§ 9.14) |
-| **Media** | `projectId?` (**null = bibliothèque** ; un seul espace), `folderId?`, `kind MediaKind`, `visibility Visibility @default(PUBLIC)`, `storageKey @unique` (clé opaque), `version Int @default(1)`, `originalName`, `mimeType`, `size Int` (octets, ≤ 2 Gio sous PG/MySQL), `checksum` (SHA-256 hex), `width?`, `height?`, `duration?`, `title?`, `altText?`, `searchTitle?`, `searchName` (défaut `''` = à indexer), `searchAlt?` (B3, normalisées), `metadata Json?`, `focalX?`, `focalY?` (C3 : point d'intérêt, fractions 0 à 1, 4 décimales), `uploadedById?`, `uploadedByTokenId?` (B4, identifiant d'API ou émetteur d'un jeton délégué), `uploadSubject?` (B4, sujet final d'un jeton délégué), `duplicatedFromId?` (provenance d'une copie), `deletedAt?` (corbeille) | project (**Restrict** : un projet n'emporte jamais ses médias), folder (SetNull), uploadedBy (SetNull), uploadedByToken (`MediaUploadedByToken`, SetNull ; index), duplicatedFrom/duplicates (`MediaDuplicates`, SetNull), variants ; index (projectId, deletedAt, createdAt), (projectId, checksum), folderId, deletedAt, duplicatedFromId |
+| **Media** | `projectId?` (**null = bibliothèque** ; un seul espace), `folderId?`, `kind MediaKind`, `visibility Visibility @default(PUBLIC)`, `storageKey @unique` (clé opaque), `version Int @default(1)`, `originalName`, `mimeType`, `size Int` (octets, ≤ 2 Gio sous PG/MySQL), `checksum` (SHA-256 hex), `width?`, `height?`, `duration?`, `title?`, `altText?`, `searchTitle?`, `searchName` (défaut `''` = à indexer), `searchAlt?` (B3, normalisées), `metadata Json?`, `focalX?`, `focalY?` (C3 : point d'intérêt, fractions 0 à 1, 4 décimales ; affiche d'une vidéo depuis D2), `posterKey? @unique`, `posterWidth?`, `posterHeight?`, `posterSize?`, `posterTime?` (D2 : image d'affiche, JPEG normalisé `variants/<média>/poster-….jpg`), `uploadedById?`, `uploadedByTokenId?` (B4, identifiant d'API ou émetteur d'un jeton délégué), `uploadSubject?` (B4, sujet final d'un jeton délégué), `duplicatedFromId?` (provenance d'une copie), `deletedAt?` (corbeille) | project (**Restrict** : un projet n'emporte jamais ses médias), folder (SetNull), uploadedBy (SetNull), uploadedByToken (`MediaUploadedByToken`, SetNull ; index), duplicatedFrom/duplicates (`MediaDuplicates`, SetNull), variants ; index (projectId, deletedAt, createdAt), (projectId, checksum), folderId, deletedAt, duplicatedFromId |
+| **MediaTextTrack** (D2) | `mediaId`, `kind TextTrackKind` (SUBTITLES, CAPTIONS, DESCRIPTIONS, CHAPTERS), `language` (BCP 47 canonique), `label`, `isDefault`, `storageKey @unique` (`variants/<média>/track-….vtt`), `size`, `checksum`, `cueCount`, `sourceFormat` (vtt, srt), dates | media (Cascade) ; index mediaId |
 | **MediaVariant** | `mediaId`, `transformation` (`v<n>/<opération effective>.<format>` depuis C1, ex. `v3/size_480x320,q_72.webp`), `storageKey @unique`, `format` (webp…), `size`, `width`, `height` | media (Cascade) ; `@@unique([mediaId, transformation])` |
 
 Enums : `Role { ADMIN MANAGER DEVELOPER EDITOR }` (MANAGER : étape 16), `ProjectRole { OWNER DEVELOPER EDITOR }`, `TokenType { PERSONAL SECRET PUBLISHABLE }`, `PasswordTokenPurpose { INVITATION RESET }`,
@@ -268,7 +273,9 @@ vérifiée sur SQLite ; la reprise de fin a été ajoutée après application lo
 `20261003194322_manager_role` (étape 16 : `Role.MANAGER`, `User.invitedById` ; PostgreSQL : type `Role` **recréé** — une valeur ajoutée
 par `ADD VALUE` est inutilisable dans la même transaction — ; reprise à la main : DEVELOPER propriétaires → MANAGER, adhésions des MANAGER →
 OWNER, autres ramenées au plafond ; vérifiée sur une copie SQLite ; générée sous le nom `d1_manager_role` puis renommée avant commit, ligne
-`_prisma_migrations` de la base de dev renommée à la main), `20261004151952_trusted_devices` (étape 17 : table `TrustedDevice`, rien à la main).
+`_prisma_migrations` de la base de dev renommée à la main), `20261004151952_trusted_devices` (étape 17 : table `TrustedDevice`, rien à la main), `20261005215018_video_poster_tracks` (D2 : colonnes
+`Media.poster*`, table `MediaTextTrack` ; appliquée à la base de dev **à la main** — même SQL et même empreinte SHA-256 que `migrate deploy`,
+qui échouait « database is locked » tant que le `nuxt dev` tournait ; `migrate status` la reconnaît).
 
 **Règles de portabilité** (schéma commun SQLite / PostgreSQL / MySQL) : pas d'attribut `@db.*`, pas de
 `String[]`, chaînes ≤ 191 caractères sous MySQL (validées par zod/API), enums et Json acceptés
@@ -299,6 +306,7 @@ Ne jamais modifier une migration publiée.
 | `NUXT_MEDIA_MAX_UPLOAD_SIZE` | 26214400 (25 Mio) | taille max d'une **image** envoyée |
 | `NUXT_MEDIA_MAX_VIDEO_UPLOAD_SIZE` | 536870912 (512 Mio) | taille max d'une **vidéo** (D1), plafonnée à 2147483647 (`MEDIA_SIZE_CEILING`) |
 | `NUXT_MEDIA_UPLOAD_TIMEOUT` | 3600 | secondes : `server.requestTimeout` de Node relevé par `http-timeouts.ts` (D1) |
+| `NUXT_MEDIA_VIDEO_PREPARE` | `faststart,metadata` | préparation des MP4/MOV à l'envoi (D2) : `faststart`, `metadata`, les deux, `none` ; lu une fois (`useVideoPreparation`) |
 | `NUXT_MEDIA_SIGNING_SECRET` | généré par `db:init` | HMAC des liens signés ; repli : dérivé du secret de session |
 | `NUXT_MEDIA_PREVIOUS_SIGNING_SECRET` | vide | ancien secret accepté pendant une rotation (sélection par `kid`) |
 | `NUXT_MEDIA_STORAGE_DRIVER` | `local` | `local` \| `s3` |
@@ -1069,7 +1077,7 @@ Architecture validée : `.claude/architecture-phase-d.md` (DD1–DD14, écarts d
   (icône `Film` sur `bg-muted`, pastille de durée `aria-hidden` + durée en toutes lettres `sr-only`), fiche (`<video controls
   preload="metadata" playsinline>`, `aria-label` = titre, `aria-describedby` = description, repli + lien ; durée `formatClock`/`formatDuration`,
   codecs `codecLabel`, débit `formatBitrate` ; avertissements `media.video.notices.*` ; « Description courte » ; extrait `videoSnippet` dans la
-  section des adresses — public, ou après un lien temporaire), tableau de bord (`admin.dashboard.stats.videos`). i18n : 1250 clés.
+  section des adresses — public, ou après un lien temporaire), tableau de bord (`admin.dashboard.stats.videos`). i18n : 1250 clés (1331 après D2).
 - **Écarts à la proposition** : durée des MP4 fragmentés calculée depuis les fragments (non prévu ; découvert avec `MediaRecorder`) ;
   refus anticipé aussi pour un remplacement d'un autre genre (422) ; vidange du corps refusé (connexion réutilisable en production).
 
@@ -1101,7 +1109,7 @@ Format d'erreur (h3) : `{ statusCode, statusMessage, message, data? }` ; **codes
 | GET `/api/admin/config/mail` | `users:invite` | — | `{ enabled }` |
 | POST `/api/admin/users/:id/password-link` | `users:invite` (gestionnaire : invitation non acceptée de ses invités) | — | `{ path, purpose, expiresAt }` · 409 si inactif (sans code) · 409 `INVITATION_ACCEPTED` · 404 |
 | DELETE `/api/admin/users/:id/sessions` | `users:manage` | — | `{ revoked }` |
-| GET `/api/admin/config/media` | session | — | `{ maxUploadSize (la plus grande), maxUploadSizes { IMAGE, VIDEO }, acceptedTypes, signedUrlDurations }` |
+| GET `/api/admin/config/media` | session | — | `{ maxUploadSize (la plus grande), maxUploadSizes { IMAGE, VIDEO }, acceptedTypes, signedUrlDurations, videoPreparation }` |
 | GET `/api/admin/spaces` | session | `?scope=` (défaut `media:upload`) | `{ spaces: ({ type: 'library' } \| { type: 'project', id, name })[] }` |
 | GET `/api/admin/media` | `media:read` (espace) | `?project&folder&recursive=1&q&kind&visibility&status=active\|trash&sort=newest\|oldest\|name\|size&page` | `{ items: MediaSummary[], total, page, pageSize: 24, space, projectRole, scopes }` · 404 |
 | POST `/api/admin/media` | `media:upload` (espace) | `?project` + multipart `file` + `title?`, `altText?`, `visibility?` | 201 `{ media: MediaDetail }` · 400/403/404/413/415/422 |
@@ -1110,9 +1118,13 @@ Format d'erreur (h3) : `{ statusCode, statusMessage, message, data? }` ; **codes
 | POST `/api/admin/media/:id/links` | `media:read` | `{ items: [{ preset? \| transform?, format }] (1–4), expiresIn? }` | `{ items: [{ url, query, expiresAt } \| { error: { code, param?, detail? } }] }` · 409 `IN_TRASH` |
 | PATCH `/api/admin/media/:id` | `media:write` | `{ title?, altText?, visibility?, folderId?, focalPoint? }` | `{ media }` · `focalPoint` modifié : version + 1, 409 `VERSION_CONFLICT` / `IN_TRASH`, 400 hors images |
 | PUT `/api/admin/media/:id/file` | `media:write` | multipart `file` | `{ media }` · 409 `VERSION_CONFLICT` · 415/422 |
+| POST `/api/admin/media/:id/prepare` | `media:write` | — | `{ media }` (MP4/MOV : nouvelle version si modifié) · 400 · 409 `IN_TRASH`/`VERSION_CONFLICT` |
+| PUT / DELETE `/api/admin/media/:id/poster` | `media:write` | multipart `file` (image) + `time?` / — | `{ media }` · 415 · 422 `KIND_MISMATCH` · 409 |
+| POST `/api/admin/media/:id/tracks` | `media:write` | multipart `file` + `kind`, `language`, `label`, `isDefault` | `{ media }` · 400 · 409 `TRACK_LIMIT_REACHED` · 413 · 422 `INVALID_TEXT_TRACK` |
+| PATCH / DELETE `/api/admin/media/:id/tracks/:trackId`, PUT `…/file` | `media:write` | `{ kind?, language?, label?, isDefault? }` / — / multipart `file` | `{ media }` · 404 `TRACK_NOT_FOUND` |
 | DELETE `/api/admin/media/:id[?permanent=true]` | `media:delete` | — | 204 · 409 `NOT_IN_TRASH` |
 | POST `/api/admin/media/:id/restore` | `media:delete` | — | `{ media }` |
-| POST `/api/admin/media/:id/signed-url` | `media:read` | `{ expiresIn }` (60–604800) | `{ url (absolue), expiresAt }` (public : URL permanente, `expiresAt: null`) · 409 `IN_TRASH` |
+| POST `/api/admin/media/:id/signed-url` | `media:read` | `{ expiresIn }` (60–604800) | `{ url (absolue), expiresAt, posterUrl, tracks: [{ id, url }] }` (public : URL permanentes, `expiresAt: null`) · 409 `IN_TRASH` |
 | POST `/api/admin/media/:id/duplicate` | `media:read` + `media:upload` (cible) | `{ projectId: string \| null }` | 201 `{ media }` · 404 · 403 · 409 `IN_TRASH` |
 | POST `/api/admin/media/:id/move` | `media:delete` + `media:upload` (cible) | `{ projectId: string \| null }` | `{ media }` (même espace : inchangé) · 404 · 403 · 409 `IN_TRASH` |
 | GET `/api/admin/projects` | session | `?q&status=active\|archived&page` | `{ items: ProjectSummary[], total, page, pageSize: 20 }` |
@@ -1149,11 +1161,14 @@ Format d'erreur (h3) : `{ statusCode, statusMessage, message, data? }` ; **codes
 | GET `/api/v1/projects/:projectId/presets` | `media:read`, toute clé | — | `{ items: Preset[] }` (`name, transformation, description, level`) · ETag → 304 |
 | GET `/api/v1/projects/:projectId/media` | `media:read` | `?q&kind&visibility&ids&sort&limit&cursor&withTotal` | `{ items: Media[], nextCursor, total? }` · 304 · 400 `INVALID_REQUEST`/`INVALID_CURSOR` · 403 `LISTING_DISABLED` |
 | GET `/api/v1/projects/:projectId/media/:mediaId` | `media:read` | — | `Media` · 304 · 404 `MEDIA_NOT_FOUND` |
-| POST `/api/v1/projects/:projectId/media/:mediaId/signed-url` | `media:read`, pas une clé publique (délégué : ≤ 3600 s) | `{ target?: file\|preset\|transform\|derived, preset?, transform?, format?, expiresIn? }` | `{ url, query, expiresAt }` · 400 `INVALID_TRANSFORM` · 403 `CREDENTIAL_NOT_ALLOWED` / `TRANSFORM_NOT_ALLOWED` · 404 `PRESET_NOT_FOUND` |
+| POST `/api/v1/projects/:projectId/media/:mediaId/signed-url` | `media:read`, pas une clé publique (délégué : ≤ 3600 s) | `{ target?: file\|preset\|transform\|derived\|track, preset?, transform?, format?, trackId?, expiresIn? }` | `{ url, query, expiresAt }` · 400 `INVALID_TRANSFORM` · 403 `CREDENTIAL_NOT_ALLOWED` / `TRANSFORM_NOT_ALLOWED` · 404 `PRESET_NOT_FOUND` |
 | POST `/api/v1/projects/:projectId/signed-urls` | idem | `{ items: [{ mediaId, target?, preset?, transform?, format? }] (1–100), expiresIn? }` | `{ items: [{ url, query, expiresAt } \| { error: { code, detail? } }] }` |
 | POST `/api/v1/projects/:projectId/media` | `media:upload` (secret, PAT, délégué) | multipart `file` + `title?`, `altText?`, `visibility?` | 201 `Media` + `Location` · 400/403 `UPLOAD_LIMIT_REACHED`/413/415/422/429/503 |
 | PATCH `/api/v1/projects/:projectId/media/:mediaId` | `media:write` | `{ title?, altText?, visibility?, folderId?, focalPoint? }` (strict) | `Media` · 400 · 404 · 409 `VERSION_CONFLICT` |
 | PUT `/api/v1/projects/:projectId/media/:mediaId/file` | `media:write` | multipart `file` | `Media` (version + 1) · 409 `VERSION_CONFLICT` · 415/422 |
+| PUT / DELETE `/api/v1/projects/:projectId/media/:mediaId/poster` | `media:write` (délégué : hors `maxFiles`/`types`) | multipart `file` + `time?` / — | `Media` |
+| GET / POST `/api/v1/projects/:projectId/media/:mediaId/tracks` | `media:read` / `media:write` | — / multipart `file` + `kind`, `language`, `label`, `default` | `{ items: TextTrack[] }` / 201 `TextTrack` |
+| PATCH / DELETE `/api/v1/projects/:projectId/media/:mediaId/tracks/:trackId` | `media:write` | `{ kind?, language?, label?, default? }` / — | `TextTrack` / 204 · 404 `TRACK_NOT_FOUND` |
 | DELETE `/api/v1/projects/:projectId/media/:mediaId` | `media:delete` | — | 204 (corbeille) · 404 |
 | POST `/api/v1/projects/:projectId/media/:mediaId/duplicate` | `media:read` + `media:upload` cible (secret : son projet ; PAT) | `{ target?: { projectId } \| { library: true } }` | 201 `Media` (+ `Location` si projet) · 403 `CREDENTIAL_NOT_ALLOWED` · 404 |
 | POST `/api/v1/projects/:projectId/delegated-tokens` | portées ⊆ émetteur (secret, PAT) | `{ scopes, expiresIn?, subject?, origin?, upload? }` | 201 `{ token, expiresAt, scopes }` (`no-store`) · 400 · 403 · 404 |
@@ -1239,7 +1254,7 @@ Contrats de données :
 
 - `@nuxtjs/i18n`, stratégie `no_prefix`, cookie `surge-media-locale`, détection navigateur, repli `fr`. `useAppHead` synchronise
   `<html lang dir>`. Sélecteur `AppLocaleSwitcher` (bouton de divulgation, noms des langues dans leur langue, attribut `lang`).
-- Fichiers `i18n/locales/fr.json` (référence) et `en.json` — 1250 clés depuis D1 (C2 : `transforms.*`, `settings.*` ; étape 10 : `apiDocs.*`, `admin.nav.apiDocs`, `permissions.api.docs`). Espaces de noms : `app, a11y, nav, footer, theme, locale, form,
+- Fichiers `i18n/locales/fr.json` (référence) et `en.json` — 1331 clés depuis D2 (D2 : `media.poster.*`, `media.tracks.*`, `media.video.prepare.*`, `media.video.notices.{device,estimated,captions}`) (C2 : `transforms.*`, `settings.*` ; étape 10 : `apiDocs.*`, `admin.nav.apiDocs`, `permissions.api.docs`). Espaces de noms : `app, a11y, nav, footer, theme, locale, form,
   validation, auth, common, landing, login, admin, roles, permissions, errors, pagination, users, password, media, projectRoles, space,
   projects, reauth, scopes, credentials, apiKeys, origins, tokens, audit, apiDocs`. Clés de portées : `scopes.<a>.<b>.{label,short,description}`
   (`scope.replace(':', '.')`) ; statuts accordés : `credentials.status.{key,token}.*` ; actions d'audit : `audit.actions.<catégorie>.<verbe>`.
@@ -1494,7 +1509,16 @@ Contrats de données :
 - **MP4 de `MediaRecorder`** (Chromium) : fragmenté, `mvhd` à 0, pistes de 0,036 s → durée tirée des fragments. **WebM de `MediaRecorder`** :
   pas de durée. Chromium 152 enregistre MP4 (H.264/AAC) et WebM (VP8/VP9/Opus) : source de vraies vidéos de test sans téléchargement
   (`tests/fixtures/video/`, panneau masqué : `setInterval` + `canvas.captureStream`).
-- `axe` signale `video-caption` « à vérifier » sur un `<video>` sans piste de sous-titres (attendu jusqu'à D2).
+- `axe` signale `video-caption` « à vérifier » sur un `<video>` sans piste de sous-titres ; disparaît dès qu'une piste `captions` existe (D2).
+- **`prisma migrate deploy` « database is locked » (SQLite)** tant qu'un `nuxt dev` tient la base, alors qu'un `BEGIN EXCLUSIVE` de `node:sqlite`
+  passe : sans arrêter le serveur de l'utilisateur, appliquer le `migration.sql` dans une transaction et insérer la ligne `_prisma_migrations`
+  (`checksum` = SHA-256 hexadécimal du fichier, `applied_steps_count` 1) après une copie `VACUUM INTO` ; `migrate status` doit dire « up to date ».
+- **Flydrive (pilote fs)** : `deleteAll(prefix)` supprime un **dossier** ; un préfixe de nom de fichier (`variants/<id>/v3-`) n'y supprimait rien
+  sans erreur → `deletePrefix` liste désormais le dossier (corrigé en D2 ; `tests/storage.test.ts`). Des dérivés d'anciennes versions restent
+  sur les disques des installations antérieures (ex. `landscape.jpg` de l'utilisateur, 8 fichiers du 2026-10-02).
+- **Panneau du navigateur intégré masqué** (`document.hidden`) : ni image dessinée, ni `requestVideoFrameCallback`, ni événements `close` des
+  `<dialog>` (en attente jusqu'au prochain rendu ; une capture d'écran les déclenche) — ne pas les prendre pour des défauts de l'application.
+- **Bash** : un `<<'EOF'` contenant des chemins `[trackId]` a tronqué un fichier ; préférer l'outil d'écriture de fichiers pour le code.
 - Pas d'outil de copie entre stockages, pas de nettoyage des fichiers orphelins ni des liens de mot de passe utilisés.
 - Originaux diffusés avec leurs EXIF (GPS possible).
 - Tests automatisés limités aux modules purs (Vitest, depuis B1) : API et interface vérifiées par scripts ad hoc et audits
@@ -1637,6 +1661,49 @@ administration limitée à ses projets, bibliothèque gérée par l'ADMIN).
 
 **Section vide** : aucune (la section « à venir » des jetons a été remplacée en B2).
 
+### 9.22 Vidéos : préparation, image d'affiche, sous-titres (phase D2, étape 21)
+
+Architecture validée : `.claude/architecture-phase-d.md` § 17 à § 27 (DD15–DD24 ; ajout de l'utilisateur : retirer aussi l'appareil). Référence
+d'exploitation : `setup.md` § 7.7.
+
+- **Préparation** (`video/prepare.ts`, `prepareVideo(source, mime, options)` → `prepared` | `unchanged` | `skipped`) : boîtes de premier niveau
+  lues, `moov` en mémoire (≤ 64 Mio, lu par blocs de 1 Mio), arbre des conteneurs (`moov trak mdia minf stbl dinf udta edts mvex meta ilst`,
+  `meta` ISO avec version ou QuickTime sans), filtres par **liste de ce qui est conservé** : premier niveau `ftyp moov mdat` (+ bourrage
+  `free/skip/wide` gardé si rien d'autre ne change) ; `udta` : `name kind tsel chpl ©nam ©des ©cmt cprt ©cpy titl dscp` ; clés `mdta` :
+  `com.apple.quicktime.{title,description,comment,copyright}` (éléments `ilst` renumérotés) ; `ilst` iTunes : `©nam desc ©des ldes ©cmt cprt` ;
+  `uuid` retirées. Refus (`skipped`) : fragmenté (`moof`/`mvex`), plusieurs `moov`, `cmov`, `rmra`, `saio`, `dref` non autonome, décalage
+  hors `mdat`. Décalages `stco`/`co64` : même position dans le `mdat` déplacé. **Vérification** : sortie virtuelle (`plannedSource`)
+  réanalysée (`probeIsoBmff` + `probeVideo` : pistes, durées, dimensions, codecs identiques ; index en tête et plus de lieu si demandés) et
+  32 octets comparés pour 8 blocs. Écriture : `preparedStream` (morceaux) → `storage.put` avec SHA-256 au fil de l'eau et contrôle du nombre
+  d'octets. Le gestionnaire vidéo expose `prepare` (`PreparedMedia` : `inspected` + `file`), `service.ts` l'appelle dans `storeOriginal` ;
+  `metadata.prepared` (`[]` = examiné, null/absent = jamais) ; `checksum`/`size` = fichier stocké. `prepareStoredMedia` (« Optimiser ») :
+  copie temporaire (`temporaryCopy`), puis chemin d'un remplacement (`commitNewFile`) ou simple marquage `prepared: []`.
+- **WebM** : `lastClusterEnd(tail)` (pur) + `estimatedDuration` (1, 4 puis 16 Mio de fin de fichier, à partir du début du premier
+  `Cluster`) → `durationEstimated`. **Détection du lieu** : aussi XMP (`udta/XMP_`, `uuid` de premier niveau, parcours de 64 boîtes après
+  `moov`+`mdat` hors fichiers fragmentés).
+- **Affiche** : `setMediaPoster` / `removeMediaPoster` (`service.ts`) — image analysée et `normalizePoster` (sharp : orientation, ≤ 3840 px,
+  aplatie sur noir, JPEG 90 mozjpeg) dans la file ; première affiche sans nouvelle version, sinon `version + 1` + `deleteVersionVariants` +
+  ancien fichier supprimé ; retrait efface aussi le point d'intérêt ; `posterTimeField` (0 ≤ t ≤ durée + 1 s). `variants.ts` : `derivedSource`
+  (image : original ; vidéo : affiche via `imageHandler.transform`, ETag tiré de `posterKey`), `hasDerivedFiles` vrai pour une vidéo avec
+  affiche. URL : `posterPath` = préréglage `full` en JPEG. Duplication : `copyPoster`.
+- **Pistes** : `text-track.ts` (décodage UTF-8/UTF-16/Windows-1252, VTT : en-tête, NOTE retirés, STYLE/REGION avant la première réplique,
+  réglages filtrés ; SRT : numéros, virgules, i/b/u gardés, font et ASS retirés, `& < >` échappés ; limites 1 Mio, 20 000 répliques,
+  2 000 caractères ; `TextTrackError(line)`) ; `tracks.ts` (transactions Prisma : une piste par défaut par groupe, `Media.updatedAt`
+  touché ; remplacement = nouvelle piste ; `copyTextTracks`) ; `MEDIA_INCLUDE` et `API_MEDIA_INCLUDE` chargent `textTracks` (ordre d'ajout).
+  Diffusion : `delivery-path.ts` (cible `track`, segment `tracks` réservé), `signing.ts` (`track:<id>` : ni `derived`, ni permanent ; `admin`
+  oui), `resolveTrackDeliverable`. Réception : `receiveSmallUpload` (mémoire, busboy).
+- **Contrats** : admin `MediaSummary.poster` (`url`, dimensions, `time`), `MediaDetail.textTracks` (URL signées « admin » si besoin),
+  `GET [id]` → `publicPosterUrl`, `publicTrackUrls` ; `POST [id]/signed-url` → aussi `posterUrl` et `tracks` à la même échéance ;
+  `config/media` → `videoPreparation`. v1 : `Media.poster`, `Media.textTracks`, `TextTrack`, routes `…/poster` et `…/tracks` (hors `maxFiles` et
+  `types` d'un jeton délégué), cible `track` (+ `trackId`) des liens signés, erreurs `TRACK_NOT_FOUND`, `TRACK_LIMIT_REACHED`, `INVALID_TEXT_TRACK`.
+- **Interface** : fiche (lecteur avec `poster` et `<track>`, section « Image d'affiche » — capture de l'image affichée, envoi, retrait —,
+  `AdminTextTracksPanel`, bloc « Optimiser la vidéo », ligne « Préparation », durée « (estimée) », avertissements `device`, `captions`,
+  `estimated` ; focus déplacé sur le message de résultat quand le bouton disparaît), `AdminMediaUploader` (capture d'affiche pendant l'envoi
+  d'une vidéo, création seulement), `AdminMediaCard` (pastille `Play` sur la vignette d'une vidéo), extrait `videoSnippet` (`poster`, `tracks`,
+  `crossorigin`). i18n : 1331 clés.
+- **Écarts à la proposition** : métadonnées de l'appareil retirées (ajout de l'utilisateur) par liste de ce qui est conservé ; bourrage gardé
+  quand rien d'autre ne change ; correctif `deletePrefix` du stockage local (les dérivés des anciennes versions n'étaient jamais supprimés).
+
 **Architecture de la phase B validée** (toutes les décisions D1–D15 confirmées le 2026-09-29) : `.claude/architecture-phase-b.md`
 — contrats détaillés des sous-étapes suivantes (types de jetons et formats, API v1, CORS, cache, transformations).
 
@@ -1647,9 +1714,9 @@ administration limitée à ses projets, bibliothèque gérée par l'ADMIN).
 - **B5 (faite)** : voir § 9.14 et `setup.md` étape 9.
 - **Phase C (terminée)** : `.claude/architecture-phase-c.md`. C1 : § 9.16 et `setup.md` étape 11 ; C2 : § 9.17, étape 12 ; C3 : § 9.18,
   étape 13 ; C4 : § 9.19, étape 14.
-- **Phase D (vidéos)** : architecture `.claude/architecture-phase-d.md` validée le 2026-10-05 ; **D1 faite** (§ 9.21, `setup.md` étape 20).
-  Suite à proposer et faire valider : D2 (faststart, retrait des métadonnées, affiche, sous-titres WebVTT), D3 (ffmpeg dans un processus
-  séparé, rendus compatibles), D4 (HLS) ; transverses : envois reprenables / directs vers S3, `BigInt` au-delà de 2 Gio, délestage de la
+- **Phase D (vidéos)** : architecture `.claude/architecture-phase-d.md` validée le 2026-10-05 ; **D1 faite** (§ 9.21, `setup.md` étape 20) ;
+  **D2 faite** (§ 9.22, `setup.md` étape 21). Suite à proposer et faire valider : D3 (ffmpeg dans un processus séparé : affiches et vignettes
+  côté serveur, rendus compatibles, réparation des WebM, positions des pistes de métadonnées), D4 (HLS) ; transverses : envois reprenables / directs vers S3, `BigInt` au-delà de 2 Gio, délestage de la
   diffusion, `<SmVideo>`. Audio et documents : phases ultérieures (DD13). `@surge-media/client` + composants (Vue d'abord) : en attente.
 - Pistes étape 19 : widgets masquables / réordonnables (préférence par compte), cache des agrégats pour de très grandes
   bibliothèques, médias récents en vignettes, journal par projet pour les propriétaires.
