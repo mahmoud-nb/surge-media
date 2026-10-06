@@ -3,8 +3,8 @@
 > **Statut : VALIDÉE (2026-10-05) — décisions DD1 à DD14 acceptées par l'utilisateur. D1 FAITE (2026-10-05)** : `setup.md`
 > étape 20 et § 7.7, `.claude/project-context.md` § 9.21. **D2 VALIDÉE (2026-10-05)** : § 17 à § 27, décisions DD15
 > à DD24, avec un ajout de l'utilisateur : retirer aussi les **métadonnées de l'appareil** (§ 18.3). **D2 FAITE
-> (2026-10-06)** : `setup.md` étape 21 et § 7.7, `.claude/project-context.md` § 9.22. D3, D4 et transverses (§ 14) : à
-> proposer plus tard.
+> (2026-10-06)** : `setup.md` étape 21 et § 7.7, `.claude/project-context.md` § 9.22. **D3 PROPOSÉE (2026-10-06)** :
+> § 28 à § 42, décisions DD25 à DD36, **en attente de validation**. D4 et transverses (§ 14) : à proposer plus tard.
 >
 > Écarts et précisions de D2 :
 > - **Appareil** : retrait par une liste de ce qui est conservé (§ 18.3), y compris boîtes de premier niveau (`uuid` portant la
@@ -728,3 +728,466 @@ Extraction d'affiches et de vignettes côté serveur, réparation des WebM, tran
 vignettes de survol de la barre de lecture (`thumbnails` VTT), HLS (D4) ; sous-titres automatiques (reconnaissance de la
 parole) ; retrait des autres métadonnées (date, appareil) ; retrait du GPS des **originaux d'images** (même logique,
 proposable ensuite) ; envois reprenables, fichiers > 2 Gio ; composant `<SmVideo>`.
+
+---
+
+# D3 — Traitements vidéo avec ffmpeg, hors du processus web (PROPOSÉE le 2026-10-06, en attente de validation)
+
+> Proposée le 2026-10-06 à la suite de D2. Rien n'est codé avant validation. Applique les règles de performance de DD12
+> (§ 12) : aucun traitement lourd dans le chemin d'une requête, processus séparé, file persistante, **désactivé par
+> défaut**. Une installation sans ffmpeg se comporte exactement comme après D2.
+
+## 28. Résumé de D3 en 10 points
+
+1. **ffmpeg du système**, jamais embarqué ni en WASM, toujours lancé comme **processus enfant** : le calcul ne passe
+   jamais par la boucle d'événements de Node. Détecté au démarrage (version ≥ 6, encodeurs présents).
+2. **Trois modes** : `off` (défaut, comportement de D2), `embedded` (le serveur web exécute les tâches, ffmpeg en
+   **priorité la plus basse** — mesuré, § 29.3), `external` (un ou plusieurs **processus de travail** lancés à part, même
+   build, rôle `worker`).
+3. **File persistante en base** (`MediaJob`) : une tâche par vidéo et par version, reprise après un arrêt (bail
+   renouvelé), essais limités, priorité. Statut résumé sur le média (`processingState`) : en attente, en cours, prête,
+   en échec.
+4. Règle de base : **une réécriture sans perte remplace l'original** (nouvelle version, comme « Optimiser » en D2) ;
+   **un réencodage produit un rendu à côté de l'original**, qui reste téléchargeable tel qu'envoyé.
+5. **Affiche côté serveur** quand aucune n'existe (envois par l'API, codecs que le navigateur ne décode pas) ; jamais
+   d'écrasement d'une affiche choisie. Les vignettes de la médiathèque en découlent (dérivés de l'affiche, déjà en place).
+6. **Rendu compatible H.264/AAC** (MP4, ≤ 1080p, « faststart ») produit **seulement quand il sert** : codec à
+   compatibilité variable (HEVC, AV1, ProRes…), format converti, définition ou débit trop élevés. HDR ramené en SDR.
+   AV1 en option, désactivé par défaut.
+7. **Réparation des WebM** sans durée ni index (copie sans réencodage) et **retrait des pistes de métadonnées**
+   (positions GPS GoPro, drones, `mebx` des iPhone) : copie sans réencodage puis filtre de D2 (liste de ce qui est conservé).
+8. **Formats refusés en D1 acceptés** une fois convertis (MKV, AVI, 3GP, MPEG-TS/M2TS, OGV, WMV) — seulement si le
+   traitement est actif ; l'original est conservé pour le téléchargement, la lecture passe par le rendu.
+9. **Contrat `sources[]`** dans l'API (liste ordonnée prête pour `<source type="…">`) et objet `processing` : champs
+   **ajoutés**, rien de retiré ni renommé.
+10. **Entrées hostiles** : format d'entrée imposé (jamais deviné par ffmpeg), protocoles limités au fichier, délai,
+    mémoire, fils et priorité bornés. Livraison : étape 22 de `setup.md`, en trois parties (§ 39, DD36).
+
+## 29. Environnement vérifié et mesures (2026-10-06, machine du nuage)
+
+### 29.1 Environnement
+
+- **ffmpeg 6.1.1** (Ubuntu) présent : `libx264`, `libx265`, `libsvtav1`, `libaom`, `libvpx`, `aac`, `libopus` ;
+  décodeurs HEVC, ProRes, AV1 (`libdav1d`) ; filtres `zscale`, `tonemap`, `thumbnail`, `blackframe`.
+- **Chromium** présent (`/opt/pw-browsers`) pour les vérifications d'interface.
+- **pnpm 12.4.2** : `pnpm install` et `pnpm typecheck` corrects sous Linux. **Node 22.22** installé alors que le projet
+  exige ≥ 24 : un test échoue (`text-track.test.ts`, Windows-1252), car le `TextDecoder('windows-1252')` de Node 22 décode
+  en Latin-1 (0x96 → U+0096 au lieu de « – »). Avec Node 24.21 (téléchargé dans le dossier temporaire de la session) :
+  **281 tests verts**. Rien à corriger dans le projet (`engines` le dit déjà).
+- **4 processeurs virtuels, 15 Gio** : chiffres ci-dessous à lire comme des ordres de grandeur.
+
+### 29.2 Coût des opérations (source HEVC 1080p 30 i/s, 20 s, AAC, 25,6 Mo, mire animée bruitée)
+
+| Opération | Temps réel | Temps processeur | Mémoire max | Sortie |
+| --- | --- | --- | --- | --- |
+| Affiche (1 image à 2 s) | 0,41 s | 1,1 s | 150 Mo | JPEG 104 Ko |
+| 10 vignettes réparties (décodage complet) | 2,9 s | 9,0 s | 128 Mo | 52 Ko |
+| Copie sans réencodage (remux, `faststart`) | 0,05 s | 0,07 s | 57 Mo | 25,6 Mo |
+| **H.264 1080p `veryfast` CRF 23 + AAC** | **10,7 s** | 34,7 s | 407 Mo | 12,8 Mo |
+| H.264 1080p `medium` CRF 23 | 18,1 s | 65,9 s | 637 Mo | 15,1 Mo |
+| H.264 720p `veryfast` | 6,1 s | 20,3 s | 263 Mo | 3,2 Mo |
+| AV1 1080p SVT-AV1 préréglage 10 CRF 35 + Opus | 15,5 s | 53,4 s | 748 Mo | 12,1 Mo |
+
+- Un rendu H.264 1080p coûte environ **1,7 s de processeur par seconde de vidéo** (≈ 0,5 × la durée sur 4 cœurs) :
+  une vidéo de téléphone d'une minute ≈ 30 s, une vidéo d'une heure ≈ 30 min. D'où : jamais dans une requête, une tâche
+  à la fois par défaut.
+- Mémoire : 0,4 à 0,75 Gio par encodage 1080p (davantage en 4K) → concurrence 1 par défaut.
+- Les tailles de sortie ne sont **pas représentatives** (mire bruitée) ; à remesurer sur de vraies vidéos (§ 40).
+- **Réparation WebM** sur les deux enregistrements `MediaRecorder` du dépôt : durée « N/A » → 1,961 s et 1,987 s, index
+  des repères (`Cues`) absent → présent, en quelques millisecondes.
+
+### 29.3 Effet d'un encodage sur le serveur web de la même machine
+
+Banc `latency.mjs` (dossier temporaire de la session) : serveur HTTP Node (réponse de 16 Kio + sérialisation JSON),
+8 clients en continu pendant 8 s, encodage H.264 1080p en boucle à côté. Un seul passage :
+
+| Situation | Réponses/s | p50 | p99 | Retard max de la boucle |
+| --- | --- | --- | --- | --- |
+| Sans ffmpeg | 4 695 | 1,49 ms | 4,08 ms | 14,0 ms |
+| ffmpeg 4 fils, priorité normale | 3 288 (−30 %) | 1,55 ms | **11,80 ms** | **68,0 ms** |
+| ffmpeg 4 fils, `nice 19` | 5 854 | 1,09 ms | 5,58 ms | 20,4 ms |
+| ffmpeg 2 fils, `nice 19` | 7 020 | 0,97 ms | 2,75 ms | 15,7 ms |
+
+- En priorité normale, ffmpeg prend des cœurs au serveur : p99 × 3, débit −30 %. En **priorité la plus basse**, l'effet
+  disparaît dans le bruit de la mesure (les débits plus élevés sous charge viennent des variations de fréquence de la
+  machine virtuelle, pas d'un gain réel). D'où DD26 : ffmpeg toujours lancé en priorité la plus basse
+  (`os.setPriority(pid, 19)`, qui correspond sous Windows à `IDLE_PRIORITY_CLASS`), y compris en mode `external`.
+
+## 30. Exécution : ffmpeg, modes, processus de travail (DD25, DD26)
+
+### 30.1 ffmpeg (DD25)
+
+- **Binaire du système** : `NUXT_FFMPEG_PATH` et `NUXT_FFPROBE_PATH` (défaut : `ffmpeg` et `ffprobe` du `PATH`).
+  Pas de paquet `ffmpeg-static` ni de WASM : binaires de 70 à 80 Mo, licence GPL des builds avec x264, traçage Nitro
+  + pnpm, et Smart App Control sous Windows (déjà vécu avec argon2 et oxc) ; un binaire installé par le système
+  (`apt install ffmpeg`, `winget install Gyan.FFmpeg`, image Docker) se met à jour avec lui.
+- **Contrôle au démarrage** du mode actif : `ffmpeg -version` (≥ 6.0), `-encoders` (`libx264` et `aac` exigés ;
+  `libsvtav1` si AV1 demandé), `-filters` (`zscale` + `tonemap` pour le HDR, sinon les vidéos HDR sont converties sans
+  correction de couleurs et signalées). Échec → traitement désactivé, message clair au démarrage et dans « Réglages »
+  (jamais d'arrêt du serveur).
+- Appels par `child_process.spawn` (jamais de shell, arguments en tableau), `-nostdin`, `-hide_banner`, sorties
+  d'erreur bornées (64 Kio gardés pour le journal), progression lue par `-progress pipe:1`.
+
+### 30.2 Modes (DD26)
+
+| `NUXT_VIDEO_PROCESSING` | Qui exécute les tâches | Quand l'utiliser |
+| --- | --- | --- |
+| `off` (**défaut**) | personne ; aucune tâche créée | installation sans ffmpeg ; comportement de D2 |
+| `embedded` | le serveur web lui-même (boucle de fond + ffmpeg enfant en priorité basse) | une seule machine, installation simple, développement |
+| `external` | des **processus de travail** séparés ; le serveur web ne fait que créer les tâches | production chargée, machine ou conteneur dédié aux calculs |
+
+- **Processus de travail = même build, autre rôle** : `NUXT_SERVER_ROLE=worker node .output/server/index.mjs` (ou
+  `surge-media worker [--port 3001]`, qui lance la même chose). Il exécute les tâches et ne sert que `/api/health`
+  (sonde des conteneurs) ; toute autre route → 404. Une seule image Docker pour les deux rôles ; aucun code serveur à
+  dupliquer ni à construire autrement (le code des médias dépend des imports automatiques de Nitro, que la CLI tsdown n'a
+  pas).
+- **Conditions du mode `external` sur une autre machine** : base partagée (PostgreSQL ou MySQL ; SQLite seulement sur
+  la même machine) et stockage partagé (S3, ou disque monté au même endroit). Vérifié au démarrage du processus de
+  travail (lecture d'un fichier témoin du stockage).
+- Plusieurs processus de travail possibles (la prise d'une tâche est atomique, § 31.2).
+- **Arrêt propre** : ffmpeg tué (arbre de processus), tâche rendue à la file sans compter d'essai, fichiers temporaires
+  supprimés.
+
+## 31. File persistante et statut (DD27)
+
+### 31.1 Modèle
+
+```prisma
+enum MediaJobStatus { QUEUED RUNNING DONE FAILED CANCELLED }
+enum ProcessingState { PENDING PROCESSING READY FAILED }
+
+model MediaJob {
+  id          String         @id @default(cuid())
+  mediaId     String
+  version     Int            // version du média visée ; une nouvelle version rend la tâche caduque
+  status      MediaJobStatus @default(QUEUED)
+  priority    Int            @default(0)   // 0 = envoi récent ; -10 = traitement des vidéos existantes
+  attempts    Int            @default(0)
+  runAfter    DateTime       @default(now())  // reprise différée après un échec (30 s, 5 min, 30 min)
+  lockedBy    String?        // identifiant du processus (hôte + pid + aléa)
+  leaseUntil  DateTime?      // bail : 2 min, renouvelé toutes les 30 s
+  step        String?        // étape en cours (probe, sanitize, poster, transcode…)
+  progress    Float?         // 0–1, écrit au plus toutes les 5 s
+  result      Json?          // étapes faites, sautées, avertissements
+  errorCode   String?
+  errorDetail String?        // 500 caractères au plus, jamais de chemin du serveur
+  createdAt   DateTime       @default(now())
+  startedAt   DateTime?
+  finishedAt  DateTime?
+  media       Media          @relation(fields: [mediaId], references: [id], onDelete: Cascade)
+  @@index([status, runAfter, priority])
+  @@index([mediaId])
+}
+```
+
+- `Media.processingState ProcessingState?` : `null` = non concerné (image, ou traitement inactif à l'envoi). Colonne sur
+  `Media` pour que les listes (cartes, API) n'aient aucune jointure à faire.
+- La tâche est créée **dans la même transaction** que le média (envoi, remplacement, « Optimiser »). Au démarrage, un
+  rattrapage recrée la tâche d'un média `PENDING` qui n'en a plus (cas d'une base restaurée).
+
+### 31.2 Prise, bail, reprise
+
+- **Prise atomique portable** (SQLite, PostgreSQL, MySQL, sans `SKIP LOCKED`) : lecture de la prochaine tâche
+  (`QUEUED`, `runAfter ≤ maintenant`, priorité puis ancienneté), puis `updateMany({ where: { id, status: 'QUEUED' } })` ;
+  compte = 0 → un autre processus l'a prise, on passe à la suivante.
+- **Bail** : `leaseUntil` renouvelé toutes les 30 s pendant le calcul. Un bail échu (processus tué, machine perdue) →
+  la tâche revient en file (`attempts + 1`). **3 essais** au plus, puis `FAILED` ; reprise différée 30 s, 5 min, 30 min.
+- **Attente sans tâche** : une requête indexée toutes les 5 s par processus de travail (négligeable) ; en mode
+  `embedded`, réveil immédiat à la création d'une tâche.
+- **Concurrence** : `NUXT_VIDEO_CONCURRENCY` (défaut **1**, mesures du § 29.2) par processus.
+- Un processus de travail actif écrit sa présence toutes les 60 s (`Setting` `videoWorker:<id>` : version de ffmpeg,
+  encodeurs, concurrence, dernière activité) : « Réglages » et `/api/health` savent si quelqu'un traite la file.
+
+### 31.3 Cycle de vie avec les actions de l'utilisateur
+
+| Action pendant le traitement | Effet |
+| --- | --- |
+| Remplacement du fichier, « Optimiser » | la tâche de l'ancienne version devient caduque (`CANCELLED`, ffmpeg arrêté au prochain contrôle) ; nouvelle tâche |
+| Corbeille | tâche annulée (aucun calcul pour un média en corbeille) ; restauration → nouvelle tâche |
+| Purge | tâches supprimées (cascade), rendus supprimés avec les dérivés (`variants/<média>/`) |
+| Duplication | rendus copiés (`CopyObject`), état copié ; pas de nouveau calcul |
+| Affiche choisie par l'utilisateur | l'affiche du serveur n'est jamais enregistrée par-dessus (contrôle au moment d'écrire) |
+
+- **Toute écriture** d'un résultat est conditionnelle : même version, pas de corbeille ; sinon le résultat est jeté et
+  ses fichiers supprimés. Les écritures passent par le service médias (`mediaChanged`).
+- **Caches d'un autre processus** : en mode `external`, le cache de diffusion du serveur web (60 s) ignore les
+  écritures du processus de travail. Un rendu demandé mais inconnu du cache provoque **une relecture** du média en base
+  avant le 404 ; la nouvelle version d'une réécriture sans perte est vue au plus 60 s plus tard (anciennes URL → 302
+  ensuite), comme avec plusieurs instances aujourd'hui.
+
+## 32. Ce que fait une tâche (DD28 à DD31)
+
+Une tâche suit un **plan calculé par une fonction pure** (`planVideoJob(analyse, média, réglages)`, testée) ; chaque
+étape est sautée quand elle ne sert à rien. Fichier source : lu directement en stockage local, copié dans un dossier
+temporaire sous S3 (ffmpeg doit pouvoir se déplacer dans le fichier, `moov` en fin) ; dossier supprimé à la fin.
+
+| Étape | Quand | Résultat |
+| --- | --- | --- |
+| 1. `probe` (ffprobe, JSON) | toujours | flux, pistes de données, couleur (HDR), images clés ; contrôle de cohérence avec l'analyse de D1 |
+| 2. `sanitize` | pistes de métadonnées (§ 32.4) | **original remplacé** (sans perte), nouvelle version |
+| 3. `repair` | WebM sans durée ou sans index | **original remplacé** (sans perte), nouvelle version |
+| 4. `poster` | aucune affiche | affiche enregistrée (1ʳᵉ affiche : pas de nouvelle version, DD18) |
+| 5. `transcode` | rendu utile (§ 32.2) | rendu H.264/AAC à côté de l'original |
+| 6. `av1` | option activée et rendu utile | rendu AV1/Opus (WebM) à côté de l'original |
+| 7. `verify` | après 2, 3, 5, 6 | réanalyse par le lecteur de D1 : durée (± 0,5 s), dimensions, codecs attendus ; sinon sortie jetée |
+
+Les étapes 2 et 3 sont faites **en une seule copie** si les deux s'appliquent, et **avant** l'affiche (une seule
+nouvelle version).
+
+### 32.1 Règle « sans perte → original ; réencodage → rendu » (DD28)
+
+- Une **copie sans réencodage** (mêmes images, même son) ne perd rien : elle remplace le fichier stocké, comme la
+  préparation de D2 à l'envoi et « Optimiser » (même chemin : `commitNewFile`, version + 1, anciennes URL → 302,
+  `metadata.prepared` complété). Sinon le fichier diffusé garderait le problème (positions GPS publiques, WebM sans
+  index) et le rendu en serait une copie presque identique.
+- Un **réencodage** perd de la qualité : l'original est gardé tel quel (téléchargement, archive, nouveau rendu plus tard
+  avec d'autres réglages) et le rendu est stocké à côté.
+- **Alternative** : réparation et nettoyage en rendus, original jamais modifié après l'envoi. Écartée : fichier d'origine
+  toujours diffusé à son URL, donc positions GPS publiques.
+
+### 32.2 Rendu compatible (DD29)
+
+- **Produit seulement s'il sert** (`NUXT_VIDEO_RENDITION=auto`, défaut) : compatibilité `variable` (HEVC, AV1, ProRes…),
+  format converti (§ 33), petit côté > 1080 px (4K des téléphones), débit moyen > 10 Mbit/s, ou HDR. Une vidéo H.264
+  1080p raisonnable n'en reçoit pas : l'original reste la source unique (aucun calcul, aucun stockage en plus).
+  `always` : toujours ; `never` : jamais (affiche, réparation et nettoyage seulement).
+- **Réglages du rendu** : MP4 `faststart`, H.264 High, `yuv420p`, CRF 23 (`NUXT_VIDEO_CRF`), préréglage `veryfast`
+  (`NUXT_VIDEO_PRESET` ; `medium` coûte 1,7 × plus, § 29.2), petit côté ≤ 1080 px sans agrandissement, cadence
+  d'origine plafonnée à 60 i/s, image clé toutes les 2 s (déplacement rapide dans la lecture, futur HLS), rotation
+  appliquée aux pixels (plus de matrice), AAC 128 kbit/s stéréo, 48 kHz ; vidéo sans son → sans piste son.
+- **HDR** (HEVC 10 bits HLG ou PQ des iPhone et Android récents) : conversion en SDR BT.709 (`zscale` + `tonemap`),
+  sinon couleurs délavées en H.264 8 bits. Filtres absents → rendu fait sans correction, avertissement dans la fiche.
+- **AV1** (`NUXT_VIDEO_AV1=on`, désactivé par défaut) : WebM AV1 + Opus, proposé en premier dans `sources[]` (lecteurs
+  récents), le H.264 restant le repli. Coût ≈ 1,5 × le H.264 `veryfast` et 0,75 Gio de mémoire (§ 29.2).
+- **Un seul rendu H.264** en D3 : plusieurs définitions n'ont d'intérêt qu'avec le streaming adaptatif (D4, HLS).
+
+### 32.3 Affiche côté serveur (DD30)
+
+- Seulement si le média n'a **aucune affiche** (envoi par l'API, codec que le navigateur ne décode pas, capture
+  interrompue) ; jamais d'écrasement, pas de bouton « régénérer » qui remplacerait une affiche choisie (l'utilisateur
+  a déjà « Utiliser l'image affichée » et « Envoyer une image… »).
+- Même règle que la capture du navigateur (§ 19.3) : 10 % de la durée, 5 s au plus ; image presque noire (`blackframe`)
+  → jusqu'à 3 essais plus loin. Image extraite **depuis le rendu H.264** quand il existe (couleurs SDR déjà corrigées),
+  sinon depuis l'original avec la même conversion HDR.
+- Puis le chemin existant : `normalizePoster` (JPEG, ≤ 3840 px, sans métadonnées) dans la file des traitements
+  d'images, `posterTime` rempli, aperçu pré-généré. **Vignettes** de la médiathèque et `previewUrl` : dérivés de
+  l'affiche, déjà en place depuis D2 (rien de plus à produire).
+- Vignettes de survol de la barre de lecture (planche + VTT `thumbnails`) : D4 (décodage complet : 2,9 s pour 20 s,
+  § 29.2).
+
+### 32.4 Réparation des WebM et retrait des pistes de métadonnées (DD31)
+
+- **WebM** (enregistrements `MediaRecorder`) : copie sans réencodage par ffmpeg, qui écrit la durée et l'index des
+  repères (`Cues`) ; `durationEstimated` disparaît, la barre de lecture devient exacte et le déplacement direct.
+- **Pistes de métadonnées** : détectées **dès l'envoi** par le lecteur de D1 (gestionnaire `meta`, ou description
+  d'échantillon `gpmd` GoPro, `camm` caméras 360°, `mebx` iPhone, `djmd`/`dbgi` DJI, `tx3g` sans rôle de sous-titre…),
+  `metadata.dataTracks` → avertissement dans la fiche dès D3, même traitement inactif (« Ce fichier contient une piste
+  de données de l'appareil, souvent des positions GPS »).
+- Retrait : ffmpeg copie **seulement la vidéo et le son** (`-map 0:v:0 -map 0:a? -dn -c copy`), puis la sortie passe
+  par la **préparation de D2** (liste de ce qui est conservé, `faststart`) : une seule règle des métadonnées, déjà
+  testée. Les chapitres (`chpl`) et sous-titres intégrés ne sont pas repris (les pistes de texte de D2 les remplacent).
+- **Limite assumée** : entre l'envoi et la fin du nettoyage (quelques secondes, plus si la file est chargée), l'original
+  public contient encore la piste. Alternative proposée : retenir la diffusion publique de l'original (`423` + aperçu
+  seulement) tant que le nettoyage est en attente — refusée par défaut car un média doit rester utilisable pendant le
+  traitement (§ 12, règle 3) ; facile à ajouter si vous la préférez.
+
+## 33. Formats acceptés une fois convertis (DD32)
+
+| Format | Reconnaissance (`sniff.ts`) | Format d'entrée imposé à ffmpeg |
+| --- | --- | --- |
+| Matroska `.mkv` | EBML, `DocType` = `matroska` | `matroska` |
+| AVI `.avi` | `RIFF` … `AVI ` | `avi` |
+| 3GP / 3G2 | `ftyp` de marque `3g*` | `mov` |
+| MPEG-TS / AVCHD `.ts .mts .m2ts` | octet `0x47` tous les 188 (ou 192) octets, 4 paquets vérifiés | `mpegts` |
+| Ogg Theora `.ogv` | `OggS` + en-tête `\x80theora` | `ogg` |
+| WMV / ASF `.wmv` | GUID d'en-tête ASF | `asf` |
+
+- **Accepté seulement si le traitement est actif** (`embedded`, ou `external` avec un processus de travail vu dans les
+  5 dernières minutes) ; sinon 415 comme aujourd'hui. FLV, MPEG-PS, RealMedia : toujours refusés (rares, surface
+  d'attaque inutile).
+- Ces fichiers ne sont **pas lisibles par `<video>`** : `metadata.playback` = `none`, l'original est servi en
+  téléchargement (`Content-Disposition: attachment`), la fiche affiche « Conversion en cours » puis le lecteur sur le
+  rendu ; dimensions et durée remplies par l'étape `probe` (inconnues avant).
+- Pas de piste vidéo, flux illisible, durée nulle → tâche `FAILED` avec un code (`NO_VIDEO_TRACK`, `UNREADABLE`,
+  `CONVERSION_FAILED`) affiché dans la fiche ; l'utilisateur supprime le média. Le refus ne peut plus être immédiat
+  (415) : la vérification complète demande ffprobe, qui ne tourne jamais dans une requête.
+- Limites : celles des vidéos (512 Mio par défaut, 2 Gio − 1) ; durée ≤ `NUXT_VIDEO_MAX_DURATION` (défaut 3 h) pour
+  qu'un fichier ne bloque pas la file des heures durant.
+
+## 34. Rendus : modèle, stockage, diffusion (DD33)
+
+```prisma
+model MediaRendition {
+  id         String   @id @default(cuid())
+  mediaId    String
+  version    Int
+  name       String   // h264 | av1
+  container  String   // mp4 | webm
+  mimeType   String
+  codecs     String   // RFC 6381 : avc1.640028,mp4a.40.2
+  width      Int
+  height     Int
+  duration   Float
+  bitrate    Int
+  size       Int
+  checksum   String
+  storageKey String   @unique   // variants/<média>/v<n>-r-<nom>-<aléa>.<ext>
+  createdAt  DateTime @default(now())
+  media      Media    @relation(fields: [mediaId], references: [id], onDelete: Cascade)
+  @@unique([mediaId, version, name])
+}
+```
+
+- Table à part (et non `MediaVariant`) : un rendu n'est pas une transformation d'image, ne compte pas dans le quota des
+  50 dérivés, porte des codecs et un débit, et ne se génère jamais à la demande.
+- **Diffusion** : `/m/<id>/v<n>/renditions/<nom>.<ext>` (segment `renditions` réservé, comme `tracks`), mêmes règles que
+  l'original : `Range`, `ETag`, cache immuable pour un média public, liens signés, Bearer, corbeille → 404, ancienne
+  version → 302 vers le rendu de la nouvelle s'il existe, sinon vers l'original.
+- **Signature** : le droit `file` couvre l'original **et ses rendus** (même vidéo, même public) ; un lien signé pour
+  le fichier donne donc aussi les URL signées des rendus à la même échéance.
+- Un rendu est **supprimé** avec sa version (`deleteVersionVariants` étendu) et à la purge (préfixe `variants/<média>/`).
+
+## 35. Contrats (DD34)
+
+**API v1** (ajouts seulement) :
+- `Media.processing` : `{ status: "pending" | "processing" | "ready" | "failed", progress: number | null, error: string | null,
+  updatedAt }` ou `null` (image, ou vidéo jamais traitée).
+- `Media.sources` : liste ordonnée par préférence, prête pour `<video><source src type>` — le navigateur prend la
+  première qu'il sait lire :
+  ```json
+  [
+    { "url": "…/renditions/av1.webm", "type": "video/webm; codecs=\"av01.0.08M.08,opus\"", "width": 1920, "height": 1080, "bitrate": 4800000, "size": 12114939, "rendition": "av1" },
+    { "url": "…/renditions/h264.mp4", "type": "video/mp4; codecs=\"avc1.640028,mp4a.40.2\"", "width": 1920, "height": 1080, "bitrate": 5100000, "size": 12844349, "rendition": "h264" }
+  ]
+  ```
+  Règle : rendus présents → rendus (AV1 d'abord, H.264 en dernier), l'original reste dans `url` ; aucun rendu → l'original
+  seul s'il est lisible (`playback` ≠ `none`, `type` avec ses codecs) ; image ou format non lisible sans rendu → `[]`.
+  URL signées si le média est privé (même échéance que `url`).
+- `signed-url` cible `file` : réponse complétée par `sources` signées. Erreur `PROCESSING_FAILED` non exposée en
+  dehors de `processing.error`.
+- OpenAPI fr/en, section « Vidéos » : modes de traitement, `sources`, extrait `<video>` avec `<source>`, attente du
+  traitement (lecture de `processing.status`, avec `ETag` / `If-None-Match` ; pas de webhooks en D3, transverse).
+
+**Administration** :
+- `MediaSummary.processingState` ; `MediaDetail.processing` (étape, progression, essais, erreur, dates),
+  `MediaDetail.renditions[]`, `sources` (liens « admin » si privé).
+- `POST /api/admin/media/:id/process` : relancer (tâche en échec ou rendus avec d'autres réglages) — droits de la
+  modification du média ; `409 PROCESSING_DISABLED` si aucun mode actif.
+- `POST /api/admin/video-processing/backfill` (ADMIN) : crée les tâches des vidéos existantes (`processingState`
+  `null`), priorité basse ; `GET /api/admin/video-processing` : mode, ffmpeg (version, encodeurs, HDR), processus de
+  travail vus, tâches par statut.
+- `/api/health` : `videoProcessing: { mode, workers, queued }` (sans détail sensible).
+
+## 36. Sécurité des fichiers hostiles (DD35)
+
+ffmpeg décode des fichiers envoyés par des tiers (API, jetons délégués) : c'est la plus grande surface d'attaque du
+projet. Défenses, toutes appliquées par une seule fonction de construction des arguments (pure, testée) :
+
+- **Format d'entrée imposé** (`-f mov|matroska|avi|…`, d'après la détection de `sniff.ts`) : ffmpeg ne devine jamais le
+  format. Attaque connue : un fichier `.avi` contenant en réalité une liste HLS qui lit des fichiers du serveur
+  (`/etc/passwd`) ou des URL internes et les incruste dans la vidéo produite.
+- **Protocoles** : `-protocol_whitelist file` (`file,pipe` pour la sortie de progression) ; les démultiplexeurs `hls`,
+  `concat`, `dash` ne peuvent pas être choisis (format imposé).
+- **Ressources** : priorité la plus basse (§ 29.3), `-threads` borné (`NUXT_VIDEO_THREADS`, défaut : moitié des cœurs),
+  délai total `10 × durée + 120 s` (plafonné) puis arrêt de l'arbre de processus, dimensions décodées ≤ 16 384 px,
+  sorties écrites dans un dossier temporaire propre à la tâche, taille de sortie ≤ 2 Gio − 1.
+- **Sous Linux**, si disponible : limite de mémoire par `prlimit --as` (défaut 4 Gio) ; documentation d'un conteneur dédié
+  au mode `external` (sans réseau, système de fichiers en lecture seule sauf le dossier temporaire).
+- Les sorties sont **réanalysées par le lecteur de D1** avant d'être enregistrées ; les messages de ffmpeg ne sont
+  jamais renvoyés tels quels à l'utilisateur (chemins du serveur), seulement un code et un résumé.
+- **Mise à jour de ffmpeg** : version affichée dans « Réglages » ; la documentation recommande les paquets du système
+  (correctifs de sécurité).
+
+## 37. Interface (DD36)
+
+- **Médiathèque** : pastille d'état sur la carte (« Conversion… », « Échec ») avec texte accessible, pas d'animation
+  continue (WCAG 2.2.2) ; filtre « État » non prévu en D3.
+- **Fiche** : section « Traitement » (étape, progression `role="progressbar"` + texte, essais, erreur, « Relancer ») ;
+  rafraîchie toutes les 5 s **seulement** tant que la tâche est en attente ou en cours, annonce discrète à la fin
+  (`role="status"`) ; liste des rendus (format, définition, débit, taille, lien) ; lecteur avec `<source>` dans l'ordre de
+  `sources` ; avertissements revus : « compatibilité variable » → « Version compatible en préparation » puis disparaît ;
+  « piste de données de l'appareil » ; « couleurs HDR converties ».
+- **Réglages** : section « Traitement des vidéos » (mode, ffmpeg détecté, processus de travail, tâches par statut,
+  « Traiter les vidéos existantes » avec confirmation et estimation du temps d'après les durées).
+- **Envoi** : aide des formats complétée quand le traitement est actif (« MKV, AVI… acceptés, convertis après l'envoi »).
+- Tout texte en `fr.json` / `en.json`, `pnpm i18n:check`, axe fr/en × clair/sombre, clavier, 375 px.
+
+## 38. Réglages et performance
+
+| Variable | Défaut | Rôle |
+| --- | --- | --- |
+| `NUXT_VIDEO_PROCESSING` | `off` | `off` \| `embedded` \| `external` (§ 30.2) |
+| `NUXT_SERVER_ROLE` | `web` | `worker` pour un processus de travail |
+| `NUXT_FFMPEG_PATH`, `NUXT_FFPROBE_PATH` | `ffmpeg`, `ffprobe` | binaires |
+| `NUXT_VIDEO_CONCURRENCY` | 1 | tâches simultanées par processus |
+| `NUXT_VIDEO_THREADS` | moitié des cœurs | fils par ffmpeg |
+| `NUXT_VIDEO_RENDITION` | `auto` | `auto` \| `always` \| `never` (§ 32.2) |
+| `NUXT_VIDEO_PRESET`, `NUXT_VIDEO_CRF` | `veryfast`, 23 | réglages du H.264 |
+| `NUXT_VIDEO_AV1` | `off` | rendu AV1 en plus |
+| `NUXT_VIDEO_MAX_DURATION` | 10 800 s | au-delà : pas de conversion (`FAILED`, `TOO_LONG`) |
+
+**Garanties** : rien ne change pour une installation en `off` ; aucun appel à ffmpeg dans une requête ; le serveur web
+ne fait, en `external`, qu'une insertion de plus par envoi vidéo ; en `embedded`, ffmpeg en priorité la plus basse
+(mesuré) et fils bornés ; espace temporaire ≈ taille de l'original (copie S3) + sorties, par tâche simultanée
+(documenté) ; stockage en plus : le rendu (souvent moins de la moitié de l'original d'un téléphone).
+
+## 39. Décisions à valider (D3)
+
+| # | Décision proposée | Alternative |
+| --- | --- | --- |
+| DD25 | **ffmpeg du système** (`NUXT_FFMPEG_PATH`), version ≥ 6 et encodeurs contrôlés au démarrage, processus enfant sans shell | `ffmpeg-static` (npm) ; ffmpeg WASM |
+| DD26 | Modes **`off` (défaut) / `embedded` / `external`** ; processus de travail = même build avec `NUXT_SERVER_ROLE=worker` ; ffmpeg toujours en **priorité la plus basse** (mesuré § 29.3) | processus de travail seul (pas d'`embedded`) ; CLI séparée avec son propre build |
+| DD27 | **File en base** `MediaJob` (prise atomique portable, bail 2 min, 3 essais, priorité) + `Media.processingState` ; une tâche par (média, version) | file Redis / BullMQ ; une tâche par étape |
+| DD28 | **Sans perte → remplace l'original** (nouvelle version) ; **réencodage → rendu** à côté de l'original conservé | ne jamais modifier l'original après l'envoi |
+| DD29 | **Un rendu H.264/AAC ≤ 1080p seulement s'il sert** (`auto`), `veryfast` CRF 23, HDR → SDR ; AV1 en option désactivée | rendu systématique ; 1080p + 720p ; AV1 par défaut |
+| DD30 | **Affiche côté serveur** si aucune, jamais d'écrasement ; vignettes = dérivés de l'affiche ; planches de survol en D4 | régénérer à chaque nouvelle version ; planches dès D3 |
+| DD31 | **Réparation WebM** et **retrait des pistes de métadonnées** par copie sans réencodage + filtre de D2 ; détection dès l'envoi ; original public pendant l'attente | retenir la diffusion publique jusqu'au nettoyage (`423`) |
+| DD32 | **MKV, AVI, 3GP, MPEG-TS/M2TS, OGV, WMV** acceptés seulement si le traitement est actif ; original en téléchargement ; durée ≤ 3 h | garder le refus de D1 ; liste plus courte (MKV, 3GP, M2TS) |
+| DD33 | Table **`MediaRendition`**, `/m/<id>/v<n>/renditions/<nom>.<ext>`, droit signé `file` couvrant les rendus, relecture en base d'un rendu inconnu du cache | réutiliser `MediaVariant` ; droit signé `rendition:<nom>` |
+| DD34 | API v1 : **`processing` et `sources[]` ajoutés** ; administration : relancer, traiter l'existant, état du traitement ; pas de webhooks en D3 | objet `video { … }` ; webhooks dès D3 |
+| DD35 | **Défenses du § 36** (format imposé, protocole `file`, délais, priorité, fils, mémoire, réanalyse des sorties) | — |
+| DD36 | Interface du § 37 ; **étape 22** en trois parties : (1) file, modes, ffmpeg, état, affiche serveur ; (2) rendus, `sources[]`, formats convertis ; (3) réparation WebM, pistes de métadonnées | tout en une fois |
+
+## 40. Plan de vérification de D3
+
+- **Vitest (sans ffmpeg)** : `planVideoJob` (toutes les règles du § 32), construction des arguments (format imposé,
+  protocoles, fils, filtres HDR, rotation), lecture de `-progress`, prise et bail de la file (base SQLite de test),
+  détection des nouveaux formats (`sniff.ts`) et des pistes de données (lecteur de D1, fichiers fabriqués boîte par boîte),
+  ordre de `sources[]`, chemins `/renditions/` et signatures.
+- **Vitest (avec ffmpeg)** : vidéos **fabriquées pendant le test** par ffmpeg (`lavfi` : HEVC tournée, HDR 10 bits, MKV,
+  AVI, MPEG-TS, sans son, piste de données factice) — aucun fichier lourd dans le dépôt ; ces tests sont signalés
+  « ignorés » quand ffmpeg manque (poste Windows sans ffmpeg), jamais réussis en silence.
+- **Vrais fichiers** : enregistrements `MediaRecorder` du dépôt ; chez vous, `v1.mp4` et la vidéo de téléphone (HEVC,
+  rotation) : rendu lu dans le navigateur, images comparées ; une vidéo GoPro ou de drone si vous en avez une.
+- **Fichiers hostiles** : AVI contenant une liste HLS qui vise `file:///etc/passwd` et une URL locale → échec propre,
+  aucune lecture ni requête (vérifié par un serveur témoin) ; fichier tronqué ; dimensions absurdes ; boucle de
+  décodage (délai).
+- **Scénario HTTP** `d3-test.mjs` (à recréer, dans le dépôt seulement avec votre accord) : envoi → tâche → rendu,
+  remplacement pendant le traitement, corbeille, duplication, purge, processus de travail tué pendant un encodage
+  (reprise par le bail), deux processus de travail (pas de double prise), mode `off`, API v1 (`processing`, `sources`
+  publiques et signées), `Range` sur les rendus.
+- **Charge** : banc du § 29.3 rejoué contre le vrai serveur en `embedded` (latence de `/m/` et de l'API pendant un
+  encodage).
+- **Non-régression** : `pnpm typecheck`, `pnpm test`, `pnpm i18n:check`, `db:migration --check` (3 fournisseurs), build
+  de production (traçage : aucune nouvelle dépendance npm prévue), axe fr/en × clair/sombre.
+
+## 41. Risques et limites de D3
+
+- **ffmpeg sous Windows** : les builds courants ne sont pas signés ; Smart App Control peut les bloquer comme argon2 — à
+  vérifier sur votre poste avant la partie 1 (`winget install Gyan.FFmpeg` puis `ffmpeg -version`).
+- **Failles de ffmpeg** : réduites (§ 36), jamais nulles ; le mode `external` dans un conteneur isolé est la
+  recommandation pour une installation ouverte aux envois de tiers.
+- **SQLite + processus de travail séparé** : même machine seulement ; écritures sérialisées (tâches courtes, délai
+  d'attente des verrous déjà en place à vérifier).
+- **Nouvelle version après nettoyage ou réparation** : un lien copié juste après l'envoi passe par une redirection
+  (302) ; les intégrations qui gardent l'URL versionnée continuent de fonctionner.
+- **Espace de stockage** : un rendu en plus de l'original pour les vidéos concernées.
+- Temps de conversion proportionnel à la durée : une heure de vidéo ≈ 30 min sur 4 cœurs (§ 29.2), file d'attente
+  visible.
+- Node 22 dans la machine du nuage : utiliser Node 24 (déjà exigé), sinon un test de D2 échoue (§ 29.1).
+
+## 42. Hors D3 (pour mémoire)
+
+HLS multi-débits, planches de survol, manifestes signés (D4) ; webhooks de fin de traitement ; accélération matérielle
+(NVENC, Quick Sync, VideoToolbox) ; sous-titres automatiques ; audio seul ; envois reprenables et directs vers S3 ;
+fichiers > 2 Gio ; filtre « État » dans la médiathèque ; composant `<SmVideo>`.
