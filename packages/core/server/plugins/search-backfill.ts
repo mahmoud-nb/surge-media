@@ -1,6 +1,7 @@
 import { mediaSearchColumns } from '#shared/utils/search'
 import { bumpRevision } from '../lib/cache/revisions'
 import type { Space } from '../utils/access'
+import { isWorkerRole } from '../lib/video-processing/settings'
 
 /**
  * Au démarrage, remplit les colonnes de recherche normalisées des médias qui n'en ont pas encore
@@ -34,6 +35,8 @@ async function backfill(): Promise<number> {
 }
 
 export default defineNitroPlugin(() => {
+  // Processus de travail (phase D3) : tâche du serveur web (sans risque à plusieurs, mais inutile ici).
+  if (isWorkerRole()) return
   void backfill()
     .then((count) => {
       if (count > 0) console.info(`[surge-media] Recherche : ${count} média(s) indexé(s).`)

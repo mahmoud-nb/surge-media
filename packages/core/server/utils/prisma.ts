@@ -6,6 +6,16 @@ import { readDatabaseEnv, sqliteFilePath, type DatabaseProvider } from '#shared/
 import type { PrismaClient } from '../generated/prisma/client'
 
 /**
+ * SQLite : attente maximale d'un verrou d'écriture tenu par un autre processus (ms). Explicite depuis la
+ * phase D3 : un processus de travail (`surge-media worker`) peut partager le fichier avec le serveur web ;
+ * leurs écritures sont courtes (une tâche, un état), mais se succèdent. better-sqlite3 attend de façon
+ * synchrone : une attente longue bloque le processus, d'où un délai borné plutôt qu'infini. Seules les
+ * instructions isolées et les transactions qui commencent par une écriture profitent de ce délai
+ * (video-processing/jobs.ts) ; une transaction qui lit puis écrit peut échouer aussitôt.
+ */
+const SQLITE_BUSY_TIMEOUT_MS = 10_000
+
+/**
  * Prisma 7 se connecte via un « driver adapter » propre à chaque fournisseur.
  * Le fournisseur doit correspondre à celui du client généré (voir `surge-media init`).
  */
@@ -13,7 +23,7 @@ function createAdapter(provider: DatabaseProvider, url: string) {
   switch (provider) {
     case 'sqlite':
       // Chemin relatif résolu depuis le dossier de lancement (packages/core), comme la CLI Prisma.
-      return new PrismaBetterSqlite3({ url: `file:${resolve(sqliteFilePath(url))}` })
+      return new PrismaBetterSqlite3({ url: `file:${resolve(sqliteFilePath(url))}`, timeout: SQLITE_BUSY_TIMEOUT_MS })
     case 'postgresql':
       return new PrismaPg({ connectionString: url })
     case 'mysql':

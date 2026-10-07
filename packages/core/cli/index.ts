@@ -5,12 +5,14 @@
  *   surge-media init        choisir le fournisseur de base de données, l'URL publique, et migrer
  *   surge-media db migrate  appliquer les migrations en attente
  *   surge-media db reset    recréer la base (éventuellement avec un autre fournisseur)
+ *   surge-media worker      processus de travail du traitement des vidéos (serveur construit, rôle worker)
  */
 import { defineCommand, runMain } from 'citty'
 import { DATABASE_PROVIDERS } from '../shared/database'
 import { runInit, runMigrate, runReset, type CliContext } from './database'
 import { createTranslator, detectLocale, langFromArgv, LOCALES } from './i18n'
 import { packageVersion, resolveCoreRoot } from './lib/project'
+import { DEFAULT_WORKER_PORT, runWorker } from './worker'
 
 const t = createTranslator(detectLocale(langFromArgv(process.argv)))
 
@@ -57,6 +59,15 @@ const reset = defineCommand({
   run: ({ args }) => runReset(context(args.cwd), args),
 })
 
+const worker = defineCommand({
+  meta: { name: 'worker', description: t('command.worker') },
+  args: {
+    ...commonArgs,
+    port: { type: 'string', description: t('args.port'), valueHint: DEFAULT_WORKER_PORT },
+  },
+  run: ({ args }) => runWorker(context(args.cwd), args),
+})
+
 const main = defineCommand({
   meta: { name: 'surge-media', version: packageVersion(), description: t('cli.description') },
   subCommands: {
@@ -65,6 +76,7 @@ const main = defineCommand({
       meta: { name: 'db', description: t('command.db') },
       subCommands: { migrate, reset },
     }),
+    worker,
   },
 })
 

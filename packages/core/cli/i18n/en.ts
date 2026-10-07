@@ -10,11 +10,13 @@ export const en: Record<MessageKey, string> = {
   'args.yes': 'Non-interactive mode: accept defaults without confirmation',
   'args.skipMigrate': 'Configure the database without applying migrations',
   'args.siteUrl': 'Public URL of the installation (e.g. https://media.example.com)',
+  'args.port': 'Port of the worker process (/api/health probe only)',
 
   'command.init': 'Configure the database (provider and URL), then apply migrations',
   'command.db': 'Database management',
   'command.db.migrate': 'Apply pending migrations (after an upgrade)',
   'command.db.reset': 'Recreate the database, optionally with a new provider (deletes all data)',
+  'command.worker': 'Start a video processing worker (NUXT_VIDEO_PROCESSING=external, after "pnpm build")',
 
   'intro.init': 'surgeMedia · setup',
   'intro.migrate': 'surgeMedia · migrations',
@@ -55,6 +57,7 @@ export const en: Record<MessageKey, string> = {
   'step.migrateSkipped': 'Migrations not applied (--skip-migrate)',
   'step.reset': 'Resetting the database…',
   'step.resetDone': 'Database recreated and migrations applied',
+  'step.workerStarting': 'surgeMedia · video processing worker (port {port}, Ctrl+C to stop)',
 
   'outro.init': 'Database ready. Start surgeMedia with "pnpm dev".',
   'outro.migrate': 'Database up to date.',
@@ -72,4 +75,7 @@ export const en: Record<MessageKey, string> = {
   'error.notConfigured': 'Database not configured: run "surge-media init" first.',
   'error.providerMismatch': 'The Prisma schema targets {schema} but DATABASE_PROVIDER is {env}: run "surge-media init" again.',
   'error.command': '"{command}" failed',
+  'error.buildMissing': 'Built server not found ({path}): run "pnpm build" first.',
+  'error.invalidPort': 'Invalid port "{value}" (integer from 1 to 65535).',
+  'error.workerFailed': 'Could not start the worker process: {message}',
 }
