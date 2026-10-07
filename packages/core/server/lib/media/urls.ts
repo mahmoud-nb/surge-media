@@ -1,7 +1,7 @@
 import type { H3Event } from 'h3'
 import { extensionForMime } from '#shared/utils/media'
 import type { TransformFormat } from '#shared/utils/transforms'
-import { isRenditionName, RENDITION_FORMATS, type RenditionName } from '#shared/utils/video-processing'
+import { deliveryHeld, isRenditionName, RENDITION_FORMATS, type RenditionName } from '#shared/utils/video-processing'
 import { alignedExpiry, signMediaAccess } from './signing'
 
 /** Dérivé désigné par son seul nom : l'aperçu (préréglage intégré), servi en WebP. */
@@ -106,11 +106,15 @@ export interface AdminMediaPaths {
  * identique pendant chaque quart d'heure (le navigateur réutilise les images en cache) — 6 h, par
  * tranche d'une heure, pour une vidéo. Le même lien couvre l'original, ses dérivés, ses pistes et ses
  * rendus (`renditionNames` : noms des rendus existants, `MediaRendition.name` ; un nom inconnu est
- * ignoré) ; « admin » passe aussi la retenue de la diffusion pendant le retrait d'une piste de
- * métadonnées (503 pour les autres liens).
+ * ignoré).
+ *
+ * Seul le lien « admin » passe la retenue de la diffusion pendant le retrait d'une piste de métadonnées
+ * (§ 32.4, 503 pour les autres liens) : l'original et les rendus d'une vidéo publique retenue le
+ * reçoivent aussi, sans quoi l'administration ne pourrait ni lire la vidéo ni choisir son affiche avant
+ * la fin du nettoyage. Son affiche, ses dérivés et ses pistes, jamais retenus, gardent leur URL permanente.
  */
 export function adminMediaPaths(
-  media: UrlSource & { kind: string, visibility: string, deletedAt: Date | null, posterKey?: string | null },
+  media: UrlSource & Parameters<typeof deliveryHeld>[0] & { visibility: string, deletedAt: Date | null, posterKey?: string | null },
   withPreview: boolean,
   trackIds: readonly string[] = [],
   renditionNames: readonly string[] = [],
@@ -123,15 +127,17 @@ export function adminMediaPaths(
   const renditions = (suffix: string): AdminMediaPaths['renditions'] => Object.fromEntries(
     renditionNames.filter(isRenditionName).map(name => [name, `${renditionPath(media, name)}${suffix}`]),
   )
-  if (media.visibility === 'PUBLIC' && !media.deletedAt) return { url, previewUrl, posterUrl, trackUrls, renditions: renditions('') }
 
-  const video = media.kind === 'VIDEO'
-  const expires = alignedExpiry(
-    Math.floor(Date.now() / 1000),
-    video ? ADMIN_VIDEO_LINK_TTL : ADMIN_LINK_TTL,
-    video ? ADMIN_VIDEO_LINK_BUCKET : ADMIN_LINK_BUCKET,
-  )
-  const query = signMediaAccess(media, { scope: 'admin' }, expires)
+  if (media.visibility === 'PUBLIC' && !media.deletedAt) {
+    // Retenue possible, quel que soit le mode de traitement (le mode `off` la lève) : un lien signé de
+    // trop est sans effet, un lien permanent retenu laisserait le lecteur sur un 503. Le lien permanent
+    // revient dès la levée (réécriture du fichier, qui change aussi la version, ou échec définitif).
+    if (!deliveryHeld(media, 'embedded')) return { url, previewUrl, posterUrl, trackUrls, renditions: renditions('') }
+    const query = adminQuery(media)
+    return { url: `${url}?${query}`, previewUrl, posterUrl, trackUrls, renditions: renditions(`?${query}`) }
+  }
+
+  const query = adminQuery(media)
   return {
     url: `${url}?${query}`,
     previewUrl: previewUrl && `${previewUrl}?${query}`,
@@ -139,6 +145,17 @@ export function adminMediaPaths(
     trackUrls: trackUrls.map(path => `${path}?${query}`),
     renditions: renditions(`?${query}`),
   }
+}
+
+/** Paramètres du lien signé « admin » (sans « ? ») : 1 h par quart d'heure, 6 h par heure pour une vidéo. */
+function adminQuery(media: { id: string, version: number, kind: string }): string {
+  const video = media.kind === 'VIDEO'
+  const expires = alignedExpiry(
+    Math.floor(Date.now() / 1000),
+    video ? ADMIN_VIDEO_LINK_TTL : ADMIN_LINK_TTL,
+    video ? ADMIN_VIDEO_LINK_BUCKET : ADMIN_LINK_BUCKET,
+  )
+  return signMediaAccess(media, { scope: 'admin' }, expires)
 }
 
 /**

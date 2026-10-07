@@ -1,16 +1,23 @@
 import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
+import { ACCEPTED_MIME_TYPES, acceptedMimeTypes, CONVERTED_MIME_TYPES } from '../shared/utils/media'
 import { codecLabel, videoMetadata, videoPlayback, videoSourceType } from '../shared/utils/video'
-import { largestSize, resolveUploadSizes, rulesFor } from '../server/lib/media/limits'
-import { detectMimeType } from '../server/lib/media/sniff'
+import { videoHandler } from '../server/lib/media/handlers/video'
+import { largestSize, resolveUploadSizes, rulesFor, uploadRules } from '../server/lib/media/limits'
+import { receiveUpload } from '../server/lib/media/upload'
+import { detectMimeType, SNIFF_HEADER_BYTES } from '../server/lib/media/sniff'
 import { av1CodecString, avcCodecString, hevcCodecString, mpeg4AudioCodec, vp9CodecString } from '../server/lib/media/video/codecs'
 import { lastClusterEnd } from '../server/lib/media/video/ebml'
 import { XMP_UUID } from '../server/lib/media/video/isobmff'
 import { parseVideoPreparation, plannedSource, type PreparationOptions, type PreparationPlan, preparedStream, prepareVideo } from '../server/lib/media/video/prepare'
-import { probeVideo, probeVideoFile, VideoProbeError } from '../server/lib/media/video/probe'
+import { convertedContainerFor, convertedVideoMetadata, probeVideo, probeVideoFile, VideoProbeError } from '../server/lib/media/video/probe'
 import { bufferSource } from '../server/lib/media/video/source'
+
+afterEach(() => {
+  vi.unstubAllGlobals()
+})
 
 // ─── Fabrication de fichiers ISO BMFF (MP4, MOV) ─────────────────────────────
 
@@ -146,14 +153,13 @@ describe('detectMimeType', () => {
     expect(detectMimeType(ebmlHeader('webm'))).toBe('video/webm')
   })
 
-  it('garde l\'AVIF et refuse HEIF, 3GP, audio seul, Matroska', () => {
+  it('garde l\'AVIF et refuse HEIF, audio seul, marques inconnues', () => {
     expect(detectMimeType(ftyp('avif', 'mif1', 'miaf'))).toBe('image/avif')
     expect(detectMimeType(ftyp('mif1', 'avif', 'miaf'))).toBe('image/avif')
     expect(detectMimeType(ftyp('heic', 'mif1', 'heic'))).toBeUndefined()
-    expect(detectMimeType(ftyp('3gp4', 'isom', '3gp4'))).toBeUndefined()
     expect(detectMimeType(ftyp('M4A ', 'M4A ', 'mp42', 'isom'))).toBeUndefined()
     expect(detectMimeType(ftyp('abcd', 'efgh'))).toBeUndefined()
-    expect(detectMimeType(ebmlHeader('matroska'))).toBeUndefined()
+    expect(detectMimeType(ebmlHeader('webvtt'))).toBeUndefined()
   })
 
   it('reste sûr sur des en-têtes tronqués ou vides', () => {
@@ -162,6 +168,110 @@ describe('detectMimeType', () => {
     expect(detectMimeType(ftyp('isom').subarray(0, 10))).toBeUndefined()
     expect(detectMimeType(u8(0x1A, 0x45, 0xDF, 0xA3, 0x00))).toBeUndefined()
     expect(detectMimeType(u8(0xFF, 0xD8, 0xFF, 0xE0))).toBe('image/jpeg')
+    expect(detectMimeType(text('OggS'))).toBeUndefined()
+    expect(detectMimeType(u8(0x47))).toBeUndefined()
+  })
+})
+
+// ─── Formats convertis (phase D3) ────────────────────────────────────────────
+
+const u16le = (value: number) => {
+  const buffer = Buffer.alloc(2)
+  buffer.writeUInt16LE(value)
+  return buffer
+}
+const u32le = (value: number) => {
+  const buffer = Buffer.alloc(4)
+  buffer.writeUInt32LE(value)
+  return buffer
+}
+
+/** AVI : liste RIFF de forme `AVI ` ouverte par la liste d'en-têtes `hdrl` (`avih`). */
+const aviHeader = (form = 'AVI ') => Buffer.concat([text('RIFF'), u32le(100_000), text(form), text('LIST'), u32le(68), text('hdrl'), text('avih'), u32le(56), Buffer.alloc(56)])
+/** ASF (WMV) : objet d'en-tête (GUID, taille sur 64 bits, nombre d'objets, réservés). */
+const ASF_GUID = Buffer.from('3026B2758E66CF11A6D900AA0062CE6C', 'hex')
+const asfHeader = () => Buffer.concat([ASF_GUID, u32le(5000), u32le(0), u32le(6), u8(1, 2), Buffer.alloc(64)])
+
+/** Page Ogg (RFC 3533) portant un seul paquet ; `bos` = page de début de flux. */
+function oggPage(packet: Buffer, { bos = true, serial = 1 } = {}): Buffer {
+  const lacing: number[] = []
+  for (let rest = packet.length; ; rest -= 255) {
+    lacing.push(Math.min(rest, 255))
+    if (rest < 255) break
+  }
+  return Buffer.concat([text('OggS'), u8(0, bos ? 0x02 : 0x00), Buffer.alloc(8), u32le(serial), u32le(0), u32le(0), u8(lacing.length), Buffer.from(lacing), packet])
+}
+/** Paquets d'identification : Theora (42 octets), Vorbis, Opus ; squelette (Ogg Skeleton). */
+const THEORA_HEADER = Buffer.concat([u8(0x80), text('theora'), u8(3, 2, 1), u16(40), u16(30), Buffer.alloc(29)])
+const VORBIS_HEADER = Buffer.concat([u8(0x01), text('vorbis'), Buffer.alloc(23)])
+const OPUS_HEADER = Buffer.concat([text('OpusHead'), u8(1, 2), Buffer.alloc(9)])
+const SKELETON_HEADER = Buffer.concat([text('fishead\0'), u16le(3), u16le(0), Buffer.alloc(60)])
+
+/** Paquet MPEG-TS (188 octets) : synchronisation 0x47, PID, compteur ; M2TS : horodatage de 4 octets en tête. */
+const tsPacket = (pid: number, counter = 0) => Buffer.concat([u8(0x47, 0x40 | (pid >> 8), pid & 0xFF, 0x10 | (counter & 0x0F)), Buffer.alloc(184, 0xFF)])
+const transportStream = (packets = 8) => Buffer.concat(Array.from({ length: packets }, (_, i) => tsPacket(i === 0 ? 0 : 0x100, i)))
+const m2ts = (packets = 8) => Buffer.concat(Array.from({ length: packets }, (_, i) => Buffer.concat([u32(0x40000000 + i * 3003), tsPacket(i === 0 ? 0 : 0x1011, i)])))
+
+describe('detectMimeType — formats convertis (D3)', () => {
+  it('3GP / 3G2 d\'après la marque principale seulement', () => {
+    expect(detectMimeType(ftyp('3gp4', 'isom', '3gp4'))).toBe('video/3gpp')
+    expect(detectMimeType(ftyp('3gp5', '3gp5', 'isom'))).toBe('video/3gpp')
+    expect(detectMimeType(ftyp('3ge6', '3ge6', '3gp6'))).toBe('video/3gpp')
+    expect(detectMimeType(ftyp('3g2a', '3g2a', '3gp4'))).toBe('video/3gpp2')
+    // MP4 courant citant 3GP parmi ses marques compatibles : reste un MP4.
+    expect(detectMimeType(ftyp('isom', 'isom', '3gp4', 'mp41'))).toBe('video/mp4')
+    expect(detectMimeType(ftyp('mp42', 'mp42', '3g2a'))).toBe('video/mp4')
+  })
+
+  it('Matroska, AVI, WMV', () => {
+    expect(detectMimeType(ebmlHeader('matroska'))).toBe('video/x-matroska')
+    expect(detectMimeType(webm({ docType: 'matroska' }))).toBe('video/x-matroska')
+    expect(detectMimeType(aviHeader())).toBe('video/x-msvideo')
+    expect(detectMimeType(aviHeader('WAVE'))).toBeUndefined()
+    expect(detectMimeType(aviHeader('AVIX'))).toBeUndefined()
+    expect(detectMimeType(asfHeader())).toBe('video/x-ms-wmv')
+    const almost = asfHeader()
+    almost[15] = 0x6D
+    expect(detectMimeType(almost)).toBeUndefined()
+  })
+
+  it('Ogg : seulement avec un flux Theora parmi les pages de début', () => {
+    expect(detectMimeType(Buffer.concat([oggPage(THEORA_HEADER), oggPage(VORBIS_HEADER, { serial: 2 })]))).toBe('video/ogg')
+    // Squelette en tête (ffmpeg2theora), puis Theora et Vorbis.
+    const skeleton = Buffer.concat([oggPage(SKELETON_HEADER), oggPage(THEORA_HEADER, { serial: 2 }), oggPage(VORBIS_HEADER, { serial: 3 })])
+    expect(detectMimeType(skeleton)).toBe('video/ogg')
+    // Paquet de plus de 255 octets : table de segments de plusieurs entrées.
+    expect(detectMimeType(Buffer.concat([oggPage(Buffer.concat([SKELETON_HEADER, Buffer.alloc(300)])), oggPage(THEORA_HEADER, { serial: 2 })]))).toBe('video/ogg')
+    // Audio seul (Vorbis, Opus) : non reconnu, même si une page suivante (hors début de flux) contient « \x80theora ».
+    expect(detectMimeType(oggPage(VORBIS_HEADER))).toBeUndefined()
+    expect(detectMimeType(oggPage(OPUS_HEADER))).toBeUndefined()
+    expect(detectMimeType(Buffer.concat([oggPage(VORBIS_HEADER), oggPage(THEORA_HEADER, { bos: false })]))).toBeUndefined()
+    // Page tronquée, ou dont la table de segments dépasse l'en-tête examiné.
+    expect(detectMimeType(oggPage(THEORA_HEADER).subarray(0, 30))).toBeUndefined()
+    expect(detectMimeType(Buffer.concat([text('OggS'), u8(0, 2), Buffer.alloc(20), u8(255), Buffer.alloc(10)]))).toBeUndefined()
+  })
+
+  it('MPEG-TS (188 octets) et M2TS / AVCHD (192 octets)', () => {
+    expect(SNIFF_HEADER_BYTES).toBeGreaterThanOrEqual(4 * 192)
+    expect(detectMimeType(transportStream().subarray(0, SNIFF_HEADER_BYTES))).toBe('video/mp2t')
+    expect(detectMimeType(m2ts().subarray(0, SNIFF_HEADER_BYTES))).toBe('video/mp2t')
+    // Fichier court : quatre paquets complets suffisent.
+    expect(detectMimeType(transportStream(4))).toBe('video/mp2t')
+    expect(detectMimeType(m2ts(4))).toBe('video/mp2t')
+  })
+
+  it('MPEG-TS : chaque paquet présent vérifié, un GIF jamais pris pour un flux de transport', () => {
+    expect(detectMimeType(transportStream(3))).toBeUndefined()
+    const broken = transportStream().subarray(0, SNIFF_HEADER_BYTES)
+    broken[5 * 188] = 0x00
+    expect(detectMimeType(broken)).toBeUndefined()
+    // « G » (0x47) au début, sans répétition : un texte quelconque.
+    expect(detectMimeType(Buffer.concat([text('GRIB'), Buffer.alloc(SNIFF_HEADER_BYTES - 4, 0x20)]))).toBeUndefined()
+    // GIF dont les octets retombent sur 0x47 tous les 188 octets : reconnu comme GIF (examiné avant).
+    const gif = Buffer.alloc(SNIFF_HEADER_BYTES)
+    for (let offset = 0; offset < gif.length; offset += 188) gif[offset] = 0x47
+    text('GIF89a').copy(gif)
+    expect(detectMimeType(gif)).toBe('image/gif')
   })
 })
 
@@ -209,6 +319,9 @@ describe('probeVideo — MP4 et MOV', () => {
       playback: 'broad',
       prepared: null,
       durationEstimated: false,
+      dataTracks: [],
+      hdr: null,
+      rewrites: [],
     })
   })
 
@@ -353,6 +466,103 @@ describe('probeVideo — MP4 et MOV', () => {
   })
 })
 
+// ─── Pistes de données de l'appareil (phase D3) ──────────────────────────────
+
+/** Entrée d'échantillon générique (piste de métadonnées) : réservé (6), index de référence (2). */
+const dataEntry = (fourcc: string) => box(fourcc, Buffer.alloc(6), u16(1))
+const dataTrack = (handler: string, fourcc: string, id: number, options: { enabled?: boolean } = {}) => track(handler, dataEntry(fourcc), { id, ...options })
+
+describe('probeVideo — pistes de données de l\'appareil (D3)', () => {
+  const dataTracksOf = async (tracks: Buffer[], mimeType = 'video/mp4') =>
+    (await probe(mp4({ tracks: [h264Track(), aacTrack(), ...tracks] }), mimeType)).metadata.dataTracks
+
+  it('GoPro, caméras 360°, iPhone, DJI, Sony : code du format d\'échantillon', async () => {
+    // GoPro : GPMF (`gpmd`), code temporel ignoré, piste de secours `fdsc` (gestionnaire `meta` seul).
+    expect(await dataTracksOf([dataTrack('tmcd', 'tmcd', 3), dataTrack('meta', 'gpmd', 4), dataTrack('meta', 'fdsc', 5)])).toEqual(['gpmd', 'meta'])
+    expect(await dataTracksOf([dataTrack('camm', 'camm', 3)])).toEqual(['camm'])
+    // iPhone : plusieurs pistes `mebx`, désactivées, listées une fois.
+    expect(await dataTracksOf([dataTrack('meta', 'mebx', 3, { enabled: false }), dataTrack('meta', 'mebx', 4, { enabled: false })], 'video/quicktime')).toEqual(['mebx'])
+    expect(await dataTracksOf([dataTrack('meta', 'djmd', 3), dataTrack('meta', 'dbgi', 4)])).toEqual(['djmd', 'dbgi'])
+    expect(await dataTracksOf([dataTrack('meta', 'rtmd', 3), dataTrack('meta', 'mett', 4)])).toEqual(['rtmd', 'mett'])
+    // Format connu sous un gestionnaire inhabituel ; gestionnaire de données sans format connu.
+    expect(await dataTracksOf([dataTrack('gpmf', 'gpmd', 3), dataTrack('data', 'xyz1', 4)])).toEqual(['gpmd', 'data'])
+  })
+
+  it('pistes lues ou gérées ailleurs ignorées : diffusion, code temporel, texte, sous-titres', async () => {
+    expect(await dataTracksOf([
+      dataTrack('hint', 'rtp ', 3),
+      dataTrack('tmcd', 'tmcd', 4),
+      dataTrack('text', 'text', 5),
+      dataTrack('sbtl', 'tx3g', 6),
+      dataTrack('subt', 'stpp', 7),
+      dataTrack('clcp', 'c608', 8),
+      dataTrack('odsm', 'mp4s', 9),
+    ])).toEqual([])
+    // La présence d'une piste de données ne change ni la piste lue ni la compatibilité.
+    const result = await probe(mp4({ tracks: [dataTrack('meta', 'gpmd', 2), h264Track(), aacTrack()] }))
+    expect(result.metadata).toMatchObject({ videoCodec: 'avc1', audioCodec: 'mp4a', playback: 'broad', dataTracks: ['gpmd'] })
+  })
+
+  it('WebM : aucune piste de données', async () => {
+    expect((await probe(webm(), 'video/webm')).metadata).toMatchObject({ dataTracks: [], hdr: null, rewrites: [] })
+  })
+})
+
+// ─── Vidéos converties (phase D3) ────────────────────────────────────────────
+
+describe('vidéos converties (D3)', () => {
+  it('conteneur d\'un type détecté', () => {
+    expect(convertedContainerFor('video/x-matroska')).toBe('mkv')
+    expect(convertedContainerFor('video/3gpp2')).toBe('3gp')
+    for (const mimeType of CONVERTED_MIME_TYPES) expect(convertedContainerFor(mimeType)).not.toBeNull()
+    for (const mimeType of ['video/mp4', 'video/quicktime', 'video/webm', 'image/png', 'constructor', '__proto__']) {
+      expect(convertedContainerFor(mimeType)).toBeNull()
+    }
+  })
+
+  it('jamais lues par le lecteur d\'en-têtes', async () => {
+    for (const mimeType of CONVERTED_MIME_TYPES) {
+      await expect(probe(mp4(), mimeType)).rejects.toMatchObject({ reason: 'unreadable' })
+    }
+    await expect(probe(webm({ docType: 'matroska' }), 'video/x-matroska')).rejects.toMatchObject({ reason: 'unreadable' })
+    await expect(probe(mp4(), 'constructor')).rejects.toMatchObject({ reason: 'unreadable' })
+  })
+
+  it('à l\'envoi : rien de lu, tout inconnu jusqu\'à l\'analyse par ffprobe, aucune préparation', async () => {
+    // Chemin inexistant : la preuve qu'aucun octet n'est lu.
+    const inspected = await videoHandler.inspect('/nonexistent/surge-media/clip.mkv', 'video/x-matroska')
+    expect(inspected).toEqual({
+      width: null,
+      height: null,
+      duration: null,
+      metadata: {
+        container: 'mkv',
+        videoCodec: null,
+        audioCodec: null,
+        codecs: null,
+        hasAudio: false,
+        rotation: 0,
+        bitrate: null,
+        faststart: null,
+        hasLocation: false,
+        playback: 'none',
+        prepared: [],
+        durationEstimated: false,
+        dataTracks: [],
+        hdr: null,
+        rewrites: [],
+      },
+    })
+    expect(await videoHandler.prepare!('/nonexistent/surge-media/clip.mkv', 'video/x-matroska', inspected)).toEqual({ inspected, file: null })
+    // Relue depuis la colonne JSON : identique, jamais lue par `<video>`.
+    expect(videoMetadata(JSON.parse(JSON.stringify(inspected.metadata)))).toEqual(convertedVideoMetadata('mkv'))
+    for (const mimeType of CONVERTED_MIME_TYPES) {
+      const { metadata } = await videoHandler.inspect('/nonexistent', mimeType)
+      expect(videoMetadata(metadata)).toMatchObject({ container: convertedContainerFor(mimeType), playback: 'none', videoCodec: null })
+    }
+  })
+})
+
 // ─── Analyse WebM ────────────────────────────────────────────────────────────
 
 describe('probeVideo — WebM', () => {
@@ -377,7 +587,7 @@ describe('probeVideo — WebM', () => {
     expect((await probe(webm({ tracks: [h264, webmAudioTrack()] }), 'video/webm')).metadata).toMatchObject({ videoCodec: 'avc1', codecs: 'avc1.42C01E,opus', playback: 'variable' })
   })
 
-  it('refuse Matroska, l\'audio seul et un en-tête incohérent', async () => {
+  it('refuse un Matroska présenté comme WebM, l\'audio seul et un en-tête incohérent', async () => {
     await expect(probe(webm({ docType: 'matroska' }), 'video/webm')).rejects.toMatchObject({ reason: 'unreadable' })
     await expect(probe(webm({ tracks: [webmAudioTrack()] }), 'video/webm')).rejects.toMatchObject({ reason: 'no-video' })
     await expect(probe(Buffer.concat([ebmlHeader(), u8(0x00, 0x00, 0x00)]), 'video/webm')).rejects.toMatchObject({ reason: 'unreadable' })
@@ -415,14 +625,65 @@ describe('limites d\'envoi par genre', () => {
   it('taille selon le type, plafond d\'un jeton délégué, plus grande limite', () => {
     const sizes = { IMAGE: 100, VIDEO: 1000 }
     const rules = rulesFor(sizes)
+    expect(rules.acceptedTypes).toEqual(ACCEPTED_MIME_TYPES)
     expect(rules.maxSizeFor('image/png')).toBe(100)
     expect(rules.maxSizeFor('video/webm')).toBe(1000)
     expect(rules.maxSizeFor('application/pdf')).toBe(0)
     expect(largestSize(rules)).toBe(1000)
     const capped = rulesFor(sizes, ['image/png', 'video/mp4'], 500)
+    expect(capped.acceptedTypes).toEqual(['image/png', 'video/mp4'])
     expect(capped.maxSizeFor('video/mp4')).toBe(500)
     expect(capped.maxSizeFor('image/png')).toBe(100)
     expect(largestSize(rulesFor(sizes, ['image/jpeg']))).toBe(100)
+  })
+
+  it('types restreints, jamais élargis : intersection avec les types de l\'installation (D3)', () => {
+    const sizes = { IMAGE: 100, VIDEO: 1000 }
+    const active = acceptedMimeTypes(true)
+    // Jeton qui cite le MKV, traitement inactif : le MKV reste refusé.
+    expect(rulesFor(sizes, ['video/x-matroska', 'video/mp4']).acceptedTypes).toEqual(['video/mp4'])
+    // Aucun type restant : plus grande limite nulle (la réception refuse alors d'emblée en 415, voir plus bas).
+    expect(largestSize(rulesFor(sizes, ['video/x-matroska']))).toBe(0)
+    // Traitement actif : ordre des types de l'installation, quel que soit celui du jeton.
+    expect(rulesFor(sizes, ['video/x-matroska', 'video/mp4'], undefined, active).acceptedTypes).toEqual(['video/mp4', 'video/x-matroska'])
+    // Affiche : seules des images, même quand l'installation accepte les vidéos converties.
+    expect(rulesFor(sizes, ['image/jpeg', 'image/png'], undefined, active).acceptedTypes).toEqual(['image/jpeg', 'image/png'])
+    // Sans restriction : tous les types de l'installation ; limite des vidéos pour les formats convertis.
+    const all = rulesFor(sizes, undefined, undefined, active)
+    expect(all.acceptedTypes).toEqual(active)
+    for (const type of CONVERTED_MIME_TYPES) expect(all.maxSizeFor(type)).toBe(1000)
+    expect(largestSize(all)).toBe(1000)
+    expect(rulesFor(sizes, ['video/ogg'], 500, active).maxSizeFor('video/ogg')).toBe(500)
+  })
+
+  it('règles de l\'installation : limites configurées, types de base transmis', () => {
+    vi.stubGlobal('useRuntimeConfig', () => ({ media: { maxUploadSize: 100, maxVideoUploadSize: 1000 } }))
+    const active = uploadRules(['image/png', 'video/x-ms-wmv', 'application/pdf'], 800, acceptedMimeTypes(true))
+    expect(active.acceptedTypes).toEqual(['image/png', 'video/x-ms-wmv'])
+    expect(active.maxSizeFor('video/x-ms-wmv')).toBe(800)
+    expect(active.maxSizeFor('image/png')).toBe(100)
+    expect(uploadRules(['image/png', 'video/x-ms-wmv']).acceptedTypes).toEqual(['image/png'])
+    expect(uploadRules().acceptedTypes).toEqual(ACCEPTED_MIME_TYPES)
+    expect(largestSize(uploadRules(undefined, undefined, acceptedMimeTypes(true)))).toBe(1000)
+  })
+
+  it('réception sans type admis : 415 d\'emblée, jamais un 413 « 0 octet » (D3)', async () => {
+    vi.stubGlobal('createError', (input: { statusCode: number, statusMessage: string, data: unknown }) => Object.assign(new Error(input.statusMessage), input))
+    const sizes = { IMAGE: 100, VIDEO: 1000 }
+    // Jeton limité au MKV, traitement des vidéos inactif. La requête factice n'a pas de flux : tout
+    // essai de lecture du corps échouerait autrement (TypeError) — le refus précède toute lecture.
+    const request = (headers: Record<string, string>) => ({ node: { req: { headers } } }) as unknown as Parameters<typeof receiveUpload>[0]
+    const multipart = { 'content-type': 'multipart/form-data; boundary=x' }
+    const none = rulesFor(sizes, ['video/x-matroska'])
+    const unsupported = { statusCode: 415, data: { code: 'UNSUPPORTED_TYPE', accepted: [] } }
+    // Corps annoncé au-delà de la marge multipart (64 Kio), ou sans taille annoncée : même refus.
+    await expect(receiveUpload(request({ ...multipart, 'content-length': String(10 * 1024 * 1024) }), none)).rejects.toMatchObject(unsupported)
+    await expect(receiveUpload(request(multipart), none)).rejects.toMatchObject(unsupported)
+    // Un corps qui n'est pas multipart reste une requête invalide (400), avant les types.
+    await expect(receiveUpload(request({ 'content-type': 'application/json' }), none)).rejects.toMatchObject({ statusCode: 400, data: { code: 'MULTIPART_REQUIRED' } })
+    // Avec un type admis, la même taille annoncée reste refusée par le pré-contrôle (413, limite des vidéos).
+    const mp4 = rulesFor(sizes, ['video/x-matroska', 'video/mp4'])
+    await expect(receiveUpload(request({ ...multipart, 'content-length': String(10 * 1024 * 1024) }), mp4)).rejects.toMatchObject({ statusCode: 413, data: { code: 'FILE_TOO_LARGE', maxSize: 1000 } })
   })
 })
 
@@ -436,6 +697,22 @@ describe('métadonnées vidéo (partagées)', () => {
     expect(videoPlayback('webm', 'vp9', 'opus')).toBe('broad')
     expect(videoPlayback('webm', 'vp8', 'mp4a')).toBe('variable')
     expect(videoPlayback('webm', 'av01', null)).toBe('variable')
+    // Conteneurs convertis (D3) : jamais lus tels quels, quels que soient les codecs.
+    expect(videoPlayback('mkv', 'avc1', 'mp4a')).toBe('none')
+    expect(videoPlayback('3gp', 'avc1', null)).toBe('none')
+    expect(videoPlayback('ts', null, null)).toBe('none')
+  })
+
+  it('champs de la phase D3 : pistes de données, HDR, réécritures, conteneurs convertis', () => {
+    expect(videoMetadata({ container: 'mp4', videoCodec: 'avc1' })).toMatchObject({ dataTracks: [], hdr: null, rewrites: [] })
+    expect(videoMetadata({ container: 'mov', videoCodec: 'hvc1', dataTracks: ['mebx', 3, null, 'gpmd'], hdr: 'hlg', rewrites: ['webmIndex', 'oops', 'dataTracks'] }))
+      .toMatchObject({ dataTracks: ['mebx', 'gpmd'], hdr: 'hlg', rewrites: ['dataTracks', 'webmIndex'] })
+    expect(videoMetadata({ container: 'mp4', videoCodec: 'avc1', dataTracks: 'gpmd', hdr: 'dolby', rewrites: 'webmIndex' })).toMatchObject({ dataTracks: [], hdr: null, rewrites: [] })
+    // Converti : codec vidéo inconnu tant que ffprobe ne l'a pas lu ; jamais lu par `<video>`.
+    expect(videoMetadata({ container: 'avi', videoCodec: null, playback: 'broad' })).toMatchObject({ container: 'avi', videoCodec: null, playback: 'none' })
+    expect(videoMetadata({ container: 'wmv', videoCodec: 'wmv3', playback: 'variable' })?.playback).toBe('none')
+    expect(videoMetadata({ container: 'mp4', videoCodec: null })).toBeNull()
+    expect(videoMetadata({ container: 'flv', videoCodec: 'flv1' })).toBeNull()
   })
 
   it('libellés, lecture de la colonne JSON, type d\'une source', () => {
@@ -464,7 +741,7 @@ describe('enregistrements réels de navigateur', () => {
 
   it('WebM VP9 + Opus', async () => {
     const file = await fixture('recorder-vp9-opus.webm')
-    expect(detectMimeType(file.subarray(0, 256))).toBe('video/webm')
+    expect(detectMimeType(file.subarray(0, SNIFF_HEADER_BYTES))).toBe('video/webm')
     const result = await probe(file, 'video/webm')
     expect(result).toMatchObject({ width: 160, height: 90 })
     // Pas de durée dans le fichier : estimée par le dernier « Cluster » (2 s enregistrées).
@@ -481,7 +758,7 @@ describe('enregistrements réels de navigateur', () => {
 
   it('MP4 fragmenté H.264 + AAC : durée tirée des fragments', async () => {
     const file = await fixture('recorder-h264-aac.mp4')
-    expect(detectMimeType(file.subarray(0, 256))).toBe('video/mp4')
+    expect(detectMimeType(file.subarray(0, SNIFF_HEADER_BYTES))).toBe('video/mp4')
     const result = await probe(file)
     expect(result).toMatchObject({ width: 160, height: 90 })
     expect(result.duration).toBeCloseTo(2, 0)
@@ -702,6 +979,14 @@ describe('préparation des MP4/MOV (D2)', () => {
     const table = file.lastIndexOf(text('stco')) + 12
     file.writeUInt32BE(4, table)
     expect(await skipped(file)).toBe('chunk offset outside media data')
+  })
+
+  it('pistes de données de l\'appareil gardées et toujours signalées (retirées par le traitement, D3)', async () => {
+    const file = phoneFile({ movie: [dataTrack('meta', 'gpmd', 3), dataTrack('camm', 'camm', 4)] })
+    expect((await probe(file)).metadata.dataTracks).toEqual(['gpmd', 'camm'])
+    const { bytes, result } = await prepared(file)
+    expect(result.metadata).toMatchObject({ dataTracks: ['gpmd', 'camm'], hasLocation: false, prepared: ['faststart', 'metadata'], hdr: null, rewrites: [] })
+    expect(bytes.includes(text('gpmd'))).toBe(true)
   })
 
   it('le flux écrit exactement la sortie vérifiée', async () => {

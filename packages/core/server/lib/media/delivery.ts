@@ -136,13 +136,23 @@ interface KnownRenditions {
 /**
  * Le média en cache doit-il être relu avant de répondre (cache.ts, `reloadDeliveryMedia`) ? Oui pour une
  * version plus récente que la sienne : sans relecture, l'URL serait redirigée vers l'ancienne version,
- * dont le fichier a pu être supprimé (réécriture sans perte par un processus de travail). Oui pour un
- * rendu de sa version qu'il ne connaît pas : produit depuis, ailleurs (l'invalidation du cache est locale
- * au processus qui écrit). Jamais pour une ancienne version : la redirection suffit.
+ * dont le fichier a pu être supprimé (réécriture sans perte par un processus de travail). Oui, à sa
+ * version, pour un fichier qu'il ne connaît pas et qu'un processus de travail ou une autre instance a pu
+ * produire depuis sans changer la version (l'invalidation du cache est locale au processus qui écrit) :
+ * un rendu absent, ou un dérivé d'une vidéo sans affiche (affiche extraite par le serveur, première
+ * affiche de DD18). Jamais pour une ancienne version : la redirection suffit.
  */
-export function deliveryReloadNeeded(target: DeliveryTarget, media: { version: number } & KnownRenditions): boolean {
-  if (target.version > media.version) return true
-  return target.kind === 'rendition' && target.version === media.version && !findRendition(media, target.name)
+export function deliveryReloadNeeded(
+  target: DeliveryTarget,
+  media: { version: number, kind: string, posterKey: string | null } & KnownRenditions,
+): boolean {
+  if (target.version !== media.version) return target.version > media.version
+  switch (target.kind) {
+    case 'rendition': return !findRendition(media, target.name)
+    case 'preset':
+    case 'transform': return media.kind === 'VIDEO' && !media.posterKey
+    default: return false
+  }
 }
 
 /**
