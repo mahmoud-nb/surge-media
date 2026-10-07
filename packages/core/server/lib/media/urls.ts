@@ -1,7 +1,7 @@
 import type { H3Event } from 'h3'
 import { extensionForMime } from '#shared/utils/media'
 import type { TransformFormat } from '#shared/utils/transforms'
-import { RENDITION_FORMATS, type RenditionName } from '#shared/utils/video-processing'
+import { isRenditionName, RENDITION_FORMATS, type RenditionName } from '#shared/utils/video-processing'
 import { alignedExpiry, signMediaAccess } from './signing'
 
 /** Dérivé désigné par son seul nom : l'aperçu (préréglage intégré), servi en WebP. */
@@ -96,7 +96,7 @@ export interface AdminMediaPaths {
   previewUrl: string | null
   posterUrl: string | null
   trackUrls: string[]
-  /** Rendus demandés d'une vidéo (phase D3), par nom. */
+  /** Rendus d'une vidéo (phase D3), par nom : seulement ceux demandés (`renditionNames`). */
   renditions: Partial<Record<RenditionName, string>>
 }
 
@@ -105,23 +105,24 @@ export interface AdminMediaPaths {
  * permanente ; un média privé ou dans la corbeille reçoit un lien signé « admin » d'environ 1 h,
  * identique pendant chaque quart d'heure (le navigateur réutilise les images en cache) — 6 h, par
  * tranche d'une heure, pour une vidéo. Le même lien couvre l'original, ses dérivés, ses pistes et ses
- * rendus (`renditionNames` : rendus existants, à la version courante) ; « admin » passe aussi la
- * retenue de la diffusion pendant le retrait d'une piste de métadonnées (503 pour les autres liens).
+ * rendus (`renditionNames` : noms des rendus existants, `MediaRendition.name` ; un nom inconnu est
+ * ignoré) ; « admin » passe aussi la retenue de la diffusion pendant le retrait d'une piste de
+ * métadonnées (503 pour les autres liens).
  */
 export function adminMediaPaths(
   media: UrlSource & { kind: string, visibility: string, deletedAt: Date | null, posterKey?: string | null },
   withPreview: boolean,
   trackIds: readonly string[] = [],
-  renditionNames: readonly RenditionName[] = [],
+  renditionNames: readonly string[] = [],
 ): AdminMediaPaths {
   const url = mediaPath(media)
   const previewUrl = withPreview ? mediaPath(media, 'preview') : null
   // Affiche d'une vidéo (attribut `poster`) : image entière réencodée, en JPEG.
   const posterUrl = media.posterKey ? posterPath(media) : null
   const trackUrls = trackIds.map(id => trackPath(media, id))
-  const renditions = (suffix: string) => Object.fromEntries(
-    renditionNames.map(name => [name, `${renditionPath(media, name)}${suffix}`]),
-  ) as AdminMediaPaths['renditions']
+  const renditions = (suffix: string): AdminMediaPaths['renditions'] => Object.fromEntries(
+    renditionNames.filter(isRenditionName).map(name => [name, `${renditionPath(media, name)}${suffix}`]),
+  )
   if (media.visibility === 'PUBLIC' && !media.deletedAt) return { url, previewUrl, posterUrl, trackUrls, renditions: renditions('') }
 
   const video = media.kind === 'VIDEO'

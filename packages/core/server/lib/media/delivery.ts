@@ -164,7 +164,8 @@ export function currentTargetPath(media: UrlSource & KnownRenditions, target: De
  * rendus, qui contiennent encore la piste de métadonnées de l'appareil (positions GPS…) ; l'affiche, ses
  * dérivés et les pistes de texte restent servis. Un lien « admin » passe : l'administration lit la vidéo
  * pendant le traitement. Décidée d'après la ligne en cache : un cache en retard ne fait que prolonger la
- * retenue (au plus 60 s), jamais la lever trop tôt sur ce processus.
+ * retenue (au plus 60 s) ; il ne la lève jamais trop tôt, car une version plus récente que la sienne est
+ * toujours relue avant d'être servie (`deliveryReloadNeeded`).
  */
 export function holdApplies(
   target: Pick<DeliveryTarget, 'kind'>,
