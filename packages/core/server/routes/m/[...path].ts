@@ -92,11 +92,13 @@ export default defineEventHandler(async (event) => {
   if (media && deliveryReloadNeeded(target, media)) media = await reloadDeliveryMedia(target.id)
   if (!media) throw createError({ statusCode: 404, statusMessage: 'Not Found' })
 
-  // Ancienne version (fichier remplacé) : redirection vers l'URL courante, sans mise en cache.
-  // Un média dans la corbeille n'est jamais redirigé (son existence n'est pas révélée).
+  // Ancienne version (fichier remplacé, réécrit par le traitement, affiche changée) : redirection vers
+  // l'URL courante, sans mise en cache ; CORS permis, sans quoi un `<video crossorigin>` ou un fetch()
+  // d'un autre site ne suivrait pas la redirection. Un média dans la corbeille n'est jamais redirigé
+  // (son existence n'est pas révélée).
   if (target.version !== media.version) {
     if (media.deletedAt) throw createError({ statusCode: 404, statusMessage: 'Not Found' })
-    setResponseHeader(event, 'Cache-Control', 'no-cache')
+    setResponseHeaders(event, { 'Cache-Control': 'no-cache', 'Access-Control-Allow-Origin': '*' })
     return sendRedirect(event, currentTargetPath(media, target), 302)
   }
 
