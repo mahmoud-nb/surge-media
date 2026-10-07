@@ -3,8 +3,11 @@
 > **Statut : VALIDÉE (2026-10-05) — décisions DD1 à DD14 acceptées par l'utilisateur. D1 FAITE (2026-10-05)** : `setup.md`
 > étape 20 et § 7.7, `.claude/project-context.md` § 9.21. **D2 VALIDÉE (2026-10-05)** : § 17 à § 27, décisions DD15
 > à DD24, avec un ajout de l'utilisateur : retirer aussi les **métadonnées de l'appareil** (§ 18.3). **D2 FAITE
-> (2026-10-06)** : `setup.md` étape 21 et § 7.7, `.claude/project-context.md` § 9.22. **D3 PROPOSÉE (2026-10-06)** :
-> § 28 à § 42, décisions DD25 à DD36, **en attente de validation**. D4 et transverses (§ 14) : à proposer plus tard.
+> (2026-10-06)** : `setup.md` étape 21 et § 7.7, `.claude/project-context.md` § 9.22. **D3 VALIDÉE (2026-10-06)** :
+> § 28 à § 42, décisions DD25 à DD36 ; l'utilisateur a délégué les choix ouverts (« le plus recommandé et performant ») :
+> DD28 tel que proposé (sans perte → original remplacé) ; **DD31 : diffusion publique de l'original retenue tant que le
+> retrait d'une piste de métadonnées est en attente** (§ 32.4, l'alternative devient la règle) ; DD32 : liste complète.
+> D4 et transverses (§ 14) : à proposer plus tard.
 >
 > Écarts et précisions de D2 :
 > - **Appareil** : retrait par une liste de ce qui est conservé (§ 18.3), y compris boîtes de premier niveau (`uuid` portant la
@@ -986,10 +989,13 @@ nouvelle version).
 - Retrait : ffmpeg copie **seulement la vidéo et le son** (`-map 0:v:0 -map 0:a? -dn -c copy`), puis la sortie passe
   par la **préparation de D2** (liste de ce qui est conservé, `faststart`) : une seule règle des métadonnées, déjà
   testée. Les chapitres (`chpl`) et sous-titres intégrés ne sont pas repris (les pistes de texte de D2 les remplacent).
-- **Limite assumée** : entre l'envoi et la fin du nettoyage (quelques secondes, plus si la file est chargée), l'original
-  public contient encore la piste. Alternative proposée : retenir la diffusion publique de l'original (`423` + aperçu
-  seulement) tant que le nettoyage est en attente — refusée par défaut car un média doit rester utilisable pendant le
-  traitement (§ 12, règle 3) ; facile à ajouter si vous la préférez.
+- **Retenue de la diffusion (choix validé)** : entre l'envoi et la fin du nettoyage, l'original contient encore la
+  piste. Tant que l'étape `sanitize` est en attente ou en cours, l'original et ses rendus **ne sont servis qu'aux liens
+  « admin »** (aperçu de l'administration) : toute autre requête sur `/m/` reçoit **`503` + `Retry-After: 30`**
+  (`PROCESSING_PENDING`), le média reste visible et modifiable ; l'affiche et ses dérivés restent servis (ils ne
+  contiennent pas la piste). En échec définitif du nettoyage, la retenue est levée et l'avertissement reste dans la
+  fiche (l'utilisateur décide : rendre privé, supprimer). Traitement inactif (`off`) : avertissement seulement, comme
+  en D2. Exception assumée à la règle 3 du § 12 (média utilisable pendant le traitement) au profit de la vie privée.
 
 ## 33. Formats acceptés une fois convertis (DD32)
 
@@ -1141,7 +1147,7 @@ ne fait, en `external`, qu'une insertion de plus par envoi vidéo ; en `embedded
 | DD28 | **Sans perte → remplace l'original** (nouvelle version) ; **réencodage → rendu** à côté de l'original conservé | ne jamais modifier l'original après l'envoi |
 | DD29 | **Un rendu H.264/AAC ≤ 1080p seulement s'il sert** (`auto`), `veryfast` CRF 23, HDR → SDR ; AV1 en option désactivée | rendu systématique ; 1080p + 720p ; AV1 par défaut |
 | DD30 | **Affiche côté serveur** si aucune, jamais d'écrasement ; vignettes = dérivés de l'affiche ; planches de survol en D4 | régénérer à chaque nouvelle version ; planches dès D3 |
-| DD31 | **Réparation WebM** et **retrait des pistes de métadonnées** par copie sans réencodage + filtre de D2 ; détection dès l'envoi ; original public pendant l'attente | retenir la diffusion publique jusqu'au nettoyage (`423`) |
+| DD31 | **Réparation WebM** et **retrait des pistes de métadonnées** par copie sans réencodage + filtre de D2 ; détection dès l'envoi ; **diffusion publique de l'original retenue (503) jusqu'au nettoyage** (choix validé) | original public pendant l'attente |
 | DD32 | **MKV, AVI, 3GP, MPEG-TS/M2TS, OGV, WMV** acceptés seulement si le traitement est actif ; original en téléchargement ; durée ≤ 3 h | garder le refus de D1 ; liste plus courte (MKV, 3GP, M2TS) |
 | DD33 | Table **`MediaRendition`**, `/m/<id>/v<n>/renditions/<nom>.<ext>`, droit signé `file` couvrant les rendus, relecture en base d'un rendu inconnu du cache | réutiliser `MediaVariant` ; droit signé `rendition:<nom>` |
 | DD34 | API v1 : **`processing` et `sources[]` ajoutés** ; administration : relancer, traiter l'existant, état du traitement ; pas de webhooks en D3 | objet `video { … }` ; webhooks dès D3 |

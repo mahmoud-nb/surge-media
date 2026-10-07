@@ -1,6 +1,7 @@
 import type { H3Event } from 'h3'
 import { extensionForMime } from '#shared/utils/media'
 import type { TransformFormat } from '#shared/utils/transforms'
+import { isRenditionName, RENDITION_FORMATS, type RenditionName } from '#shared/utils/video-processing'
 import { alignedExpiry, signMediaAccess } from './signing'
 
 /** Dérivé désigné par son seul nom : l'aperçu (préréglage intégré), servi en WebP. */
@@ -16,7 +17,7 @@ const ADMIN_LINK_BUCKET = 900
 const ADMIN_VIDEO_LINK_TTL = 6 * 3600
 const ADMIN_VIDEO_LINK_BUCKET = 3600
 
-interface UrlSource {
+export interface UrlSource {
   id: string
   version: number
   mimeType: string
@@ -61,6 +62,14 @@ export function trackPath(media: Pick<UrlSource, 'id' | 'version'>, trackId: str
   return `/m/${media.id}/v${media.version}/tracks/${trackId}.vtt`
 }
 
+/**
+ * Rendu d'une vidéo produit par ffmpeg (phase D3, élément `<source>`) : nom de fichier fixe
+ * (`h264.mp4`, `av1.webm`), servi sous la version courante du média comme l'original.
+ */
+export function renditionPath(media: Pick<UrlSource, 'id' | 'version'>, name: RenditionName): string {
+  return `/m/${media.id}/v${media.version}/renditions/${name}.${RENDITION_FORMATS[name].container}`
+}
+
 /** Affiche d'une vidéo (attribut `poster` de `<video>`, balises `og:image`) : préréglage `full`, en JPEG. */
 export function posterPath(media: UrlSource): string {
   return derivedPath(media, 'full', 'jpg')
@@ -81,23 +90,40 @@ export function signedMediaPath(media: UrlSource, ttlSeconds: number, variant?: 
   return { path: `${mediaPath(media, variant)}?${query}`, expiresAt: new Date(expires * 1000) }
 }
 
+/** Chemins d'un média dans l'administration (`adminMediaPaths`). */
+export interface AdminMediaPaths {
+  url: string
+  previewUrl: string | null
+  posterUrl: string | null
+  trackUrls: string[]
+  /** Rendus d'une vidéo (phase D3), par nom : seulement ceux demandés (`renditionNames`). */
+  renditions: Partial<Record<RenditionName, string>>
+}
+
 /**
  * Chemins affichés dans l'administration. Un média public (hors corbeille) garde son URL
  * permanente ; un média privé ou dans la corbeille reçoit un lien signé « admin » d'environ 1 h,
  * identique pendant chaque quart d'heure (le navigateur réutilise les images en cache) — 6 h, par
- * tranche d'une heure, pour une vidéo.
+ * tranche d'une heure, pour une vidéo. Le même lien couvre l'original, ses dérivés, ses pistes et ses
+ * rendus (`renditionNames` : noms des rendus existants, `MediaRendition.name` ; un nom inconnu est
+ * ignoré) ; « admin » passe aussi la retenue de la diffusion pendant le retrait d'une piste de
+ * métadonnées (503 pour les autres liens).
  */
 export function adminMediaPaths(
   media: UrlSource & { kind: string, visibility: string, deletedAt: Date | null, posterKey?: string | null },
   withPreview: boolean,
   trackIds: readonly string[] = [],
-): { url: string, previewUrl: string | null, posterUrl: string | null, trackUrls: string[] } {
+  renditionNames: readonly string[] = [],
+): AdminMediaPaths {
   const url = mediaPath(media)
   const previewUrl = withPreview ? mediaPath(media, 'preview') : null
   // Affiche d'une vidéo (attribut `poster`) : image entière réencodée, en JPEG.
   const posterUrl = media.posterKey ? posterPath(media) : null
   const trackUrls = trackIds.map(id => trackPath(media, id))
-  if (media.visibility === 'PUBLIC' && !media.deletedAt) return { url, previewUrl, posterUrl, trackUrls }
+  const renditions = (suffix: string): AdminMediaPaths['renditions'] => Object.fromEntries(
+    renditionNames.filter(isRenditionName).map(name => [name, `${renditionPath(media, name)}${suffix}`]),
+  )
+  if (media.visibility === 'PUBLIC' && !media.deletedAt) return { url, previewUrl, posterUrl, trackUrls, renditions: renditions('') }
 
   const video = media.kind === 'VIDEO'
   const expires = alignedExpiry(
@@ -111,6 +137,7 @@ export function adminMediaPaths(
     previewUrl: previewUrl && `${previewUrl}?${query}`,
     posterUrl: posterUrl && `${posterUrl}?${query}`,
     trackUrls: trackUrls.map(path => `${path}?${query}`),
+    renditions: renditions(`?${query}`),
   }
 }
 
