@@ -1,34 +1,41 @@
 import { freeTransformAllowed } from '#shared/utils/transforms'
+import { PROCESSING_RETRY_AFTER } from '#shared/utils/video-processing'
 import type { Media } from '../../generated/prisma/client'
 import { createTokenBucketLimiter } from '../../lib/api/rate-limit'
 import { closeWithResponse } from '../../lib/http/stream'
-import { findDeliveryMedia } from '../../lib/media/cache'
+import { findDeliveryMedia, reloadDeliveryMedia, type DeliveryMedia } from '../../lib/media/cache'
 import {
   authorizeDelivery,
   cacheControl,
   contentDisposition,
+  currentTargetPath,
+  deliveryReloadNeeded,
   generationRateLimited,
+  holdApplies,
+  originalDisposition,
   parseDeliveryPath,
   transformGrant,
   type DeliveryAccess,
 } from '../../lib/media/delivery'
-import { derivedSegment, type DeliveryTarget } from '../../lib/media/delivery-path'
+import type { DeliveryTarget, DerivedTarget } from '../../lib/media/delivery-path'
 import { mediaError } from '../../lib/media/errors'
 import { BUSY_RETRY_AFTER } from '../../lib/media/processing'
 import { resolveRange } from '../../lib/media/range'
+import { renditionFilename, resolveRenditionDeliverable } from '../../lib/media/renditions'
 import { useTransformSettings } from '../../lib/media/transform-settings'
 import { resolveTrackDeliverable } from '../../lib/media/tracks'
-import { derivedPath, mediaPath, trackPath } from '../../lib/media/urls'
-import { resolveDeliverable, type DerivedRequest } from '../../lib/media/variants'
+import { resolveDeliverable, type DeliverableObject, type DerivedRequest } from '../../lib/media/variants'
 import { useMediaStorage } from '../../lib/storage'
 import { resolvePreset, spaceTransformPolicy } from '../../lib/transforms/service'
+import { useVideoProcessingSettings } from '../../lib/video-processing/settings'
 
 /** Débit de nouvelles générations libres non signées, par IP (architecture phase C § 6). */
 const generations = createTokenBucketLimiter()
 
 /**
  * GET|HEAD /m/<id>/v<version>/[<préréglage>|<paramètres>/]<nom> — diffusion d'un média ;
- * /m/<id>/v<version>/tracks/<piste>.vtt — piste de texte d'une vidéo (phase D2, droit signé `track:<piste>`).
+ * /m/<id>/v<version>/tracks/<piste>.vtt — piste de texte d'une vidéo (phase D2, droit signé `track:<piste>`) ;
+ * /m/<id>/v<version>/renditions/h264.mp4|av1.webm — rendu d'une vidéo (phase D3, droit signé de l'original).
  *
  * Original, préréglage (intégré `preview`/`full`, du projet ou global) ou transformation libre
  * (`w_800,h_600,q_75`), format de sortie donné par l'extension (phase C). Une transformation non
@@ -40,8 +47,14 @@ const generations = createTokenBucketLimiter()
  * Public : mis en cache sans limite (l'URL change à chaque remplacement). Privé : lien signé
  * (?exp=&kid=&sig=) ou identifiant d'API (`Authorization: Bearer`), jamais par cookie. Le chemin
  * physique n'est jamais exposé ; le type MIME vient de la base (nosniff). Requêtes partielles
- * (`Range`, une plage) : 206 / 416. Métadonnées lues via le cache de diffusion (60 s). Flux du stockage
- * fermé si le client interrompt la réponse (`closeWithResponse`).
+ * (`Range`, une plage) : 206 / 416. Métadonnées lues via le cache de diffusion (60 s), relues pour une
+ * version plus récente ou un rendu inconnu du cache. Flux du stockage fermé si le client interrompt la
+ * réponse (`closeWithResponse`).
+ *
+ * Ancienne version : 302 vers l'URL courante (un rendu : vers le rendu de la version courante s'il
+ * existe, sinon vers l'original). Rendu absent : 404. Original et rendus d'une vidéo dont la piste de
+ * métadonnées n'est pas encore retirée : 503 PROCESSING_PENDING (`Retry-After: 30`), sauf lien « admin ».
+ * Original d'un format converti (MKV, AVI…) : `Content-Disposition: attachment`.
  * OPTIONS : preflight CORS (lecture avec en-tête Authorization ou Range depuis un script).
  */
 export default defineEventHandler(async (event) => {
@@ -73,7 +86,10 @@ export default defineEventHandler(async (event) => {
   }
   const target = parsed.target
 
-  const media = await findDeliveryMedia(target.id)
+  let media = await findDeliveryMedia(target.id)
+  // Version plus récente que le cache, ou rendu qu'il ne connaît pas : écrits depuis par un processus de
+  // travail ou une autre instance (invalidation locale) ; relus avant de décider.
+  if (media && deliveryReloadNeeded(target, media)) media = await reloadDeliveryMedia(target.id)
   if (!media) throw createError({ statusCode: 404, statusMessage: 'Not Found' })
 
   // Ancienne version (fichier remplacé) : redirection vers l'URL courante, sans mise en cache.
@@ -81,14 +97,28 @@ export default defineEventHandler(async (event) => {
   if (target.version !== media.version) {
     if (media.deletedAt) throw createError({ statusCode: 404, statusMessage: 'Not Found' })
     setResponseHeader(event, 'Cache-Control', 'no-cache')
-    const current = target.kind === 'original'
-      ? mediaPath(media)
-      : target.kind === 'track' ? trackPath(media, target.trackId) : derivedPath(media, derivedSegment(target), target.format)
-    return sendRedirect(event, current, 302)
+    return sendRedirect(event, currentTargetPath(media, target), 302)
   }
 
   const access = await authorizeDelivery(event, media, target)
-  const { request, mutable } = target.kind === 'track' ? { request: { track: target.trackId }, mutable: false } : await derivedRequest(media, target, access, () => {
+
+  // Retrait d'une piste de métadonnées (positions GPS…) en attente : l'original et ses rendus ne sont
+  // servis qu'aux liens « admin ». Après le contrôle d'accès (un média privé reste 403, rien n'est
+  // révélé) ; jamais mis en cache, lisible par un script (Retry-After exposé).
+  if (holdApplies(target, media, access, useVideoProcessingSettings().mode)) {
+    setResponseHeaders(event, {
+      'Retry-After': PROCESSING_RETRY_AFTER,
+      'Cache-Control': 'no-store',
+      'Access-Control-Allow-Origin': '*',
+      'Access-Control-Expose-Headers': 'Retry-After',
+    })
+    throw mediaError(503, 'PROCESSING_PENDING', {
+      retryAfter: PROCESSING_RETRY_AFTER,
+      detail: 'This video is being processed (device metadata track removal): retry later.',
+    })
+  }
+
+  const { object, mutable } = await deliverable(media, target, access, () => {
     if (!generationRateLimited(access) || settings.rateLimit === 0) return
     const result = generations.take(`gen:${getRequestIP(event) ?? 'unknown'}`, settings.rateLimit)
     if (!result.allowed) {
@@ -97,8 +127,7 @@ export default defineEventHandler(async (event) => {
         detail: `Too many new transformations from this address (${settings.rateLimit} per minute): use existing sizes, a preset or a signed URL.`,
       })
     }
-  })
-  const object = await (typeof request === 'object' && 'track' in request ? resolveTrackDeliverable(media, request.track) : resolveDeliverable(media, request)).catch((error: unknown) => {
+  }).catch((error: unknown) => {
     // File des traitements pleine, ou débit atteint : réessayer plus tard.
     const data = (error as { data?: { code?: string, retryAfter?: number } } | null)?.data
     if (data?.code === 'SERVER_BUSY') setResponseHeader(event, 'Retry-After', BUSY_RETRY_AFTER)
@@ -119,7 +148,7 @@ export default defineEventHandler(async (event) => {
     // l'identifiant présenté est la preuve d'accès (jamais de cookie).
     'Access-Control-Allow-Origin': '*',
     'Access-Control-Expose-Headers': 'Content-Length, Content-Range, Accept-Ranges, ETag',
-    'Content-Disposition': contentDisposition(target.kind === 'original' ? media.originalName : decodeFilename(target.filename)),
+    'Content-Disposition': dispositionHeader(media, target),
   })
   if (access.mode === 'credential') setResponseHeader(event, 'Vary', 'Authorization')
   if (access.mode !== 'public') setResponseHeader(event, 'X-Robots-Tag', 'noindex')
@@ -162,18 +191,42 @@ export default defineEventHandler(async (event) => {
 })
 
 /**
- * Fichier demandé : l'original, un préréglage de l'espace (intégré, du projet ou global ; 404 s'il
- * est inconnu) ou des paramètres libres, soumis à la politique de l'espace (403
- * TRANSFORM_NOT_ALLOWED). `mutable` : préréglage modifiable (cache limité, revalidé).
+ * Fichier servi : l'original, une piste de texte, un rendu ou un dérivé (`derivedRequest`).
+ * `mutable` : préréglage modifiable (cache limité, revalidé).
+ */
+async function deliverable(
+  media: DeliveryMedia,
+  target: DeliveryTarget,
+  access: DeliveryAccess,
+  beforeGenerate: () => void,
+): Promise<{ object: DeliverableObject, mutable: boolean }> {
+  switch (target.kind) {
+    case 'original': return { object: await resolveDeliverable(media, 'original'), mutable: false }
+    case 'track': return { object: await resolveTrackDeliverable(media, target.trackId), mutable: false }
+    case 'rendition': {
+      // Absent même après relecture du cache (pas encore produit, ou fichier remplacé depuis) : 404,
+      // jamais mis en cache (Nitro marque toute réponse 404 `no-cache`) — le rendu peut arriver.
+      const object = resolveRenditionDeliverable(media, target.name)
+      if (!object) throw createError({ statusCode: 404, statusMessage: 'Not Found' })
+      return { object, mutable: false }
+    }
+    default: {
+      const { request, mutable } = await derivedRequest(media, target, access, beforeGenerate)
+      return { object: await resolveDeliverable(media, request), mutable }
+    }
+  }
+}
+
+/**
+ * Dérivé demandé : un préréglage de l'espace (intégré, du projet ou global ; 404 s'il est inconnu) ou
+ * des paramètres libres, soumis à la politique de l'espace (403 TRANSFORM_NOT_ALLOWED).
  */
 async function derivedRequest(
   media: Media,
-  target: Exclude<DeliveryTarget, { kind: 'track' }>,
+  target: DerivedTarget,
   access: DeliveryAccess,
   beforeGenerate: () => void,
-): Promise<{ request: 'original' | DerivedRequest, mutable: boolean }> {
-  if (target.kind === 'original') return { request: 'original', mutable: false }
-
+): Promise<{ request: DerivedRequest, mutable: boolean }> {
   if (target.kind === 'transform') {
     const policy = await spaceTransformPolicy(media.projectId)
     if (!freeTransformAllowed(policy, transformGrant(access))) {
@@ -190,6 +243,18 @@ async function derivedRequest(
   if (!preset) throw createError({ statusCode: 404, statusMessage: 'Not Found' })
   if (!preset.transformation) throw mediaError(400, 'INVALID_TRANSFORM', { detail: preset.error })
   return { request: { transformation: preset.transformation, format: target.format, free: false }, mutable: preset.level !== 'builtin' }
+}
+
+/**
+ * Content-Disposition : nom d'origine pour l'original (en téléchargement pour un format converti, que le
+ * navigateur ne lit pas), nom du média pour un rendu, nom de l'URL pour un dérivé ou une piste.
+ */
+function dispositionHeader(media: DeliveryMedia, target: DeliveryTarget): string {
+  switch (target.kind) {
+    case 'original': return contentDisposition(media.originalName, originalDisposition(media))
+    case 'rendition': return contentDisposition(renditionFilename(media, target.name))
+    default: return contentDisposition(decodeFilename(target.filename))
+  }
 }
 
 /** Nom de fichier de l'URL (encodé) → texte, pour Content-Disposition. */

@@ -8,6 +8,7 @@ import { createHash, randomBytes } from 'node:crypto'
  *
  *   originaux : originals/2026/09/Qx7…Kp.jpg   (répartis par mois : dossiers de taille raisonnable)
  *   dérivés   : variants/<mediaId>/v3-9f2c…e1.webp
+ *   affiche, pistes, rendus d'une vidéo : variants/<mediaId>/<sorte>-Qx7…Kp.<ext> (ci-dessous)
  */
 export function originalKey(extension: string, date = new Date()): string {
   const month = String(date.getUTCMonth() + 1).padStart(2, '0')
@@ -35,4 +36,14 @@ export function posterKey(mediaId: string): string {
 
 export function trackKey(mediaId: string): string {
   return `${variantPrefix(mediaId)}track-${randomBytes(12).toString('base64url')}.vtt`
+}
+
+/**
+ * Rendu d'une vidéo produit par ffmpeg (phase D3, § 34) : variants/<mediaId>/rendition-h264-Qx7…Kp.mp4.
+ * Hors des préfixes de version, comme l'affiche : un changement de version qui ne touche pas le fichier
+ * (affiche, point d'intérêt) le garde ; il n'est supprimé que si le fichier change (nouvel original, purge).
+ * `name` vient toujours du serveur (`RENDITION_NAMES`), jamais de la requête.
+ */
+export function renditionKey(mediaId: string, name: string, extension: string): string {
+  return `${variantPrefix(mediaId)}rendition-${name}-${randomBytes(12).toString('base64url')}.${extension}`
 }

@@ -4,17 +4,20 @@ import { createHash, createHmac, timingSafeEqual } from 'node:crypto'
  * Liens signés des médias (v2) : `?exp=<unix>&kid=<secret>[&scope=derived|admin]&sig=<HMAC-SHA256>`.
  *
  * La signature couvre `v2:<média>:<version>:<droit>:<échéance>`, où le droit est :
- *   - la cible exacte (sans `scope`) : `file` pour l'original, `preset:<nom>` pour un préréglage,
+ *   - la cible exacte (sans `scope`) : `file` pour l'original **et ses rendus** (phase D3 : même vidéo,
+ *     même public ; la signature ne dépend pas du chemin, un lien signé pour le fichier donne donc aussi
+ *     les URL de ses rendus à la même échéance), `preset:<nom>` pour un préréglage,
  *     `t:<transformation canonique>` pour des paramètres libres — jamais le format de sortie (une
  *     signature couvre les sources AVIF, WebP et JPEG d'un même <picture>) —, `track:<piste>` pour une
  *     piste de texte (phase D2) ;
- *   - ou un droit élargi (`scope`) : `derived` = tout dérivé de cette version, jamais l'original
- *     ni une piste (un seul lien pour construire un srcset) ; `admin` = tout fichier de cette version, même dans
- *     la corbeille (aperçus de l'administration, qui n'utilise plus de cookie sur /m/).
+ *   - ou un droit élargi (`scope`) : `derived` = tout dérivé de cette version, jamais l'original, ses
+ *     rendus ni une piste (un seul lien pour construire un srcset) ; `admin` = tout fichier de cette
+ *     version, même dans la corbeille (aperçus de l'administration, qui n'utilise plus de cookie sur /m/),
+ *     y compris pendant la retenue de la diffusion d'une vidéo en cours de nettoyage (503 pour les autres).
  *
  * Signature **permanente** (sans `exp`, échéance signée `perm`) : cible exacte d'un dérivé, jamais
- * l'original ni un droit élargi ; la diffusion ne l'accepte que pour un média public (politique
- * « signed » des transformations, phase C).
+ * l'original, ses rendus ni un droit élargi ; la diffusion ne l'accepte que pour un média public
+ * (politique « signed » des transformations, phase C).
  *
  * Vérification sans accès à la base. `kid` (empreinte courte du secret) désigne le secret utilisé :
  * pendant une rotation, NUXT_MEDIA_PREVIOUS_SIGNING_SECRET reste accepté. Invalidation : nouvelle
@@ -27,8 +30,8 @@ export const SIGNATURE_SCOPES = ['derived', 'admin'] as const
 export type SignatureScope = (typeof SIGNATURE_SCOPES)[number]
 
 /**
- * Fichier demandé à /m/ : `variant` = `original`, nom d'un préréglage, ou `t:<transformation
- * canonique>` (delivery-path.ts, `deliveryVariant`).
+ * Fichier demandé à /m/ : `variant` = `original` (l'original ou l'un de ses rendus), nom d'un
+ * préréglage, `t:<transformation canonique>` ou `track:<piste>` (delivery-path.ts, `deliveryVariant`).
  */
 export interface SignatureTarget {
   mediaId: string
@@ -58,7 +61,7 @@ export function keyId(secret: string): string {
   return createHash('sha256').update(`surge-media:kid:${secret}`).digest('base64url').slice(0, 8)
 }
 
-/** Droit exigé pour un fichier : `file` (original), `preset:<nom>`, `t:<transformation canonique>` ou `track:<piste>`. */
+/** Droit exigé pour un fichier : `file` (original et ses rendus), `preset:<nom>`, `t:<transformation canonique>` ou `track:<piste>`. */
 export function targetGrant(variant: string): string {
   if (variant === 'original') return 'file'
   return variant.startsWith('t:') || isTrackVariant(variant) ? variant : `preset:${variant}`
