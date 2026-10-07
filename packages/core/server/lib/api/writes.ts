@@ -65,7 +65,9 @@ export async function withApiUpload<T>(
     const rules = uploadRules(grant?.upload?.types, grant?.upload?.maxSize)
     const upload = await receiveUpload(event, expectedKind ? { ...rules, expectedKind } : rules)
     try {
-      const result = await task(upload, { acceptedTypes: grant?.upload?.types })
+      // Types déjà restreints aux types de l'installation : l'analyse refuse (415) avec la même liste
+      // que la réception, jamais un type du jeton que l'installation n'accepte pas.
+      const result = await task(upload, { acceptedTypes: rules.acceptedTypes })
       succeeded = true
       return result
     }
