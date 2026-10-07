@@ -1,18 +1,25 @@
 import type { H3Event } from 'h3'
+import { CONVERTED_MIME_TYPES } from '#shared/utils/media'
 import type { TokenScope } from '#shared/utils/permissions'
 import type { TransformGrant } from '#shared/utils/transforms'
-import type { Media } from '../../generated/prisma/client'
+import { videoMetadata } from '#shared/utils/video'
+import { deliveryHeld, type VideoProcessingMode } from '#shared/utils/video-processing'
+import type { Media, MediaRendition } from '../../generated/prisma/client'
 import { touchCredential } from '../access/credentials'
 import { browserGuard, principalLibraryScopes, principalProjectScopes, resolvePrincipal } from '../access/principal'
 import { getProjectState } from '../projects/state'
-import { deliveryVariant, type DeliveryTarget } from './delivery-path'
+import { deliveryVariant, derivedSegment, type DeliveryTarget } from './delivery-path'
 import { mediaError } from './errors'
+import { findRendition } from './renditions'
 import { verifyMediaSignature, type SignatureScope } from './signing'
+import { derivedPath, mediaPath, renditionPath, trackPath, type UrlSource } from './urls'
 
 /**
- * Diffusion des médias (/m/…) : contrôle d'accès (analyse des chemins : delivery-path.ts ; fichiers :
- * variants.ts). Le chemin physique n'est jamais exposé : l'URL ne contient que l'identifiant, la
- * version, la transformation et un nom indicatif.
+ * Diffusion des médias (/m/…) : contrôle d'accès et règles de la réponse (analyse des chemins :
+ * delivery-path.ts ; fichiers : variants.ts, tracks.ts, renditions.ts). Le chemin physique n'est jamais
+ * exposé : l'URL ne contient que l'identifiant, la version, la transformation et un nom indicatif.
+ * Les décisions pures (relecture du cache, redirection, retenue, disposition) sont testées dans
+ * tests/renditions-delivery.test.ts.
  */
 
 export { parseDeliveryPath, type DeliveryTarget } from './delivery-path'
@@ -121,8 +128,72 @@ export function cacheControl(access: DeliveryAccess, mutableMaxAge?: number): st
   }
 }
 
-/** En-tête Content-Disposition (affichage dans le navigateur, nom lisible si téléchargé). */
-export function contentDisposition(filename: string): string {
+/** Rendus connus d'un média (ligne du cache de diffusion). */
+interface KnownRenditions {
+  renditions: readonly Pick<MediaRendition, 'name' | 'container'>[]
+}
+
+/**
+ * Le média en cache doit-il être relu avant de répondre (cache.ts, `reloadDeliveryMedia`) ? Oui pour une
+ * version plus récente que la sienne : sans relecture, l'URL serait redirigée vers l'ancienne version,
+ * dont le fichier a pu être supprimé (réécriture sans perte par un processus de travail). Oui pour un
+ * rendu de sa version qu'il ne connaît pas : produit depuis, ailleurs (l'invalidation du cache est locale
+ * au processus qui écrit). Jamais pour une ancienne version : la redirection suffit.
+ */
+export function deliveryReloadNeeded(target: DeliveryTarget, media: { version: number } & KnownRenditions): boolean {
+  if (target.version > media.version) return true
+  return target.kind === 'rendition' && target.version === media.version && !findRendition(media, target.name)
+}
+
+/**
+ * Adresse courante d'une cible demandée sous une ancienne version (redirection 302) : le même fichier à
+ * la version du média. Un rendu absent de la version courante (fichier remplacé, rendu pas encore
+ * refait) renvoie vers l'original, toujours présent.
+ */
+export function currentTargetPath(media: UrlSource & KnownRenditions, target: DeliveryTarget): string {
+  switch (target.kind) {
+    case 'original': return mediaPath(media)
+    case 'track': return trackPath(media, target.trackId)
+    case 'rendition': return findRendition(media, target.name) ? renditionPath(media, target.name) : mediaPath(media)
+    default: return derivedPath(media, derivedSegment(target), target.format)
+  }
+}
+
+/**
+ * Diffusion retenue pour cette demande (§ 32.4, 503 PROCESSING_PENDING) ? Seulement l'original et ses
+ * rendus, qui contiennent encore la piste de métadonnées de l'appareil (positions GPS…) ; l'affiche, ses
+ * dérivés et les pistes de texte restent servis. Un lien « admin » passe : l'administration lit la vidéo
+ * pendant le traitement. Décidée d'après la ligne en cache : un cache en retard ne fait que prolonger la
+ * retenue (au plus 60 s) ; il ne la lève jamais trop tôt, car une version plus récente que la sienne est
+ * toujours relue avant d'être servie (`deliveryReloadNeeded`).
+ */
+export function holdApplies(
+  target: Pick<DeliveryTarget, 'kind'>,
+  media: Parameters<typeof deliveryHeld>[0],
+  access: DeliveryAccess,
+  mode: VideoProcessingMode,
+): boolean {
+  if (target.kind !== 'original' && target.kind !== 'rendition') return false
+  if (access.mode === 'signed' && access.scope === 'admin') return false
+  return deliveryHeld(media, mode)
+}
+
+/** `inline` : affiché par le navigateur ; `attachment` : proposé en téléchargement. */
+export type ContentDispositionType = 'inline' | 'attachment'
+
+/**
+ * Disposition de l'original. Une vidéo d'un format converti (MKV, AVI…, phase D3) n'est jamais lue par
+ * `<video>` ni par le navigateur : proposée en téléchargement plutôt qu'affichée en lecteur cassé (la
+ * lecture passe par son rendu H.264). Le type MIME suffit avant l'analyse par ffprobe ; `playback: none`
+ * couvre toute autre vidéo déclarée illisible par ses métadonnées.
+ */
+export function originalDisposition(media: { kind: string, mimeType: string, metadata: unknown }): ContentDispositionType {
+  if (media.kind !== 'VIDEO') return 'inline'
+  return CONVERTED_MIME_TYPES.includes(media.mimeType) || videoMetadata(media.metadata)?.playback === 'none' ? 'attachment' : 'inline'
+}
+
+/** En-tête Content-Disposition (affichage dans le navigateur ou téléchargement, nom lisible si téléchargé). */
+export function contentDisposition(filename: string, disposition: ContentDispositionType = 'inline'): string {
   const ascii = filename.normalize('NFD').replace(/[^\x20-\x7E]/g, '').replace(/["\\]/g, '_') || 'media'
-  return `inline; filename="${ascii}"; filename*=UTF-8''${encodeURIComponent(filename)}`
+  return `${disposition}; filename="${ascii}"; filename*=UTF-8''${encodeURIComponent(filename)}`
 }

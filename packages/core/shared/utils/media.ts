@@ -35,8 +35,29 @@ export const ACCEPTED_MEDIA_TYPES: Partial<Record<MediaKind, Readonly<Record<str
   },
 }
 
-/** Tous les types acceptés par l'installation. */
+/** Tous les types acceptés par l'installation (traitement des vidéos inactif). */
 export const ACCEPTED_MIME_TYPES: readonly string[] = Object.values(ACCEPTED_MEDIA_TYPES).flatMap(types => Object.keys(types ?? {}))
+
+/**
+ * Vidéos acceptées **seulement quand le traitement est actif** (phase D3, DD32) : type MIME → extension.
+ * L'original est conservé (téléchargement) ; la lecture passe par le rendu H.264. FLV, MPEG-PS,
+ * RealMedia restent refusés (rares, surface d'attaque inutile).
+ */
+export const CONVERTED_VIDEO_TYPES: Readonly<Record<string, string>> = {
+  'video/x-matroska': 'mkv',
+  'video/x-msvideo': 'avi',
+  'video/3gpp': '3gp',
+  'video/3gpp2': '3g2',
+  'video/mp2t': 'ts',
+  'video/ogg': 'ogv',
+  'video/x-ms-wmv': 'wmv',
+}
+export const CONVERTED_MIME_TYPES: readonly string[] = Object.keys(CONVERTED_VIDEO_TYPES)
+
+/** Types acceptés selon que le traitement des vidéos est actif ou non. */
+export function acceptedMimeTypes(videoProcessingActive: boolean): readonly string[] {
+  return videoProcessingActive ? [...ACCEPTED_MIME_TYPES, ...CONVERTED_MIME_TYPES] : ACCEPTED_MIME_TYPES
+}
 
 /**
  * Taille maximale stockable (octets) : `Media.size` est un entier 32 bits sous PostgreSQL et MySQL.
@@ -56,10 +77,12 @@ export type UploadSizes = Partial<Record<MediaKind, number>>
 export const ENABLED_MEDIA_KINDS = Object.keys(ACCEPTED_MEDIA_TYPES) as MediaKind[]
 
 export function mediaKindForMime(mimeType: string): MediaKind | undefined {
+  if (mimeType in CONVERTED_VIDEO_TYPES) return 'VIDEO'
   return ENABLED_MEDIA_KINDS.find(kind => mimeType in (ACCEPTED_MEDIA_TYPES[kind] ?? {}))
 }
 
 export function extensionForMime(mimeType: string): string | undefined {
+  if (mimeType in CONVERTED_VIDEO_TYPES) return CONVERTED_VIDEO_TYPES[mimeType]
   const kind = mediaKindForMime(mimeType)
   return kind ? ACCEPTED_MEDIA_TYPES[kind]?.[mimeType] : undefined
 }
@@ -91,5 +114,7 @@ export const MEDIA_ERROR_CODES = [
   'TRACK_NOT_FOUND', // piste de texte inconnue pour cette vidéo (404)
   'TRACK_LIMIT_REACHED', // nombre maximal de pistes de texte atteint pour cette vidéo (409)
   'INVALID_TEXT_TRACK', // fichier de sous-titres illisible (422, data.line, data.detail)
+  'PROCESSING_DISABLED', // traitement des vidéos inactif (aucun mode, ou aucun processus de travail vu) (409)
+  'PROCESSING_PENDING', // diffusion retenue tant qu'une piste de métadonnées n'est pas retirée (503, Retry-After)
 ] as const
 export type MediaErrorCode = (typeof MEDIA_ERROR_CODES)[number]

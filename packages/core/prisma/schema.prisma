@@ -415,6 +415,9 @@ model Media {
   posterSize        Int?
   /// Instant de la vidéo capturé (secondes), null pour une image envoyée
   posterTime        Float?
+  /// Traitement de la vidéo par ffmpeg (phase D3) : en attente, en cours, prête, en échec ; null = non
+  /// concerné (image, ou traitement inactif à l'envoi). Résumé de la dernière tâche (MediaJob), sans jointure
+  processingState   ProcessingState?
   uploadedById      String?
   /// Identifiant d'API ayant envoyé le média (API v1 ; émetteur pour un jeton délégué)
   uploadedByTokenId String?
@@ -436,6 +439,8 @@ model Media {
   duplicates      Media[]          @relation("MediaDuplicates")
   variants        MediaVariant[]
   textTracks      MediaTextTrack[]
+  jobs            MediaJob[]
+  renditions      MediaRendition[]
 
   @@index([projectId, deletedAt, createdAt])
   @@index([projectId, checksum])
@@ -499,4 +504,87 @@ model MediaTextTrack {
   media Media @relation(fields: [mediaId], references: [id], onDelete: Cascade)
 
   @@index([mediaId])
+}
+
+/// État de traitement d'une vidéo, résumé sur le média (phase D3)
+enum ProcessingState {
+  PENDING
+  PROCESSING
+  READY
+  FAILED
+}
+
+/// Statut d'une tâche de la file des traitements vidéo (phase D3)
+enum MediaJobStatus {
+  QUEUED
+  RUNNING
+  DONE
+  FAILED
+  CANCELLED
+}
+
+/// Tâche de la file persistante des traitements vidéo (phase D3, ffmpeg hors du chemin des requêtes) :
+/// prise atomique par un processus de travail, bail renouvelé, reprise après un arrêt, essais limités.
+model MediaJob {
+  id          String         @id @default(cuid())
+  mediaId     String
+  /// Clé du fichier original visé : un autre fichier (remplacement, « Optimiser ») rend la tâche caduque ;
+  /// un changement de version sans changement de fichier (affiche, point d'intérêt) ne la touche pas
+  sourceKey   String
+  status      MediaJobStatus @default(QUEUED)
+  /// 0 = envoi récent ; négatif = traitement des vidéos existantes (passe après)
+  priority    Int            @default(0)
+  attempts    Int            @default(0)
+  /// Reprise différée après un échec ou un arrêt
+  runAfter    DateTime       @default(now())
+  /// Processus qui exécute la tâche (hôte, pid, aléa ; 191 caractères au plus)
+  lockedBy    String?
+  /// Bail : une tâche dont le bail est échu revient dans la file
+  leaseUntil  DateTime?
+  /// Étape en cours (probe, sanitize, repair, transcode, av1, poster, verify)
+  step        String?
+  /// Avancement de l'étape (0–1), écrit au plus toutes les 5 s
+  progress    Float?
+  /// Étapes faites ou sautées, avertissements (JSON)
+  result      Json?
+  errorCode   String?
+  /// Résumé de l'erreur (191 caractères au plus, jamais de chemin du serveur)
+  errorDetail String?
+  createdAt   DateTime       @default(now())
+  updatedAt   DateTime       @updatedAt
+  startedAt   DateTime?
+  finishedAt  DateTime?
+
+  media Media @relation(fields: [mediaId], references: [id], onDelete: Cascade)
+
+  @@index([status, runAfter, priority])
+  @@index([mediaId])
+}
+
+/// Rendu d'une vidéo produit par réencodage (phase D3) : H.264/AAC compatible, AV1 facultatif. Stocké
+/// à côté de l'original (qui reste téléchargeable tel qu'envoyé) ; supprimé quand le fichier change.
+model MediaRendition {
+  id         String   @id @default(cuid())
+  mediaId    String
+  /// h264 | av1
+  name       String
+  /// mp4 | webm
+  container  String
+  mimeType   String
+  /// Chaîne RFC 6381 (avc1.640028,mp4a.40.2)
+  codecs     String
+  width      Int
+  height     Int
+  duration   Float
+  /// Débit moyen (bit/s)
+  bitrate    Int
+  size       Int
+  checksum   String
+  /// Clé du fichier (variants/<média>/rendition-<nom>-<aléa>.<ext>), indépendante de la version du média
+  storageKey String   @unique
+  createdAt  DateTime @default(now())
+
+  media Media @relation(fields: [mediaId], references: [id], onDelete: Cascade)
+
+  @@unique([mediaId, name])
 }
