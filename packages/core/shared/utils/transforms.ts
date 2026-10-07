@@ -77,9 +77,10 @@ export type BuiltinPreset = keyof typeof BUILTIN_PRESETS
 
 /**
  * Noms interdits aux préréglages globaux et de projet. `original` désigne le fichier d'origine dans les
- * signatures ; `tracks`, les pistes de texte des vidéos dans les chemins de diffusion.
+ * signatures ; `tracks`, les pistes de texte des vidéos dans les chemins de diffusion ; `renditions`, les
+ * rendus d'une vidéo produits par ffmpeg (phase D3).
  */
-export const RESERVED_PRESET_NAMES: readonly string[] = [...Object.keys(BUILTIN_PRESETS), 'original', 'tracks']
+export const RESERVED_PRESET_NAMES: readonly string[] = [...Object.keys(BUILTIN_PRESETS), 'original', 'tracks', 'renditions']
 
 export interface TransformRegion {
   x: number
