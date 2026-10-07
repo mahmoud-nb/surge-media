@@ -1,6 +1,7 @@
 import { findMedia, replaceMediaFile, toMediaDetail } from '../../../../lib/media/service'
 import { uploadRules } from '../../../../lib/media/limits'
 import { receiveUpload } from '../../../../lib/media/upload'
+import { videoProcessingActive } from '../../../../lib/video-processing/status'
 
 /**
  * PUT /api/admin/media/:id/file — multipart/form-data `file` : remplace le fichier en
@@ -10,7 +11,9 @@ import { receiveUpload } from '../../../../lib/media/upload'
  */
 export default defineEventHandler(async (event) => {
   const { media } = await requireMediaAccess(event, () => findMedia(getRouterParam(event, 'id') ?? ''), 'media:write')
-  const upload = await receiveUpload(event, { ...uploadRules(), expectedKind: media.kind })
+  // Types acceptés en ce moment : une vidéo peut être remplacée par un MKV… quand le traitement est actif.
+  const rules = uploadRules(undefined, undefined, acceptedMimeTypes(await videoProcessingActive()))
+  const upload = await receiveUpload(event, { ...rules, expectedKind: media.kind })
   try {
     return { media: toMediaDetail(await replaceMediaFile(media, upload)) }
   }

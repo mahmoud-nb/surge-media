@@ -1,5 +1,11 @@
-/** Rappels au démarrage sur le compte d'amorçage (voir authenticateBootstrapAdmin). */
+import { isWorkerRole } from '../lib/video-processing/settings'
+
+/**
+ * Rappels au démarrage sur le compte d'amorçage (voir authenticateBootstrapAdmin). Pas dans un processus
+ * de travail (phase D3) : il ne sert pas l'administration, le serveur web le signale déjà.
+ */
 export default defineNitroPlugin(async () => {
+  if (isWorkerRole()) return
   const { bootstrapAdmin } = useRuntimeConfig()
   const credentialsSet = Boolean(bootstrapAdmin.email || bootstrapAdmin.password)
 
