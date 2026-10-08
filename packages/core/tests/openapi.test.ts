@@ -155,6 +155,10 @@ describe('spécification OpenAPI générée depuis les routes', () => {
       for (const text of ['`sources`', '`processing`', '<source src=', '<track ', 'poster=', 'If-None-Match', 'MKV', 'attachment', '`PROCESSING_PENDING`', '`Retry-After`']) {
         expect(section, `${heading} : ${text}`).toContain(text)
       }
+      // Préparation à l'envoi, nettoyage et réparation réécrivent le fichier : jamais « tel qu'envoyé ».
+      for (const text of [section, document.components.schemas.MediaProcessing.properties.status.description as string]) {
+        expect(text).not.toMatch(/telles? qu'envoyée|as uploaded/)
+      }
     }
     // Erreurs de /m/ : la retenue d'une vidéo figure dans la liste.
     expect(fr.info.description).toMatch(/`SERVER_BUSY` \(503\), `PROCESSING_PENDING` \(503/)

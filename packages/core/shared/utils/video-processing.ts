@@ -18,7 +18,8 @@ export type ServerRole = (typeof SERVER_ROLES)[number]
 
 /**
  * Production du rendu compatible (NUXT_VIDEO_RENDITION) : `auto` = seulement s'il sert (codec à
- * compatibilité variable, format converti, définition ou débit trop élevés, HDR) ; `always` ; `never`.
+ * compatibilité variable, format converti, définition ou débit trop élevés, HDR) ; `always` ; `never`
+ * (sauf format converti, illisible sans rendu).
  */
 export const RENDITION_MODES = ['auto', 'always', 'never'] as const
 export type RenditionMode = (typeof RENDITION_MODES)[number]

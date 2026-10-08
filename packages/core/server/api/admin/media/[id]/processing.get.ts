@@ -1,5 +1,5 @@
+import { mediaProcessingDetail } from '../../../../lib/media/service'
 import { PROCESSING_INCLUDE } from '../../../../lib/media/sources'
-import { processingDetail } from '../../../../lib/video-processing/jobs'
 
 /**
  * GET /api/admin/media/:id/processing — avancement du traitement d'une vidéo (phase D3), interrogé toutes
@@ -16,5 +16,5 @@ export default defineEventHandler(async (event) => {
     select: { projectId: true, version: true, processingState: true, jobs: PROCESSING_INCLUDE.jobs },
   }), 'media:read')
   setResponseHeader(event, 'Cache-Control', 'no-store')
-  return { version: media.version, processingState: media.processingState, processing: processingDetail(media.jobs[0] ?? null) }
+  return { version: media.version, processingState: media.processingState, processing: mediaProcessingDetail(media) }
 })

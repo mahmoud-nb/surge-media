@@ -110,16 +110,17 @@ export function frameLuminance(channelMeans: readonly number[]): number {
 }
 
 /**
- * Le rendu sert-il (§ 32.2) ? `always` : oui ; `never` : non ; `auto` : compatibilité de lecture qui
- * n'est pas « large » (HEVC, AV1, ProRes…, ou format converti), petit côté > 1080 px, débit > 10 Mbit/s,
- * HDR, ou images entrelacées (les navigateurs les affichent sans les désentrelacer : « peignes »).
+ * Le rendu sert-il (§ 32.2) ? Format converti (MKV, AVI…) : toujours, quel que soit le mode — sans rendu,
+ * la vidéo, acceptée seulement pour être convertie, ne serait jamais lisible. Sinon `always` : oui ;
+ * `never` : non ; `auto` : compatibilité de lecture qui n'est pas « large » (HEVC, AV1, ProRes…),
+ * petit côté > 1080 px, débit > 10 Mbit/s, HDR, ou images entrelacées (les navigateurs les affichent sans
+ * les désentrelacer : « peignes »).
  */
 function renditionUseful(input: PlanInput, video: NonNullable<ProbeResult['video']>): boolean {
+  if (isConvertedContainer(input.container)) return true
   const mode = input.settings.rendition
   if (mode !== 'auto') return mode === 'always'
-  const playback = isConvertedContainer(input.container)
-    ? 'none'
-    : input.metadata?.playback ?? videoPlayback(input.container, video.codec, input.probe.audio?.codec ?? null)
+  const playback = input.metadata?.playback ?? videoPlayback(input.container, video.codec, input.probe.audio?.codec ?? null)
   const bitrate = input.probe.bitrate ?? input.metadata?.bitrate ?? null
   return playback !== 'broad'
     || Math.min(video.width, video.height) > RENDITION_MAX_SHORT_SIDE

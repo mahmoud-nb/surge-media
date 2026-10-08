@@ -218,6 +218,12 @@ describe('représentation des médias (administration)', () => {
     expect(unknown.processing?.errorCode).toBeNull()
   })
 
+  it('état null (fichier remplacé pendant que le traitement est inactif) : pas de traitement, même avec la tâche de l\'ancien fichier', () => {
+    const detail = toMediaDetail(detailRecord({ processingState: null }, { jobs: [job({ status: 'FAILED', errorCode: 'TIMEOUT', errorDetail: 'Délai dépassé (transcode).' })] }))
+    expect(detail.processingState).toBeNull()
+    expect(detail.processing).toBeNull()
+  })
+
   it('image : ni traitement, ni rendus, ni sources', () => {
     const detail = toMediaDetail(detailRecord({ kind: 'IMAGE', mimeType: 'image/jpeg', processingState: null, metadata: null, duration: null }))
     expect(detail.processing).toBeNull()

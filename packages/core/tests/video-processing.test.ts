@@ -768,6 +768,13 @@ describe('planVideoJob', () => {
     })
   })
 
+  it('mode never : un format converti reçoit quand même son rendu (sans lui, jamais lisible), AV1 compris s\'il est activé', () => {
+    const never = { rendition: 'never' as const, av1: false, maxDuration: 10_800 }
+    expect(plan({ container: 'mkv', metadata: null, settings: never })).toMatchObject({ failure: null, steps: ['transcode'], target: { width: 1920, height: 1080 } })
+    expect(plan({ container: 'avi', metadata: null, settings: { ...never, av1: true } }).steps).toEqual(['transcode', 'av1'])
+    expect(plan({ container: 'mkv', metadata: null, settings: never }, { duration: 20_000 })).toMatchObject({ failure: 'TOO_LONG', steps: [] })
+  })
+
   it('AV1 : demandé, possible et rendu utile', () => {
     const settings = { rendition: 'auto' as const, av1: true, maxDuration: 10_800 }
     expect(plan({ ...HEVC, settings }, {}, { codec: 'hvc1' }).steps).toEqual(['transcode', 'av1'])
@@ -785,7 +792,7 @@ describe('planVideoJob', () => {
     expect(plan({}, { dataStreams: ['gpmd'] }).steps).toEqual(['sanitize'])
     expect(plan({ metadata: metadataOf({ dataTracks: ['mebx'] }) }).steps).toEqual(['sanitize'])
     expect(plan({ container: 'mov', metadata: metadataOf({ container: 'mov' }) }, { dataStreams: ['camm'] }).steps).toEqual(['sanitize'])
-    expect(plan({ container: 'mkv', metadata: null, settings: { rendition: 'never', av1: false, maxDuration: 10_800 } }, { dataStreams: ['klv'] }).steps).toEqual([])
+    expect(plan({ container: 'mkv', metadata: null }, { dataStreams: ['klv'] }).steps).toEqual(['transcode'])
   })
 
   const webm = metadataOf({ container: 'webm', videoCodec: 'vp9', audioCodec: 'opus', playback: 'broad', faststart: null, prepared: null })

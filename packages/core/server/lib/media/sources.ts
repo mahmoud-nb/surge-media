@@ -1,6 +1,6 @@
 import { videoMetadata, videoSourceType } from '#shared/utils/video'
 import { isRenditionName, RENDITION_NAMES, type RenditionName } from '#shared/utils/video-processing'
-import type { Media, MediaJob, MediaRendition } from '../../generated/prisma/client'
+import type { Media, MediaJob, MediaRendition, Prisma } from '../../generated/prisma/client'
 
 /**
  * Sources d'une vidéo (contrat `sources[]`, phase D3, architecture § 35) : liste ordonnée par préférence,
@@ -39,15 +39,27 @@ export type SourceRendition = Pick<MediaRendition, 'name' | 'mimeType' | 'codecs
 export type SourceMedia = Pick<Media, 'kind' | 'mimeType' | 'metadata' | 'width' | 'height' | 'size'>
 
 /**
+ * « Dernière tâche » d'un média : la tâche active s'il y en a une (`finishedAt` null : en file, en cours,
+ * ou rendue à la file pour un nouvel essai), sinon la dernière terminée. Pas simplement la plus récente :
+ * deux rattrapages simultanés (jobs.ts, `catchUpJobs`) gardent la plus ancienne et annulent l'autre, qui
+ * masquerait alors l'avancement, l'erreur et les avertissements de la tâche qui tourne. Identifiant en
+ * dernier : ordre stable à la milliseconde près.
+ */
+const LATEST_JOB = {
+  orderBy: [{ finishedAt: { sort: 'desc', nulls: 'first' } }, { createdAt: 'desc' }, { id: 'desc' }],
+  take: 1,
+} satisfies Prisma.MediaJobFindManyArgs
+
+/**
  * Relations d'un média lues pour ses sources et son traitement (fiche de l'administration, API v1) : ses
  * rendus et sa dernière tâche. Jamais dans les listes de l'administration (requêtes légères).
  */
 export const PROCESSING_INCLUDE = {
   renditions: true,
-  jobs: { orderBy: { createdAt: 'desc' }, take: 1 },
+  jobs: LATEST_JOB,
 } as const
 
-/** Média lu avec `PROCESSING_INCLUDE`. `jobs` : la dernière tâche seulement (0 ou 1 élément). */
+/** Média lu avec `PROCESSING_INCLUDE`. `jobs` : la dernière tâche seulement (0 ou 1 élément, voir LATEST_JOB). */
 export interface ProcessingRelations {
   renditions: MediaRendition[]
   jobs: MediaJob[]

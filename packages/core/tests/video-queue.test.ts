@@ -44,6 +44,7 @@ import {
   superviseJobRunner,
   type SupervisorState,
 } from '../server/lib/video-processing/runner'
+import { PROCESSING_INCLUDE } from '../server/lib/media/sources'
 import { servedByWorker } from '../server/lib/video-processing/status'
 import { parseWorkerId, WORKER_ID_MAX, workerIdentity } from '../server/lib/video-processing/worker-id'
 
@@ -75,6 +76,7 @@ vi.mock('../server/lib/access/delegated', () => ({ reserveDelegatedUpload: vi.fn
 
 type Row = Record<string, unknown>
 type Where = Record<string, unknown>
+type Order = 'asc' | 'desc' | { sort: 'asc' | 'desc', nulls?: 'first' | 'last' }
 
 function same(a: unknown, b: unknown): boolean {
   if (a instanceof Date && b instanceof Date) return a.getTime() === b.getTime()
@@ -127,12 +129,17 @@ class MemoryStore implements JobStore {
     })
   }
 
-  private sorted<T>(rows: T[], orderBy: Record<string, 'asc' | 'desc'>[] = []): T[] {
+  private sorted<T>(rows: T[], orderBy: Record<string, Order>[] = []): T[] {
     return [...rows].sort((a, b) => {
       for (const order of orderBy) {
-        const [key, direction] = Object.entries(order)[0]!
-        const result = compare((a as Row)[key], (b as Row)[key])
-        if (result !== 0) return direction === 'asc' ? result : -result
+        const [key, spec] = Object.entries(order)[0]!
+        const { sort, nulls } = typeof spec === 'string' ? { sort: spec, nulls: undefined } : spec
+        const x = (a as Row)[key]
+        const y = (b as Row)[key]
+        // `nulls` explicite (SortOrderInput de Prisma) : valeurs nulles en tête ou en fin, quel que soit le sens.
+        if (nulls && (x === null) !== (y === null)) return (x === null) === (nulls === 'first') ? -1 : 1
+        const result = compare(x, y)
+        if (result !== 0) return sort === 'asc' ? result : -result
       }
       return 0
     })
@@ -152,7 +159,7 @@ class MemoryStore implements JobStore {
   }
 
   mediaJob: JobTx['mediaJob'] = {
-    findMany: async ({ where, orderBy, take }) => this.sorted(this.jobs.filter(job => this.matches('job', job as unknown as Row, where as Where)), orderBy as Record<string, 'asc' | 'desc'>[])
+    findMany: async ({ where, orderBy, take }) => this.sorted(this.jobs.filter(job => this.matches('job', job as unknown as Row, where as Where)), orderBy as Record<string, Order>[])
       .slice(0, take ?? Infinity).map(job => ({ ...job })),
     create: async ({ data }) => {
       const now = this.clock()
@@ -173,7 +180,7 @@ class MemoryStore implements JobStore {
   }
 
   media: JobTx['media'] = {
-    findMany: async ({ where, orderBy, take }) => this.sorted(this.medias.filter(media => this.matches('media', media as unknown as Row, where as Where)), orderBy as Record<string, 'asc' | 'desc'>[])
+    findMany: async ({ where, orderBy, take }) => this.sorted(this.medias.filter(media => this.matches('media', media as unknown as Row, where as Where)), orderBy as Record<string, Order>[])
       .slice(0, take ?? Infinity).map(media => ({ ...media })),
     updateMany: async ({ where, data }) => {
       const rows = this.medias.filter(media => this.matches('media', media as unknown as Row, where as Where))
@@ -553,6 +560,25 @@ describe('file des vidéos : baux échus et rattrapage', () => {
     await Promise.all([catchUpJobs(store, now, writeState), catchUpJobs(store, now, writeState)])
     const active = store.jobs.filter(job => job.mediaId === orphan.id && ['QUEUED', 'RUNNING'].includes(job.status))
     expect(active).toHaveLength(1)
+  })
+
+  it('rattrapage en double : la « dernière tâche » lue par l\'API (PROCESSING_INCLUDE) est celle qui tourne, jamais le doublon annulé', async () => {
+    // Horloge qui avance à chaque lecture : le doublon est créé après la tâche gardée (la plus ancienne).
+    let tick = 0
+    store = new MemoryStore(() => at(++tick))
+    const orphan = store.addMedia()
+    await Promise.all([catchUpJobs(store, now, writeState), catchUpJobs(store, now, writeState)])
+    const [kept, duplicate] = [...store.jobs].sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime())
+    expect(duplicate).toMatchObject({ status: 'CANCELLED' })
+    const latest = async () => (await store.mediaJob.findMany({ where: { mediaId: orphan.id }, ...PROCESSING_INCLUDE.jobs }))[0]
+    expect(await latest()).toMatchObject({ id: kept!.id, status: 'QUEUED' })
+
+    now = at(60_000)
+    const lease = (await claimNextJob(store, 'worker-a', now, writeState))!
+    expect(lease.id).toBe(kept!.id)
+    expect(await latest()).toMatchObject({ id: kept!.id, status: 'RUNNING' })
+    await completeJob(store, lease, at(120_000), emptyJobResult(), writeState)
+    expect(await latest()).toMatchObject({ id: kept!.id, status: 'DONE' })
   })
 })
 

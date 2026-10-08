@@ -953,7 +953,8 @@ nouvelle version).
 - **Produit seulement s'il sert** (`NUXT_VIDEO_RENDITION=auto`, défaut) : compatibilité `variable` (HEVC, AV1, ProRes…),
   format converti (§ 33), petit côté > 1080 px (4K des téléphones), débit moyen > 10 Mbit/s, ou HDR. Une vidéo H.264
   1080p raisonnable n'en reçoit pas : l'original reste la source unique (aucun calcul, aucun stockage en plus).
-  `always` : toujours ; `never` : jamais (affiche, réparation et nettoyage seulement).
+  `always` : toujours ; `never` : jamais (affiche, réparation et nettoyage seulement), sauf pour un format converti
+  (§ 33 : sans rendu, il ne serait jamais lisible).
 - **Réglages du rendu** : MP4 `faststart`, H.264 High, `yuv420p`, CRF 23 (`NUXT_VIDEO_CRF`), préréglage `veryfast`
   (`NUXT_VIDEO_PRESET` ; `medium` coûte 1,7 × plus, § 29.2), petit côté ≤ 1080 px sans agrandissement, cadence
   d'origine plafonnée à 60 i/s, image clé toutes les 2 s (déplacement rapide dans la lecture, futur HLS), rotation
@@ -1226,6 +1227,7 @@ concurrent, processus arrêté qui se disait actif, nettoyage des dossiers tempo
   touche ni les tâches ni les rendus ; remplacer un rendu existant (relance) change la version.
 - `TOO_LONG` n'empêche que les réencodages : retrait des pistes GPS, réparation et affiche sont faits, puis échec.
 - Mode `auto` : une source **entrelacée** reçoit aussi un rendu (les navigateurs ne désentrelacent pas).
+- Mode `never` : un **format converti** reçoit quand même son rendu (accepté pour être converti, illisible sans).
 - Fils de ffmpeg plafonnés à 16 (mémoire sous `prlimit`), `MALLOC_ARENA_MAX=2`.
 - Réparation WebM seulement pour VP8/VP9/AV1 + Opus/Vorbis (sinon le rendu H.264 suffit).
 - Vidéo dont la diffusion est retenue : priorité 10 dans la file ; ses liens d'administration sont signés « admin ».
