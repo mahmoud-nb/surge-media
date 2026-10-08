@@ -48,8 +48,8 @@ const generations = createTokenBucketLimiter()
  * (?exp=&kid=&sig=) ou identifiant d'API (`Authorization: Bearer`), jamais par cookie. Le chemin
  * physique n'est jamais exposé ; le type MIME vient de la base (nosniff). Requêtes partielles
  * (`Range`, une plage) : 206 / 416. Métadonnées lues via le cache de diffusion (60 s), relues pour une
- * version plus récente ou un rendu inconnu du cache. Flux du stockage fermé si le client interrompt la
- * réponse (`closeWithResponse`).
+ * version plus récente, un rendu ou une affiche de vidéo inconnus du cache. Flux du stockage fermé si le
+ * client interrompt la réponse (`closeWithResponse`).
  *
  * Ancienne version : 302 vers l'URL courante (un rendu : vers le rendu de la version courante s'il
  * existe, sinon vers l'original). Rendu absent : 404. Original et rendus d'une vidéo dont la piste de
@@ -87,8 +87,8 @@ export default defineEventHandler(async (event) => {
   const target = parsed.target
 
   let media = await findDeliveryMedia(target.id)
-  // Version plus récente que le cache, ou rendu qu'il ne connaît pas : écrits depuis par un processus de
-  // travail ou une autre instance (invalidation locale) ; relus avant de décider.
+  // Version plus récente que le cache, rendu ou affiche de vidéo qu'il ne connaît pas : écrits depuis par
+  // un processus de travail ou une autre instance (invalidation locale) ; relus avant de décider.
   if (media && deliveryReloadNeeded(target, media)) media = await reloadDeliveryMedia(target.id)
   if (!media) throw createError({ statusCode: 404, statusMessage: 'Not Found' })
 

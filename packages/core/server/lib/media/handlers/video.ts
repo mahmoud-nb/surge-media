@@ -1,6 +1,6 @@
 import { mediaError } from '../errors'
 import { parseVideoPreparation, type PreparationOptions, preparedStream, prepareVideo } from '../video/prepare'
-import { probeVideoFile, VideoProbeError } from '../video/probe'
+import { convertedContainerFor, convertedVideoMetadata, probeVideoFile, VideoProbeError } from '../video/probe'
 import { withFileSource } from '../video/source'
 import type { MediaTypeHandler } from './types'
 
@@ -10,6 +10,12 @@ import type { MediaTypeHandler } from './types'
  * refuser (503) un envoi de plusieurs minutes. Phase D2 : les MP4/MOV sont **préparés** avant d'être
  * stockés (index en tête, métadonnées d'origine retirées : video/prepare.ts), sans réencodage et sans
  * passage de plus sur le fichier ; au moindre doute, le fichier est gardé tel qu'envoyé.
+ *
+ * Phase D3 : les conteneurs convertis (MKV, AVI…), acceptés seulement quand le traitement est actif, ne
+ * sont ni lus ni préparés ici : stockés tels qu'envoyés, ils sont analysés par ffprobe dans la tâche de
+ * traitement (dimensions, durée, codecs inconnus jusque-là). Un fichier sans vidéo ou illisible y échoue
+ * avec un code affiché dans la fiche : le refus ne peut plus être immédiat (ffprobe ne tourne jamais
+ * dans une requête).
  */
 
 let preparation: PreparationOptions | undefined
@@ -28,6 +34,8 @@ export const videoHandler: MediaTypeHandler = {
   queued: false,
 
   async inspect(path, mimeType) {
+    const converted = convertedContainerFor(mimeType)
+    if (converted) return { width: null, height: null, duration: null, metadata: { ...convertedVideoMetadata(converted) } }
     try {
       const probe = await probeVideoFile(path, mimeType)
       return { width: probe.width, height: probe.height, duration: probe.duration, metadata: { ...probe.metadata } }
@@ -41,6 +49,8 @@ export const videoHandler: MediaTypeHandler = {
   },
 
   async prepare(path, mimeType, inspected) {
+    // Conteneur converti : jamais servi à `<video>`, rien à préparer (`prepared: []` dès l'analyse).
+    if (convertedContainerFor(mimeType)) return { inspected, file: null }
     const options = useVideoPreparation()
     // Préparation désactivée : `prepared` reste null (fichier jamais examiné).
     if (!options.faststart && !options.metadata) return { inspected, file: null }

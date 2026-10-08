@@ -21,7 +21,7 @@ async function createStorage(config: MediaStorageConfig): Promise<MediaStorage> 
       const location = resolve(config.root)
       await mkdir(location, { recursive: true })
       return createFlydriveStorage('local', new Disk(new FSDriver({ location, visibility: 'private' })), config.prefix,
-        async (key, { start, end }) => createReadStream(join(location, key), { start, end }))
+        async (key, { start, end }) => createReadStream(join(location, key), { start, end }), location)
     }
     case 's3': {
       const { bucket, region, endpoint, accessKeyId, secretAccessKey, forcePathStyle } = config.s3

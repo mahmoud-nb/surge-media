@@ -1,3 +1,4 @@
+import { join } from 'node:path'
 import type { Readable } from 'node:stream'
 import type { Disk } from 'flydrive'
 import type { ByteRange, MediaStorage } from './types'
@@ -16,11 +17,21 @@ function isNotFound(error: unknown): boolean {
  * les flux, les métadonnées et la normalisation des clés (protection contre la traversée
  * de chemin) ; cet adaptateur ajoute le préfixe éventuel et une gestion homogène des absences.
  */
-export function createFlydriveStorage(driver: string, disk: Disk, prefix = '', readRange?: RangeReader): MediaStorage {
+export function createFlydriveStorage(driver: string, disk: Disk, prefix = '', readRange?: RangeReader, localRoot?: string): MediaStorage {
   const full = (key: string) => `${prefix}${key}`
 
   return {
     driver,
+
+    ...(localRoot
+      ? {
+          localPath(key: string) {
+            // Clés générées par le serveur ; refus de toute remontée de dossier par sécurité.
+            if (full(key).split('/').includes('..')) throw new Error('Invalid storage key')
+            return join(localRoot, ...full(key).split('/'))
+          },
+        }
+      : {}),
 
     async put(key, body: Readable, info) {
       await disk.putStream(full(key), body, { contentType: info.contentType, contentLength: info.size })

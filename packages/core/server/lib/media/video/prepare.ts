@@ -514,6 +514,8 @@ async function verify(source: ByteSource, output: ByteSource, mimeType: string, 
   for (const key of ['container', 'videoCodec', 'audioCodec', 'codecs', 'hasAudio', 'rotation', 'playback'] as const) {
     if (expected.metadata[key] !== probe.metadata[key]) return { problem: `${key} differs after preparation` }
   }
+  // `dataTracks` : mêmes pistes (`sameTracks`), donc même liste. La préparation ne retire jamais une piste,
+  // pas même une piste de données de l'appareil (GPS) : elle reste signalée, retirée par le traitement (D3).
   if (options.faststart && !probe.metadata.faststart) return { problem: 'index still after the media data' }
   if (options.metadata && probe.metadata.hasLocation) return { problem: 'location still present' }
   for (const index of sampleIndices(prepared.chunks.length)) {

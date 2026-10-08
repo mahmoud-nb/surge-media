@@ -131,6 +131,10 @@ export async function receiveUpload(event: H3Event, rules: UploadRules): Promise
   if (!headers['content-type']?.toLowerCase().startsWith('multipart/form-data')) {
     throw mediaError(400, 'MULTIPART_REQUIRED')
   }
+  // Aucun type admis (jeton délégué limité à des types que l'installation n'accepte pas en ce moment :
+  // MKV sans traitement des vidéos actif) : tout fichier serait refusé, 415 d'emblée. Sans ce cas, la
+  // plus grande limite vaudrait 0 et le même refus deviendrait un 413 FILE_TOO_LARGE « 0 octet ».
+  if (rules.acceptedTypes.length === 0) throw mediaError(415, 'UNSUPPORTED_TYPE', { accepted: [] })
   // Refus immédiat si la taille annoncée dépasse nettement la plus grande limite admise (type encore inconnu).
   const largest = largestSize(rules)
   const declared = Number(headers['content-length'])
