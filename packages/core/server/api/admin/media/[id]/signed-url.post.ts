@@ -2,14 +2,16 @@ import { signedUrlSchema } from '#shared/schemas/media'
 import { mediaError } from '../../../../lib/media/errors'
 import { findMedia } from '../../../../lib/media/service'
 import { signMediaAccess } from '../../../../lib/media/signing'
-import { mediaBaseUrl, mediaPath, posterPath, signedMediaPath, trackPath } from '../../../../lib/media/urls'
+import { videoSources } from '../../../../lib/media/sources'
+import { mediaBaseUrl, mediaPath, posterPath, renditionPath, signedMediaPath, trackPath } from '../../../../lib/media/urls'
 
 /**
  * POST /api/admin/media/:id/signed-url — { expiresIn: secondes (60 à 7 jours) } → lien
  * temporaire absolu vers un média privé, utilisable directement (balise <img>, partage).
  * Pour un média public, renvoie son URL permanente (expiresAt: null). Vidéo : aussi l'affiche
- * (`posterUrl`) et les pistes de texte (`tracks`), signées jusqu'à la même échéance (extrait <video>
- * complet). 409 IN_TRASH.
+ * (`posterUrl`), les pistes de texte (`tracks`) et les sources du lecteur (`sources`, phase D3 : rendus
+ * puis original, server/lib/media/sources.ts), signées jusqu'à la même échéance (extrait <video>
+ * complet) ; le droit `file` de l'original couvre ses rendus. 409 IN_TRASH.
  */
 export default defineEventHandler(async (event) => {
   const { media } = await requireMediaAccess(event, () => findMedia(getRouterParam(event, 'id') ?? ''), 'media:read')
@@ -27,5 +29,6 @@ export default defineEventHandler(async (event) => {
     expiresAt,
     posterUrl: media.posterKey ? link(posterPath(media), 'full') : null,
     tracks: media.textTracks.map(track => ({ id: track.id, url: link(trackPath(media, track.id), `track:${track.id}`) })),
+    sources: videoSources(media, media.renditions, name => link(name ? renditionPath(media, name) : mediaPath(media), 'original')),
   }
 })

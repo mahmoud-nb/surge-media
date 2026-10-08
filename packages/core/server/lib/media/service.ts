@@ -7,7 +7,7 @@ import { ACCEPTED_MEDIA_TYPES, acceptedMimeTypes, CONVERTED_MIME_TYPES, extensio
 import { mediaSearchColumns, normalizeSearchText } from '#shared/utils/search'
 import { sameFocalPoint } from '#shared/utils/transforms'
 import { isConvertedContainer, type VideoHdrTransfer, type VideoMetadata, videoMetadata, type VideoRewrite, VIDEO_REWRITES } from '#shared/utils/video'
-import { BACKFILL_PRIORITY, type ProcessingStateValue, RENDITION_FORMATS, type RenditionName } from '#shared/utils/video-processing'
+import { BACKFILL_PRIORITY, type ProcessingStateValue, RENDITION_FORMATS, RENDITION_NAMES, type RenditionName } from '#shared/utils/video-processing'
 import type { AccessToken, Media, MediaRendition, MediaTextTrack, Prisma } from '../../generated/prisma/client'
 import type { Space } from '../../utils/access'
 import { folderWhere, requireFolderInSpace } from '../folders/service'
@@ -28,6 +28,7 @@ import {
   jobPriority,
   type JobResult,
   type MediaStateWrite,
+  processingDetail,
   reapExpiredLeases,
   type ReapedJob,
   releaseJob,
@@ -44,9 +45,10 @@ import type { PreparedMedia } from './handlers/types'
 import { originalKey, posterKey, renditionKey, variantPrefix } from './keys'
 import { sniffMimeType } from './sniff'
 import { runProcessing } from './processing'
+import { PROCESSING_INCLUDE, type ProcessingRelations, videoSources } from './sources'
 import { type ReceivedUpload, temporaryCopy } from './upload'
 import { copyTextTracks, TEXT_TRACK_ORDER } from './tracks'
-import { adminMediaPaths } from './urls'
+import { adminMediaPaths, type AdminMediaPaths } from './urls'
 import type { VideoProbe } from './video/probe'
 import { hasDerivedFiles, mediaFocalPoint, pregenerateVariants } from './variants'
 
@@ -77,14 +79,27 @@ import { hasDerivedFiles, mediaFocalPoint, pregenerateVariants } from './variant
  * jeté.
  */
 
-const MEDIA_INCLUDE = {
+/** Relations lues pour les listes de l'administration : auteur de l'envoi seulement (requête légère). */
+const MEDIA_LIST_INCLUDE = {
   uploadedBy: { select: { id: true, name: true, email: true } },
   uploadedByToken: { select: { id: true, name: true, type: true, prefix: true } },
-  textTracks: TEXT_TRACK_ORDER,
 } as const
-type MediaWithUploader = Media & {
+/**
+ * Relations d'un média complet (fiche, réponse de chaque écriture) : en plus, ses pistes de texte, ses
+ * rendus et sa dernière tâche (phase D3) — jamais dans les listes, une jointure par média affiché.
+ */
+const MEDIA_INCLUDE = {
+  ...MEDIA_LIST_INCLUDE,
+  textTracks: TEXT_TRACK_ORDER,
+  ...PROCESSING_INCLUDE,
+} as const
+/** Média d'une liste de l'administration (`listMedia`). */
+export type MediaListRecord = Media & {
   uploadedBy: { id: string, name: string | null, email: string } | null
   uploadedByToken: { id: string, name: string, type: AccessToken['type'], prefix: string } | null
+}
+/** Média complet (`MEDIA_INCLUDE`). */
+export type MediaWithUploader = MediaListRecord & ProcessingRelations & {
   /** Pistes de texte d'une vidéo (phase D2), dans leur ordre d'ajout. */
   textTracks: MediaTextTrack[]
 }
@@ -115,8 +130,12 @@ function provenanceData(provenance: MediaProvenance) {
 // ─── Représentation API ──────────────────────────────────────────────────────
 
 /** Représentation pour l'administration (chemins relatifs, signés si privé ou en corbeille). */
-export function toMediaSummary(media: MediaWithUploader) {
-  const paths = adminMediaPaths(media, hasDerivedFiles(media))
+export function toMediaSummary(media: MediaListRecord) {
+  return summaryFields(media, adminMediaPaths(media, hasDerivedFiles(media)))
+}
+
+/** Champs de la représentation résumée, chemins déjà calculés (une seule signature par réponse). */
+function summaryFields(media: MediaListRecord, paths: AdminMediaPaths) {
   return {
     id: media.id,
     projectId: media.projectId,
@@ -133,9 +152,11 @@ export function toMediaSummary(media: MediaWithUploader) {
     height: media.height,
     duration: media.duration,
     version: media.version,
+    /** État du traitement d'une vidéo (phase D3) : PENDING, PROCESSING, READY, FAILED ; null = non concerné. */
+    processingState: media.processingState,
     /** Point d'intérêt (fractions 0 à 1 de l'image orientée), null = centre. */
     focalPoint: mediaFocalPoint(media),
-    /** Chemins de diffusion ; signés (droit « admin ») pour un média privé ou dans la corbeille. */
+    /** Chemins de diffusion ; signés (droit « admin ») pour un média privé, dans la corbeille ou retenu (urls.ts). */
     url: paths.url,
     previewUrl: paths.previewUrl,
     /** Image d'affiche d'une vidéo (source de l'aperçu et des dérivés) ; `url` : image entière en JPEG. */
@@ -152,10 +173,18 @@ export function toMediaSummary(media: MediaWithUploader) {
   }
 }
 
+/**
+ * Représentation complète (fiche). Vidéo (phase D3) : `processing` = dernière tâche (détail de l'erreur
+ * déjà assaini, jamais de chemin) ; `renditions` dans l'ordre de `sources` (noms inconnus ignorés) ;
+ * `sources` = liste prête pour `<video><source>` (server/lib/media/sources.ts). Leurs liens sont signés
+ * comme l'original (« admin » si privé, en corbeille ou retenu).
+ */
 export function toMediaDetail(media: MediaWithUploader) {
-  const { trackUrls } = adminMediaPaths(media, false, media.textTracks.map(track => track.id))
+  const renditions = RENDITION_NAMES.flatMap(name => media.renditions.filter(rendition => rendition.name === name).map(rendition => ({ ...rendition, name })))
+  const paths = adminMediaPaths(media, hasDerivedFiles(media), media.textTracks.map(track => track.id), renditions.map(rendition => rendition.name))
+  const renditionUrl = (name: RenditionName) => paths.renditions[name]!
   return {
-    ...toMediaSummary(media),
+    ...summaryFields(media, paths),
     checksum: media.checksum,
     metadata: media.metadata,
     duplicatedFromId: media.duplicatedFromId,
@@ -169,9 +198,26 @@ export function toMediaDetail(media: MediaWithUploader) {
       size: track.size,
       cueCount: track.cueCount,
       sourceFormat: track.sourceFormat,
-      url: trackUrls[index]!,
+      url: paths.trackUrls[index]!,
       createdAt: track.createdAt,
     })),
+    /** Dernière tâche de traitement d'une vidéo (phase D3), null : jamais traitée (ou image). */
+    processing: processingDetail(media.jobs[0] ?? null),
+    /** Rendus produits par ffmpeg (AV1 puis H.264). */
+    renditions: renditions.map(rendition => ({
+      name: rendition.name,
+      container: rendition.container,
+      mimeType: rendition.mimeType,
+      codecs: rendition.codecs,
+      width: rendition.width,
+      height: rendition.height,
+      duration: rendition.duration,
+      bitrate: rendition.bitrate,
+      size: rendition.size,
+      url: renditionUrl(rendition.name),
+    })),
+    /** Sources du lecteur, par ordre de préférence ; [] : image, ou format converti sans rendu (pas encore lisible). */
+    sources: videoSources(media, renditions, name => name ? renditionUrl(name) : paths.url),
   }
 }
 
@@ -225,7 +271,7 @@ export async function listMedia(space: Space, query: MediaListQuery) {
     prisma.media.count({ where }),
     prisma.media.findMany({
       where,
-      include: MEDIA_INCLUDE,
+      include: MEDIA_LIST_INCLUDE,
       orderBy: SORTS[query.sort],
       skip: (query.page - 1) * MEDIA_PAGE_SIZE,
       take: MEDIA_PAGE_SIZE,

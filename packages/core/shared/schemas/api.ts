@@ -18,11 +18,12 @@ import {
 } from '../utils/api'
 import { ORIGIN_MAX_LENGTH } from '../utils/credentials'
 import { FOLDER_NAME_MAX_LENGTH } from '../utils/folders'
-import { ACCEPTED_MEDIA_TYPES, ENABLED_MEDIA_KINDS, MEDIA_VISIBILITIES, SIGNED_URL_MAX_TTL } from '../utils/media'
+import { acceptedMimeTypes, CONVERTED_MIME_TYPES, ENABLED_MEDIA_KINDS, MEDIA_VISIBILITIES, SIGNED_URL_MAX_TTL } from '../utils/media'
 import { isWildcardOrigin, normalizeOrigin } from '../utils/origins'
 import { TOKEN_SCOPES } from '../utils/permissions'
 import { TEXT_TRACK_LABEL_MAX_LENGTH } from '../utils/text-tracks'
 import { PRESET_NAME_PATTERN, TRANSFORM_FORMATS, TRANSFORM_SEGMENT_MAX_LENGTH } from '../utils/transforms'
+import { API_PROCESSING_STATUSES, RENDITION_NAMES, VIDEO_JOB_ERROR_CODES } from '../utils/video-processing'
 import { isValidFolderName } from './folders'
 import { focalPointSchema } from './media'
 
@@ -194,8 +195,13 @@ export const apiDuplicateBodySchema = z.strictObject({
   folderId: z.string().regex(ID_PATTERN).nullable().optional().meta(doc('Dossier de l\'espace cible (par défaut : hors dossier).', 'Folder in the target space (default: no folder).')),
 })
 
-/** Types de fichiers acceptés par l'installation (détectés d'après le contenu). */
-const ACCEPTED_TYPES = Object.values(ACCEPTED_MEDIA_TYPES).flatMap(types => Object.keys(types ?? {})) as [string, ...string[]]
+/**
+ * Types de fichiers que l'installation peut accepter (détectés d'après le contenu), formats vidéo convertis
+ * compris (MKV, AVI…, phase D3) : un jeton peut les citer, ils ne sont reçus que pendant que le traitement
+ * des vidéos est actif (server/lib/api/writes.ts, intersection avec les types du moment).
+ */
+const ACCEPTED_TYPES = acceptedMimeTypes(true) as [string, ...string[]]
+const CONVERTED_TYPES_LIST = CONVERTED_MIME_TYPES.map(type => `\`${type}\``).join(', ')
 
 /** Contraintes d'envoi d'un jeton délégué (champ `upload`). */
 export const apiUploadConstraintsSchema = z.strictObject({
@@ -203,8 +209,10 @@ export const apiUploadConstraintsSchema = z.strictObject({
     .meta(doc('Nombre de fichiers que le jeton peut envoyer (nouveaux médias et remplacements).', 'Number of files the token can upload (new media and replacements).')),
   maxSize: z.number().int().min(1).max(2_147_483_647).optional()
     .meta(doc('Taille maximale d\'un fichier, en octets (bornée par la limite de l\'installation).', 'Maximum file size in bytes (capped by the installation limit).')),
-  types: z.array(z.enum(ACCEPTED_TYPES)).min(1).max(DELEGATED_MAX_TYPES).optional()
-    .meta(doc('Types MIME acceptés, détectés d\'après le contenu du fichier.', 'Accepted MIME types, detected from the file contents.')),
+  types: z.array(z.enum(ACCEPTED_TYPES)).min(1).max(DELEGATED_MAX_TYPES).optional().meta(doc(
+    `Types MIME acceptés, détectés d'après le contenu du fichier. Les formats vidéo convertis (${CONVERTED_TYPES_LIST}) ne sont reçus que pendant que le traitement des vidéos est actif sur le serveur : sinon ils sont refusés (\`UNSUPPORTED_TYPE\`) comme tout type que l'installation n'accepte pas, et un jeton qui ne cite qu'eux ne peut rien envoyer.`,
+    `Accepted MIME types, detected from the file contents. Converted video formats (${CONVERTED_TYPES_LIST}) are received only while video processing is active on the server: otherwise they are rejected (\`UNSUPPORTED_TYPE\`) like any type the installation does not accept, and a token that lists only them cannot upload anything.`,
+  )),
   visibility: z.enum(API_VISIBILITIES).optional().meta(doc('Visibilité imposée aux médias envoyés.', 'Visibility enforced on uploaded media.')),
   folderId: z.string().regex(ID_PATTERN).optional().meta(doc('Dossier du projet imposé aux médias envoyés.', 'Project folder enforced on uploaded media.')),
 })
@@ -337,6 +345,51 @@ export const apiPosterSchema = z.object({
   time: z.number().nullable().meta(doc('Instant de la vidéo capturé, en secondes ; null pour une image envoyée.', 'Captured moment of the video, in seconds; null for an uploaded image.')),
 })
 
+/**
+ * Source de lecture d'une vidéo (phase D3) : élément `<source src type>`, rendu produit par le serveur ou
+ * fichier original (server/lib/media/sources.ts).
+ */
+export const apiMediaSourceSchema = z.object({
+  url: z.url().meta(doc(
+    'URL absolue du fichier ; pour un média privé, signée comme l\'URL de l\'original qu\'elle accompagne (même signature, même échéance).',
+    'Absolute URL of the file; for a private media item, signed like the URL of the original it comes with (same signature, same expiry).',
+  )),
+  type: z.string().meta(doc(
+    'Type MIME avec ses codecs (RFC 6381 : `video/mp4; codecs="avc1.640028, mp4a.40.2"`) pour l\'attribut `type` de `<source>` : le navigateur passe sans la télécharger une source qu\'il ne sait pas lire. Un MOV est annoncé `video/mp4` (même famille de fichiers, lue quand ses codecs le sont).',
+    'MIME type with its codecs (RFC 6381: `video/mp4; codecs="avc1.640028, mp4a.40.2"`) for the `type` attribute of `<source>`: the browser skips a source it cannot play without downloading it. A MOV file is announced as `video/mp4` (same file family, played when its codecs are).',
+  )),
+  width: z.number().int().nullable().meta(doc('Largeur affichée, en pixels ; null si elle est inconnue.', 'Displayed width in pixels; null when unknown.')),
+  height: z.number().int().nullable().meta(doc('Hauteur affichée, en pixels ; null si elle est inconnue.', 'Displayed height in pixels; null when unknown.')),
+  bitrate: z.number().int().nullable().meta(doc('Débit moyen, en bit/s ; null s\'il est inconnu.', 'Average bitrate in bit/s; null when unknown.')),
+  size: z.number().int().meta(doc('Taille du fichier, en octets.', 'File size in bytes.')),
+  rendition: z.enum(RENDITION_NAMES).nullable().meta(doc(
+    'Rendu produit par le serveur : `av1` (WebM, AV1 et Opus : plus léger, lu par les navigateurs récents) ou `h264` (MP4, H.264 et AAC : lu partout) ; `null` : le fichier original.',
+    'Rendition produced by the server: `av1` (WebM, AV1 and Opus: lighter, played by recent browsers) or `h264` (MP4, H.264 and AAC: played everywhere); `null`: the original file.',
+  )),
+})
+export type ApiMediaSource = z.input<typeof apiMediaSourceSchema>
+
+/**
+ * Traitement d'une vidéo par le serveur (phase D3) : état résumé de sa dernière tâche. Jamais le détail
+ * technique d'un échec (messages de ffmpeg, chemins du serveur), seulement son code.
+ */
+export const apiMediaProcessingSchema = z.object({
+  status: z.enum(API_PROCESSING_STATUSES).meta(doc(
+    '`pending` : en attente d\'un processus de traitement (ou d\'un nouvel essai après un échec passager) ; `processing` : en cours ; `ready` : terminé, `sources` et les champs du fichier sont à jour ; `failed` : échec définitif (`error`), la vidéo reste servie telle qu\'envoyée.',
+    '`pending`: waiting for a processing worker (or for a new attempt after a transient failure); `processing`: in progress; `ready`: done, `sources` and the file fields are up to date; `failed`: final failure (`error`), the video is still served as uploaded.',
+  )),
+  progress: z.number().min(0).max(1).nullable().meta(doc(
+    'Avancement du réencodage en cours (0 à 1), mis à jour toutes les 5 s environ ; repart de 0 pour chaque rendu (H.264, puis AV1). null hors du statut `processing`, ou pendant une étape non mesurée (analyse, nettoyage, affiche).',
+    'Progress of the current encoding (0 to 1), updated about every 5 s; starts again from 0 for each rendition (H.264, then AV1). null outside the `processing` status, or during a step that is not measured (analysis, clean-up, poster).',
+  )),
+  error: z.enum(VIDEO_JOB_ERROR_CODES).nullable().meta(doc(
+    'Code de l\'échec, seulement au statut `failed` : `NO_VIDEO_TRACK` (aucune piste vidéo), `UNREADABLE` (fichier illisible), `CONVERSION_FAILED` (réencodage impossible), `TOO_LONG` (durée au-delà de la limite du serveur), `TIMEOUT` (délai dépassé), `SOURCE_MISSING` (fichier introuvable dans le stockage), `FFMPEG_UNAVAILABLE` (outil de traitement absent du serveur). D\'autres codes pourront s\'ajouter : traitez un code inconnu comme un échec quelconque.',
+    'Failure code, only with the `failed` status: `NO_VIDEO_TRACK` (no video track), `UNREADABLE` (unreadable file), `CONVERSION_FAILED` (encoding impossible), `TOO_LONG` (duration beyond the server limit), `TIMEOUT` (time limit exceeded), `SOURCE_MISSING` (file missing from storage), `FFMPEG_UNAVAILABLE` (processing tool missing on the server). More codes may be added: treat an unknown code as a generic failure.',
+  )),
+  updatedAt: isoDate.meta(doc('Dernière écriture de la tâche (avancement compris) ; à défaut, dernière modification du média.', 'Last write of the task (progress included); otherwise, last change of the media item.')),
+})
+export type ApiMediaProcessing = z.input<typeof apiMediaProcessingSchema>
+
 export const apiMediaSchema = z.object({
   id: z.string(),
   projectId: z.string().nullable().meta(doc('Projet du média ; null = bibliothèque de l\'organisation (copie créée par duplication).', 'Project of the media item; null = organization library (copy created by duplication).')),
@@ -348,12 +401,16 @@ export const apiMediaSchema = z.object({
   mimeType: z.string(),
   extension: z.string().nullable(),
   size: z.number().int().meta(doc('Taille en octets.', 'Size in bytes.')),
-  width: z.number().int().nullable().meta(doc('Largeur affichée, en pixels (orientation EXIF d\'une image, rotation d\'une vidéo appliquées).', 'Displayed width in pixels (EXIF orientation of an image, rotation of a video applied).')),
+  width: z.number().int().nullable().meta(doc('Largeur affichée, en pixels (orientation EXIF d\'une image, rotation d\'une vidéo appliquées) ; null pour une vidéo d\'un format converti tant que le traitement ne l\'a pas analysée.', 'Displayed width in pixels (EXIF orientation of an image, rotation of a video applied); null for a video in a converted format until processing has analysed it.')),
   height: z.number().int().nullable().meta(doc('Hauteur affichée, en pixels.', 'Displayed height in pixels.')),
-  duration: z.number().nullable().meta(doc('Durée d\'une vidéo en secondes (3 décimales) ; null pour une image ou si le fichier ne l\'indique pas.', 'Duration of a video in seconds (3 decimals); null for an image or when the file does not say.')),
-  version: z.number().int().meta(doc('Incrémentée à chaque remplacement du fichier, de l\'image d\'affiche, ou changement du point d\'intérêt ; fait partie des URL.', 'Incremented each time the file or the poster image is replaced, or the focal point changes; part of the URLs.')),
+  duration: z.number().nullable().meta(doc('Durée d\'une vidéo en secondes (3 décimales) ; null pour une image, si le fichier ne l\'indique pas, ou pour un format converti tant que le traitement ne l\'a pas analysé.', 'Duration of a video in seconds (3 decimals); null for an image, when the file does not say, or for a converted format until processing has analysed it.')),
+  version: z.number().int().meta(doc('Incrémentée à chaque remplacement du fichier, de l\'image d\'affiche ou d\'un rendu vidéo, à chaque réécriture du fichier par le traitement des vidéos, ou changement du point d\'intérêt ; fait partie des URL.', 'Incremented each time the file, the poster image or a video rendition is replaced, each time video processing rewrites the file, or when the focal point changes; part of the URLs.')),
   folderId: z.string().nullable(),
-  url: z.url().meta(doc('URL absolue du fichier original ; signée (temporaire) pour un média privé. Vidéo : à lire dans `<video src>` (requêtes partielles acceptées).', 'Absolute URL of the original file; signed (temporary) for a private media item. Video: play it in `<video src>` (partial requests accepted).')),
+  url: z.url().meta(doc('URL absolue du fichier original ; signée (temporaire) pour un média privé. Vidéo : pour la lecture, préférez `sources` ; l\'original d\'un format converti (MKV, AVI…) est servi en téléchargement (`Content-Disposition: attachment`). Requêtes partielles acceptées.', 'Absolute URL of the original file; signed (temporary) for a private media item. Video: for playback, prefer `sources`; the original of a converted format (MKV, AVI…) is served as a download (`Content-Disposition: attachment`). Partial requests accepted.')),
+  sources: z.array(apiMediaSourceSchema).meta(doc(
+    'Sources de lecture d\'une vidéo, par ordre de préférence, à reprendre dans cet ordre en éléments `<source src type>` (le navigateur prend la première qu\'il sait lire) : les rendus produits par le serveur quand ils existent (AV1, puis H.264), sinon le fichier original s\'il est lisible par `<video>`. Vide pour une image, et pour un format converti (MKV, AVI…) tant que son rendu H.264 n\'existe pas.',
+    'Playback sources of a video, in order of preference, to use in this order as `<source src type>` elements (the browser takes the first one it can play): the renditions produced by the server when they exist (AV1, then H.264), otherwise the original file when `<video>` can play it. Empty for an image, and for a converted format (MKV, AVI…) until its H.264 rendition exists.',
+  )),
   previewUrl: z.url().nullable().meta(doc('URL de l\'aperçu (WebP, 480 px) ; signée pour un média privé. Vidéo : tiré de son image d\'affiche, null sans affiche.', 'Preview URL (WebP, 480 px); signed for a private media item. Video: taken from its poster image, null without a poster.')),
   urlTemplate: z.string().nullable().meta(doc(
     'Gabarit des URL de dérivés d\'une image : remplacer `{transform}` par un préréglage (`preview`, `full`, ceux de `GET …/presets`) ou des paramètres (`w_800,h_450`), et `{format}` par `jpg`, `png`, `webp` ou `avif`. Média privé : porte une signature valable pour tout dérivé jusqu\'à `urlExpiresAt`. Média public d\'un projet en politique `signed` : paramètres libres seulement par un lien signé (`POST …/signed-url`). Vidéo : dérivés de son image d\'affiche ; `null` sans affiche.',
@@ -361,6 +418,10 @@ export const apiMediaSchema = z.object({
   )),
   poster: apiPosterSchema.nullable().meta(doc('Image d\'affiche d\'une vidéo ; null pour une image ou une vidéo sans affiche.', 'Poster image of a video; null for an image or a video without a poster.')),
   textTracks: z.array(apiTextTrackSchema).meta(doc('Pistes de texte d\'une vidéo (sous-titres, chapitres…), dans leur ordre d\'ajout ; vide pour une image.', 'Text tracks of a video (subtitles, chapters…), in the order they were added; empty for an image.')),
+  processing: apiMediaProcessingSchema.nullable().meta(doc(
+    'Traitement de la vidéo par le serveur (ffmpeg) : état de sa dernière tâche. null pour une image, ou pour une vidéo jamais traitée (traitement désactivé sur le serveur, ou vidéo envoyée avant son activation).',
+    'Processing of the video by the server (ffmpeg): state of its latest task. null for an image, or for a video never processed (processing disabled on the server, or video uploaded before it was enabled).',
+  )),
   focalPoint: z.object({ x: z.number(), y: z.number() }).nullable().meta(doc(
     'Point d\'intérêt (fractions 0 à 1 de la largeur et de la hauteur, depuis le coin haut gauche ; image d\'affiche pour une vidéo) : centre des recadrages `fit_cover` ; `null` = centre de l\'image.',
     'Focal point (fractions 0 to 1 of the width and height, from the top left corner; poster image for a video): center of `fit_cover` crops; `null` = center of the image.',
@@ -462,6 +523,10 @@ export const apiSignedUrlSchema = z.object({
     'Signature parameters only (`exp`, `kid`, `scope`, `sig`), to append to derivative URLs with `derived`; empty when the URL needs no signature.',
   )),
   expiresAt: isoDate.nullable().meta(doc('Échéance du lien ; `null` : URL permanente.', 'Expiry of the link; `null`: permanent URL.')),
+  sources: z.array(apiMediaSourceSchema).optional().meta(doc(
+    'Cible `file` d\'une vidéo seulement : ses sources de lecture (`Media.sources`), signées comme `url` jusqu\'à la même échéance (URL permanentes pour un média public) — le droit sur le fichier couvre ses rendus.',
+    'Target `file` of a video only: its playback sources (`Media.sources`), signed like `url` until the same expiry (permanent URLs for a public media item) — the right to the file covers its renditions.',
+  )),
 })
 
 /** Codes d'erreur possibles pour un lien d'un lot (les autres liens du lot restent délivrés). */

@@ -11,7 +11,7 @@ defineRouteMeta({
     'operationId': 'createSignedUrls',
     'tags': ['media'],
     'summary': 'Liens par lot',
-    'description': 'Jusqu\'à 100 liens en un appel (par exemple toutes les sources `srcset` d\'une page), mêmes règles que `POST …/media/{mediaId}/signed-url`, une seule échéance pour tout le lot. Un lien impossible (média introuvable, préréglage inconnu, transformation invalide ou refusée) donne `error` à sa place sans faire échouer les autres.',
+    'description': 'Jusqu\'à 100 liens en un appel (par exemple toutes les sources `srcset` d\'une page), mêmes règles que `POST …/media/{mediaId}/signed-url` (`sources` compris pour l\'original d\'une vidéo), une seule échéance pour tout le lot. Un lien impossible (média introuvable, préréglage inconnu, transformation invalide ou refusée) donne `error` à sa place sans faire échouer les autres.',
     'x-scopes': ['media:read'],
     'x-credentials': ['secret', 'personal', 'delegated'],
     'x-errors': [
@@ -26,7 +26,7 @@ defineRouteMeta({
     'x-i18n': {
       en: {
         summary: 'Links in bulk',
-        description: 'Up to 100 links in one call (for instance every `srcset` source of a page), same rules as `POST …/media/{mediaId}/signed-url`, one expiry for the whole batch. A link that cannot be issued (media item not found, unknown preset, invalid or refused transformation) gets `error` in its place without failing the others.',
+        description: 'Up to 100 links in one call (for instance every `srcset` source of a page), same rules as `POST …/media/{mediaId}/signed-url` (`sources` included for the original of a video), one expiry for the whole batch. A link that cannot be issued (media item not found, unknown preset, invalid or refused transformation) gets `error` in its place without failing the others.',
       },
     },
   },
@@ -36,7 +36,7 @@ defineRouteMeta({
  * POST /api/v1/projects/:projectId/signed-urls — { items: [{ mediaId, target?, preset?, transform?,
  * format? }], expiresIn? } (portée media:read ; comme le lien unitaire). Médias lus en une requête ;
  * résultats dans l'ordre des demandes, erreur par lien (codes API_SIGNED_URL_ITEM_ERRORS).
- * → { items: [{ url, query, expiresAt } | { error: { code, detail? } }] }
+ * → { items: [{ url, query, expiresAt, sources? } | { error: { code, detail? } }] } (`sources` : cible `file` d'une vidéo).
  */
 export default defineApiHandler(async (event, principal) => {
   if (principal.type === 'publishable') {

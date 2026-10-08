@@ -1,4 +1,5 @@
 import type { TransformFormat } from './transforms'
+import { videoSourceType } from './video'
 
 /**
  * Extraits HTML d'intégration d'une image transformée (générateur d'adresses de la fiche média,
@@ -74,6 +75,11 @@ export interface VideoSnippetInput {
   mimeType: string
   /** Chaîne RFC 6381 des codecs, si elle est connue (type de la source). */
   codecs: string | null
+  /**
+   * Sources du lecteur par ordre de préférence (phase D3 : rendus AV1 puis H.264, ou l'original), `type`
+   * avec ses codecs ; absentes ou vides = l'original seul (`url`, `mimeType`, `codecs`).
+   */
+  sources?: readonly { url: string, type: string }[]
   /** Dimensions affichées : rapport d'aspect réservé avant le chargement. */
   width?: number | null
   height?: number | null
@@ -86,9 +92,11 @@ export interface VideoSnippetInput {
 }
 
 /**
- * Extrait HTML d'intégration d'une vidéo servie telle quelle (phase D1) : lecteur natif avec ses
- * commandes, sans lecture automatique (WCAG 1.4.2), métadonnées seulement chargées à l'avance,
- * type de la source avec ses codecs pour que le navigateur sache s'il peut la lire. Pure, testée.
+ * Extrait HTML d'intégration d'une vidéo (phases D1 à D3) : lecteur natif avec ses commandes, sans
+ * lecture automatique (WCAG 1.4.2), métadonnées seulement chargées à l'avance, un `<source>` par source
+ * dans l'ordre de préférence (le navigateur prend la première qu'il sait lire : AV1, puis H.264), type
+ * avec ses codecs pour qu'il sache s'il peut la lire sans la télécharger (un MOV est annoncé
+ * `video/mp4`, shared/utils/video.ts). Pure, testée (tests/transforms.test.ts).
  */
 export function videoSnippet(input: VideoSnippetInput): string {
   const attributes = [
@@ -101,8 +109,9 @@ export function videoSnippet(input: VideoSnippetInput): string {
     ...(input.tracks?.length ? ['crossorigin="anonymous"'] : []),
     ...(input.label ? [`aria-label="${htmlAttribute(input.label)}"`] : []),
   ]
-  const type = input.codecs ? `${input.mimeType}; codecs="${input.codecs.split(',').join(', ')}"` : input.mimeType
+  const sources = input.sources?.length ? input.sources : [{ url: input.url, type: videoSourceType(input.mimeType, input.codecs) }]
   const tracks = (input.tracks ?? []).map(track =>
     `\n  <track kind="${htmlAttribute(track.kind)}" srclang="${htmlAttribute(track.srclang)}" label="${htmlAttribute(track.label)}" src="${htmlAttribute(track.src)}"${track.default ? ' default' : ''}>`)
-  return `<video ${attributes.join(' ')}>\n  <source src="${htmlAttribute(input.url)}" type="${htmlAttribute(type)}">${tracks.join('')}\n</video>`
+  const sourceTags = sources.map(source => `\n  <source src="${htmlAttribute(source.url)}" type="${htmlAttribute(source.type)}">`)
+  return `<video ${attributes.join(' ')}>${sourceTags.join('')}${tracks.join('')}\n</video>`
 }

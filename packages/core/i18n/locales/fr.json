@@ -1547,7 +1547,8 @@
       "media": {
         "visibility_changed": "Visibilité d'un média modifiée",
         "moved": "Média déplacé",
-        "deleted": "Média supprimé définitivement"
+        "deleted": "Média supprimé définitivement",
+        "processing_backfill": "Traitement des vidéos existantes lancé"
       },
       "user": {
         "created": "Compte créé",

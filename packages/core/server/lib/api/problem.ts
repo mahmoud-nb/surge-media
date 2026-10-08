@@ -47,8 +47,13 @@ function problemDetail(code: ApiErrorCode, data: Record<string, unknown>): strin
     case 'FILE_TOO_LARGE':
       return typeof data.maxSize === 'number' ? `The file exceeds the maximum size of ${data.maxSize} bytes.` : undefined
     case 'UNSUPPORTED_TYPE': {
-      // Précision du gestionnaire (vidéo sans piste vidéo), puis les types acceptés.
-      const accepted = Array.isArray(data.accepted) ? `Accepted types (detected from the content): ${data.accepted.join(', ')}.` : null
+      // Précision du gestionnaire (vidéo sans piste vidéo), puis les types acceptés. Liste vide : seul cas,
+      // un jeton délégué qui ne cite que des formats convertis (MKV…) pendant que le traitement est inactif.
+      const accepted = !Array.isArray(data.accepted)
+        ? null
+        : data.accepted.length > 0
+          ? `Accepted types (detected from the content): ${data.accepted.join(', ')}.`
+          : 'None of the types allowed by this credential is accepted right now: converted video formats (MKV, AVI…) require video processing to be active on the server.'
       return [typeof data.detail === 'string' ? data.detail : null, accepted].filter(Boolean).join(' ') || undefined
     }
     case 'DIMENSIONS_TOO_LARGE':
