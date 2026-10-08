@@ -11,11 +11,13 @@ export const fr = {
   'args.yes': 'Mode non interactif : accepte les valeurs par défaut sans confirmation',
   'args.skipMigrate': 'Configure la base sans appliquer les migrations',
   'args.siteUrl': 'URL publique de l\'installation (ex. https://media.example.com)',
+  'args.port': 'Port du processus de travail (sonde /api/health seulement)',
 
   'command.init': 'Configure la base de données (fournisseur et URL) puis applique les migrations',
   'command.db': 'Gestion de la base de données',
   'command.db.migrate': 'Applique les migrations en attente (après une mise à jour)',
   'command.db.reset': 'Recrée la base, éventuellement avec un nouveau fournisseur (supprime toutes les données)',
+  'command.worker': 'Lance un processus de travail du traitement des vidéos (NUXT_VIDEO_PROCESSING=external, après « pnpm build »)',
 
   'intro.init': 'surgeMedia · initialisation',
   'intro.migrate': 'surgeMedia · migrations',
@@ -56,6 +58,7 @@ export const fr = {
   'step.migrateSkipped': 'Migrations non appliquées (--skip-migrate)',
   'step.reset': 'Réinitialisation de la base…',
   'step.resetDone': 'Base recréée et migrations appliquées',
+  'step.workerStarting': 'surgeMedia · processus de travail du traitement des vidéos (port {port}, Ctrl+C pour arrêter)',
 
   'outro.init': 'Base de données prête. Démarrez surgeMedia avec « pnpm dev ».',
   'outro.migrate': 'Base de données à jour.',
@@ -73,6 +76,9 @@ export const fr = {
   'error.notConfigured': 'Base de données non configurée : lancez d\'abord « surge-media init ».',
   'error.providerMismatch': 'Le schéma Prisma cible {schema} mais DATABASE_PROVIDER vaut {env} : relancez « surge-media init ».',
   'error.command': 'Échec de « {command} »',
+  'error.buildMissing': 'Serveur construit introuvable ({path}) : lancez d\'abord « pnpm build ».',
+  'error.invalidPort': 'Port « {value} » invalide (entier de 1 à 65535).',
+  'error.workerFailed': 'Impossible de lancer le processus de travail : {message}',
 } as const
 
 export type MessageKey = keyof typeof fr

@@ -1,12 +1,13 @@
 import type { H3Event } from 'h3'
 import type { ApiMediaUpdate } from '#shared/schemas/api'
 import type { MediaMetadataInput } from '#shared/schemas/media'
-import type { MediaKind, MediaVisibility } from '#shared/utils/media'
+import { acceptedMimeTypes, type MediaKind, type MediaVisibility } from '#shared/utils/media'
 import type { Media } from '../../generated/prisma/client'
 import { releaseDelegatedUpload, reserveDelegatedUpload } from '../access/delegated'
 import { uploadRules } from '../media/limits'
 import type { MediaProvenance, UploadOptions } from '../media/service'
 import { type ReceivedUpload, receiveUpload } from '../media/upload'
+import { videoProcessingActive } from '../video-processing/status'
 import { type ApiPrincipal, requireUploadAllowance } from './context'
 import { apiBaseUrl, apiProblem } from './problem'
 
@@ -62,10 +63,14 @@ export async function withApiUpload<T>(
 
   let succeeded = false
   try {
-    const rules = uploadRules(grant?.upload?.types, grant?.upload?.maxSize)
+    // Types de l'installation en ce moment (formats convertis seulement si le traitement des vidéos est
+    // actif), restreints à ceux du jeton délégué.
+    const rules = uploadRules(grant?.upload?.types, grant?.upload?.maxSize, acceptedMimeTypes(await videoProcessingActive()))
     const upload = await receiveUpload(event, expectedKind ? { ...rules, expectedKind } : rules)
     try {
-      const result = await task(upload, { acceptedTypes: grant?.upload?.types })
+      // Types déjà restreints aux types de l'installation : l'analyse refuse (415) avec la même liste
+      // que la réception, jamais un type du jeton que l'installation n'accepte pas.
+      const result = await task(upload, { acceptedTypes: rules.acceptedTypes })
       succeeded = true
       return result
     }

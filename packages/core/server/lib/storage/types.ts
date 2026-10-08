@@ -30,6 +30,12 @@ export interface MediaStorage {
   deletePrefix: (prefix: string) => Promise<void>
   /** Vérifie que le backend répond (GET /api/health). */
   healthcheck: () => Promise<void>
+  /**
+   * Chemin absolu du fichier sur le disque de ce serveur, si le backend en a un (pilote local), sans
+   * garantie d'existence. Le traitement des vidéos (phase D3) le lit en place, en lecture seule ; sans
+   * lui (S3), le fichier est d'abord copié dans un dossier temporaire (ffmpeg doit pouvoir s'y déplacer).
+   */
+  localPath?: (key: string) => string
 }
 
 /** Plage d'octets incluse aux deux bornes. */

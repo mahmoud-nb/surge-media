@@ -2,6 +2,7 @@ import { useMediaStorage } from '../lib/storage'
 import { planTransform } from '../lib/media/transform-plan'
 import { useTransformSettings } from '../lib/media/transform-settings'
 import { previewRequest, transformSource } from '../lib/media/variants'
+import { isWorkerRole } from '../lib/video-processing/settings'
 
 /**
  * Au démarrage, reprend les aperçus générés avant la phase C (`MediaVariant.transformation` =
@@ -53,6 +54,8 @@ async function migrateLegacyVariants(): Promise<number> {
 }
 
 export default defineNitroPlugin(() => {
+  // Processus de travail (phase D3) : tâche du serveur web (sans risque à plusieurs, mais inutile ici).
+  if (isWorkerRole()) return
   void migrateLegacyVariants()
     .then((count) => {
       if (count > 0) console.info(`[surge-media] Transformations : ${count} aperçu(s) repris.`)

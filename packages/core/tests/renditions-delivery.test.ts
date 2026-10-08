@@ -12,7 +12,7 @@ import {
 import { deliveryVariant, parseDeliveryPath, type DeliveryTarget } from '../server/lib/media/delivery-path'
 import { renditionKey, variantPrefix } from '../server/lib/media/keys'
 import { findRendition, renditionFilename, resolveRenditionDeliverable } from '../server/lib/media/renditions'
-import { buildSignatureQuery, checkSignature } from '../server/lib/media/signing'
+import { buildSignatureQuery, checkSignature, computeSignature, keyId } from '../server/lib/media/signing'
 import { adminMediaPaths, renditionPath } from '../server/lib/media/urls'
 
 const options = { maxDimension: 4096, formats: TRANSFORM_FORMATS }
@@ -48,8 +48,13 @@ const video = {
   mimeType: 'video/quicktime',
   originalName: 'Vacances été.MOV',
   title: null,
+  posterKey: `variants/${id}/poster-Qx7Kp.jpg` as string | null,
+  processingState: 'READY' as const,
+  metadata: { container: 'mov', dataTracks: [] as string[] },
   renditions: [rendition('h264', 'mp4')],
 }
+/** Vidéo dont la piste de métadonnées (GoPro) attend d'être retirée : diffusion retenue (§ 32.4). */
+const held = { kind: 'VIDEO', processingState: 'PENDING' as const, metadata: { container: 'mp4', dataTracks: ['gpmd'] } }
 
 describe('rendus : chemins de diffusion et signatures', () => {
   it('reconnaît /m/<id>/v<n>/renditions/h264.mp4 et av1.webm, rien d\'autre (404)', () => {
@@ -87,9 +92,13 @@ describe('rendus : chemins de diffusion et signatures', () => {
     expect(checkSignature(['secret'], check, file, 1_900_000_000)).toEqual({ status: 'valid', expires: 2_000_000_000, scope: null })
     // … mais pas ceux d'une autre version.
     expect(checkSignature(['secret'], { ...check, version: 4 }, file, 1_900_000_000).status).toBe('invalid')
-    // Jamais de signature permanente, ni présentée sans échéance.
+    // Jamais de signature permanente : ni produite, ni acceptée. Signature calculée correctement (la même
+    // ouvre bien un dérivé précis) : seule la garde des signatures permanentes la refuse.
     expect(() => buildSignatureQuery('secret', media, { variant: 'original' }, null)).toThrow()
-    expect(checkSignature(['secret'], check, { ...file, exp: undefined }, 1_900_000_000).status).toBe('invalid')
+    const permanent = (grant: string) => ({ kid: keyId('secret'), sig: computeSignature('secret', id, 3, grant, null) })
+    expect(checkSignature(['secret'], { ...check, variant: 'full' }, permanent('preset:full'), 1_900_000_000).status).toBe('valid')
+    expect(checkSignature(['secret'], check, permanent('file'), 1_900_000_000).status).toBe('invalid')
+    expect(checkSignature(['secret'], check, { ...permanent('admin'), scope: 'admin' }, 1_900_000_000).status).toBe('invalid')
     const derived = Object.fromEntries(new URLSearchParams(buildSignatureQuery('secret', media, { scope: 'derived' }, 2_000_000_000)))
     expect(checkSignature(['secret'], check, derived, 1_900_000_000).status).toBe('invalid')
     const admin = Object.fromEntries(new URLSearchParams(buildSignatureQuery('secret', media, { scope: 'admin' }, 2_000_000_000)))
@@ -117,6 +126,40 @@ describe('rendus : chemins de diffusion et signatures', () => {
       expect(signed.scope).toBe('admin')
       const check = { mediaId: id, version: 4, variant: deliveryVariant(target(path.slice('/m/'.length))) }
       expect(checkSignature(['secret-de-test'], check, signed, Math.floor(Date.now() / 1000)).status).toBe('valid')
+    }
+  })
+
+  it('administration : vidéo publique retenue → original et rendus signés « admin » (seuls à passer la retenue)', () => {
+    vi.stubGlobal('useRuntimeConfig', () => ({ media: { signingSecret: 'secret-de-test', previousSigningSecret: '' }, session: {} }))
+    const now = Math.floor(Date.now() / 1000)
+    for (const state of ['PENDING', 'PROCESSING'] as const) {
+      const media = { ...video, ...held, processingState: state, visibility: 'PUBLIC', deletedAt: null }
+      const paths = adminMediaPaths(media, true, ['cmtrack0001'], ['h264'])
+      for (const link of [paths.url, paths.renditions.h264!]) {
+        const [path, query] = link.split('?') as [string, string]
+        const signed = Object.fromEntries(new URLSearchParams(query))
+        const delivered = target(path.slice('/m/'.length))
+        const check = checkSignature(['secret-de-test'], { mediaId: id, version: 4, variant: deliveryVariant(delivered) }, signed, now)
+        expect(check).toMatchObject({ status: 'valid', scope: 'admin' })
+        // Accès que la route en déduit (`authorizeDelivery`) : la retenue ne s'applique pas.
+        const access: DeliveryAccess = { mode: 'signed', expires: Number(signed.exp), scope: 'admin' }
+        expect(holdApplies(delivered, media, access, 'embedded'), link).toBe(false)
+      }
+      // Affiche, aperçu et pistes ne sont jamais retenus : URL permanentes, comme pour le public.
+      expect(paths.previewUrl).toBe(`/m/${id}/v4/preview/vacances-ete.webp`)
+      expect(paths.posterUrl).toBe(`/m/${id}/v4/full/vacances-ete.jpg`)
+      expect(paths.trackUrls).toEqual([`/m/${id}/v4/tracks/cmtrack0001.vtt`])
+    }
+    // Retenue levée (prêt, en échec, piste retirée) : de nouveau l'URL permanente.
+    const open = { ...video, ...held, visibility: 'PUBLIC', deletedAt: null }
+    for (const media of [
+      { ...open, processingState: 'READY' as const },
+      { ...open, processingState: 'FAILED' as const },
+      { ...open, metadata: { container: 'mp4', dataTracks: [] } },
+    ]) {
+      const paths = adminMediaPaths(media, false, [], ['h264'])
+      expect(paths.url).toBe(`/m/${id}/v4/vacances-ete.mov`)
+      expect(paths.renditions.h264).toBe(`/m/${id}/v4/renditions/h264.mp4`)
     }
   })
 })
@@ -155,8 +198,24 @@ describe('diffusion : décisions de la route', () => {
     expect(deliveryReloadNeeded(target(`${id}/v4/renditions/av1.webm`), video)).toBe(true)
     expect(deliveryReloadNeeded(target(`${id}/v4/renditions/h264.mp4`), video)).toBe(false)
     expect(deliveryReloadNeeded(target(`${id}/v4/video.mov`), video)).toBe(false)
+    expect(deliveryReloadNeeded(target(`${id}/v4/full/video.jpg`), video)).toBe(false)
     expect(deliveryReloadNeeded(target(`${id}/v3/renditions/av1.webm`), video)).toBe(false)
     expect(deliveryReloadNeeded(target(`${id}/v3/full/video.jpg`), video)).toBe(false)
+  })
+
+  it('relit le cache pour un dérivé d\'une vidéo sans affiche : affiche extraite ailleurs, sans changer la version', () => {
+    const withoutPoster = { ...video, posterKey: null }
+    for (const path of [`${id}/v4/preview/clip.webp`, `${id}/v4/full/clip.jpg`, `${id}/v4/w_800/clip.webp`]) {
+      expect(deliveryReloadNeeded(target(path), withoutPoster), path).toBe(true)
+      expect(deliveryReloadNeeded(target(path), video), path).toBe(false)
+    }
+    // Ni l'original ni une piste n'en dépendent ; une ancienne version est redirigée ; une image ou un
+    // document n'a pas d'affiche (dérivés de l'original, ou aucun).
+    expect(deliveryReloadNeeded(target(`${id}/v4/clip.mov`), withoutPoster)).toBe(false)
+    expect(deliveryReloadNeeded(target(`${id}/v4/tracks/cmtrack0001.vtt`), withoutPoster)).toBe(false)
+    expect(deliveryReloadNeeded(target(`${id}/v3/preview/clip.webp`), withoutPoster)).toBe(false)
+    expect(deliveryReloadNeeded(target(`${id}/v4/preview/photo.webp`), { ...withoutPoster, kind: 'IMAGE' })).toBe(false)
+    expect(deliveryReloadNeeded(target(`${id}/v4/preview/notes.webp`), { ...withoutPoster, kind: 'DOCUMENT' })).toBe(false)
   })
 
   it('ancienne version : même fichier à la version courante ; rendu disparu → original', () => {
@@ -170,7 +229,6 @@ describe('diffusion : décisions de la route', () => {
   })
 
   it('retenue (503) : original et rendus d\'une vidéo en cours de nettoyage, sauf lien « admin »', () => {
-    const held = { kind: 'VIDEO', processingState: 'PENDING' as const, metadata: { container: 'mp4', dataTracks: ['gpmd'] } }
     const original = target(`${id}/v4/video.mp4`)
     const h264 = target(`${id}/v4/renditions/h264.mp4`)
     const accesses: DeliveryAccess[] = [
@@ -249,7 +307,7 @@ describe('cache de diffusion : rendus et relecture', () => {
     expect(await findDeliveryMedia('cmcache0001')).toBe(updated)
   })
 
-  it('relit sans attendre après une invalidation locale ; un média absent n\'est pas mis en cache longtemps', async () => {
+  it('garde aussi un média absent, et relit sans attendre après une invalidation locale', async () => {
     const findUnique = fakePrisma({})
     expect(await findDeliveryMedia('cmcache0002')).toBeNull()
     expect(await findDeliveryMedia('cmcache0002')).toBeNull()
@@ -258,5 +316,42 @@ describe('cache de diffusion : rendus et relecture', () => {
     const row = { ...video, id: 'cmcache0002' }
     fakePrisma({ cmcache0002: row })
     expect(await findDeliveryMedia('cmcache0002')).toBe(row)
+  })
+
+  it('un média absent est gardé 10 s, un média trouvé 60 s', async () => {
+    // L'horloge du cache (lru.ts) est prise au chargement du module : module rechargé sous une horloge
+    // simulée, qui avance sans attendre.
+    vi.useFakeTimers({ toFake: ['Date'] })
+    vi.resetModules()
+    try {
+      const cache = await import('../server/lib/media/cache')
+      const row = { ...video, id: 'cmcache0004' }
+      const findUnique = fakePrisma({ cmcache0004: row })
+      const lookups = async () => [await cache.findDeliveryMedia('cmcache0003'), await cache.findDeliveryMedia('cmcache0004')]
+      expect(await lookups()).toEqual([null, row])
+      expect(findUnique).toHaveBeenCalledTimes(2)
+
+      vi.advanceTimersByTime(9_999)
+      await lookups()
+      expect(findUnique).toHaveBeenCalledTimes(2)
+      // 10 s : l'absent est relu (et regardé encore 10 s), le média trouvé reste en cache.
+      vi.advanceTimersByTime(1)
+      await lookups()
+      expect(findUnique).toHaveBeenCalledTimes(3)
+      expect(findUnique).toHaveBeenLastCalledWith(expect.objectContaining({ where: { id: 'cmcache0003' } }))
+
+      vi.advanceTimersByTime(49_999)
+      await lookups()
+      expect(findUnique).toHaveBeenCalledTimes(4)
+      expect(findUnique).toHaveBeenLastCalledWith(expect.objectContaining({ where: { id: 'cmcache0003' } }))
+      // 60 s : le média trouvé est relu.
+      vi.advanceTimersByTime(1)
+      await lookups()
+      expect(findUnique).toHaveBeenCalledTimes(5)
+      expect(findUnique).toHaveBeenLastCalledWith(expect.objectContaining({ where: { id: 'cmcache0004' } }))
+    }
+    finally {
+      vi.useRealTimers()
+    }
   })
 })

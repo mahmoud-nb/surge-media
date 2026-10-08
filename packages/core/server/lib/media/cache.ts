@@ -27,7 +27,8 @@ const mediaCache = createLruCache<DeliveryEntry>({ max: 10_000, ttlMs: 60_000 })
 const MISSING_TTL_MS = 10_000
 /**
  * Relecture forcée au plus une fois par seconde et par média : une URL inventée (version future, rendu
- * absent) ne contourne pas le cache à chaque requête ; une écriture faite ailleurs est vue au plus 1 s après.
+ * absent, dérivé d'une vidéo sans affiche) ne contourne pas le cache à chaque requête ; une écriture faite
+ * ailleurs est vue au plus 1 s après.
  */
 const RELOAD_INTERVAL_MS = 1_000
 
@@ -54,8 +55,9 @@ export async function findDeliveryMedia(id: string): Promise<DeliveryMedia | nul
 
 /**
  * Média relu en base, sans attendre l'expiration du cache : demande d'une version plus récente que celle
- * du cache, ou d'un rendu qu'il ne connaît pas (écrits par un processus de travail ou une autre instance,
- * dont l'invalidation ne nous parvient pas). Une entrée lue il y a moins d'une seconde est reprise telle quelle.
+ * du cache, d'un rendu ou d'une affiche de vidéo qu'il ne connaît pas (écrits par un processus de travail
+ * ou une autre instance, dont l'invalidation ne nous parvient pas ; delivery.ts, `deliveryReloadNeeded`).
+ * Une entrée lue il y a moins d'une seconde est reprise telle quelle.
  */
 export async function reloadDeliveryMedia(id: string): Promise<DeliveryMedia | null> {
   const cached = mediaCache.get(id)
