@@ -11,7 +11,7 @@ defineRouteMeta({
     'operationId': 'uploadMedia',
     'tags': ['media'],
     'summary': 'Envoyer un média',
-    'description': 'Un fichier par requête (`multipart/form-data`, champ `file`), type détecté d\'après son contenu : images JPEG, PNG, WebP, AVIF ou GIF (25 Mio par défaut), vidéos MP4, WebM ou QuickTime (512 Mio par défaut). Type et taille sont contrôlés dès les premiers octets : un fichier refusé n\'est pas reçu en entier. Les vidéos sont stockées et servies telles qu\'envoyées (ni aperçu, ni transformation). Visibilité `public` par défaut. Jeton délégué : nombre de fichiers, taille, types, visibilité et dossier selon ses contraintes. En-tête `Location` : URL du média dans l\'API.',
+    'description': 'Un fichier par requête (`multipart/form-data`, champ `file`), type détecté d\'après son contenu : images JPEG, PNG, WebP, AVIF ou GIF (25 Mio par défaut), vidéos MP4, WebM ou QuickTime (512 Mio par défaut) et, seulement pendant que le traitement des vidéos est actif sur le serveur, MKV, AVI, 3GP, MPEG-TS, OGV ou WMV (lues par leur rendu H.264). Type et taille sont contrôlés dès les premiers octets : un fichier refusé n\'est pas reçu en entier. Une vidéo n\'a ni aperçu ni transformation par URL ; selon le réglage du serveur, elle est traitée après l\'envoi (`processing`, rendus dans `sources` : voir « Vidéos »). Visibilité `public` par défaut. Jeton délégué : nombre de fichiers, taille, types, visibilité et dossier selon ses contraintes. En-tête `Location` : URL du média dans l\'API.',
     'x-scopes': ['media:upload'],
     'x-credentials': ['secret', 'personal', 'delegated'],
     'x-errors': [
@@ -34,7 +34,7 @@ defineRouteMeta({
     'x-i18n': {
       en: {
         summary: 'Upload a media item',
-        description: 'One file per request (`multipart/form-data`, `file` field), type detected from its contents: JPEG, PNG, WebP, AVIF or GIF images (25 MiB by default), MP4, WebM or QuickTime videos (512 MiB by default). Type and size are checked from the first bytes: a rejected file is not received in full. Videos are stored and served as uploaded (no preview, no transformation). Visibility `public` by default. Delegated token: number of files, size, types, visibility and folder according to its constraints. `Location` header: URL of the media item in the API.',
+        description: 'One file per request (`multipart/form-data`, `file` field), type detected from its contents: JPEG, PNG, WebP, AVIF or GIF images (25 MiB by default), MP4, WebM or QuickTime videos (512 MiB by default) and, only while video processing is active on the server, MKV, AVI, 3GP, MPEG-TS, OGV or WMV (played through their H.264 rendition). Type and size are checked from the first bytes: a rejected file is not received in full. A video has no preview and no transformation by URL; depending on the server setting, it is processed after the upload (`processing`, renditions in `sources`: see “Videos”). Visibility `public` by default. Delegated token: number of files, size, types, visibility and folder according to its constraints. `Location` header: URL of the media item in the API.',
       },
     },
   },

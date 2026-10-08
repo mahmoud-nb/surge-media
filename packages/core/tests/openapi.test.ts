@@ -92,7 +92,7 @@ describe('spécification OpenAPI générée depuis les routes', () => {
     expect(upload.required).toEqual(['file'])
     expect(Object.keys(upload.properties)).toEqual(['file', 'title', 'altText', 'visibility', 'folderId'])
     expect(Object.keys(fr.components.schemas).sort()).toEqual([
-      'DelegatedToken', 'DelegatedTokenClaims', 'ErrorCatalog', 'Folder', 'FolderList', 'Me', 'Media', 'MediaList', 'Preset', 'PresetList', 'Problem',
+      'DelegatedToken', 'DelegatedTokenClaims', 'ErrorCatalog', 'Folder', 'FolderList', 'Me', 'Media', 'MediaList', 'MediaProcessing', 'MediaSource', 'Preset', 'PresetList', 'Problem',
       'Project', 'ProjectList', 'SignedUrl', 'SignedUrlError', 'SignedUrlList', 'TextTrack', 'TextTrackList', 'UploadConstraints',
     ])
   })
@@ -130,6 +130,35 @@ describe('spécification OpenAPI générée depuis les routes', () => {
     expect(fr.components.schemas.Media.properties.size.description).toBe('Taille en octets.')
     expect(en.tags.find((tag: Doc) => tag.name === 'media')['x-displayName']).toBe('Media')
     expect(en.paths['/projects/{projectId}/media'].get.responses[403].description).toMatch(/^Access denied: /)
+  })
+
+  it('vidéos (phase D3) : composants MediaSource et MediaProcessing, traduits, et section « Vidéos »', () => {
+    for (const document of [fr, en]) {
+      const { schemas } = document.components
+      expect(schemas.Media.properties.sources).toMatchObject({ type: 'array', items: { $ref: '#/components/schemas/MediaSource' } })
+      expect(JSON.stringify(schemas.Media.properties.processing)).toContain('"$ref":"#/components/schemas/MediaProcessing"')
+      expect(schemas.MediaSource.required).toEqual(['url', 'type', 'width', 'height', 'bitrate', 'size', 'rendition'])
+      expect(schemas.MediaProcessing.properties.status.enum).toEqual(['pending', 'processing', 'ready', 'failed'])
+      expect(schemas.MediaProcessing.properties.error.anyOf ?? [schemas.MediaProcessing.properties.error]).toEqual(expect.arrayContaining([expect.objectContaining({ enum: expect.arrayContaining(['TOO_LONG', 'CONVERSION_FAILED']) })]))
+      expect(schemas.SignedUrl.properties.sources.items).toEqual({ $ref: '#/components/schemas/MediaSource' })
+      expect(schemas.SignedUrl.required).not.toContain('sources')
+      expect(schemas.UploadConstraints.properties.types.items.enum).toEqual(expect.arrayContaining(['video/mp4', 'video/x-matroska', 'video/x-ms-wmv']))
+    }
+    expect(fr.components.schemas.MediaSource.properties.size.description).toBe('Taille du fichier, en octets.')
+    expect(en.components.schemas.MediaSource.properties.size.description).toBe('File size in bytes.')
+    expect(en.components.schemas.MediaProcessing.properties.error.description).toMatch(/^Failure code/)
+    expect(en.components.schemas.UploadConstraints.properties.types.description).toContain('only while video processing is active')
+
+    for (const [document, heading] of [[fr, '## Vidéos'], [en, '## Videos']] as const) {
+      const info = document.info.description as string
+      const section = info.slice(info.indexOf(heading))
+      for (const text of ['`sources`', '`processing`', '<source src=', '<track ', 'poster=', 'If-None-Match', 'MKV', 'attachment', '`PROCESSING_PENDING`', '`Retry-After`']) {
+        expect(section, `${heading} : ${text}`).toContain(text)
+      }
+    }
+    // Erreurs de /m/ : la retenue d'une vidéo figure dans la liste.
+    expect(fr.info.description).toMatch(/`SERVER_BUSY` \(503\), `PROCESSING_PENDING` \(503/)
+    expect(en.info.description).toMatch(/`SERVER_BUSY` \(503\), `PROCESSING_PENDING` \(503/)
   })
 
   it('signale une route non décrite, une traduction manquante et une référence pendante', () => {

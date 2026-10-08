@@ -17,7 +17,7 @@ import {
   TRANSFORM_DENSITIES,
   type PresetFormValues,
 } from '../shared/schemas/transforms'
-import { htmlAttribute, imageSnippets, withTransformFormat } from '../shared/utils/snippets'
+import { htmlAttribute, imageSnippets, videoSnippet, withTransformFormat } from '../shared/utils/snippets'
 import {
   BUILTIN_PRESETS,
   focalObjectPosition,
@@ -463,6 +463,38 @@ describe('générateur d\'adresses', () => {
     expect(only[0]!.code).toBe('<img src="/m/x/v1/w_10/a.jpg" alt="" loading="lazy">')
     const webpOnly = imageSnippets({ url: '/m/x/v1/w_10/a.webp', alt: '', formats: ['webp', 'avif'], format: 'webp' })
     expect(webpOnly[1]!.code).toBe('<picture>\n  <source type="image/avif" srcset="/m/x/v1/w_10/a.avif">\n  <img src="/m/x/v1/w_10/a.webp" alt="" loading="lazy">\n</picture>')
+  })
+})
+
+describe('extrait <video>', () => {
+  const base = { url: 'https://media.example.com/m/v1d/v2/clip.mov?exp=1&kid=k&sig=s', mimeType: 'video/quicktime', codecs: 'avc1.640028,mp4a.40.2', label: '' }
+
+  it('sans sources : l\'original seul, MOV annoncé video/mp4 avec ses codecs, attributs échappés', () => {
+    expect(videoSnippet({ ...base, width: 1920, height: 1080, label: 'Plage "été"' })).toBe([
+      '<video controls preload="metadata" playsinline width="1920" height="1080" style="max-width: 100%; height: auto" aria-label="Plage &quot;été&quot;">',
+      '  <source src="https://media.example.com/m/v1d/v2/clip.mov?exp=1&amp;kid=k&amp;sig=s" type="video/mp4; codecs=&quot;avc1.640028, mp4a.40.2&quot;">',
+      '</video>',
+    ].join('\n'))
+    expect(videoSnippet({ ...base, mimeType: 'video/webm', codecs: null, sources: [] })).toContain('<source src="https://media.example.com/m/v1d/v2/clip.mov?exp=1&amp;kid=k&amp;sig=s" type="video/webm">')
+  })
+
+  it('sources (phase D3) : un <source> par source dans l\'ordre donné, avant les pistes ; `url` ignorée', () => {
+    const code = videoSnippet({
+      ...base,
+      poster: '/m/v1d/v2/full/clip.jpg',
+      sources: [
+        { url: '/m/v1d/v2/renditions/av1.webm?exp=1&kid=k&sig=s', type: 'video/webm; codecs="av01.0.08M.08, opus"' },
+        { url: '/m/v1d/v2/renditions/h264.mp4?exp=1&kid=k&sig=s', type: 'video/mp4; codecs="avc1.640028, mp4a.40.2"' },
+      ],
+      tracks: [{ src: '/m/v1d/v2/tracks/t1.vtt', kind: 'subtitles', srclang: 'fr', label: 'Français', default: true }],
+    }).split('\n')
+    expect(code).toEqual([
+      '<video controls preload="metadata" playsinline poster="/m/v1d/v2/full/clip.jpg" crossorigin="anonymous">',
+      '  <source src="/m/v1d/v2/renditions/av1.webm?exp=1&amp;kid=k&amp;sig=s" type="video/webm; codecs=&quot;av01.0.08M.08, opus&quot;">',
+      '  <source src="/m/v1d/v2/renditions/h264.mp4?exp=1&amp;kid=k&amp;sig=s" type="video/mp4; codecs=&quot;avc1.640028, mp4a.40.2&quot;">',
+      '  <track kind="subtitles" srclang="fr" label="Français" src="/m/v1d/v2/tracks/t1.vtt" default>',
+      '</video>',
+    ])
   })
 })
 

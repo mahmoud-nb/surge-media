@@ -169,8 +169,8 @@ describe('ETag', () => {
 
   it('détail : échéance des liens incluse seulement pour un média privé', () => {
     const updatedAt = new Date(0)
-    expect(mediaEtag({ id: 'm', version: 2, updatedAt, visibility: 'PUBLIC' }, 99)).toBe('W/"m-2-0"')
-    expect(mediaEtag({ id: 'm', version: 2, updatedAt, visibility: 'PRIVATE' }, 99)).toBe('W/"m-2-0-99"')
+    expect(mediaEtag({ id: 'm', version: 2, updatedAt, visibility: 'PUBLIC', processingState: null, jobs: [] }, 99)).toBe('W/"m-2-0"')
+    expect(mediaEtag({ id: 'm', version: 2, updatedAt, visibility: 'PRIVATE', processingState: null, jobs: [] }, 99)).toBe('W/"m-2-0-99"')
   })
 
   it('If-None-Match : liste, comparaison faible, joker', () => {
@@ -189,6 +189,7 @@ describe('contrat Media v1', () => {
     version: 3, originalName: 'Affiche été.jpg', mimeType: 'image/jpeg', size: 1234, checksum: 'a'.repeat(64), width: 800, height: 600,
     duration: null, title: 'Affiche été', altText: 'Plage', searchTitle: null, searchName: '', searchAlt: null, metadata: null, focalX: null, focalY: null,
     posterKey: null, posterWidth: null, posterHeight: null, posterSize: null, posterTime: null, textTracks: [],
+    processingState: null, renditions: [], jobs: [],
     uploadedById: null, duplicatedFromId: null, createdAt: new Date('2026-09-29T10:00:00Z'), updatedAt: new Date('2026-09-29T11:00:00Z'), deletedAt: null,
   } as const
 

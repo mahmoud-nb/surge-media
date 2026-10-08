@@ -24,6 +24,8 @@ export const AUDIT_ACTIONS = [
   'media.visibility_changed',
   'media.moved',
   'media.deleted',
+  // « Traiter les vidéos existantes » (phase D3) : data.count = tâches créées.
+  'media.processing_backfill',
   'user.created',
   'user.updated',
   'user.deleted',

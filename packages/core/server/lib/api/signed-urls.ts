@@ -1,11 +1,11 @@
-import type { ApiSignedUrlBody } from '#shared/schemas/api'
+import type { ApiMediaSource, ApiSignedUrlBody } from '#shared/schemas/api'
 import { API_DEFAULT_TRANSFORM_FORMAT } from '#shared/utils/api'
 import { transformationSegment, type TransformPolicy } from '#shared/utils/transforms'
 import { apiProblem } from './problem'
 import { mediaError } from '../media/errors'
 import { signMediaAccess } from '../media/signing'
 import { derivedPath, mediaPath, trackPath } from '../media/urls'
-import type { ApiMediaRecord } from './serializers'
+import { apiVideoSources, type ApiMediaRecord } from './serializers'
 import { hasDerivedFiles } from '../media/variants'
 import { resolveTransformRequest } from '../transforms/service'
 import { signaturePlan, type SignedFile } from './signature-plan'
@@ -15,6 +15,8 @@ import { signaturePlan, type SignedFile } from './signature-plan'
  * {mediaId}/signed-url` et le lot `POST …/signed-urls`) et générateur d'adresses de la fiche média
  * (`POST /api/admin/media/:id/links`). L'original, un préréglage de l'espace, une transformation libre
  * (canonisée), ou le droit « derived » (tout dérivé de la version). Architecture phase C § 5.3 et § 7.
+ * L'original d'une vidéo est accompagné de ses sources de lecture (`sources`, phase D3) : le droit sur le
+ * fichier couvre ses rendus (DD33), les sources reprennent donc la signature et l'échéance du lien.
  *
  * Erreurs métier (`data.code` : INVALID_TRANSFORM, PRESET_NOT_FOUND, TRANSFORM_NOT_ALLOWED ; 400 sans
  * code pour un média sans dérivés) : l'API v1 les convertit en problèmes RFC 9457 (`toProblem`).
@@ -36,6 +38,8 @@ export interface SignedUrlResult {
   /** Paramètres de signature seuls (vide sans signature). */
   query: string
   expiresAt: string | null
+  /** Cible `file` d'une vidéo : ses sources de lecture, signées comme `url`. */
+  sources?: ApiMediaSource[]
 }
 
 /**
@@ -74,11 +78,12 @@ export async function issueSignedUrl(media: ApiMediaRecord, request: SignedUrlRe
     ? mediaPath(media)
     : file.kind === 'track' ? trackPath(media, file.trackId) : derivedPath(media, file.kind === 'preset' ? file.name : transformationSegment(file.canonical), file.format)
   const url = `${options.base}${path}`
-  if (plan.type === 'none') return { url, query: '', expiresAt: null }
-  if (plan.type === 'permanent') {
-    const query = signMediaAccess(media, plan.access, null)
-    return { url: `${url}?${query}`, query, expiresAt: null }
+  const query = plan.type === 'none' ? '' : signMediaAccess(media, plan.access, plan.type === 'permanent' ? null : options.expires)
+  const result: SignedUrlResult = {
+    url: query ? `${url}?${query}` : url,
+    query,
+    expiresAt: plan.type === 'expiring' ? new Date(options.expires * 1000).toISOString() : null,
   }
-  const query = signMediaAccess(media, plan.access, options.expires)
-  return { url: `${url}?${query}`, query, expiresAt: new Date(options.expires * 1000).toISOString() }
+  if (file.kind === 'file' && media.kind === 'VIDEO') result.sources = apiVideoSources(media, media.renditions, options.base, query ? `?${query}` : '')
+  return result
 }

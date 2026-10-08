@@ -11,7 +11,9 @@ import {
   apiFolderUpdateSchema,
   apiMediaListQuerySchema,
   apiMediaListSchema,
+  apiMediaProcessingSchema,
   apiMediaSchema,
+  apiMediaSourceSchema,
   apiMediaUpdateSchema,
   apiMediaUploadFieldsSchema,
   apiMeSchema,
@@ -147,9 +149,30 @@ Les clés secrètes et les jetons personnels sont **refusés depuis un navigateu
 Les champs \`url\` et \`previewUrl\` sont des adresses absolues, utilisables telles quelles (\`<img src>\`) : permanentes et mises en cache pour un média public, signées et temporaires pour un média privé. Un lien signé à la demande s'obtient avec \`POST …/signed-url\` (ou \`POST …/signed-urls\` pour tout un lot).
 
 ## Vidéos
-Les vidéos MP4, WebM et QuickTime (MOV) sont stockées et servies sans transcodage. Un MP4 ou un MOV est **préparé à l'envoi**, sans réencodage ni perte de qualité : index placé en tête du fichier (la lecture commence sans aller chercher la fin) et métadonnées d'origine retirées (lieu de tournage, appareil, logiciel) ; \`size\` est la taille du fichier servi. \`width\` et \`height\` sont les dimensions affichées (rotation des vidéos de téléphone appliquée), \`duration\` la durée en secondes (estimée pour un WebM enregistré par un navigateur, \`null\` si elle reste inconnue). \`url\` se lit directement dans \`<video src>\` : la diffusion accepte les requêtes partielles (\`Range\` → \`206\`) et un média public est mis en cache sans limite (CDN). La lecture dépend des codecs du fichier : H.264 (MP4, MOV) et VP8/VP9 (WebM) sont lus partout, HEVC ou AV1 selon le navigateur. L'\`url\` d'une vidéo privée est signée pour environ une heure et le lecteur la réutilise pendant toute la lecture : pour une longue vidéo, demandez un lien plus durable (\`POST …/signed-url\`, \`expiresIn\` au moins égal à la durée, 7 jours au plus).
+Les vidéos MP4, WebM et QuickTime (MOV) sont stockées et servies telles qu'envoyées. Un MP4 ou un MOV est **préparé à l'envoi**, sans réencodage ni perte de qualité : index placé en tête du fichier (la lecture commence sans aller chercher la fin) et métadonnées d'origine retirées (lieu de tournage, appareil, logiciel) ; \`size\` est la taille du fichier servi. \`width\` et \`height\` sont les dimensions affichées (rotation des vidéos de téléphone appliquée), \`duration\` la durée en secondes (estimée pour un WebM enregistré par un navigateur, \`null\` si elle reste inconnue). La diffusion accepte les requêtes partielles (\`Range\` → \`206\`) et un média public est mis en cache sans limite (CDN).
 
-**Image d'affiche** (\`PUT …/media/{mediaId}/poster\`) : une image, normalisée en JPEG, sert d'attribut \`poster\` (\`poster.url\`) et de source aux dérivés de la vidéo (\`previewUrl\`, \`urlTemplate\`) ; sans affiche, ils valent \`null\`. La première affiche garde la version ; la remplacer ou la retirer l'incrémente (nouvelles URL). Une application peut capturer l'image dans le navigateur, sans calcul côté serveur :
+**Traitement par le serveur** : selon son réglage (choisi par l'installation, pas par l'API : aucun traitement, ou ffmpeg en tâche de fond), le serveur traite chaque nouvelle vidéo après l'envoi — retrait des pistes de métadonnées de l'appareil (positions GPS des téléphones, caméras d'action, drones), durée et index d'un WebM enregistré par un navigateur, image d'affiche extraite quand la vidéo n'en a pas, et **rendus** lisibles partout quand l'original ne l'est pas (HEVC, ProRes, format converti…) ou qu'il est trop lourd (définition ou débit élevés, HDR) : H.264 en MP4 et, si l'installation l'active, AV1 en WebM. Réécrire le fichier ou remplacer un rendu incrémente la version (nouvelles URL, les anciennes redirigent). \`processing\` donne l'état de la dernière tâche : \`pending\`, \`processing\` (avec \`progress\`), \`ready\`, ou \`failed\` (avec \`error\` ; la vidéo reste servie telle qu'envoyée) ; il vaut \`null\` pour une vidéo jamais traitée (traitement désactivé, ou vidéo envoyée avant son activation), servie telle quelle.
+
+**Lecture** : reprenez \`sources\` dans l'ordre, une balise \`<source>\` par entrée avec son \`type\` — le navigateur prend la première qu'il sait lire, sans télécharger les autres : les rendus quand ils existent (AV1 d'abord, plus léger ; H.264 ensuite, lu partout), sinon l'original s'il est lisible par \`<video>\`. \`url\` reste l'original (téléchargement, archivage). Sans rendu, la lecture dépend des codecs du fichier : H.264 (MP4, MOV) et VP8/VP9 (WebM) sont lus partout, HEVC ou AV1 selon le navigateur. \`type\` contient des guillemets : entourez l'attribut d'apostrophes (ou laissez votre moteur de gabarits l'échapper). Avec l'affiche (\`poster.url\`) et les pistes de texte (\`textTracks\`) :
+
+\`\`\`html
+<video controls playsinline preload="metadata" crossorigin="anonymous" width="1920" height="1080"
+       poster="https://media.example.com/m/cm…/v4/full/vacances.jpg">
+  <source src="https://media.example.com/m/cm…/v4/renditions/av1.webm" type='video/webm; codecs="av01.0.08M.08, opus"'>
+  <source src="https://media.example.com/m/cm…/v4/renditions/h264.mp4" type='video/mp4; codecs="avc1.640028, mp4a.40.2"'>
+  <track kind="captions" srclang="fr" label="Français" src="https://media.example.com/m/cm…/v4/tracks/cm….vtt" default>
+</video>
+\`\`\`
+
+Les URL d'une vidéo privée (\`url\`, \`sources\`, pistes) sont signées pour environ une heure et le lecteur les réutilise pendant toute la lecture : pour une longue vidéo, demandez un lien plus durable (\`POST …/signed-url\`, cible \`file\`, \`expiresIn\` au moins égal à la durée, 7 jours au plus), dont la réponse contient aussi \`sources\`, signées jusqu'à la même échéance.
+
+**Attendre le traitement** : aucune notification n'est envoyée (pas de webhook) ; relisez le média (\`GET …/media/{mediaId}\`) avec \`If-None-Match\`, pas plus d'une fois toutes les 5 s, tant que \`processing.status\` vaut \`pending\` ou \`processing\` : \`304\` tant que rien n'a changé, l'\`ETag\` suit l'avancement. À \`ready\`, reprenez \`url\`, \`sources\` et \`poster\` (nouvelles URL si la version a changé). Les listes suivent aussi l'état du traitement, mais le suivi d'une vidéo passe par son média.
+
+**Formats convertis** : seulement pendant que le traitement est actif, le serveur accepte aussi MKV, AVI, 3GP/3G2, MPEG-TS (et M2TS), OGV et WMV, que les navigateurs ne lisent pas. L'original est servi en téléchargement (\`Content-Disposition: attachment\`), \`width\`, \`height\` et \`duration\` valent \`null\` jusqu'à son analyse, et \`sources\` reste vide tant que le rendu H.264 n'existe pas. Traitement inactif : ces formats sont refusés (\`415 UNSUPPORTED_TYPE\`), même pour un jeton délégué qui les cite.
+
+**Retenue pendant le nettoyage** : tant qu'une piste de métadonnées de l'appareil (souvent des positions GPS) n'est pas retirée, l'original et les rendus de la vidéo répondent \`503\` (\`PROCESSING_PENDING\`, en-tête \`Retry-After\`), par leur URL publique comme par un lien signé ; ce nettoyage passe avant les réencodages et ne prend en général que quelques secondes. L'affiche, les dérivés et les pistes de texte restent servis. Le fichier nettoyé a une nouvelle version : relisez le média pour obtenir ses nouvelles URL. Un échec définitif lève la retenue.
+
+**Image d'affiche** (\`PUT …/media/{mediaId}/poster\`) : une image, normalisée en JPEG, sert d'attribut \`poster\` (\`poster.url\`) et de source aux dérivés de la vidéo (\`previewUrl\`, \`urlTemplate\`) ; sans affiche, ils valent \`null\`. La première affiche garde la version ; la remplacer ou la retirer l'incrémente (nouvelles URL). Quand le traitement est actif, le serveur extrait une affiche de la vidéo qui n'en a pas ; une affiche envoyée l'emporte toujours. Une application peut aussi capturer l'image dans le navigateur, sans attendre le serveur :
 
 \`\`\`js
 const video = document.createElement('video')
@@ -188,7 +211,7 @@ Chaque image se décline par son URL de diffusion, dont \`urlTemplate\` donne le
 | \`crop\` | \`x-y-largeur-hauteur\` | zone extraite, en pixels de l'image tournée |
 | \`bg\` | \`rrggbb\` | fond de \`contain\` et de la transparence convertie en JPEG |
 
-Une URL non canonique (ordre des paramètres, valeurs par défaut, \`dpr\`, \`jpeg\`) est redirigée (\`301\`) vers sa forme canonique ; une URL valable est mise en cache sans limite (une semaine, puis revalidée, pour un préréglage du projet ou de l'installation, modifiable). Selon la politique du projet (\`transformPolicy\`), les paramètres libres sont acceptés (\`open\`), seulement signés (\`signed\` : \`POST …/signed-url\`, ou signature de \`urlTemplate\` pour un média privé) ou refusés (\`presets\`) ; les préréglages sont toujours servis. Les erreurs de \`/m/\` sont en JSON avec un code dans \`data.code\` : \`INVALID_TRANSFORM\` (400), \`TRANSFORM_NOT_ALLOWED\`, \`MEDIA_FORBIDDEN\`, \`SIGNATURE_INVALID\`, \`SIGNATURE_EXPIRED\` (403), \`TRANSFORM_QUOTA\` (429 : 50 dérivés libres par version, débit de nouvelles générations par adresse IP), \`SERVER_BUSY\` (503).`
+Une URL non canonique (ordre des paramètres, valeurs par défaut, \`dpr\`, \`jpeg\`) est redirigée (\`301\`) vers sa forme canonique ; une URL valable est mise en cache sans limite (une semaine, puis revalidée, pour un préréglage du projet ou de l'installation, modifiable). Selon la politique du projet (\`transformPolicy\`), les paramètres libres sont acceptés (\`open\`), seulement signés (\`signed\` : \`POST …/signed-url\`, ou signature de \`urlTemplate\` pour un média privé) ou refusés (\`presets\`) ; les préréglages sont toujours servis. Les erreurs de \`/m/\` sont en JSON avec un code dans \`data.code\` : \`INVALID_TRANSFORM\` (400), \`TRANSFORM_NOT_ALLOWED\`, \`MEDIA_FORBIDDEN\`, \`SIGNATURE_INVALID\`, \`SIGNATURE_EXPIRED\` (403), \`TRANSFORM_QUOTA\` (429 : 50 dérivés libres par version, débit de nouvelles générations par adresse IP), \`SERVER_BUSY\` (503), \`PROCESSING_PENDING\` (503 avec \`Retry-After\` : original ou rendu d'une vidéo retenu pendant le retrait de ses métadonnées, voir « Vidéos »).`
 
 const INFO_EN = `Public API of surgeMedia: media, folders and projects, for your applications.
 
@@ -215,9 +238,30 @@ Secret keys and personal tokens are **rejected from a browser** (\`SECRET_IN_BRO
 The \`url\` and \`previewUrl\` fields are absolute addresses, usable as is (\`<img src>\`): permanent and cached for a public media item, signed and temporary for a private one. An on-demand signed link comes from \`POST …/signed-url\` (or \`POST …/signed-urls\` for a whole batch).
 
 ## Videos
-MP4, WebM and QuickTime (MOV) videos are stored and served without transcoding. An MP4 or MOV file is **prepared on upload**, without re-encoding or quality loss: index moved to the start of the file (playback starts without fetching the end) and original metadata removed (shooting location, device, software); \`size\` is the size of the served file. \`width\` and \`height\` are the displayed dimensions (rotation of phone videos applied), \`duration\` the duration in seconds (estimated for a WebM recorded by a browser, \`null\` when it remains unknown). \`url\` plays directly in \`<video src>\`: delivery accepts partial requests (\`Range\` → \`206\`) and a public media item is cached without limit (CDN). Playback depends on the codecs of the file: H.264 (MP4, MOV) and VP8/VP9 (WebM) play everywhere, HEVC or AV1 depending on the browser. The \`url\` of a private video is signed for about one hour and the player reuses it during the whole playback: for a long video, request a longer-lived link (\`POST …/signed-url\`, \`expiresIn\` at least equal to the duration, 7 days at most).
+MP4, WebM and QuickTime (MOV) videos are stored and served as uploaded. An MP4 or MOV file is **prepared on upload**, without re-encoding or quality loss: index moved to the start of the file (playback starts without fetching the end) and original metadata removed (shooting location, device, software); \`size\` is the size of the served file. \`width\` and \`height\` are the displayed dimensions (rotation of phone videos applied), \`duration\` the duration in seconds (estimated for a WebM recorded by a browser, \`null\` when it remains unknown). Delivery accepts partial requests (\`Range\` → \`206\`) and a public media item is cached without limit (CDN).
 
-**Poster image** (\`PUT …/media/{mediaId}/poster\`): an image, normalised to JPEG, serves as the \`poster\` attribute (\`poster.url\`) and as the source of the video's derivatives (\`previewUrl\`, \`urlTemplate\`); without a poster, they are \`null\`. The first poster keeps the version; replacing or removing it increments it (new URLs). An application can capture the frame in the browser, with no server-side processing:
+**Processing by the server**: depending on its setting (chosen by the installation, not through the API: no processing, or ffmpeg in the background), the server processes every new video after the upload — removal of device metadata tracks (GPS positions of phones, action cameras, drones), duration and index of a WebM recorded by a browser, poster image extracted when the video has none, and **renditions** playable everywhere when the original is not (HEVC, ProRes, converted format…) or is too heavy (high definition or bitrate, HDR): H.264 in MP4 and, when the installation enables it, AV1 in WebM. Rewriting the file or replacing a rendition increments the version (new URLs, old ones redirect). \`processing\` gives the state of the latest task: \`pending\`, \`processing\` (with \`progress\`), \`ready\`, or \`failed\` (with \`error\`; the video is still served as uploaded); it is \`null\` for a video never processed (processing disabled, or video uploaded before it was enabled), served as is.
+
+**Playback**: use \`sources\` in order, one \`<source>\` tag per entry with its \`type\` — the browser takes the first one it can play, without downloading the others: the renditions when they exist (AV1 first, lighter; H.264 next, played everywhere), otherwise the original when \`<video>\` can play it. \`url\` remains the original (download, archiving). Without a rendition, playback depends on the codecs of the file: H.264 (MP4, MOV) and VP8/VP9 (WebM) play everywhere, HEVC or AV1 depending on the browser. \`type\` contains double quotes: wrap the attribute in single quotes (or let your template engine escape it). With the poster (\`poster.url\`) and the text tracks (\`textTracks\`):
+
+\`\`\`html
+<video controls playsinline preload="metadata" crossorigin="anonymous" width="1920" height="1080"
+       poster="https://media.example.com/m/cm…/v4/full/holidays.jpg">
+  <source src="https://media.example.com/m/cm…/v4/renditions/av1.webm" type='video/webm; codecs="av01.0.08M.08, opus"'>
+  <source src="https://media.example.com/m/cm…/v4/renditions/h264.mp4" type='video/mp4; codecs="avc1.640028, mp4a.40.2"'>
+  <track kind="captions" srclang="en" label="English" src="https://media.example.com/m/cm…/v4/tracks/cm….vtt" default>
+</video>
+\`\`\`
+
+The URLs of a private video (\`url\`, \`sources\`, tracks) are signed for about one hour and the player reuses them during the whole playback: for a long video, request a longer-lived link (\`POST …/signed-url\`, target \`file\`, \`expiresIn\` at least equal to the duration, 7 days at most), whose response also contains \`sources\`, signed until the same expiry.
+
+**Waiting for processing**: no notification is sent (no webhook); read the media item again (\`GET …/media/{mediaId}\`) with \`If-None-Match\`, no more than once every 5 s, while \`processing.status\` is \`pending\` or \`processing\`: \`304\` while nothing changed, the \`ETag\` follows the progress. At \`ready\`, take \`url\`, \`sources\` and \`poster\` again (new URLs if the version changed). Lists also follow the processing state, but following a video goes through its media item.
+
+**Converted formats**: only while processing is active, the server also accepts MKV, AVI, 3GP/3G2, MPEG-TS (and M2TS), OGV and WMV, which browsers do not play. The original is served as a download (\`Content-Disposition: attachment\`), \`width\`, \`height\` and \`duration\` are \`null\` until it is analysed, and \`sources\` stays empty until the H.264 rendition exists. Processing inactive: these formats are rejected (\`415 UNSUPPORTED_TYPE\`), even for a delegated token that lists them.
+
+**Hold during clean-up**: until a device metadata track (often GPS positions) is removed, the original and the renditions of the video answer \`503\` (\`PROCESSING_PENDING\`, \`Retry-After\` header), through their public URL as through a signed link; this clean-up runs before any re-encoding and usually takes only a few seconds. The poster, derivatives and text tracks are still served. The cleaned file has a new version: read the media item again to get its new URLs. A final failure lifts the hold.
+
+**Poster image** (\`PUT …/media/{mediaId}/poster\`): an image, normalised to JPEG, serves as the \`poster\` attribute (\`poster.url\`) and as the source of the video's derivatives (\`previewUrl\`, \`urlTemplate\`); without a poster, they are \`null\`. The first poster keeps the version; replacing or removing it increments it (new URLs). When processing is active, the server extracts a poster from a video that has none; an uploaded poster always wins. An application can also capture the frame in the browser, without waiting for the server:
 
 \`\`\`js
 const video = document.createElement('video')
@@ -256,7 +300,7 @@ Every image can be derived through its delivery URL, whose template is given by 
 | \`crop\` | \`x-y-width-height\` | extracted area, in pixels of the rotated image |
 | \`bg\` | \`rrggbb\` | background of \`contain\` and of transparency converted to JPEG |
 
-A non-canonical URL (parameter order, default values, \`dpr\`, \`jpeg\`) is redirected (\`301\`) to its canonical form; a valid URL is cached without limit (one week, then revalidated, for a project or installation preset, which can change). Depending on the project policy (\`transformPolicy\`), free parameters are accepted (\`open\`), signed only (\`signed\`: \`POST …/signed-url\`, or the signature of \`urlTemplate\` for a private media item) or refused (\`presets\`); presets are always served. Errors of \`/m/\` are JSON with a code in \`data.code\`: \`INVALID_TRANSFORM\` (400), \`TRANSFORM_NOT_ALLOWED\`, \`MEDIA_FORBIDDEN\`, \`SIGNATURE_INVALID\`, \`SIGNATURE_EXPIRED\` (403), \`TRANSFORM_QUOTA\` (429: 50 free derivatives per version, rate of new generations per IP address), \`SERVER_BUSY\` (503).`
+A non-canonical URL (parameter order, default values, \`dpr\`, \`jpeg\`) is redirected (\`301\`) to its canonical form; a valid URL is cached without limit (one week, then revalidated, for a project or installation preset, which can change). Depending on the project policy (\`transformPolicy\`), free parameters are accepted (\`open\`), signed only (\`signed\`: \`POST …/signed-url\`, or the signature of \`urlTemplate\` for a private media item) or refused (\`presets\`); presets are always served. Errors of \`/m/\` are JSON with a code in \`data.code\`: \`INVALID_TRANSFORM\` (400), \`TRANSFORM_NOT_ALLOWED\`, \`MEDIA_FORBIDDEN\`, \`SIGNATURE_INVALID\`, \`SIGNATURE_EXPIRED\` (403), \`TRANSFORM_QUOTA\` (429: 50 free derivatives per version, rate of new generations per IP address), \`SERVER_BUSY\` (503), \`PROCESSING_PENDING\` (503 with \`Retry-After\`: original or rendition of a video held while its metadata is removed, see “Videos”).`
 
 // ─── Schémas zod → JSON Schema ───────────────────────────────────────────────
 
@@ -381,6 +425,8 @@ function buildComponents() {
   const registry = z.registry<{ id: string }>()
   registry.add(apiMediaSchema, { id: 'Media' })
   registry.add(apiMediaListSchema, { id: 'MediaList' })
+  registry.add(apiMediaSourceSchema, { id: 'MediaSource' })
+  registry.add(apiMediaProcessingSchema, { id: 'MediaProcessing' })
   registry.add(apiTextTrackSchema, { id: 'TextTrack' })
   registry.add(apiTextTrackListSchema, { id: 'TextTrackList' })
   registry.add(apiFolderSchema, { id: 'Folder' })
