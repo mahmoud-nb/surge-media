@@ -375,8 +375,8 @@ export type ApiMediaSource = z.input<typeof apiMediaSourceSchema>
  */
 export const apiMediaProcessingSchema = z.object({
   status: z.enum(API_PROCESSING_STATUSES).meta(doc(
-    '`pending` : en attente d\'un processus de traitement (ou d\'un nouvel essai après un échec passager) ; `processing` : en cours ; `ready` : terminé, `sources` et les champs du fichier sont à jour ; `failed` : échec définitif (`error`), la vidéo reste servie telle qu\'envoyée.',
-    '`pending`: waiting for a processing worker (or for a new attempt after a transient failure); `processing`: in progress; `ready`: done, `sources` and the file fields are up to date; `failed`: final failure (`error`), the video is still served as uploaded.',
+    '`pending` : en attente d\'un processus de traitement (ou d\'un nouvel essai après un échec passager) ; `processing` : en cours ; `ready` : terminé, `sources` et les champs du fichier sont à jour ; `failed` : échec définitif (`error`), la vidéo reste servie avec ce qui a pu être fait (l\'original, éventuellement nettoyé, et les rendus déjà produits).',
+    '`pending`: waiting for a processing worker (or for a new attempt after a transient failure); `processing`: in progress; `ready`: done, `sources` and the file fields are up to date; `failed`: final failure (`error`), the video is still served with what could be done (the original, possibly cleaned, and any rendition already produced).',
   )),
   progress: z.number().min(0).max(1).nullable().meta(doc(
     'Avancement du réencodage en cours (0 à 1), mis à jour toutes les 5 s environ ; repart de 0 pour chaque rendu (H.264, puis AV1). null hors du statut `processing`, ou pendant une étape non mesurée (analyse, nettoyage, affiche).',

@@ -99,7 +99,7 @@ export default defineNuxtConfig({
       processing: 'off', // off | embedded | external — NUXT_VIDEO_PROCESSING
       concurrency: 1, // tâches simultanées par processus — NUXT_VIDEO_CONCURRENCY
       threads: 0, // fils par ffmpeg, 0 = moitié des cœurs — NUXT_VIDEO_THREADS
-      rendition: 'auto', // rendu H.264 : auto | always | never — NUXT_VIDEO_RENDITION
+      rendition: 'auto', // rendu H.264 : auto | always | never (sauf formats convertis) — NUXT_VIDEO_RENDITION
       preset: 'veryfast', // préréglage x264 — NUXT_VIDEO_PRESET
       crf: 23, // qualité x264 (0–51, plus bas = meilleur) — NUXT_VIDEO_CRF
       av1: false, // rendu AV1 en plus (on/off) — NUXT_VIDEO_AV1

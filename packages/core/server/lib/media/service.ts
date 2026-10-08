@@ -8,7 +8,7 @@ import { mediaSearchColumns, normalizeSearchText } from '#shared/utils/search'
 import { sameFocalPoint } from '#shared/utils/transforms'
 import { isConvertedContainer, type VideoHdrTransfer, type VideoMetadata, videoMetadata, type VideoRewrite, VIDEO_REWRITES } from '#shared/utils/video'
 import { BACKFILL_PRIORITY, type ProcessingStateValue, RENDITION_FORMATS, RENDITION_NAMES, type RenditionName } from '#shared/utils/video-processing'
-import type { AccessToken, Media, MediaRendition, MediaTextTrack, Prisma } from '../../generated/prisma/client'
+import type { AccessToken, Media, MediaJob, MediaRendition, MediaTextTrack, Prisma } from '../../generated/prisma/client'
 import type { Space } from '../../utils/access'
 import { folderWhere, requireFolderInSpace } from '../folders/service'
 import { useMediaStorage } from '../storage'
@@ -174,6 +174,16 @@ function summaryFields(media: MediaListRecord, paths: AdminMediaPaths) {
 }
 
 /**
+ * Traitement d'une vidéo pour l'administration (fiche, GET …/processing) : sa dernière tâche (sources.ts,
+ * `PROCESSING_INCLUDE`), selon l'état et non la seule présence d'une tâche — un fichier remplacé pendant
+ * que le traitement est inactif remet l'état à null mais garde la tâche terminée de l'ancien fichier.
+ * null : jamais traitée (ou image), comme `processing` de l'API v1.
+ */
+export function mediaProcessingDetail(media: Pick<Media, 'processingState'> & { jobs: readonly MediaJob[] }) {
+  return media.processingState ? processingDetail(media.jobs[0] ?? null) : null
+}
+
+/**
  * Représentation complète (fiche). Vidéo (phase D3) : `processing` = dernière tâche (détail de l'erreur
  * déjà assaini, jamais de chemin) ; `renditions` dans l'ordre de `sources` (noms inconnus ignorés) ;
  * `sources` = liste prête pour `<video><source>` (server/lib/media/sources.ts). Leurs liens sont signés
@@ -202,7 +212,7 @@ export function toMediaDetail(media: MediaWithUploader) {
       createdAt: track.createdAt,
     })),
     /** Dernière tâche de traitement d'une vidéo (phase D3), null : jamais traitée (ou image). */
-    processing: processingDetail(media.jobs[0] ?? null),
+    processing: mediaProcessingDetail(media),
     /** Rendus produits par ffmpeg (AV1 puis H.264). */
     renditions: renditions.map(rendition => ({
       name: rendition.name,
@@ -1067,37 +1077,46 @@ const BACKFILL_BATCH = 200
  * récents) pour chaque vidéo jamais traitée (`processingState` null), hors corbeille. Chaque vidéo est
  * prise par une écriture conditionnelle (toujours non traitée, même fichier) : deux demandes simultanées
  * ne créent pas deux tâches. 409 PROCESSING_DISABLED si le traitement est inactif. Renvoie le nombre de
- * tâches créées.
+ * tâches créées ; `progress.count` le suit pendant la boucle : une écriture qui échoue en route (base
+ * indisponible) laisse les tâches déjà créées, que l'appelant peut encore journaliser. Elles sont
+ * annoncées dans tous les cas (caches, révisions, boucle de traitement).
  */
-export async function backfillProcessing(): Promise<{ count: number }> {
+export async function backfillProcessing(progress: { count: number } = { count: 0 }): Promise<{ count: number }> {
   if (!await videoProcessingActive()) throw mediaError(409, 'PROCESSING_DISABLED')
   const prisma = await usePrisma()
   const changed: string[] = []
   const skipped: string[] = []
-  for (let round = 0; round < 10_000; round++) {
-    const batch = await prisma.media.findMany({
-      where: { kind: 'VIDEO', processingState: null, deletedAt: null, ...(skipped.length > 0 ? { id: { notIn: skipped } } : {}) },
-      select: { id: true, storageKey: true, metadata: true },
-      orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
-      take: BACKFILL_BATCH,
-    })
-    for (const media of batch) {
-      const now = new Date()
-      const queued = await prisma.$transaction(async (tx) => {
-        const { count } = await tx.media.updateMany({
-          where: { id: media.id, storageKey: media.storageKey, processingState: null, deletedAt: null },
-          data: { processingState: 'PENDING' },
-        })
-        if (count !== 1) return false
-        await enqueueJob(tx, { mediaId: media.id, sourceKey: media.storageKey, priority: jobPriority(media.metadata, BACKFILL_PRIORITY) }, now)
-        return true
-      }, JOB_TRANSACTION)
-      ;(queued ? changed : skipped).push(media.id)
+  try {
+    for (let round = 0; round < 10_000; round++) {
+      const batch = await prisma.media.findMany({
+        where: { kind: 'VIDEO', processingState: null, deletedAt: null, ...(skipped.length > 0 ? { id: { notIn: skipped } } : {}) },
+        select: { id: true, storageKey: true, metadata: true },
+        orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
+        take: BACKFILL_BATCH,
+      })
+      for (const media of batch) {
+        const now = new Date()
+        const queued = await prisma.$transaction(async (tx) => {
+          const { count } = await tx.media.updateMany({
+            where: { id: media.id, storageKey: media.storageKey, processingState: null, deletedAt: null },
+            data: { processingState: 'PENDING' },
+          })
+          if (count !== 1) return false
+          await enqueueJob(tx, { mediaId: media.id, sourceKey: media.storageKey, priority: jobPriority(media.metadata, BACKFILL_PRIORITY) }, now)
+          return true
+        }, JOB_TRANSACTION)
+        ;(queued ? changed : skipped).push(media.id)
+        progress.count = changed.length
+      }
+      if (batch.length < BACKFILL_BATCH) break
     }
-    if (batch.length < BACKFILL_BATCH) break
   }
-  await processingChanged(changed)
-  if (changed.length > 0) notifyJobQueued()
+  finally {
+    if (changed.length > 0) {
+      notifyJobQueued()
+      await processingChanged(changed)
+    }
+  }
   return { count: changed.length }
 }
 
