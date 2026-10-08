@@ -49,6 +49,13 @@ export interface RunOptions {
   maxOutputSeconds?: number
   /** Sortie standard gardée au plus (octets) ; au-delà, le processus est arrêté (`overflow`). */
   stdoutLimit?: number
+  /**
+   * POSIX : nouveau groupe de processus (défaut), tué d'un coup avec ses descendants, et à l'abri d'un
+   * Ctrl+C adressé au serveur (arrêt propre : la tâche est rendue avant que ffmpeg soit tué). false en
+   * développement : `nuxt dev` s'arrête sur Ctrl+C sans crochet `close` ; ffmpeg, resté dans le groupe
+   * du terminal, reçoit le même signal au lieu de continuer seul.
+   */
+  detached?: boolean
 }
 
 export interface RunResult {
@@ -237,6 +244,16 @@ async function command(binary: string, args: readonly string[], options: RunOpti
   return { file: prlimit, args: [...limits, '--', binary, ...args], wrapped: true }
 }
 
+/**
+ * Échec de lancement dû au réglage (programme absent ou non exécutable) : le traitement ne peut pas
+ * fonctionner sur ce processus. Les autres (EAGAIN, EMFILE, ENOMEM : machine momentanément saturée) sont
+ * passagers : nouvel essai, la boucle continue.
+ */
+export function isMissingTool(error: unknown): boolean {
+  const code = (error as NodeJS.ErrnoException | null)?.code
+  return code === 'ENOENT' || code === 'EACCES' || code === 'ENOTDIR' || code === 'EPERM'
+}
+
 /** Outil introuvable derrière `prlimit` (qui sort alors en 127 avec ce message) : même erreur qu'un lancement direct. */
 function wrappedSpawnError(binary: string, code: number | null, stderr: string): NodeJS.ErrnoException | null {
   if (code !== 127 || !/^prlimit: failed to execute /m.test(stderr)) return null
@@ -247,7 +264,7 @@ function wrappedSpawnError(binary: string, code: number | null, stderr: string):
  * Arrête le processus et ses descendants : groupe POSIX créé par `detached` (tué même si son chef est
  * déjà sorti, tant que des descendants gardent les tubes ouverts), arbre Windows (`taskkill /T`).
  */
-function killTree(child: ChildProcess): void {
+function killTree(child: ChildProcess, group: boolean): void {
   const pid = child.pid
   if (pid === undefined) return
   if (process.platform === 'win32') {
@@ -257,7 +274,8 @@ function killTree(child: ChildProcess): void {
     return
   }
   try {
-    process.kill(-pid, 'SIGKILL')
+    // Hors groupe (développement) : ffmpeg ne crée pas de processus (prlimit le remplace, même pid).
+    process.kill(group ? -pid : pid, 'SIGKILL')
   }
   catch {
     // Groupe déjà vide (ESRCH) : rien à arrêter.
@@ -279,11 +297,12 @@ export async function runTool(binary: string, options: RunOptions): Promise<RunR
   // Arrêt demandé pendant la recherche de `prlimit`.
   if (signal?.aborted) return notStarted
 
+  // Nouveau groupe de processus (POSIX) : tué d'un coup, descendants compris (voir `RunOptions.detached`).
+  const group = process.platform !== 'win32' && options.detached !== false
   return new Promise<RunResult>((resolve, reject) => {
     const child = spawn(file, args, {
       stdio: ['ignore', 'pipe', 'pipe'],
-      // Nouveau groupe de processus (POSIX) : tué d'un coup, descendants compris.
-      detached: process.platform !== 'win32',
+      detached: group,
       windowsHide: true,
       shell: false,
       env: toolEnvironment(process.env),
@@ -306,11 +325,11 @@ export async function runTool(binary: string, options: RunOptions): Promise<RunR
 
     const timer = setTimeout(() => {
       timedOut = true
-      killTree(child)
+      killTree(child, group)
     }, options.timeoutMs)
     const onAbort = () => {
       aborted = true
-      killTree(child)
+      killTree(child, group)
     }
     signal?.addEventListener('abort', onAbort, { once: true })
     const cleanup = () => {
@@ -324,7 +343,7 @@ export async function runTool(binary: string, options: RunOptions): Promise<RunR
         if (tooLong) return
         if (maxOutputSeconds !== undefined && seconds > maxOutputSeconds + OUTPUT_DURATION_TOLERANCE) {
           tooLong = true
-          killTree(child)
+          killTree(child, group)
           return
         }
         // Une erreur de l'appelant (écriture de l'avancement) ne doit ni arrêter ffmpeg ni le serveur.
@@ -342,7 +361,7 @@ export async function runTool(binary: string, options: RunOptions): Promise<RunR
         if (stdoutSize > stdoutLimit) {
           overflow = true
           stdout.length = 0
-          killTree(child)
+          killTree(child, group)
           return
         }
         stdout.push(chunk)

@@ -1,6 +1,6 @@
 import type { VideoContainer, VideoHdrTransfer } from '#shared/utils/video'
 import { ffprobeArgs } from './args'
-import { PROBE_TIMEOUT_MS, runTool, toolFailure, VideoToolError } from './run'
+import { isMissingTool, PROBE_TIMEOUT_MS, runTool, toolFailure, VideoToolError } from './run'
 import type { VideoProcessingSettings } from './settings'
 
 /**
@@ -339,8 +339,10 @@ export async function runFfprobe(
   try {
     result = await runTool(settings.ffprobePath, { args: ffprobeArgs(container, input), timeoutMs: PROBE_TIMEOUT_MS, signal, memoryLimit: settings.memoryLimit })
   }
-  catch {
-    throw new VideoToolError('FFMPEG_UNAVAILABLE', 'ffprobe introuvable ou impossible à lancer.')
+  catch (error) {
+    if (isMissingTool(error)) throw new VideoToolError('FFMPEG_UNAVAILABLE', 'ffprobe introuvable ou impossible à lancer.')
+    // Machine momentanément saturée (EAGAIN, EMFILE…) : erreur passagère (pipeline.ts, classifyFailure).
+    throw error
   }
   if (result.aborted) {
     signal?.throwIfAborted()

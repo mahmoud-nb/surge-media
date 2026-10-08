@@ -14,7 +14,10 @@ import type { CliContext } from './database'
  *     relatifs de la base SQLite et du stockage local, comme `pnpm start`) ; les variables du shell
  *     restent prioritaires sur le fichier .env ;
  *   - port propre (3001 par défaut) : il ne doit pas entrer en conflit avec le serveur web ;
- *   - SIGINT et SIGTERM transmis : arrêt propre (ffmpeg tué, tâche rendue à la file) ; code de sortie repris.
+ *   - SIGINT et SIGTERM transmis (POSIX) : arrêt propre (ffmpeg tué, tâche rendue à la file) ; code de
+ *     sortie repris. Sous Windows, `child.kill` termine le processus brutalement (sans crochet `close` :
+ *     tâche non rendue, essai compté) : rien n'est transmis. Le Ctrl+C de la console parvient de lui-même
+ *     au processus de travail (même console), qui s'arrête proprement ; la CLI attend seulement sa fin.
  * Pas de `VAR=x commande` dans les scripts : la syntaxe n'existe pas sous Windows.
  */
 
@@ -42,6 +45,8 @@ export async function runWorker(ctx: CliContext, args: { port?: string }): Promi
     env: { ...process.env, NUXT_SERVER_ROLE: 'worker', PORT: port, NITRO_PORT: port },
   })
   const forward = (signal: NodeJS.Signals) => {
+    // Windows : voir l'en-tête (le gestionnaire évite seulement que la CLI se termine avant l'enfant).
+    if (process.platform === 'win32') return
     if (child.exitCode === null && child.signalCode === null) child.kill(signal)
   }
   process.on('SIGINT', forward)

@@ -1197,3 +1197,86 @@ ne fait, en `external`, qu'une insertion de plus par envoi vidéo ; en `embedded
 HLS multi-débits, planches de survol, manifestes signés (D4) ; webhooks de fin de traitement ; accélération matérielle
 (NVENC, Quick Sync, VideoToolbox) ; sous-titres automatiques ; audio seul ; envois reprenables et directs vers S3 ;
 fichiers > 2 Gio ; filtre « État » dans la médiathèque ; composant `<SmVideo>`.
+
+---
+
+# D3 — état de l'implémentation (2026-10-08, session du nuage)
+
+> Spécification de travail des modules (contrats, propriété des fichiers, raffinements) :
+> `.claude/d3-implementation-notes.md`. **Étape 22 de `setup.md` pas encore écrite** (à faire à la fin de D3).
+
+## Fait (branche `main-7i2ki7`, fusionnée dans `main`)
+
+| Module | Contenu | Fichiers principaux |
+| --- | --- | --- |
+| Fondations | schéma + migration `d3_video_processing` (3 bases), constantes et règles partagées, réglages `NUXT_VIDEO_*`, `NUXT_SERVER_ROLE`, `NUXT_FFMPEG_PATH` | `prisma/`, `shared/utils/video-processing.ts`, `shared/utils/{video,media}.ts`, `server/lib/video-processing/settings.ts` |
+| A — ffmpeg | détection, exécution bornée (priorité 19, groupe de processus, `prlimit` mémoire + temps processeur, environnement réduit, délais, garde de durée de sortie), arguments (format imposé, `-protocol_whitelist file`, `-enable_drefs 0`, `-max_pixels`, `-fs`, désentrelacement `bwdif`, `-fpsmax 60`, HDR → SDR), ffprobe, plan pur | `server/lib/video-processing/{ffmpeg,run,args,ffprobe,plan}.ts` |
+| B — diffusion | cible `renditions`, retenue 503, liens « admin » pour une vidéo publique retenue, relecture du cache (rendu inconnu, affiche d'une vidéo sans affiche, version plus récente), téléchargement des originaux non lisibles | `server/lib/media/{delivery-path,delivery,cache,urls,renditions,keys}.ts`, `server/routes/m/[...path].ts` |
+| C — détection | 3GP, MKV, AVI, WMV, Ogg Theora, MPEG-TS/M2TS ; pistes de données (`gpmd`, `camm`, `mebx`, `djmd`…) ; règles d'envoi par intersection ; 415 (et non 413 « 0 octet ») quand aucun type n'est admis | `server/lib/media/{sniff,limits,upload}.ts`, `video/probe.ts`, `handlers/video.ts` |
+| D — file et pipeline | file persistante (prise atomique, bail, reprise, rattrapage périodique, présence), boucle + superviseur (nouvel essai au démarrage, reprise après une panne de ffmpeg), pipeline (probe, sanitize, repair, transcode, av1, poster, vérification de chaque sortie par le lecteur de D1), intégration au service (création, remplacement, corbeille, restauration, duplication, relance, traitement de l'existant), rôle `worker`, `surge-media worker`, `.env.example` | `server/lib/video-processing/{jobs,runner,pipeline,status,worker-id}.ts`, `server/lib/media/service.ts`, `server/plugins/0.video-processing.ts`, `server/middleware/0.server-role.ts`, `cli/worker.ts` |
+
+Chaque module a été revu par des relecteurs indépendants (défauts reproduits puis corrigés, chacun avec un test) :
+13 défauts en phase B, 11 en phase C (dont 3 majeurs : réécriture annulée par un changement de version
+concurrent, processus arrêté qui se disait actif, nettoyage des dossiers temporaires d'une autre installation).
+
+## Écarts à la proposition (§ 28–42)
+
+- **Validité d'une tâche par fichier** (`MediaJob.sourceKey`, pas la version) ; **clés des rendus indépendantes de
+  la version** (`variants/<média>/rendition-<nom>-<aléa>.<ext>`) : un changement d'affiche ou de point d'intérêt ne
+  touche ni les tâches ni les rendus ; remplacer un rendu existant (relance) change la version.
+- `TOO_LONG` n'empêche que les réencodages : retrait des pistes GPS, réparation et affiche sont faits, puis échec.
+- Mode `auto` : une source **entrelacée** reçoit aussi un rendu (les navigateurs ne désentrelacent pas).
+- Fils de ffmpeg plafonnés à 16 (mémoire sous `prlimit`), `MALLOC_ARENA_MAX=2`.
+- Réparation WebM seulement pour VP8/VP9/AV1 + Opus/Vorbis (sinon le rendu H.264 suffit).
+- Vidéo dont la diffusion est retenue : priorité 10 dans la file ; ses liens d'administration sont signés « admin ».
+- « Actif » (mode `embedded`) exige aussi que la boucle tourne ; processus de travail arrêté : présence `halted`,
+  effacée à l'arrêt propre.
+- Développement : ffmpeg reste dans le groupe du terminal (Ctrl+C sur `nuxt dev` l'arrête) ; au démarrage suivant,
+  le bail de ses tâches est rendu échu aussitôt. Windows : la CLI `worker` ne retransmet pas les signaux (le Ctrl+C
+  de la console suffit ; `child.kill` y tuerait le processus sans arrêt propre).
+- Point de rafraîchissement léger prévu pour la fiche (`GET /api/admin/media/:id/processing`, module E).
+
+## Vérifié (2026-10-08)
+
+- `pnpm test` : **449 tests** (22 fichiers ; ffmpeg réel dans `tests/video-ffmpeg.test.ts`, ignoré sans ffmpeg),
+  `pnpm typecheck`, `pnpm db:migration --check`, `pnpm i18n:check` : verts (Node 24).
+- Serveur de développement, mode `embedded`, base et stockage copiés : HEVC → prête en 2 s (affiche du serveur) ;
+  ffprobe retiré en cours de route → tâche rendue sans essai compté, traitement inactif (MKV refusé 415), reprise
+  automatique 56 s après son retour ; Ctrl+C pendant un encodage → aucun ffmpeg orphelin, reprise au redémarrage ;
+  dossier temporaire d'une autre installation conservé. Bancs des relecteurs rejoués : défauts disparus.
+- Pendant la phase C (relecteurs et implémentation) : build de production + `surge-media worker` en mode `external`
+  (prise en 4,6 s, présence, 404 hors `/api/health`, SIGTERM → tâche rendue), HEVC HLG → SDR, MKV → rendu +
+  original en téléchargement, GoPro `gpmd` → 503 puis v2 sans piste, WebM réparé, remplacement / corbeille /
+  restauration / duplication pendant un encodage, plantage → reprise par le bail, 4 processus sur une même base
+  SQLite (80 tâches, aucune double prise).
+
+## Reste à faire
+
+1. **Module E — contrats** : `Media.processing` et `Media.sources[]` (API v1, OpenAPI fr/en, `mediaEtag` avec
+   l'avancement), `MediaSummary.processingState`, `MediaDetail.processing/renditions/sources`, routes
+   `POST /api/admin/media/:id/process`, `GET /api/admin/media/:id/processing`, `GET /api/admin/video-processing`,
+   `POST /api/admin/video-processing/backfill` (journal), `/api/health` (`videoProcessing`), `config/media`
+   (`videoProcessing`), `videoSnippet` avec `sources`, types convertis dans `upload.types` des jetons délégués.
+   Les fonctions du service existent déjà : `requestProcessing`, `backfillProcessing`, `processingDetail`,
+   `listWorkers`, `jobCounts`, `backfillCandidates`, `videoProcessingActive`.
+2. **Module F — interface** : pastille d'état des cartes, section « Traitement » de la fiche (rafraîchie toutes
+   les 5 s seulement pendant le traitement, sans réinitialiser les formulaires), lecteur avec `<source>`, liste des
+   rendus, avertissements (`compatPending`, `dataTracks`, `hdr`, `converting`), section « Traitement des vidéos »
+   de « Réglages », aide d'envoi des formats convertis ; i18n fr/en, axe fr/en × clair/sombre.
+3. **Documentation** : `setup.md` étape 22 et § 7.7 (modes, processus de travail, Docker, mandataire, dépannage
+   ffmpeg/Smart App Control), `project-context.md` § 9.23 ; textes « 256 premiers octets » et « Matroska refusé »
+   à corriger (setup.md, project-context § 9.4 et § 9.21, § 6 de ce document).
+4. **Sous Windows (poste de l'utilisateur)** : ffmpeg installé et non bloqué par Smart App Control, `taskkill`,
+   Ctrl+C de `surge-media worker`, tests ffmpeg.
+
+## Limites connues
+
+- Original **3GP/MKV** gardé tel quel (téléchargement) : un lieu de tournage qu'il contiendrait n'est ni détecté
+  ni retiré (le rendu H.264, lui, n'a aucune métadonnée).
+- Mode `external` : formats convertis refusés jusqu'à 30 s après le démarrage d'un processus de travail ; retenue
+  (503) et affiche visibles avec jusqu'à 60 s de retard sur le serveur web (caches) ; processus de travail sur une
+  autre machine : PostgreSQL/MySQL et stockage partagé obligatoires.
+- Production, arrêt brutal (SIGKILL, panne) : ffmpeg peut finir seul (borné par `prlimit --cpu`), la tâche est
+  reprise à l'expiration du bail (2 min, un essai compté).
+- Antérieur à D3, observé pendant les essais : un aperçu pré-généré pendant un changement de version peut rester
+  orphelin dans le stockage (`variants/<média>/v<n>-…`).

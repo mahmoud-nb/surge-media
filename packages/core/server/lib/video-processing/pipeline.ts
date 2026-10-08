@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto'
 import { constants, createWriteStream } from 'node:fs'
 import { access, mkdtemp, readdir, rm, stat } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
@@ -17,6 +18,7 @@ import {
 import type { Media } from '../../generated/prisma/client'
 import {
   applyProbeResult,
+  catchUpProcessing,
   claimProcessingJob,
   commitRewrittenFile,
   completeProcessingJob,
@@ -32,11 +34,12 @@ import { useMediaStorage } from '../storage'
 import { av1Args, h264Args, isSanitizableContainer, MAX_OUTPUT_SIZE, posterArgs, sanitizeArgs, webmRepairArgs } from './args'
 import { type FfmpegCapabilities, useFfmpegCapabilities } from './ffmpeg'
 import { runFfprobe } from './ffprobe'
-import { cancelLeasedJob, type JobFailure, type JobLease, JobLost, type JobResult, progressData, renewLease } from './jobs'
+import { expireLease, type JobFailure, type JobLease, JobLost, type JobResult, progressData, renewLease } from './jobs'
 import { frameLuminance, planVideoJob, POSTER_DARK_LUMINANCE, posterTimes, type VideoJobPlan } from './plan'
 import { createJobRunner, type JobRunner, RunnerHalt, RunnerStopping } from './runner'
-import { encodeTimeoutMs, POSTER_TIMEOUT_MS, REMUX_TIMEOUT_MS, type RunResult, runTool, stderrSummary, toolFailure, VideoToolError } from './run'
+import { encodeTimeoutMs, isMissingTool, POSTER_TIMEOUT_MS, REMUX_TIMEOUT_MS, type RunResult, runTool, toolFailure, VideoToolError } from './run'
 import type { VideoProcessingSettings } from './settings'
+import { parseWorkerId, useWorkerId } from './worker-id'
 
 /**
  * Exécution d'une tâche vidéo prise dans la file (phase D3, architecture § 32, DD28 à DD31) :
@@ -58,10 +61,33 @@ import type { VideoProcessingSettings } from './settings'
  * rendue sans compter d'essai et boucle de ce processus arrêtée (processus mal configuré).
  */
 
-/** Préfixe des dossiers temporaires des tâches : `surge-media-job-<tâche>-<aléa>`. */
+/**
+ * Préfixe des dossiers temporaires des tâches : `surge-media-job-<installation>-<tâche>-<aléa>`. Le dossier
+ * temporaire du système peut être partagé par plusieurs installations (préproduction et production sur
+ * une même machine, serveur de développement à côté d'une build) : chacune ne nettoie que les siens.
+ */
 export const JOB_DIR_PREFIX = 'surge-media-job-'
 /** Nettoyage des dossiers temporaires abandonnés (processus arrêté net) : au démarrage, puis toutes les… */
 const CLEANUP_INTERVAL_MS = 15 * 60_000
+/**
+ * Rattrapage (médias « en attente » sans tâche) : au démarrage, puis toutes les… — filet de sécurité :
+ * une restauration ou une duplication faite pendant que le serveur web croyait le traitement inactif
+ * (cache de 30 s, processus de travail tout juste revenu) ne reste pas sans tâche jusqu'au redémarrage.
+ */
+const CATCH_UP_INTERVAL_MS = 5 * 60_000
+
+let installation: string | undefined
+
+/**
+ * Identifiant court de l'installation, pour les dossiers temporaires : même base (DATABASE_URL) et même
+ * dossier de lancement (chemins relatifs de SQLite et du stockage local) = même file de tâches. Le
+ * serveur web et un processus de travail lancés depuis le même dossier partagent donc leurs dossiers,
+ * ce qui est voulu : la base dit lesquels sont vivants.
+ */
+export function jobDirPrefix(): string {
+  installation ??= createHash('sha256').update(`${process.cwd()}\n${process.env.DATABASE_URL ?? ''}`).digest('hex').slice(0, 8)
+  return `${JOB_DIR_PREFIX}${installation}-`
+}
 
 /** Échec d'une étape, avec sa suite (nouvel essai ou non). */
 class StepFailure extends Error {
@@ -80,11 +106,14 @@ function fail(code: VideoJobErrorCode, detail: string, retryable = false): StepF
  * ou disque plein → passager ; sinon (fichier refusé par ffmpeg) → déterministe, un nouvel essai
  * donnerait la même chose.
  */
+/** Écriture de la sortie impossible (disque plein, dossier supprimé, erreur d'E/S) : passagère, pas un défaut du fichier. */
+const WRITE_FAILURE = /No space left on device|Input\/output error|Error writing trailer|Unable to re-open .* output file|No such file or directory/i
+
 function runFailure(result: RunResult): StepFailure {
   const error = toolFailure(result, 'CONVERSION_FAILED')
   const transient = error.code === 'TIMEOUT'
     || (error.code === 'CONVERSION_FAILED' && result.code === null)
-    || /No space left on device/i.test(result.stderrTail)
+    || WRITE_FAILURE.test(result.stderrTail)
   return fail(error.code, error.message, transient)
 }
 
@@ -100,9 +129,12 @@ export function classifyFailure(error: unknown): JobFailure {
     const transient = http.statusCode === 409 || http.statusCode === 503 || http.statusCode >= 500
     return { code: 'CONVERSION_FAILED', detail: truncateText(`Enregistrement refusé (${http.data?.code ?? http.statusCode}).`), retryable: transient }
   }
-  // Stockage, base, système : passager. Message résumé sans chemin du serveur.
-  const message = error instanceof Error ? error.message : String(error)
-  return { code: 'CONVERSION_FAILED', detail: stderrSummary(`Erreur interne : ${message}`), retryable: true }
+  // Stockage, base, système : passager. Le message complet (chemins du serveur, noms d'utilisateur)
+  // reste dans le journal ; la fiche ne reçoit qu'un résumé fixe et le code système (EACCES, ENOSPC…).
+  console.error('[surge-media] Traitement des vidéos, erreur interne :', error)
+  const code = (error as NodeJS.ErrnoException | null)?.code
+  const known = typeof code === 'string' && /^[A-Z][A-Z0-9_]{1,31}$/.test(code) ? ` (${code})` : ''
+  return { code: 'CONVERSION_FAILED', detail: `Erreur interne${known} : nouvel essai prévu.`, retryable: true }
 }
 
 // ─── Avancement et bail ──────────────────────────────────────────────────────
@@ -203,10 +235,14 @@ async function missingSource(lease: JobLease): Promise<never> {
 async function ffmpeg(settings: VideoProcessingSettings, args: string[], options: { timeoutMs: number, signal: AbortSignal, onProgress?: (seconds: number) => void, maxOutputSeconds?: number }): Promise<void> {
   let result: RunResult
   try {
-    result = await runTool(settings.ffmpegPath, { args, memoryLimit: settings.memoryLimit, ...options })
+    // Développement : ffmpeg reste dans le groupe du terminal, arrêté avec `nuxt dev` (run.ts, `detached`).
+    result = await runTool(settings.ffmpegPath, { args, memoryLimit: settings.memoryLimit, detached: !import.meta.dev, ...options })
   }
-  catch {
-    throw new VideoToolError('FFMPEG_UNAVAILABLE', 'ffmpeg introuvable ou impossible à lancer.')
+  catch (error) {
+    if (isMissingTool(error)) throw new VideoToolError('FFMPEG_UNAVAILABLE', 'ffmpeg introuvable ou impossible à lancer.')
+    // Machine momentanément saturée (EAGAIN, EMFILE, ENOMEM) : nouvel essai, la boucle continue.
+    const code = (error as NodeJS.ErrnoException | null)?.code
+    throw fail('CONVERSION_FAILED', `Lancement de ffmpeg impossible pour le moment${typeof code === 'string' ? ` (${code})` : ''}.`, true)
   }
   if (result.aborted) {
     options.signal.throwIfAborted()
@@ -496,7 +532,7 @@ export async function runVideoJob(lease: JobLease, stop: AbortSignal, settings: 
   let dir: string | null = null
 
   try {
-    dir = await mkdtemp(join(tmpdir(), `${JOB_DIR_PREFIX}${lease.id.replace(/[^\w]/g, '')}-`))
+    dir = await mkdtemp(join(tmpdir(), `${jobDirPrefix()}${lease.id.replace(/[^\w]/g, '')}-`))
     const capabilities = await useFfmpegCapabilities()
     if (!capabilities.ok) throw new VideoToolError('FFMPEG_UNAVAILABLE', 'ffmpeg introuvable ou inutilisable.')
     await processJob(lease, { settings, capabilities, dir, signal: controller.signal, progress })
@@ -522,8 +558,11 @@ async function settle(lease: JobLease, error: unknown, signal: AbortSignal): Pro
       return
     }
     if (reason instanceof JobLost || error instanceof JobLost) {
-      // Tâche annulée ou reprise ailleurs : rien à écrire. Encore à nous (fichier changé sans annulation) : annulée.
-      await cancelLeasedJob(await usePrisma(), lease, new Date())
+      // Tâche annulée (remplacement, corbeille, relance) ou reprise ailleurs : l'écriture, conditionnée au
+      // bail, ne fait rien. Encore à nous (média modifié d'une façon imprévue) : essai compté, nouvel essai
+      // différé puis échec définitif, l'état du média suivant chaque fois — jamais une vidéo laissée « en
+      // cours » sans tâche (sa diffusion publique pourrait rester retenue).
+      await failProcessingJob(lease, { code: 'CONVERSION_FAILED', detail: 'Traitement interrompu : média modifié pendant le calcul.', retryable: true }, result)
       return
     }
     if (error instanceof VideoToolError && error.code === 'FFMPEG_UNAVAILABLE') {
@@ -553,12 +592,14 @@ async function settle(lease: JobLease, error: unknown, signal: AbortSignal): Pro
  */
 export async function cleanupJobDirectories(): Promise<number> {
   const root = tmpdir()
+  const prefix = jobDirPrefix()
   const entries = await readdir(root, { withFileTypes: true }).catch(() => [])
   const prisma = await usePrisma()
   let removed = 0
   for (const entry of entries) {
-    if (!entry.isDirectory() || !entry.name.startsWith(JOB_DIR_PREFIX)) continue
-    const jobId = entry.name.slice(JOB_DIR_PREFIX.length).split('-')[0] ?? ''
+    // Dossiers de cette installation seulement (préfixe : voir JOB_DIR_PREFIX).
+    if (!entry.isDirectory() || !entry.name.startsWith(prefix)) continue
+    const jobId = entry.name.slice(prefix.length).split('-')[0] ?? ''
     const live = jobId
       ? await prisma.mediaJob.count({ where: { id: jobId, status: 'RUNNING', leaseUntil: { gt: new Date() } } })
       : 0
@@ -571,17 +612,52 @@ export async function cleanupJobDirectories(): Promise<number> {
 }
 
 /**
+ * Développement seulement : tâches encore « en cours » au nom d'un processus de cette machine qui
+ * n'existe plus (`nuxt dev` arrêté par Ctrl+C, qui n'appelle pas le crochet `close`) : leur bail est
+ * rendu échu tout de suite, la reprise ordinaire s'en charge (un essai compté) sans attendre 2 min. Pas
+ * en production : deux conteneurs peuvent partager un nom d'hôte avec des pid indépendants.
+ */
+export async function expireDeadHolderLeases(): Promise<number> {
+  const self = parseWorkerId(useWorkerId())
+  if (!self) return 0
+  const prisma = await usePrisma()
+  const running = await prisma.mediaJob.findMany({ where: { status: 'RUNNING', lockedBy: { startsWith: `${self.host}:` } } })
+  let expired = 0
+  for (const job of running) {
+    const holder = job.lockedBy ? parseWorkerId(job.lockedBy) : null
+    if (!holder || holder.host !== self.host || holder.pid === process.pid || processAlive(holder.pid)) continue
+    if (await expireLease(prisma, { id: job.id, lockedBy: job.lockedBy! }, new Date())) expired++
+  }
+  return expired
+}
+
+function processAlive(pid: number): boolean {
+  try {
+    process.kill(pid, 0)
+    return true
+  }
+  catch (error) {
+    // EPERM : le processus existe (autre utilisateur).
+    return (error as NodeJS.ErrnoException).code === 'EPERM'
+  }
+}
+
+/**
  * Boucle d'exécution des tâches de ce processus (plugin 0.video-processing.ts) : prise des tâches,
  * exécution, entretien (baux échus toutes les 30 s ; dossiers temporaires abandonnés tous les quarts
  * d'heure, et aussitôt après la reprise d'un bail échu : celui de l'essai interrompu, souvent sur cette
- * machine, peut peser autant que la vidéo).
+ * machine, peut peser autant que la vidéo ; rattrapage toutes les 5 min). `onHalt` : ffmpeg devenu
+ * inutilisable (superviseur, runner.ts).
  */
-export function createVideoJobRunner(settings: VideoProcessingSettings, workerId: string): JobRunner {
+export function createVideoJobRunner(settings: VideoProcessingSettings, workerId: string, onHalt?: (error: RunnerHalt) => void): JobRunner {
   let lastCleanup = 0
+  // Le rattrapage vient d'être fait au démarrage (plugin) : le premier passage attend l'intervalle.
+  let lastCatchUp = Date.now()
   return createJobRunner<JobLease>({
     concurrency: settings.concurrency,
     claim: () => claimProcessingJob(workerId),
     execute: (lease, signal) => runVideoJob(lease, signal, settings),
+    onHalt,
     maintenance: async () => {
       const reaped = await reapProcessingJobs()
       for (const job of reaped) {
@@ -590,6 +666,11 @@ export function createVideoJobRunner(settings: VideoProcessingSettings, workerId
       if (reaped.length > 0 || Date.now() - lastCleanup >= CLEANUP_INTERVAL_MS) {
         lastCleanup = Date.now()
         await cleanupJobDirectories()
+      }
+      if (Date.now() - lastCatchUp >= CATCH_UP_INTERVAL_MS) {
+        lastCatchUp = Date.now()
+        const caught = await catchUpProcessing()
+        if (caught > 0) console.info(`[surge-media] Traitement des vidéos : ${caught} tâche(s) recréée(s) (médias en attente sans tâche).`)
       }
     },
     onError: (error) => {

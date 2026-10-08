@@ -32,3 +32,11 @@ export function useWorkerId(): string {
   current ??= workerIdentity(hostname(), process.pid, randomBytes(4).toString('hex'))
   return current
 }
+
+/** Hôte et pid d'un identifiant (null s'il n'a pas la forme `<hôte>:<pid>:<aléa>`). */
+export function parseWorkerId(id: string): { host: string, pid: number } | null {
+  const match = /^(.+):(\d{1,10}):[\da-f]+$/.exec(id)
+  if (!match) return null
+  const pid = Number(match[2])
+  return Number.isSafeInteger(pid) && pid > 0 ? { host: match[1]!, pid } : null
+}

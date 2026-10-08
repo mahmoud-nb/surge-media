@@ -1715,8 +1715,11 @@ d'exploitation : `setup.md` § 7.7.
 - **Phase C (terminée)** : `.claude/architecture-phase-c.md`. C1 : § 9.16 et `setup.md` étape 11 ; C2 : § 9.17, étape 12 ; C3 : § 9.18,
   étape 13 ; C4 : § 9.19, étape 14.
 - **Phase D (vidéos)** : architecture `.claude/architecture-phase-d.md` validée le 2026-10-05 ; **D1 faite** (§ 9.21, `setup.md` étape 20) ;
-  **D2 faite** (§ 9.22, `setup.md` étape 21). Suite à proposer et faire valider : D3 (ffmpeg dans un processus séparé : affiches et vignettes
-  côté serveur, rendus compatibles, réparation des WebM, positions des pistes de métadonnées), D4 (HLS) ; transverses : envois reprenables / directs vers S3, `BigInt` au-delà de 2 Gio, délestage de la
+  **D2 faite** (§ 9.22, `setup.md` étape 21). **D3 validée le 2026-10-06 (§ 28–42, DD25–DD36), EN COURS** : fondations et modules A
+  (ffmpeg), B (diffusion), C (détection), D (file, pipeline, service, processus de travail) faits, revus et vérifiés (449 tests) ;
+  restent E (contrats API/admin), F (interface), documentation (`setup.md` étape 22, § 9.23 ici) — état détaillé et reste à faire :
+  `.claude/architecture-phase-d.md`, section « D3 — état de l'implémentation » ; contrats des modules : `.claude/d3-implementation-notes.md`.
+  Ensuite D4 (HLS) ; transverses : envois reprenables / directs vers S3, `BigInt` au-delà de 2 Gio, délestage de la
   diffusion, `<SmVideo>`. Audio et documents : phases ultérieures (DD13). `@surge-media/client` + composants (Vue d'abord) : en attente.
 - Pistes étape 19 : widgets masquables / réordonnables (préférence par compte), cache des agrégats pour de très grandes
   bibliothèques, médias récents en vignettes, journal par projet pour les propriétaires.

@@ -451,7 +451,14 @@ async function commitFile(media: Media, data: FileData, options: CommitOptions =
       where: { id: media.id, version: media.version, deletedAt: null, ...(carry ? { storageKey: carry.sourceKey } : {}) },
       data: { ...data, ...state, version: { increment: 1 } },
     })
-    if (count !== 1) return { status: carry ? 'lost' : 'conflict' }
+    if (count !== 1) {
+      if (!carry) return { status: 'conflict' }
+      // Bail renouvelé, verrou d'écriture pris : la lecture est sûre. Même fichier, hors corbeille : seule la
+      // version a changé (affiche, point d'intérêt) — conflit, relu et refait par commitRewrittenFile ; un
+      // autre fichier ou la corbeille rendent la tâche caduque.
+      const same = await tx.media.count({ where: { id: media.id, storageKey: carry.sourceKey, deletedAt: null } })
+      return { status: same === 1 ? 'conflict' : 'lost' }
+    }
     const renditions = data.kind === 'VIDEO' ? await tx.mediaRendition.findMany({ where: { mediaId: media.id } }) : []
     if (renditions.length > 0) await tx.mediaRendition.deleteMany({ where: { mediaId: media.id } })
     if (carry) {
@@ -622,27 +629,31 @@ export async function trashMedia(media: Media): Promise<void> {
 /**
  * Restauration. Vidéo dont le traitement n'était pas terminé (en attente, en cours ou en échec), traitement
  * actif : nouvelle tâche (celle d'avant a été annulée par la corbeille). Traitement inactif : « en attente »
- * sans tâche, repris par le rattrapage quand le traitement redevient actif.
+ * sans tâche, repris par le rattrapage quand le traitement redevient actif. Média hors de la corbeille
+ * (double clic, deux onglets) : rien ne change — surtout pas l'annulation d'un traitement en cours.
  */
 export async function restoreMedia(media: Media): Promise<MediaWithUploader> {
   const prisma = await usePrisma()
   const now = new Date()
   const active = media.kind === 'VIDEO' && await videoProcessingActive()
-  const queued = await prisma.$transaction(async (tx) => {
-    const restored = await tx.media.update({ where: { id: media.id }, data: { deletedAt: null } })
+  const outcome = await prisma.$transaction(async (tx) => {
+    // Écriture conditionnelle d'abord (jobs.ts, « écriture d'abord ») : seulement depuis la corbeille.
+    const { count } = await tx.media.updateMany({ where: { id: media.id, deletedAt: { not: null } }, data: { deletedAt: null } })
+    if (count !== 1) return 'unchanged' as const
+    const restored = await tx.media.findUniqueOrThrow({ where: { id: media.id } })
     const state = restored.processingState
-    if (restored.kind !== 'VIDEO' || state === null || state === 'READY') return false
+    if (restored.kind !== 'VIDEO' || state === null || state === 'READY') return 'restored' as const
     if (!active) {
       if (state === 'PROCESSING') await tx.media.updateMany({ where: { id: media.id }, data: { processingState: 'PENDING' } })
-      return false
+      return 'restored' as const
     }
     await tx.media.updateMany({ where: { id: media.id }, data: { processingState: 'PENDING' } })
     await cancelActiveJobs(tx, media.id, now)
     await enqueueJob(tx, { mediaId: media.id, sourceKey: restored.storageKey, priority: jobPriority(restored.metadata) }, now)
-    return true
+    return 'queued' as const
   }, JOB_TRANSACTION)
-  await mediaChanged([media.id], spaceOfMedia(media))
-  if (queued) notifyJobQueued()
+  if (outcome !== 'unchanged') await mediaChanged([media.id], spaceOfMedia(media))
+  if (outcome === 'queued') notifyJobQueued()
   return findMediaOrFail(media.id)
 }
 

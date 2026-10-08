@@ -152,8 +152,12 @@ const CODEC_LABELS: Record<string, string> = {
   twos: 'PCM',
 }
 
-/** Nom lisible d'un codec (noms propres : identiques dans toutes les langues). */
-export function codecLabel(codec: string): string {
+/**
+ * Nom lisible d'un codec (noms propres : identiques dans toutes les langues). null : codec pas encore
+ * connu (format converti en attente d'analyse, phase D3) → « ? ».
+ */
+export function codecLabel(codec: string | null): string {
+  if (codec === null) return '?'
   return CODEC_LABELS[codec] ?? codec.toUpperCase()
 }
 

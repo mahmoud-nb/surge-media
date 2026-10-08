@@ -30,12 +30,22 @@ import {
   readWorkerPresence,
   reapExpiredLeases,
   releaseJob,
+  removeWorkerPresence,
   renewLease,
   writeWorkerPresence,
 } from '../server/lib/video-processing/jobs'
-import { createJobRunner, notifyJobQueued, registerJobRunner, RunnerHalt, RunnerStopping } from '../server/lib/video-processing/runner'
+import {
+  createJobRunner,
+  type JobRunner,
+  notifyJobQueued,
+  registerJobRunner,
+  RunnerHalt,
+  RunnerStopping,
+  superviseJobRunner,
+  type SupervisorState,
+} from '../server/lib/video-processing/runner'
 import { servedByWorker } from '../server/lib/video-processing/status'
-import { WORKER_ID_MAX, workerIdentity } from '../server/lib/video-processing/worker-id'
+import { parseWorkerId, WORKER_ID_MAX, workerIdentity } from '../server/lib/video-processing/worker-id'
 
 // Le pipeline importe le service des médias et le stockage (base, fichiers) : remplacés, seules ses
 // règles pures sont testées ici (le reste l'est par le scénario de bout en bout).
@@ -553,7 +563,7 @@ describe('file des vidéos : présence des processus de travail, compteurs', () 
     await writeWorkerPresence(store, 'worker-1:12:abcd', info, now)
     expect(store.settings[0]!.key).toBe(`${WORKER_PRESENCE_PREFIX}worker-1:12:abcd`)
     let workers = await readWorkerPresence(store, now)
-    expect(workers).toEqual([{ id: 'worker-1:12:abcd', ...info, seenAt: now, active: true }])
+    expect(workers).toEqual([{ id: 'worker-1:12:abcd', ...info, halted: false, seenAt: now, active: true }])
 
     workers = await readWorkerPresence(store, at(WORKER_SEEN_WINDOW_MS + 1))
     expect(workers[0]!.active).toBe(false)
@@ -565,7 +575,19 @@ describe('file des vidéos : présence des processus de travail, compteurs', () 
   it('présence d\'un autre processus : valeurs contrôlées, autres réglages ignorés', async () => {
     store.settings.push({ key: `${WORKER_PRESENCE_PREFIX}x`, value: { host: 42, encoders: ['aac', 3], concurrency: 'two' }, updatedAt: now })
     store.settings.push({ key: 'transformPolicy', value: {}, updatedAt: now })
-    expect(await readWorkerPresence(store, now)).toEqual([{ id: 'x', host: '', pid: 0, version: null, encoders: ['aac'], concurrency: 0, seenAt: now, active: true }])
+    expect(await readWorkerPresence(store, now)).toEqual([{ id: 'x', host: '', pid: 0, version: null, encoders: ['aac'], concurrency: 0, halted: false, seenAt: now, active: true }])
+  })
+
+  it('processus dont la boucle est arrêtée : vu, mais jamais actif ; présence effacée à l\'arrêt', async () => {
+    await writeWorkerPresence(store, 'worker-1:12:abcd', { ...info, halted: true }, now)
+    expect(await readWorkerPresence(store, now)).toMatchObject([{ id: 'worker-1:12:abcd', halted: true, active: false }])
+    await writeWorkerPresence(store, 'worker-1:12:abcd', { ...info, halted: false }, now)
+    expect(await readWorkerPresence(store, now)).toMatchObject([{ halted: false, active: true }])
+    // Valeur écrite par un autre processus : seul `true` arrête.
+    store.settings[0]!.value = { ...info, halted: 'yes' }
+    expect(await readWorkerPresence(store, now)).toMatchObject([{ halted: false, active: true }])
+    await removeWorkerPresence(store, 'worker-1:12:abcd')
+    expect(await readWorkerPresence(store, now)).toEqual([])
   })
 
   it('tâches par statut', async () => {
@@ -797,6 +819,43 @@ describe('boucle d\'exécution des tâches', () => {
     await runner.stop()
   })
 
+  it('arrêt pendant une prise : la tâche prise ensuite est lancée déjà arrêtée, et l\'arrêt l\'attend', async () => {
+    const claim = deferred()
+    let claimed: number | null = 42
+    const signals: AbortSignal[] = []
+    const finished = deferred()
+    const runner = createJobRunner<number>({
+      concurrency: 1,
+      claim: async () => {
+        await claim.promise
+        const job = claimed
+        claimed = null
+        return job
+      },
+      execute: async (_job, signal) => {
+        signals.push(signal)
+        // Le pipeline rend la tâche à la file (écriture en base) avant de se terminer.
+        await finished.promise
+      },
+    })
+    runner.start()
+    await tick()
+    let stopped = false
+    const stopping = runner.stop().then(() => {
+      stopped = true
+    })
+    claim.resolve()
+    await tick(10)
+    expect(signals).toHaveLength(1)
+    expect(signals[0]!.aborted).toBe(true)
+    expect(signals[0]!.reason).toBeInstanceOf(RunnerStopping)
+    expect(stopped).toBe(false)
+    finished.resolve()
+    await stopping
+    expect(runner.state).toBe('stopped')
+    expect(runner.active).toBe(0)
+  })
+
   it('arrêt avant le démarrage : résout aussitôt', async () => {
     const runner = createJobRunner<number>({ concurrency: 1, claim: async () => null, execute: async () => {} })
     await runner.stop()
@@ -806,7 +865,215 @@ describe('boucle d\'exécution des tâches', () => {
   })
 })
 
+// ─── Superviseur : démarrage, nouvel essai, reprise ─────────────────────────
+
+/** Minuteries manuelles du superviseur. */
+function manualTimers() {
+  const timers: Array<{ task: () => void, ms: number, cleared: boolean }> = []
+  return {
+    timers,
+    setTimer: (task: () => void, ms: number) => {
+      const timer = { task, ms, cleared: false }
+      timers.push(timer)
+      return timer
+    },
+    clearTimer: (timer: unknown) => {
+      (timer as { cleared: boolean }).cleared = true
+    },
+    /** Exécute la dernière minuterie programmée (non annulée). */
+    fire: () => {
+      const timer = timers.filter(entry => !entry.cleared).pop()
+      if (!timer) throw new Error('aucune minuterie')
+      timer.cleared = true
+      timer.task()
+    },
+  }
+}
+
+/** Boucle factice : démarrée, arrêtée, et le rappel d'arrêt (RunnerHalt) qu'elle a reçu. */
+function fakeRunner(onHalt: (error: RunnerHalt) => void) {
+  let state: JobRunner['state'] = 'idle'
+  const runner: JobRunner & { halt: () => void } = {
+    start: () => {
+      state = 'running'
+    },
+    stop: async () => {
+      state = 'stopped'
+    },
+    notify: () => {},
+    get state() {
+      return state
+    },
+    get active() {
+      return 0
+    },
+    halt: () => {
+      state = 'stopped'
+      onHalt(new RunnerHalt('ffmpeg introuvable'))
+    },
+  }
+  return runner
+}
+
+describe('superviseur de la boucle', () => {
+  it('ffmpeg utilisable : préparation puis boucle ; états publiés', async () => {
+    const states: SupervisorState[] = []
+    const runners: ReturnType<typeof fakeRunner>[] = []
+    const supervisor = superviseJobRunner({
+      detect: async () => true,
+      prepare: async () => true,
+      createRunner: (onHalt) => {
+        const runner = fakeRunner(onHalt)
+        runners.push(runner)
+        return runner
+      },
+      onState: state => states.push(state),
+    })
+    supervisor.start()
+    await tick()
+    expect(states).toEqual(['starting', 'running'])
+    expect(runners[0]!.state).toBe('running')
+    await supervisor.stop()
+    expect(states.at(-1)).toBe('stopped')
+    expect(runners[0]!.state).toBe('stopped')
+  })
+
+  it('ffmpeg inutilisable au démarrage : désactivé, aucune boucle', async () => {
+    const states: SupervisorState[] = []
+    let created = 0
+    const supervisor = superviseJobRunner({
+      detect: async () => false,
+      prepare: async () => true,
+      createRunner: (onHalt) => {
+        created++
+        return fakeRunner(onHalt)
+      },
+      onState: state => states.push(state),
+    })
+    supervisor.start()
+    await tick()
+    expect(states).toEqual(['starting', 'disabled'])
+    expect(created).toBe(0)
+    await supervisor.stop()
+  })
+
+  it('base indisponible au démarrage : nouvel essai, délai doublé, puis boucle', async () => {
+    const timers = manualTimers()
+    const errors: unknown[] = []
+    let prepares = 0
+    const states: SupervisorState[] = []
+    const supervisor = superviseJobRunner({
+      detect: async () => true,
+      prepare: async () => {
+        prepares++
+        if (prepares <= 2) throw new Error('database is locked')
+        return true
+      },
+      createRunner: onHalt => fakeRunner(onHalt),
+      onState: state => states.push(state),
+      onError: error => errors.push(error),
+      retryMs: 1000,
+      retryMaxMs: 5000,
+      setTimer: timers.setTimer,
+      clearTimer: timers.clearTimer,
+    })
+    supervisor.start()
+    await tick()
+    expect(errors).toHaveLength(1)
+    expect(timers.timers.map(timer => timer.ms)).toEqual([1000])
+    timers.fire()
+    await tick()
+    expect(timers.timers.map(timer => timer.ms)).toEqual([1000, 2000])
+    timers.fire()
+    await tick()
+    expect(prepares).toBe(3)
+    expect(states.at(-1)).toBe('running')
+    await supervisor.stop()
+  })
+
+  it('RunnerHalt : arrêté, détection refaite, boucle relancée quand ffmpeg revient', async () => {
+    const timers = manualTimers()
+    const states: SupervisorState[] = []
+    const runners: ReturnType<typeof fakeRunner>[] = []
+    const detections: boolean[] = []
+    let usable = true
+    const supervisor = superviseJobRunner({
+      detect: async (recovering) => {
+        detections.push(recovering)
+        return usable
+      },
+      prepare: async () => true,
+      createRunner: (onHalt) => {
+        const runner = fakeRunner(onHalt)
+        runners.push(runner)
+        return runner
+      },
+      onState: state => states.push(state),
+      recoveryMs: 60_000,
+      setTimer: timers.setTimer,
+      clearTimer: timers.clearTimer,
+    })
+    supervisor.start()
+    await tick()
+    usable = false
+    runners[0]!.halt()
+    expect(supervisor.state).toBe('halted')
+    expect(timers.timers.at(-1)!.ms).toBe(60_000)
+    // Toujours absent : nouvelle détection plus tard, aucune boucle.
+    timers.fire()
+    await tick()
+    expect(runners).toHaveLength(1)
+    expect(supervisor.state).toBe('halted')
+    usable = true
+    timers.fire()
+    await tick()
+    expect(detections).toEqual([false, true, true])
+    expect(runners).toHaveLength(2)
+    expect(runners[1]!.state).toBe('running')
+    expect(states).toEqual(['starting', 'running', 'halted', 'running'])
+    // Un arrêt de l'ancienne boucle (rappel tardif) ne touche pas la nouvelle.
+    runners[0]!.halt()
+    expect(supervisor.state).toBe('running')
+    await supervisor.stop()
+    expect(timers.timers.every(timer => timer.cleared)).toBe(true)
+  })
+
+  it('arrêt pendant un nouvel essai programmé : minuterie annulée, plus rien ne démarre', async () => {
+    const timers = manualTimers()
+    let created = 0
+    const supervisor = superviseJobRunner({
+      detect: async () => true,
+      prepare: async () => {
+        throw new Error('base indisponible')
+      },
+      createRunner: (onHalt) => {
+        created++
+        return fakeRunner(onHalt)
+      },
+      onError: () => {},
+      setTimer: timers.setTimer,
+      clearTimer: timers.clearTimer,
+    })
+    supervisor.start()
+    await tick()
+    await supervisor.stop()
+    expect(timers.timers.every(timer => timer.cleared)).toBe(true)
+    expect(supervisor.state).toBe('stopped')
+    expect(created).toBe(0)
+  })
+})
+
 // ─── Pipeline : classement des échecs, tolérances ────────────────────────────
+
+describe('identité des processus', () => {
+  it('hôte et pid relus depuis l\'identifiant ; formes inattendues refusées', () => {
+    expect(parseWorkerId(workerIdentity('vm-1', 4242, 'a1b2c3d4'))).toEqual({ host: 'vm-1', pid: 4242 })
+    expect(parseWorkerId('host:0:ab')).toBeNull()
+    expect(parseWorkerId('host:12')).toBeNull()
+    expect(parseWorkerId('host:12:zz')).toBeNull()
+    expect(parseWorkerId('')).toBeNull()
+  })
+})
 
 describe('pipeline : suite donnée aux erreurs', async () => {
   const { classifyFailure, durationTolerance } = await import('../server/lib/video-processing/pipeline')
@@ -825,11 +1092,32 @@ describe('pipeline : suite donnée aux erreurs', async () => {
     expect(classifyFailure({ statusCode: 415, data: { code: 'UNSUPPORTED_TYPE' } })).toMatchObject({ retryable: false })
   })
 
-  it('erreur interne (stockage, base) : passagère, sans chemin du serveur', () => {
-    const failure = classifyFailure(new Error('ENOENT: no such file or directory, open \'/srv/media/originals/2026/10/abc.mp4\''))
-    expect(failure.retryable).toBe(true)
-    expect(failure.detail).not.toContain('/srv/media')
-    expect(failure.detail.length).toBeLessThanOrEqual(191)
+  it('erreur interne (stockage, base) : passagère, résumé fixe sans aucun morceau de chemin', () => {
+    const errorLog = vi.spyOn(console, 'error').mockImplementation(() => {})
+    try {
+      const failure = classifyFailure(new Error('ENOENT: no such file or directory, open \'/srv/media/originals/2026/10/abc.mp4\''))
+      expect(failure.retryable).toBe(true)
+      expect(failure.detail).not.toContain('/srv/media')
+      expect(failure.detail.length).toBeLessThanOrEqual(191)
+      // Chemins avec espaces (nom d'utilisateur Windows, dossier « surge media ») : rien ne passe.
+      const windows = Object.assign(new Error('EACCES: permission denied, mkdtemp \'C:\\Users\\Jean Dupont\\AppData\\Local\\Temp\\surge-media-job-x\''), { code: 'EACCES' })
+      expect(classifyFailure(windows)).toEqual({ code: 'CONVERSION_FAILED', detail: 'Erreur interne (EACCES) : nouvel essai prévu.', retryable: true })
+      const spaced = Object.assign(new Error('ENOSPC: no space left on device, open \'/srv/surge media/storage/a.mp4\''), { code: 'ENOSPC' })
+      expect(classifyFailure(spaced).detail).not.toMatch(/Dupont|media|storage/)
+      // Code inattendu (texte libre) : jamais recopié.
+      expect(classifyFailure(Object.assign(new Error('x'), { code: 'see /etc/passwd' })).detail).toBe('Erreur interne : nouvel essai prévu.')
+      // Le message complet reste dans le journal du serveur.
+      expect(errorLog).toHaveBeenCalled()
+    }
+    finally {
+      errorLog.mockRestore()
+    }
+  })
+
+  it('dossiers temporaires : préfixe propre à l\'installation (même base, même dossier de lancement)', async () => {
+    const { jobDirPrefix, JOB_DIR_PREFIX } = await import('../server/lib/video-processing/pipeline')
+    expect(jobDirPrefix()).toMatch(new RegExp(`^${JOB_DIR_PREFIX}[0-9a-f]{8}-$`))
+    expect(jobDirPrefix()).toBe(jobDirPrefix())
   })
 
   it('tolérance de durée : 0,5 s ou 2 %, élargie pour une durée estimée', () => {
