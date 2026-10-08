@@ -939,6 +939,14 @@
         "tooLarge": "The file exceeds 1 MB.",
         "fields": "Check the kind, language and label of the track."
       }
+    },
+    "processing": {
+      "states": {
+        "PENDING": "Processing pending",
+        "PROCESSING": "Processing",
+        "READY": "Processed",
+        "FAILED": "Processing failed"
+      }
     }
   },
   "projectRoles": {
