@@ -939,6 +939,14 @@
         "tooLarge": "Le fichier dépasse 1 Mo.",
         "fields": "Vérifiez le type, la langue et le libellé de la piste."
       }
+    },
+    "processing": {
+      "states": {
+        "PENDING": "Traitement en attente",
+        "PROCESSING": "Traitement en cours",
+        "READY": "Traitée",
+        "FAILED": "Échec du traitement"
+      }
     }
   },
   "projectRoles": {
