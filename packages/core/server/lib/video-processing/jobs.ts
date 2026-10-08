@@ -363,9 +363,17 @@ export async function releaseJob(store: JobStore, lease: JobLease, now: Date, re
   }, JOB_TRANSACTION)
 }
 
-/** Tâche devenue caduque pendant son exécution (fichier remplacé, corbeille) : annulée, l'état du média n'est pas touché. */
-export async function cancelLeasedJob(store: JobTx, lease: JobLease, now: Date): Promise<boolean> {
-  const { count } = await store.mediaJob.updateMany({ where: leaseWhere(lease), data: { status: 'CANCELLED', finishedAt: now, leaseUntil: null } })
+/**
+ * Bail rendu échu tout de suite : son détenteur est arrêté pour de bon (même machine, processus absent :
+ * arrêt net, Ctrl+C sur `nuxt dev`). La reprise ordinaire des baux échus s'en charge ensuite, avec ses
+ * règles (un essai de plus : un fichier qui fait tomber le processus ne boucle pas sans fin) ; seule
+ * l'attente de l'expiration (2 min) est évitée. Conditionné au détenteur lu.
+ */
+export async function expireLease(store: JobTx, job: { id: string, lockedBy: string }, now: Date): Promise<boolean> {
+  const { count } = await store.mediaJob.updateMany({
+    where: { id: job.id, lockedBy: job.lockedBy, status: 'RUNNING' },
+    data: { leaseUntil: new Date(now.getTime() - 1) },
+  })
   return count === 1
 }
 
@@ -463,21 +471,35 @@ export interface WorkerPresenceInfo {
   /** Encodeurs utiles présents (ffmpeg.ts, RELEVANT_ENCODERS). */
   encoders: string[]
   concurrency: number
+  /**
+   * Boucle arrêtée (ffmpeg devenu inutilisable, nouvelle détection chaque minute) : le processus vit
+   * encore mais ne traite rien ; il ne compte pas pour rendre le mode `external` actif.
+   */
+  halted?: boolean
 }
 
 export interface WorkerPresence extends WorkerPresenceInfo {
   id: string
+  halted: boolean
   /** Dernière présence écrite. */
   seenAt: Date
-  /** Vu dans la fenêtre WORKER_SEEN_WINDOW_MS : le mode `external` est actif. */
+  /** Vu dans la fenêtre WORKER_SEEN_WINDOW_MS et en état de traiter : le mode `external` est actif. */
   active: boolean
 }
 
 /** Écrit la présence d'un processus de travail (`Setting` `videoWorker:<id>`), toutes les 60 s. */
 export async function writeWorkerPresence(store: JobTx, workerId: string, info: WorkerPresenceInfo, now: Date): Promise<void> {
   const key = `${WORKER_PRESENCE_PREFIX}${workerId}`
-  const value: Prisma.InputJsonValue = { ...info, encoders: [...info.encoders], seenAt: now.toISOString() }
+  const value: Prisma.InputJsonValue = { ...info, encoders: [...info.encoders], halted: info.halted === true, seenAt: now.toISOString() }
   await store.setting.upsert({ where: { key }, create: { key, value }, update: { value } })
+}
+
+/**
+ * Efface la présence d'un processus de travail qui s'arrête proprement : le serveur web cesse de le
+ * compter (au plus 30 s de cache) au lieu d'attendre la fin de la fenêtre de 5 min.
+ */
+export async function removeWorkerPresence(store: JobTx, workerId: string): Promise<void> {
+  await store.setting.deleteMany({ where: { key: `${WORKER_PRESENCE_PREFIX}${workerId}` } })
 }
 
 /** Efface les présences de plus d'un jour (processus arrêtés, conteneurs remplacés). */
@@ -498,6 +520,7 @@ export async function readWorkerPresence(store: JobTx, now: Date): Promise<Worke
   return rows
     .map((row) => {
       const value = (row.value && typeof row.value === 'object' ? row.value : {}) as Record<string, unknown>
+      const halted = value.halted === true
       return {
         id: row.key.slice(WORKER_PRESENCE_PREFIX.length),
         host: text(value.host) ?? '',
@@ -505,8 +528,9 @@ export async function readWorkerPresence(store: JobTx, now: Date): Promise<Worke
         version: text(value.version, 64),
         encoders: Array.isArray(value.encoders) ? value.encoders.filter((item): item is string => typeof item === 'string').slice(0, 16) : [],
         concurrency: typeof value.concurrency === 'number' ? value.concurrency : 0,
+        halted,
         seenAt: row.updatedAt,
-        active: now.getTime() - row.updatedAt.getTime() <= WORKER_SEEN_WINDOW_MS,
+        active: !halted && now.getTime() - row.updatedAt.getTime() <= WORKER_SEEN_WINDOW_MS,
       }
     })
     .sort((a, b) => b.seenAt.getTime() - a.seenAt.getTime())

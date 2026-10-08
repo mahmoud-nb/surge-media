@@ -9,10 +9,13 @@ import { useVideoProcessingSettings } from './settings'
  * Actif (§ 33, raffinement 7) :
  *   - `off` : jamais ; aucune tâche créée, `processingState` reste null (comportement de D2) ;
  *   - `embedded` : quand ffmpeg a été détecté utilisable par ce processus (§ 30.1 : un échec désactive le
- *     traitement, jamais l'arrêt du serveur) — sinon les tâches s'accumuleraient sans être traitées ;
- *   - `external` : quand un processus de travail a écrit sa présence dans les 5 dernières minutes
- *     (WORKER_SEEN_WINDOW_MS) ; le serveur web ne lance jamais ffmpeg.
- * Mis en cache 30 s par processus : la question est posée à chaque envoi.
+ *     traitement, jamais l'arrêt du serveur) et que sa boucle n'est pas arrêtée (ffmpeg devenu
+ *     inutilisable en cours de route, `setVideoProcessingHalted`) — sinon les tâches s'accumuleraient
+ *     sans être traitées ;
+ *   - `external` : quand un processus de travail en état de traiter (présence sans `halted`) a écrit sa
+ *     présence dans les 5 dernières minutes (WORKER_SEEN_WINDOW_MS) ; le serveur web ne lance jamais ffmpeg.
+ * Mis en cache 30 s par processus : la question est posée à chaque envoi. Un changement vu par ce
+ * processus (présence écrite, boucle arrêtée ou relancée) oublie le cache aussitôt.
  */
 
 const ACTIVE_CACHE_MS = 30_000
@@ -21,11 +24,15 @@ const ACTIVE_ERROR_CACHE_MS = 5_000
 
 let activeCache: { value: boolean, expires: number } | undefined
 let activePending: Promise<boolean> | undefined
+/** Incrémenté à chaque oubli : un calcul commencé avant ne remet pas en cache une réponse périmée. */
+let generation = 0
+/** Boucle de ce processus arrêtée par RunnerHalt (plugin 0.video-processing.ts). */
+let halted = false
 
 async function computeActive(): Promise<boolean> {
   const settings = useVideoProcessingSettings()
   if (settings.mode === 'off') return false
-  if (settings.mode === 'embedded') return (await useFfmpegCapabilities()).ok
+  if (settings.mode === 'embedded') return !halted && (await useFfmpegCapabilities()).ok
   const workers = await readWorkerPresence(await usePrisma(), new Date())
   return workers.some(worker => worker.active)
 }
@@ -34,25 +41,45 @@ async function computeActive(): Promise<boolean> {
 export async function videoProcessingActive(): Promise<boolean> {
   if (useVideoProcessingSettings().mode === 'off') return false
   if (activeCache && activeCache.expires > Date.now()) return activeCache.value
-  activePending ??= computeActive()
-    .then((value) => {
-      activeCache = { value, expires: Date.now() + ACTIVE_CACHE_MS }
-      return value
-    })
+  if (activePending) return activePending
+  const started = generation
+  const remember = (value: boolean, ms: number) => {
+    if (generation === started) activeCache = { value, expires: Date.now() + ms }
+    return value
+  }
+  activePending = computeActive()
+    .then(value => remember(value, ACTIVE_CACHE_MS))
     .catch((error: unknown) => {
       console.error('[surge-media] État du traitement des vidéos illisible :', error)
-      activeCache = { value: false, expires: Date.now() + ACTIVE_ERROR_CACHE_MS }
-      return false
+      return remember(false, ACTIVE_ERROR_CACHE_MS)
     })
     .finally(() => {
-      activePending = undefined
+      if (generation === started) activePending = undefined
     })
   return activePending
 }
 
-/** Oublie l'état mis en cache (présence écrite par ce processus, tests). */
+/** Oublie l'état mis en cache (présence écrite ou boucle arrêtée par ce processus, tests). */
 export function invalidateVideoProcessingStatus(): void {
+  generation++
   activeCache = undefined
+  activePending = undefined
+}
+
+/**
+ * Boucle de ce processus arrêtée (`RunnerHalt` : ffmpeg devenu introuvable) ou relancée : en mode
+ * `embedded`, le traitement est inactif ici tant qu'elle est arrêtée (formats convertis refusés, aucune
+ * tâche créée à l'envoi). Le superviseur refait la détection chaque minute et relance la boucle.
+ */
+export function setVideoProcessingHalted(value: boolean): void {
+  if (halted === value) return
+  halted = value
+  invalidateVideoProcessingStatus()
+}
+
+/** Boucle de ce processus arrêtée faute de ffmpeg utilisable (« Réglages », sonde de santé). */
+export function videoProcessingHalted(): boolean {
+  return halted
 }
 
 /** Processus de travail connus (présences de moins d'un jour), les plus récents d'abord. */
