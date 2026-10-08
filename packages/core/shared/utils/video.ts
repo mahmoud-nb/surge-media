@@ -195,7 +195,13 @@ export function videoMetadata(metadata: unknown): VideoMetadata | null {
   }
 }
 
-/** Type MIME d'une source `<video>`, avec les codecs s'ils sont connus (`video/mp4; codecs="avc1.64001F, mp4a.40.2"`). */
+/**
+ * Type MIME d'une source `<video>`, avec les codecs s'ils sont connus (`video/mp4; codecs="avc1.64001F, mp4a.40.2"`).
+ * Un MOV (`video/quicktime`) est annoncé `video/mp4` : même famille de fichiers (ISO BMFF), lue par les
+ * navigateurs quand ses codecs le sont, mais `canPlayType('video/quicktime')` répond « non » dans Chrome et
+ * Firefox, qui ignoreraient la source (le type n'est qu'une indication : le fichier reste servi tel quel).
+ */
 export function videoSourceType(mimeType: string, codecs: string | null): string {
-  return codecs ? `${mimeType}; codecs="${codecs.split(',').join(', ')}"` : mimeType
+  const type = mimeType === 'video/quicktime' ? 'video/mp4' : mimeType
+  return codecs ? `${type}; codecs="${codecs.split(',').join(', ')}"` : type
 }
