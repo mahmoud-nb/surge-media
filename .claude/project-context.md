@@ -6,7 +6,7 @@
 > `setup.md`, puis ce fichier.
 >
 > **État décrit** : commit `dbf3aa7` (**étape 22, D3 — traitement des vidéos par ffmpeg**, 2026-10-09 ; § 9.23 ; documentation de
-> D3 écrite ensuite, non commitée au moment de la rédaction : vérifier `git log`), après `919a113` (**étape 18, envoi des liens par
+> D3 écrite ensuite — brouillon commité en `fbfcfaa`, version finale non commitée au moment de la rédaction : vérifier `git log`), après `919a113` (**étape 18, envoi des liens par
 > e-mail**, 2026-10-04 ; § 8), `608b8f6` (**étape 17, appareils de confiance** ; § 7.2) et `7a42f45` (**étape 16, rôle Gestionnaire** ;
 > § 7.1, § 8, § 9.10), **étape 19, tableau de bord** (2026-10-04 ; § 9.20). Étapes terminées : 1 (monorepo, core, base), 2 (UI, auth, rôles),
 > 3 (utilisateurs), 4 (médias, phase A), 5 = **B1** (projets, espaces, autorisations), 6 = **B2**
@@ -43,7 +43,8 @@
   des médias (« mini-Cloudinary »). Déployée sur l'infrastructure du client.
 - Deux faces du core : **interface d'administration** (médias, utilisateurs, jetons) et **couche
   d'API** pour les applications tierces du client (authentification, autorisations, CORS).
-- Traitements d'images prévus à la demande par URL : CROP, RESIZE, OPTIMIZE (phase C, non commencée).
+- Traitements d'images à la demande par URL (crop, resize, optimisation : phase C, terminée) ; vidéos (phase D : envoi et diffusion
+  directe, préparation, affiche, sous-titres ; D3 : conversion facultative par ffmpeg hors du chemin des requêtes, § 9.23).
 - Monorepo cible : `@surge-media/core` (admin + API), `@surge-media/vue` / `react` / `svelte`
   (composants : images optimisées, galeries, sélecteurs, upload), `docs` (GitHub Pages).
   **Seul `packages/core` existe aujourd'hui.**
@@ -81,6 +82,7 @@
 | Vitest | 5.0 | tests des modules purs (`packages/core/tests/`, `vitest.config.ts`, alias `#shared`) |
 | @scalar/api-reference | **1.72.3 exact** | documentation interactive (étape 10) ; `vue-demi` (dépendance) : `allowBuilds: false` ; `vite.optimizeDeps.include` |
 | node:sqlite (intégré) | Node 24 | uniquement dans les scripts de test ad hoc (vieillir `Session.passwordVerifiedAt`, nettoyer l'audit) ; avertissement « experimental » |
+| ffmpeg + ffprobe (D3) | **≥ 6**, du **système** (pas un paquet npm) | facultatif (`NUXT_VIDEO_PROCESSING=off` par défaut) ; `libx264` + `aac` exigés, `zscale`/`tonemap` (HDR) et `libsvtav1`/`libopus` (AV1) facultatifs ; vérifié avec 6.1.1 (Linux du nuage) ; Windows : `winget install Gyan.FFmpeg`, non vérifié (§ 22) |
 | oxc-transform | **0.141.0 forcé** (`pnpm-workspace.yaml` › `overrides`) | Windows Smart App Control bloque le binaire 0.143.0 exigé par Nuxt 3.21 (`^0.143.0`) ; typecheck/dev/build vérifiés ; à retirer dès que possible (l'utilisateur a choisi cette option) |
 
 Plateforme de dev de l'utilisateur : **Windows 11** (PowerShell + Git Bash). Chemin : `C:\__develop\surge-media`.
@@ -123,6 +125,9 @@ Couches serveur :
    ├─ lib/media/keys.ts, urls.ts, signing.ts    └─ lib/storage (MediaStorage → Flydrive local | s3)
    └─ usePrisma() (server/utils/prisma.ts) ──► Prisma 7 + driver adapter (better-sqlite3 | pg | mariadb)
 ```
+
+Traitement des vidéos (D3) : `service.ts` crée les `MediaJob` → boucle `plugins/0.video-processing.ts` (serveur `embedded` ou processus
+`NUXT_SERVER_ROLE=worker`) → `lib/video-processing/` (file, pipeline) → ffmpeg/ffprobe en processus enfants.
 
 ## 4. Inventaire des fichiers importants (packages/core)
 
@@ -344,7 +349,7 @@ Ne jamais modifier une migration publiée.
 | `NUXT_VIDEO_RENDITION` | `auto` | rendu H.264 : `auto` (seulement s'il sert) \| `always` \| `never` (formats convertis toujours rendus) |
 | `NUXT_VIDEO_PRESET` / `NUXT_VIDEO_CRF` | `veryfast` / 23 | préréglage x264 (`X264_PRESETS`) / qualité 0 à 51 |
 | `NUXT_VIDEO_AV1` | off | rendu AV1/Opus en plus (`libsvtav1` + `libopus`) |
-| `NUXT_VIDEO_MAX_DURATION` | 10800 | s (1 à 86 400) ; au-delà, aucun réencodage, échec `TOO_LONG` |
+| `NUXT_VIDEO_MAX_DURATION` | 10800 | s (1 à 86 400) ; au-delà, aucun réencodage (échec `TOO_LONG` si un rendu servait) ; borne aussi la durée écrite par un encodage |
 | `NUXT_VIDEO_MEMORY_LIMIT` | 4096 | Mio par ffmpeg (Linux, `prlimit --as`), 0 = sans limite |
 | `NUXT_MEDIA_SIGNING_SECRET` | généré par `db:init` | HMAC des liens signés ; repli : dérivé du secret de session |
 | `NUXT_MEDIA_PREVIOUS_SIGNING_SECRET` | vide | ancien secret accepté pendant une rotation (sélection par `kid`) |
@@ -611,7 +616,7 @@ clé `originals/…` ; nouvelle ligne (version 1, mêmes kind/visibility/origina
   puis suppression de l'ancien original, des `MediaVariant` de l'ancienne version (`transformation startsWith v<old>/`) et des fichiers
   `variants/<id>/v<old>-*`. Titre, texte alternatif, visibilité conservés ; `originalName` = nouveau fichier. D3 (vidéo) : même
   transaction (`commitFile`, écriture conditionnelle d'abord) : tâches actives annulées, lignes `MediaRendition` supprimées (fichiers
-  après validation), nouvelle tâche si le traitement est actif, sinon `processingState` remis à null.
+  après validation), nouvelle tâche si le traitement est actif (toujours pour un format converti), sinon `processingState` remis à null.
 - PATCH : `title`, `altText` (texte vide → null), `visibility`.
 - Corbeille : `deletedAt` ; restauration ; suppression définitive **uniquement depuis la corbeille** (409 `NOT_IN_TRASH`) : ligne supprimée
   d'abord (variants en cascade), puis original + `variants/<id>/` (échec physique = fichier orphelin journalisé). D3 : corbeille =
@@ -1185,7 +1190,7 @@ Format d'erreur (h3) : `{ statusCode, statusMessage, message, data? }` ; **codes
 | PATCH / DELETE `/api/admin/media/:id/tracks/:trackId`, PUT `…/file` | `media:write` | `{ kind?, language?, label?, isDefault? }` / — / multipart `file` | `{ media }` · 404 `TRACK_NOT_FOUND` |
 | DELETE `/api/admin/media/:id[?permanent=true]` | `media:delete` | — | 204 · 409 `NOT_IN_TRASH` |
 | POST `/api/admin/media/:id/restore` | `media:delete` | — | `{ media }` |
-| POST `/api/admin/media/:id/signed-url` | `media:read` | `{ expiresIn }` (60–604800) | `{ url (absolue), expiresAt, posterUrl, tracks: [{ id, url }], sources: VideoSource[] (D3, droit `original`, même échéance) }` (public : URL permanentes, `expiresAt: null`) · 409 `IN_TRASH` |
+| POST `/api/admin/media/:id/signed-url` | `media:read` | `{ expiresIn }` (60–604800) | `{ url (absolue), expiresAt, posterUrl, tracks: [{ id, url }], sources: VideoSource[] (D3, droit `file` de l'original, même échéance) }` (public : URL permanentes, `expiresAt: null`) · 409 `IN_TRASH` |
 | POST `/api/admin/media/:id/duplicate` | `media:read` + `media:upload` (cible) | `{ projectId: string \| null }` | 201 `{ media }` · 404 · 403 · 409 `IN_TRASH` |
 | POST `/api/admin/media/:id/move` | `media:delete` + `media:upload` (cible) | `{ projectId: string \| null }` | `{ media }` (même espace : inchangé) · 404 · 403 · 409 `IN_TRASH` |
 | GET `/api/admin/projects` | session | `?q&status=active\|archived&page` | `{ items: ProjectSummary[], total, page, pageSize: 20 }` |
@@ -1215,7 +1220,7 @@ Format d'erreur (h3) : `{ statusCode, statusMessage, message, data? }` ; **codes
 | GET · PATCH `/api/admin/transforms?project=` | `project:read` · `project:settings` ; sans `project` : `settings:manage` | — · `{ policy }` | `{ level, canEdit, policy, presets, limits }` |
 | POST `/api/admin/presets?project=` · PATCH / DELETE `/api/admin/presets/:id` | `project:settings` ou `settings:manage` (selon le niveau) | `{ name, transformation, description? }` | 201 `{ preset }` · `{ preset }` · 204 ; 400 `INVALID_TRANSFORM` (`param`), 404 `PRESET_NOT_FOUND`, 409 `PRESET_NAME_TAKEN` / `PRESET_LIMIT_REACHED` |
 | GET `/api/admin/video-processing` | `settings:manage` | — | `{ mode, role, active, halted, settings { concurrency, threads, rendition, preset, crf, av1, maxDuration }, ffmpeg { ok, version, major, encoders, hdrFilters, av1, problems } \| null, workers: [{ id, host, seenAt, version, concurrency, active, halted }], jobs { queued, running, done, failed, cancelled }, backfill { count, totalDuration } }` (D3, `no-store` ; jamais les chemins des binaires ni la limite mémoire) |
-| POST `/api/admin/video-processing/backfill` | `settings:manage` | — | `{ count }` (D3 : tâches de priorité −10 pour les vidéos jamais traitées ; audit `media.processing_backfill`) · 409 `PROCESSING_DISABLED` |
+| POST `/api/admin/video-processing/backfill` | `settings:manage` | — | `{ count }` (D3 : tâches de priorité −10 — 10 pour une vidéo à piste de données — pour les vidéos jamais traitées ; audit `media.processing_backfill`) · 409 `PROCESSING_DISABLED` |
 | GET `/api/admin/audit` | `audit:read` | `?category&project&page` | `{ items, total, page, pageSize: 50, filterProject }` |
 | GET\|HEAD `/m/...` | selon § 9.6 (sans cookie ; Bearer depuis B3) | `Range` | fichier en flux · 206/302/304/401/403/404/405/416 ; 503 `PROCESSING_PENDING` (D3, retenue) ; OPTIONS 204 |
 | GET `/api/v1/me` | tout identifiant valable | — | `Me` (credential, user, project, access) |
@@ -1247,7 +1252,8 @@ Contrats de données :
   height, duration, version, processingState (D3), focalPoint (C3), url, previewUrl, poster (D2) | null, uploadedBy { id, name, email } | null, createdAt, updatedAt, deletedAt }` ;
   `MediaDetail` = + `checksum`, `metadata`, `duplicatedFromId` ; B4 : + `uploadedByToken { id, name, type, prefix } | null`, `uploadSubject` ; D2 : + `textTracks` ;
   D3 : + `processing` (dernière tâche, `status` = statut de la tâche) | null, `renditions[]`, `sources[]` (§ 9.23). `url`/`previewUrl` sont des chemins **relatifs**, signés `scope=admin`
-  si privé, en corbeille ou retenu (D3) ; les adresses à copier (`publicUrl`, `signed-url`) sont **absolues** (`mediaBaseUrl`).
+  si privé ou en corbeille ; vidéo publique retenue (D3) : seuls `url` et les rendus sont signés « admin » (aperçu, affiche et pistes jamais
+  retenus) ; les adresses à copier (`publicUrl`, `signed-url`) sont **absolues** (`mediaBaseUrl`).
 - `describeAccess(access)` → `{ space: { type: 'library', project: null } | { type: 'project', project: { id, name, slug, archivedAt } },
   projectRole, scopes }` (joint aux réponses média/membres).
 - Codes métier : utilisateurs `EMAIL_TAKEN, SELF_ACTION, LAST_ADMIN, TOKEN_INVALID, ROLE_NOT_INVITABLE, PROJECTS_REQUIRED,
@@ -1291,8 +1297,8 @@ Contrats de données :
 12. **Traitement d'une vidéo** (D3, § 9.23) : envoi (traitement actif) → `createMedia` crée le média PENDING **et** sa `MediaJob` dans la
    même écriture → `notifyJobQueued` (`embedded`) ou recherche toutes les 5 s (worker) → prise atomique (PROCESSING) → `probe` → plan →
    `sanitize`/`repair` (nouvelle version, retenue 503 levée) → `transcode` (rendu H.264, sans nouvelle version s'il n'existait pas) →
-   `poster` (si aucune affiche) → READY ; la fiche suit `GET …/processing` toutes les 5 s et ne recharge le média qu'aux changements de
-   version ou d'état ; l'API v1 expose `processing` et `sources` (ETag qui suit l'avancement).
+   `poster` (si aucune affiche) → READY ; la fiche suit `GET …/processing` toutes les 5 s et ne recharge le média qu'à un changement de
+   version ou à la fin de la tâche ; l'API v1 expose `processing` et `sources` (ETag qui suit l'avancement).
 
 ## 12. Frontend : conventions et patrons
 
@@ -1368,8 +1374,12 @@ Contrats de données :
   du core avec `NUXT_SERVER_ROLE=worker`, `PORT` et `NITRO_PORT` (port 1 à 65 535, défaut 3001 pour ne pas gêner le serveur web) ; variables
   du shell prioritaires sur `.env`. POSIX : SIGINT/SIGTERM transmis (arrêt propre : ffmpeg tué, tâche rendue à la file), code de sortie
   repris. **Windows : rien n'est transmis** (`child.kill` y tuerait le processus sans crochet `close`, tâche non rendue, essai compté) ; le
-  Ctrl+C de la console parvient de lui-même au processus de travail et la CLI attend sa fin — **à vérifier sur un poste Windows**. En dépôt :
-  `pnpm cli worker`. Pas de `VAR=x commande` dans les scripts (syntaxe absente sous Windows).
+  Ctrl+C de la console parvient de lui-même au processus de travail et la CLI attend sa fin — **à vérifier sur un poste Windows**. Sous
+  Windows, ffmpeg n'a pas non plus de groupe de processus propre (`run.ts`) : s'il reçoit lui aussi le Ctrl+C (non établi : il est lancé avec
+  `windowsHide`) et sort (code 255) avant que le crochet `close` ait arrêté la tâche (Nitro n'appelle `close` qu'après l'arrêt du serveur
+  HTTP), l'échec est classé définitif (`runFailure` : ni délai, ni code null, ni erreur d'écriture) au lieu d'une tâche rendue sans essai —
+  à vérifier sur un poste Windows (Ctrl+C de `surge-media worker` et de `pnpm start` en `embedded` pendant un encodage, puis état de la
+  tâche). En dépôt : `pnpm cli worker`. Pas de `VAR=x commande` dans les scripts (syntaxe absente sous Windows).
 - La CLI exécute la CLI Prisma installée (`prisma` est en dependencies, pas devDependencies).
 - Recherche du dossier core : `--cwd`, sinon dossier courant, sinon package installé (doit contenir `prisma/schema.prisma`).
 
@@ -1450,7 +1460,7 @@ Contrats de données :
   jamais lus tels quels (original en téléchargement, lecture par le rendu H.264) ; une réécriture sans perte (pistes de données, WebM) remplace
   l'original (nouvelle version), un réencodage produit un rendu à côté (original gardé) ; au plus un rendu `h264` et un `av1` par vidéo ;
   affiche du serveur seulement sans affiche ; vidéo à piste de données : original et rendus en 503 sauf lien « admin » jusqu'au nettoyage ;
-  durée > `NUXT_VIDEO_MAX_DURATION` : aucun réencodage (`TOO_LONG`) ; 3 essais ; « Relancer » = `media:write`, « Traiter les vidéos
+  durée > `NUXT_VIDEO_MAX_DURATION` : aucun réencodage (échec `TOO_LONG` si un rendu servait, sinon READY) ; 3 essais ; « Relancer » = `media:write`, « Traiter les vidéos
   existantes » = `settings:manage` ; l'API v1 n'expose jamais le détail technique d'un échec.
 - Un média en corbeille n'est plus diffusé (sauf aperçu admin) et ne peut pas recevoir de lien signé ; purge seulement depuis la corbeille.
 - Lien signé lié à (média, version, dérivé, échéance) ; 7 jours maximum.
@@ -1641,7 +1651,10 @@ Contrats de données :
   depuis un rendu restent à vérifier dans un vrai navigateur.
 - **ffmpeg sous Windows** : builds courants non signés, Smart App Control peut les bloquer comme argon2 ; arrêt de l'arbre par `taskkill /T
   /F`, priorité `IDLE_PRIORITY_CLASS`, aucune limite mémoire ni processeur (`prlimit` : Linux seulement) — **à vérifier sur un poste
-  Windows** (tâche en attente pour l'utilisateur, § 21). Les tests ffmpeg y sont « ignorés » si ffmpeg manque.
+  Windows** (tâche en attente pour l'utilisateur, § 21). Les tests ffmpeg y sont « ignorés » si ffmpeg ou ffprobe manque ; le bloc
+  `runTool : processus enfant borné` (priorité, arbre de processus, arrêt) l'est toujours (`describe.skipIf(!posix)`), même avec ffmpeg :
+  la priorité se vérifie à la main ; les tests d'arrêt qui restent attendent `code: null` (sémantique POSIX ; `taskkill /F` donne
+  probablement le code 1, à vérifier — la règle « ffmpeg tué par un signal → passager » repose aussi sur `code === null`).
 - Pas d'outil de copie entre stockages, pas de nettoyage des fichiers orphelins ni des liens de mot de passe utilisés.
 - Originaux diffusés avec leurs EXIF (GPS possible).
 - Tests automatisés limités aux modules purs (Vitest, depuis B1) : API et interface vérifiées par scripts ad hoc et audits
@@ -1701,8 +1714,10 @@ Contrats de données :
 
 - Commandes : `pnpm typecheck`, `pnpm test` (Vitest, **Node 24** : sous Node 22, `text-track.test.ts` échoue), `pnpm i18n:check`, `pnpm a11y:contrast`,
   `pnpm --filter @surge-media/core db:migration --check`, `pnpm build` puis `pnpm start` (config `core-start` de `.claude/launch.json`).
-  Tests ffmpeg (`video-ffmpeg.test.ts`) : exécutés seulement si `ffmpeg` répond (`describe.skipIf`), sinon signalés « ignorés » ; AV1 si
-  `libsvtav1`, limites `prlimit` sous Linux seulement.
+  Tests ffmpeg (`video-ffmpeg.test.ts`) : exécutés si ffmpeg **et** ffprobe répondent (`describe.skipIf`), sinon signalés « ignorés » ; AV1 si
+  `libsvtav1`, limites `prlimit` sous Linux seulement ; le bloc `runTool : processus enfant borné` (priorité, arbre de processus, arrêt) est
+  toujours ignoré sous Windows (`describe.skipIf(!posix)`) — la priorité `IDLE_PRIORITY_CLASS` se vérifie à la main ; les tests d'arrêt
+  attendent `code: null` (sémantique POSIX), à vérifier sous Windows où `taskkill /F` donne probablement le code 1.
 - Tests d'API faits jusqu'ici avec des scripts Node temporaires (fetch + FormData + cookie), rejoués en dev **et** en prod ;
   S3 testé contre `s3rver` (faux S3 local, `pnpm dlx s3rver@3.7.1 --port 4568 --configure-bucket surge-media`).
 - Interface : navigateur intégré (pilotage par JS quand le panneau ne s'affiche pas), audits axe injectés depuis jsDelivr.
@@ -1878,8 +1893,9 @@ par défaut = comportement de D2). Faite le 2026-10-09.
   `setVideoProcessingStopped` : **`halted`** (arrêtée en route, redétection chaque minute ; seul cas où l'API dit `halted: true`) ≠
   **`disabled`** (inutilisable dès le démarrage, ou stockage non partagé : corriger, puis redémarrer).
 - **File** (`jobs.ts`, magasin injecté `JobStore` testé en mémoire ; constantes de `shared/utils/video-processing.ts`) : une `MediaJob` par
-  **fichier** (`sourceKey`), créée **dans la même écriture** que lui (création imbriquée de `createMedia`, `commitFile` pour remplacement et
-  « Optimiser », `restoreMedia`, `requestProcessing`, `backfillProcessing`, `copyProcessing`). **Prise** atomique portable sans `SKIP LOCKED`
+  **fichier** (`sourceKey`), créée **dans la même transaction** que l'écriture qui la motive (création imbriquée de `createMedia`,
+  `commitFile` pour remplacement et « Optimiser », `restoreMedia`, `requestProcessing`, `backfillProcessing`, `copyProcessing` après la
+  copie des rendus d'une duplication). **Prise** atomique portable sans `SKIP LOCKED`
   (lots de 5 tâches QUEUED prêtes, priorité desc puis ancienneté, `updateMany({ id, status: 'QUEUED' })`, compte 0 = prise ailleurs) + média
   PROCESSING dans la même transaction (fichier changé → tâche annulée sans calcul). **Bail** 2 min, **battement** 30 s (`renewLease`
   conditionné à `id`, `lockedBy`, `RUNNING` ; compte 0 = annulée ou reprise → signal d'arrêt, ffmpeg tué, rien écrit) ; avancement écrit au
@@ -1907,21 +1923,22 @@ par défaut = comportement de D2). Faite le 2026-10-09.
   débit, HDR, **sans nouvelle version** ; MP4/MOV/WebM : courbe HDR seulement) → `planVideoJob` → étapes `sanitize`, `repair`, `transcode`,
   `av1`, `poster` dans cet ordre, chaque sortie **vérifiée par le lecteur de D1** (`probeVideoFile` : codec, dimensions du plan, son, durée ±
   0,5 s ou 2 % — 2 s ou 10 % si estimée —, taille ≤ 2 Gio − 1 ; sinon `CONVERSION_FAILED`) → READY (avertissements dans `result`) ou FAILED
-  (`errorCode`, `errorDetail` ≤ 191 car. sans chemin). Délais : analyse 60 s, affiche 120 s, copie 10 min, encodage 10 × durée + 120 s
-  (24 h au plus ; durée inconnue → `maxDuration`).
+  (`errorCode`, `errorDetail` ≤ 191 car. sans chemin). Délais (`run.ts`) : analyse 60 s, affiche 120 s par instant essayé, copie sans
+  réencodage (`sanitize`, `repair`) 10 min, encodage 10 × durée + 120 s (24 h au plus ; durée inconnue → `maxDuration`), sortie arrêtée
+  au-delà de `maxDuration` + 10 s de vidéo écrite.
 - **Plan** (`plan.ts`, pur) : sans flux vidéo → `NO_VIDEO_TRACK` ; dimensions hors 1–16 384 → `UNREADABLE` ; `sanitize` = MP4/MOV avec
   pistes de données (ffprobe ou `metadata.dataTracks`) ; `repair` = WebM sans durée aux codecs copiables en WebM (VP8/VP9/AV1 + Opus/Vorbis,
   `webmCopyable`) ; **rendu utile** = format converti **toujours** (même `never`), sinon `always` oui, `never` non, `auto` si lecture ≠
   `broad`, petit côté > 1080, débit > 10 Mbit/s, HDR ou images entrelacées ; `transcode` si utile et H.264 pas déjà fait par cette tâche
   (`existing` = `result.renditions` ; une relance refait tout) ; `av1` si utile + `NUXT_VIDEO_AV1` + encodeurs ; `poster` si aucune affiche ;
-  durée > `maxDuration` → réencodages retirés, autres étapes faites puis `TOO_LONG` sans nouvel essai ; `toneMap` si HDR + filtres
-  (avertissement `hdr_converted` / `hdr_unconverted` seulement avec un réencodage) ; cible `scaledDimensions` (petit côté ≤ 1080, paire,
-  jamais agrandie).
+  durée > `maxDuration` et réencodage utile → réencodages retirés, autres étapes faites puis `TOO_LONG` sans nouvel essai (sans
+  réencodage utile : READY) ; `toneMap` si HDR + filtres (avertissement `hdr_converted` / `hdr_unconverted` seulement avec un
+  réencodage) ; cible `scaledDimensions` (petit côté ≤ 1080, paire, jamais agrandie).
 - **Rendus** (`MediaRendition`, `RENDITION_NAMES` = `av1`, `h264`, ordre de `sources`) : clé `renditionKey` **indépendante de la version** ;
   URL `/m/<id>/v<version courante>/renditions/h264.mp4|av1.webm` (`renditionPath`, segment `renditions` réservé, autre nom → 404) ; règles
   de l'original (droit signé `file` — jamais `derived` ni permanent, `admin` oui —, `Range`, ETag = 32 hex de l'empreinte du rendu, cache
   immuable public, Bearer, corbeille → 404) ; ancienne version → 302 vers le rendu courant, sinon l'original ; rendu inconnu du cache →
-  relecture en base (≤ 1 par seconde et par média) puis 404 ; téléchargé sous le nom du média + extension du rendu. Rendu **créé** : même
+  relecture en base (≤ 1 par seconde et par média) puis 404 ; `Content-Disposition: inline` au nom du média + extension du rendu. Rendu **créé** : même
   version ; rendu **remplacé** (relance) : version + 1, dérivés de l'ancienne version et ancien fichier supprimés. Supprimés quand le fichier
   change (lignes dans la transaction de `commitFile`, fichiers après) et à la purge. H.264 : MP4 « faststart », High 8 bits 4:2:0, CRF et
   préréglage réglables, petit côté ≤ 1080, `-fpsmax 60`, image clé toutes les 2 s, désentrelacement `bwdif` image par image, rotation
@@ -1934,8 +1951,8 @@ par défaut = comportement de D2). Faite le 2026-10-09.
   **continue** sur le nouveau fichier (`sourceKey` mis à jour dans la transaction, option `carry` de `commitFile`) ; version changée sans
   nouveau fichier (affiche, point d'intérêt) → relue, 3 essais.
 - **Affiche du serveur** (DD30) : seulement si `posterKey` null ; instants `posterTimes` (10 % de la durée, 5 s au plus, puis + 1 s, + 2 s,
-  ≤ 90 %), image de luminance moyenne < 16 (sharp `stats`) écartée ; extraite du rendu H.264 s'il existe (SDR), sinon de la source (tone
-  mapping si HDR) ; `normalizePoster` dans la file des images (5 essais si `SERVER_BUSY`) ; écriture conditionnelle (`posterKey` null, même
+  ≤ 90 %), image de luminance moyenne < 16 (sharp `stats`) écartée ; extraite du rendu H.264 produit par cet essai (SDR), sinon de la
+  source (conversion des couleurs si HDR) ; `normalizePoster` dans la file des images (5 essais si `SERVER_BUSY`) ; écriture conditionnelle (`posterKey` null, même
   fichier, hors corbeille) **sans nouvelle version** ; affiche choisie entre-temps par l'utilisateur → la nôtre supprimée ; échec =
   avertissement `poster_failed`, jamais un échec de tâche.
 - **Formats convertis** (DD32, `CONVERTED_VIDEO_TYPES` : `video/x-matroska` mkv, `video/x-msvideo` avi, `video/3gpp` 3gp, `video/3gpp2` 3g2,
@@ -1955,7 +1972,8 @@ par défaut = comportement de D2). Faite le 2026-10-09.
   `file` que `url`) ; `Media.processing: { status: pending | processing | ready | failed, progress (0–1, seulement tâche RUNNING), error (code
   connu, seulement FAILED), updatedAt } | null`, jamais `errorDetail` ; `signed-url` / `signed-urls` cible `file` d'une vidéo → `sources`
   signées à la même échéance ; `upload.types` des jetons délégués accepte les types convertis. **ETag** du détail
-  `W/"id-version-updatedAt[-état.tâche.updatedAtMs][-échéance]"` (suit l'avancement, et chaque battement de 30 s) ; **liste** : 304 sans
+  `W/"<id>-<version>-<updatedAt ms>[-<état>.<id de la tâche>.<updatedAt ms de la tâche>][-<échéance>]"` (suit l'avancement, et chaque
+  battement de 30 s ; échéance pour un média privé) ; **liste** : 304 sans
   requête par la révision, mais une page qui contient une vidéo PENDING/PROCESSING reçoit un ETag qui inclut ses tâches
   (`activeProcessingParts`), jamais égal à celui de la révision seule (relue à chaque revalidation). OpenAPI : composants `MediaSource`,
   `MediaProcessing`, section « Vidéos » réécrite fr/en, `PROCESSING_PENDING` dans les erreurs de `/m/` ; `PROCESSING_DISABLED` hors
@@ -1984,16 +2002,18 @@ par défaut = comportement de D2). Faite le 2026-10-09.
   file sans échec ; rien pour une nouvelle tâche ni autour de la corbeille). **Suivi** (`useProcessingPoll`) : `GET …/processing` toutes les
   5 s, navigateur seulement, tant que PENDING/PROCESSING hors corbeille (`processingLive`), une requête à la fois, pause onglet masqué, arrêt
   sur 403/404 ; champs de tâche fusionnés sans rechargement ; rechargement complet (`$api`, page gardée en cas d'échec) seulement si la
-  version ou l'état changent, si la tâche a été annulée ailleurs, ou une fois quand la même tâche dépasse `transcode` sans H.264 affiché
-  (`processingNeedsReload`) ; formulaire suivi sur l'id et les valeurs du serveur (saisie conservée). **Lecteur** : `<source>` dans l'ordre
+  version change, si la tâche se termine (état READY, FAILED ou null), si elle a été annulée ailleurs, ou une fois quand la même tâche
+  dépasse `transcode` sans H.264 affiché (`processingNeedsReload`) ; les passages PENDING ↔ PROCESSING ne font que reporter l'état et la
+  tâche ; formulaire suivi sur l'id et les valeurs du serveur (saisie conservée). **Lecteur** : `<source>` dans l'ordre
   de `sources`, recréé seulement si leurs adresses changent, changement reporté pendant la lecture ou le focus puis repris au même instant ;
-  sans source, cadre de même taille + « Télécharger l'original » ; lien temporaire abandonné seulement si la version ou les rendus changent
+  sans source, cadre 16:9 au même emplacement + « Télécharger l'original » (« Cette vidéo sera lisible ici dès que sa version
+  compatible sera prête. » pendant le traitement) ; lien temporaire abandonné seulement si la version ou les rendus changent
   (message poli) ; focus replacé si l'élément focalisé disparaît. **Avertissements** : `compatPending` (au lieu de `variable` : traitement
   actif, `rendition` ≠ `never`, durée ≤ max), `variable` masqué avec un H.264, `dataTracks` (`held` / `heldPrivate` d'après `deliveryHeld`,
   `failed`, exposé), `hdr` / `hdrUnconverted` (H.264 présent et dernière tâche DONE), `converting` / `convertFailed` ; « Optimiser » masqué
   pendant un traitement ; extrait `videoSnippet({ sources })` (`publicSources` ou `link.sources`), remplacé par une explication si la liste
   est vide. **Réglages** (`AdminVideoProcessingSettings`, section « Traitement des vidéos ») : lecture seule (état Actif / Désactivé / Arrêté
-  / Inactif, mode, ffmpeg, encodage, processus de travail, tâches par statut), bouton « Actualiser », aucun rafraîchissement automatique ;
+  / Inactif, mode, ffmpeg, encodage, processus de travail, tâches par statut), bouton « Actualiser l'état », aucun rafraîchissement automatique ;
   « Traiter les vidéos existantes » : nombre, durée totale, estimation « jusqu'à environ » = n × 1 s + durée × coût ÷ (fils × tâches en
   parallèle), coût = 2 × facteur du préréglage (veryfast 1, medium 1,9) + 3 si AV1, 0 en `never` ; dialogue `UiDialog`, focus sur le titre de
   la section après succès, bouton désactivé avec sa raison visible. **Envoi** : ligne `media.upload.converted` et extensions
@@ -2018,8 +2038,9 @@ par défaut = comportement de D2). Faite le 2026-10-09.
   (nouveaux), `MediaCard.vue`, `MediaUploader.vue`, `app/pages/admin/media/[id].vue`, `app/pages/admin/settings.vue`,
   `app/composables/{useProcessingPoll,useMediaUpload,useAuditFormat}.ts`, `app/utils/processing-view.ts`, `nuxt.config.ts`, `.env.example`.
 - **Tests** : `tests/video-processing.test.ts` (réglages, arguments, progression, ffprobe, plan, règles pures), `video-ffmpeg.test.ts` (vrai
-  ffmpeg sur des vidéos fabriquées par `lavfi` ; `describe.skipIf(!hasFfmpeg)` : **ignorés sans ffmpeg**, jamais réussis en silence ; AV1 si
-  `libsvtav1` ; `prlimit` sous Linux ; fichier hostile), `video-queue.test.ts` (prise, bail, reprise, rattrapage, runner, superviseur),
+  ffmpeg sur des vidéos fabriquées par `lavfi` ; `describe.skipIf(!hasFfmpeg)` : **ignorés sans ffmpeg ou ffprobe**, jamais réussis en
+  silence ; bloc `runTool : processus enfant borné` toujours ignoré sous Windows (`describe.skipIf(!posix)`) ; AV1 si `libsvtav1` ; `prlimit`
+  sous Linux ; fichier hostile), `video-queue.test.ts` (prise, bail, reprise, rattrapage, runner, superviseur),
   `renditions-delivery.test.ts`, `video.test.ts` (signatures, pistes de données, ébauches), `video-sources.test.ts`, `video-admin.test.ts`,
   `api-video.test.ts`, `video-routes.test.ts`, `processing-view.test.ts` ; `api`, `openapi`, `transforms` (extrait `<video>`) mis à jour.
   526 tests en 27 fichiers (Node 24).
@@ -2097,7 +2118,13 @@ par défaut = comportement de D2). Faite le 2026-10-09.
 - **D3 sous Windows** (poste de l'utilisateur) **non vérifié** : ffmpeg (`winget install Gyan.FFmpeg`) éventuellement bloqué par Smart App
   Control, arrêt de l'arbre par `taskkill /T /F`, priorité `IDLE_PRIORITY_CLASS`, Ctrl+C de `surge-media worker` (rien n'est transmis par la
   CLI : le Ctrl+C de la console doit atteindre le processus de travail et l'arrêter proprement), Ctrl+C de `nuxt dev` pendant un encodage,
-  tests ffmpeg — tâche en attente pour l'utilisateur. Aucune limite mémoire ni processeur par ffmpeg hors Linux (`prlimit`).
+  tests ffmpeg — tâche en attente pour l'utilisateur. Aucune limite mémoire ni processeur par ffmpeg hors Linux (`prlimit`). Sous Windows,
+  ffmpeg n'a pas de groupe de processus propre (`run.ts`) : s'il reçoit lui aussi le Ctrl+C de la console (non établi : lancé avec
+  `windowsHide`) et sort (code 255) avant que le crochet `close` ait arrêté la tâche, l'échec est classé définitif (`runFailure`) au lieu
+  d'une tâche rendue sans essai — à vérifier (Ctrl+C de `surge-media worker` et de `pnpm start` pendant un encodage, puis état de la
+  tâche). Tests : le bloc `runTool : processus enfant borné` (priorité, arbre de processus, arrêt) est toujours ignoré sous Windows
+  (`describe.skipIf(!posix)`), la priorité `IDLE_PRIORITY_CLASS` se vérifie à la main ; les tests d'arrêt qui restent attendent `code: null`
+  (sémantique POSIX), alors que `taskkill /F` donne probablement le code 1 sous Windows.
 - D3 vérifié avec SQLite et le stockage local : aucun essai consigné avec S3 (original copié dans le dossier de la tâche), PostgreSQL ou
   MySQL (l'ordre `nulls: 'first'` de la « dernière tâche » n'a été essayé que sous SQLite). Lecture réelle des rendus H.264 dans un navigateur
   non vérifiée (Chromium du nuage sans H.264), ni le report du changement de sources pendant une lecture.

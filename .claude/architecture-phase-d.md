@@ -325,7 +325,7 @@ lui recopier chaque bloc, soit plus de travail. Les vrais leviers :
 
 | # | Décision proposée | Alternative |
 | --- | --- | --- |
-| DD1 | Formats **MP4, WebM, MOV** (signature + structure) ; MKV, AVI, 3GP, MPEG-TS, OGV… refusés (415) | MP4 + WebM seulement |
+| DD1 | Formats **MP4, WebM, MOV** (signature + structure) ; MKV, AVI, 3GP, MPEG-TS, OGV… refusés (415) — *changé par D3 (DD32, § 33) : acceptés une fois convertis quand le traitement des vidéos est actif* | MP4 + WebM seulement |
 | DD2 | Aucun codec refusé ; codecs enregistrés ; avertissement « compatibilité variable » hors H.264 (MP4/MOV) et VP8/VP9 (WebM) | refuser HEVC/ProRes jusqu'au transcodage |
 | DD3 | Analyse par un **lecteur d'en-têtes maison** (TypeScript pur, testé), sans ffprobe ni WASM | `mediainfo.js` (WASM) ; ffprobe |
 | DD4 | `NUXT_MEDIA_MAX_VIDEO_UPLOAD_SIZE` **512 Mio** par défaut, plafond **2 Gio − 1** (sans migration) ; images 25 Mio ; type et taille contrôlés **pendant la réception** | autre défaut (256 Mio, 1 Gio) ; `BigInt` dès D1 |
@@ -1257,8 +1257,8 @@ l'existant interrompu en route, `processing` de l'ancien fichier affiché après
 - Réécriture sans perte : la tâche **continue** sur le nouveau fichier (`sourceKey` mis à jour dans la même transaction) au
   lieu d'être annulée et recréée.
 - **Ordre des étapes** : `probe`, `sanitize`, `repair`, `transcode`, `av1`, puis `poster` en dernier (extraite du rendu
-  H.264 s'il existe, et laisse à l'affiche capturée par le navigateur le temps d'arriver) ; `verify` n'est pas une étape
-  du plan mais suit chaque sortie.
+  H.264 produit par cet essai, en SDR, sinon de la source, couleurs converties si HDR ; ce rang laisse à l'affiche
+  capturée par le navigateur le temps d'arriver) ; `verify` n'est pas une étape du plan mais suit chaque sortie vidéo.
 - **Reprise différée** de 30 s puis 5 min ; le 3ᵉ échec est définitif (la proposition citait aussi 30 min).
 - `TOO_LONG` n'empêche que les réencodages : retrait des pistes GPS, réparation et affiche sont faits, puis échec.
 - Mode `auto` : une source **entrelacée** reçoit aussi un rendu (les navigateurs ne désentrelacent pas).
@@ -1270,15 +1270,20 @@ l'existant interrompu en route, `processing` de l'ancien fichier affiché après
 - Vidéo dont la diffusion est retenue : priorité 10 dans la file ; ses liens d'administration sont signés « admin ».
 - « Actif » (mode `embedded`) exige aussi que la boucle tourne. Arrêt de la boucle en deux cas distincts (« Réglages ») :
   **`halted`** = ffmpeg devenu inutilisable en route, nouvelle détection chaque minute (badge « Arrêté » ; seul cas où
-  `GET /api/admin/video-processing` renvoie `halted: true`) ; **`disabled`** = inutilisable dès le démarrage ou stockage
-  non partagé, rien n'est redétecté (badge « Inactif », « Corrigez le problème, puis redémarrez le serveur. »). Processus
-  de travail arrêté : présence `halted`, effacée à l'arrêt propre.
+  `GET /api/admin/video-processing` renvoie `halted: true`) ; **`disabled`** = inutilisable dès le démarrage (ou, pour un
+  processus de travail, stockage non partagé), rien n'est redétecté — en `embedded` : badge « Inactif », « Corrigez le
+  problème, puis redémarrez le serveur. » ; un processus de travail dans ce cas n'écrit aucune présence (le serveur web
+  affiche « Inactif », aucun processus de travail signalé). Processus de travail arrêté en route : présence `halted`,
+  effacée à l'arrêt propre.
 - **`/api/health`** compte comme processus de travail le serveur `embedded` dont la boucle tourne (il n'écrit pas de
   présence) : sans cela, une règle de supervision « `workers` = 0 et `queued` > 0 » se déclencherait toujours.
 - Développement : ffmpeg reste dans le groupe du terminal (Ctrl+C sur `nuxt dev` l'arrête) ; au démarrage suivant,
   le bail de ses tâches est rendu échu aussitôt (puis reprise ordinaire, un essai compté). Windows : la CLI `worker` ne
   retransmet pas les signaux (le Ctrl+C de la console suffit ; `child.kill` y tuerait le processus sans arrêt propre) —
-  à vérifier sur un poste Windows.
+  à vérifier sur un poste Windows. Sous Windows, ffmpeg n'a pas de groupe de processus propre (`run.ts`) : s'il reçoit
+  lui aussi le Ctrl+C de la console (non établi : lancé avec `windowsHide`) et sort (code 255) avant que le crochet
+  `close` ait arrêté la tâche (Nitro n'appelle `close` qu'après l'arrêt du serveur HTTP), l'échec est classé définitif
+  (`runFailure`) au lieu d'une tâche rendue sans essai — à vérifier sur un poste Windows.
 - **Route de suivi légère** (non prévue) : `GET /api/admin/media/:id/processing` → `{ version, processingState,
   processing }`, interrogée toutes les 5 s par la fiche (un rechargement complet réinitialiserait les formulaires et
   re-signerait les liens).
@@ -1337,8 +1342,13 @@ l'existant interrompu en route, `processing` de l'ancien fichier affiché après
    (`winget install Gyan.FFmpeg`) et non bloqué par Smart App Control ; arrêt de l'arbre de processus par `taskkill
    /pid <pid> /T /F` (délai, annulation, arrêt du serveur) ; priorité `IDLE_PRIORITY_CLASS` ; Ctrl+C de
    `surge-media worker` (la CLI ne transmet rien : le processus de travail doit s'arrêter proprement et rendre sa tâche
-   sans essai compté) ; Ctrl+C de `nuxt dev` pendant un encodage ; `pnpm test` avec ffmpeg (tests `video-ffmpeg`
-   exécutés, pas ignorés) ; lecture du rendu H.264 dans un vrai navigateur.
+   sans essai compté) et de `pnpm start` en `embedded` pendant un encodage, puis état de la tâche (ffmpeg, sans groupe de
+   processus propre, peut recevoir le Ctrl+C lui aussi et sortir avant que la tâche soit rendue : échec définitif au lieu
+   d'une tâche rendue, voir « Écarts ») ; Ctrl+C de `nuxt dev` pendant un encodage ; `pnpm test` avec ffmpeg (tests
+   `video-ffmpeg` exécutés si ffmpeg **et** ffprobe répondent ; le bloc `runTool : processus enfant borné` — priorité,
+   arbre de processus, arrêt — y est toujours ignoré, `describe.skipIf(!posix)`, la priorité se vérifie donc à la main ;
+   les tests d'arrêt attendent `code: null`, sémantique POSIX, alors que `taskkill /F` donne probablement le code 1) ;
+   lecture du rendu H.264 dans un vrai navigateur.
 2. **Scénario HTTP `d3-test.mjs`** (§ 40) : facultatif, et dans le dépôt seulement avec l'accord de l'utilisateur.
 3. **Décisions de l'utilisateur en attente** : sa vidéo de téléphone publique (Samsung, projet « My Phone », envoyée avant
    D2) contient encore son lieu de tournage — « Optimiser » (nouvelle version sans le lieu), la rendre privée ou la laisser ;
@@ -1349,9 +1359,10 @@ l'existant interrompu en route, `processing` de l'ancien fichier affiché après
 
 - Original **3GP/MKV** gardé tel quel (téléchargement) : un lieu de tournage qu'il contiendrait n'est ni détecté
   ni retiré (le rendu H.264, lui, n'a aucune métadonnée).
-- Mode `external` : formats convertis refusés jusqu'à 30 s après le démarrage d'un processus de travail ; retenue
-  (503) et affiche visibles avec jusqu'à 60 s de retard sur le serveur web (caches) ; processus de travail sur une
-  autre machine : PostgreSQL/MySQL et stockage partagé obligatoires.
+- Mode `external` : formats convertis refusés jusqu'à 30 s après le démarrage d'un processus de travail ; fin d'une
+  retenue (503) vue avec jusqu'à 60 s de retard à l'ancienne URL ou après un échec définitif (cache de diffusion du
+  serveur web ; une nouvelle version, un rendu ou l'affiche d'une vidéo sans affiche sont relus en base, 1 s au plus) ;
+  processus de travail sur une autre machine : PostgreSQL/MySQL et stockage partagé obligatoires.
 - Retenue (503) maintenue tant que la tâche attend : sans processus de travail actif (`external`) ou boucle arrêtée
   (`embedded`), une vidéo à piste de données en attente reste indisponible hors liens « admin » jusqu'à son traitement
   ou le passage en `off`.
@@ -1365,5 +1376,8 @@ l'existant interrompu en route, `processing` de l'ancien fichier affiché après
   métadonnées vidéo) ; tous les chemins d'envoi en écrivent : cas sans exemple aujourd'hui.
 - Fiche : « Prochain essai au plus tôt » peut afficher une heure passée si aucun processus ne reprend la tâche ; après un
   échec passager, « Commencé le » garde l'heure de l'essai précédent jusqu'à la reprise.
+- Écarts mineurs de l'interface relevés pendant les essais et laissés : l'extrait HTML échappe les guillemets de
+  l'attribut `type` (`codecs=&quot;…&quot;` : valide, mais peu lisible) ; à la fin d'un traitement, la zone d'état de
+  l'aperçu (antérieure à D3) s'annonce aussi, juste après « Traitement de la vidéo terminé. ».
 - Antérieur à D3, observé pendant les essais : un aperçu pré-généré pendant un changement de version peut rester
   orphelin dans le stockage (`variants/<média>/v<n>-…`).

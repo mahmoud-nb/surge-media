@@ -228,7 +228,7 @@ pnpm cli --help                                # aide (--lang en pour l'anglais)
   `pnpm build` d'abord, sinon la commande s'arrête) depuis `packages/core`, avec son `.env`
   (`--env-file-if-exists`, les variables du shell restant prioritaires) et `NUXT_SERVER_ROLE=worker`. Il
   exécute les tâches vidéo du mode `external` et ne sert que `/api/health` sur son port (3001 par défaut,
-  distinct de celui du serveur web). Ctrl+C ou SIGTERM : arrêt propre (§ 7.7).
+  distinct de celui du serveur web). Ctrl+C ou SIGTERM : arrêt propre (§ 7.7 ; Windows : à vérifier).
 - **Distribution** : le package `@surge-media/core` expose le binaire `surge-media`
   (`dist/cli/index.mjs`, construit par `pnpm build:cli`). Une fois publié : `npx @surge-media/core init`,
   ou `npx surge-media init` depuis un projet où le package est installé.
@@ -279,8 +279,8 @@ Le fichier `packages/core/.env` est créé par `pnpm db:init` à partir de `.env
 | `NUXT_VIDEO_RENDITION` | `auto` | version compatible H.264 : `auto` (seulement si elle sert), `always`, `never` (sauf formats convertis) |
 | `NUXT_VIDEO_PRESET` / `NUXT_VIDEO_CRF` | `veryfast` / `23` | préréglage x264 (`ultrafast` … `veryslow`) et qualité (0 à 51, plus bas = meilleure qualité, plus lourd) |
 | `NUXT_VIDEO_AV1` | `off` | version AV1/Opus en WebM en plus (`on` ; encodeurs `libsvtav1` et `libopus` exigés) |
-| `NUXT_VIDEO_MAX_DURATION` | `10800` (3 h) | durée maximale réencodée, en secondes ; au-delà, échec `TOO_LONG` (sans rendu) |
-| `NUXT_VIDEO_MEMORY_LIMIT` | `4096` | Mio de mémoire par ffmpeg (Linux, par `prlimit`) ; `0` = sans limite |
+| `NUXT_VIDEO_MAX_DURATION` | `10800` (3 h) | durée maximale réencodée, en secondes ; au-delà, aucun réencodage (échec `TOO_LONG` si un rendu servait) ; borne aussi la durée écrite par un encodage |
+| `NUXT_VIDEO_MEMORY_LIMIT` | `4096` | Mio d'espace d'adressage (mémoire virtuelle) par ffmpeg (Linux, `prlimit --as`) ; `0` = sans limite |
 
 Une valeur `NUXT_VIDEO_*` invalide reprend sa valeur par défaut avec un avertissement au démarrage ; un
 changement demande un redémarrage (et vaut pour chaque processus : un processus de travail applique ses propres
@@ -527,7 +527,7 @@ manquante **403** (`PROJECT_ARCHIVED` si c'est l'archivage du projet qui la reti
 | `POST /api/admin/media/:id/signed-url` | `media:read` | `{ expiresIn }` (60 s à 7 jours) → lien temporaire absolu (URL permanente si public) ; vidéo : aussi l'affiche, les pistes et `sources` (rendus), à la même échéance · 409 `IN_TRASH` |
 | `POST /api/admin/media/:id/process` | `media:write` | traiter ou relancer le traitement d'une vidéo (échec, rendus à refaire avec les réglages actuels, vidéo jamais traitée) → `{ media }` · 422 `KIND_MISMATCH` · 409 `IN_TRASH` / `PROCESSING_DISABLED` / `VERSION_CONFLICT` |
 | `GET /api/admin/media/:id/processing` | `media:read` | `{ version, processingState, processing }` : avancement, interrogé toutes les 5 s par la fiche pendant le traitement (`no-store`) |
-| `GET /api/admin/video-processing` | `settings:manage` | état pour « Réglages » : mode, rôle, `active`, `halted`, réglages `NUXT_VIDEO_*` (jamais les chemins des binaires), ffmpeg détecté, processus de travail, tâches par statut, vidéos jamais traitées (nombre, durée totale) |
+| `GET /api/admin/video-processing` | `settings:manage` | état pour « Réglages » : mode, rôle, `active`, `halted`, réglages d'encodage (`concurrency`, `threads`, `rendition`, `preset`, `crf`, `av1`, `maxDuration` ; ni la limite de mémoire ni les chemins des binaires), ffmpeg détecté (null sur le serveur web en mode `external`), processus de travail, tâches par statut, vidéos jamais traitées (nombre, durée totale) |
 | `POST /api/admin/video-processing/backfill` | `settings:manage` | « Traiter les vidéos existantes » → `{ count }` (journalisé) · 409 `PROCESSING_DISABLED` |
 | `POST /api/admin/media/:id/duplicate` | `media:read` + `media:upload` dans la cible | `{ projectId \| null }` → copie indépendante (201) · 409 `IN_TRASH` |
 | `POST /api/admin/media/:id/move` | `media:delete` + `media:upload` dans la cible | `{ projectId \| null }` → même média, même adresse, autre espace |
@@ -539,8 +539,8 @@ manquante **403** (`PROJECT_ARCHIVED` si c'est l'archivage du projet qui la reti
 Codes d'erreur (`data.code`, `shared/utils/media.ts`) : `NO_FILE`, `MULTIPART_REQUIRED` (400),
 `FILE_TOO_LARGE` (413), `UNSUPPORTED_TYPE` (415), `UNREADABLE_FILE`, `DIMENSIONS_TOO_LARGE`,
 `KIND_MISMATCH` (422), `VERSION_CONFLICT`, `NOT_IN_TRASH`, `IN_TRASH`, `PROCESSING_DISABLED` (409),
-`MEDIA_FORBIDDEN`, `SIGNATURE_INVALID`, `SIGNATURE_EXPIRED` (403), `SERVER_BUSY`, `PROCESSING_PENDING` (503, sur
-`/m/`), `INVALID_TRANSFORM` (400) et `TRANSFORM_QUOTA` (429), `TRANSFORM_NOT_ALLOWED` (403) sur `/m/` ;
+`MEDIA_FORBIDDEN`, `SIGNATURE_INVALID`, `SIGNATURE_EXPIRED` (403), `SERVER_BUSY` (503), `PROCESSING_PENDING` (503,
+sur `/m/` seulement), `INVALID_TRANSFORM` (400) et `TRANSFORM_QUOTA` (429), `TRANSFORM_NOT_ALLOWED` (403) sur `/m/` ;
 préréglages : `PRESET_NOT_FOUND` (404), `PRESET_NAME_TAKEN`, `PRESET_LIMIT_REACHED` (409), `INVALID_TRANSFORM`
 (400) ; dossiers (`shared/utils/folders.ts`) : `FOLDER_NOT_FOUND` (404), `FOLDER_NAME_TAKEN`, `FOLDER_NOT_EMPTY`,
 `FOLDER_LIMIT_REACHED` (409), `FOLDER_DEPTH_EXCEEDED`, `FOLDER_CYCLE` (422).
@@ -638,7 +638,7 @@ service des médias).
 | `transcode` « Conversion H.264 » | rendu utile (voir plus bas) | **rendu** H.264/AAC en MP4, à côté de l'original |
 | `av1` « Conversion AV1 » | `NUXT_VIDEO_AV1=on`, `libsvtav1` et `libopus` présents, rendu utile | rendu AV1/Opus en WebM, en plus |
 | `poster` « Extraction de l'image d'affiche » | aucune affiche | affiche enregistrée, sans nouvelle version |
-| `verify` « Vérification du résultat » | après chaque sortie | réanalyse par le lecteur de D1 : codec, dimensions, durée (± 0,5 s ou 2 %), taille ; sinon sortie jetée (`CONVERSION_FAILED`) |
+| `verify` « Vérification du résultat » | après chaque sortie vidéo | réanalyse par le lecteur de D1 : codec, dimensions, son, durée (± 0,5 s ou 2 % ; 2 s ou 10 % pour un WebM réparé, dont la durée doit être écrite), plus aucune piste de données après `sanitize`, taille ≤ 2 Gio − 1 ; sinon sortie jetée (`CONVERSION_FAILED`) |
 
 - **Sans perte → original ; réencodage → rendu** : une copie sans réencodage remplace le fichier stocké (comme
   « Optimiser » : nouvelle version, sinon les positions GPS resteraient publiques à l'URL de l'original) ; un
@@ -658,14 +658,17 @@ service des médias).
   H.264 (plusieurs définitions : avec le HLS de D4).
 - **Affiche côté serveur** : seulement si la vidéo **n'a aucune affiche** (envoi par l'API, codec que le
   navigateur ne décode pas), jamais par-dessus une affiche choisie ; 10 % de la durée (5 s au plus), puis 1 s et
-  2 s plus loin si l'image est presque noire ; extraite du rendu H.264 s'il existe (couleurs SDR), puis
-  normalisée comme une affiche envoyée.
+  2 s plus loin si l'image est presque noire ; extraite du rendu H.264 produit par le même essai (couleurs SDR),
+  sinon de la source (couleurs HDR converties quand `zscale` et `tonemap` sont présents), puis normalisée comme
+  une affiche envoyée.
 - **Formats convertis** : `width`, `height` et `duration` restent inconnus jusqu'à l'étape `probe` ; la fiche
   affiche « Format converti après l'envoi » puis le lecteur sur le rendu ; sans piste vidéo ou illisible, la
   tâche échoue (`NO_VIDEO_TRACK`, `UNREADABLE`, `CONVERSION_FAILED`) et seul le téléchargement de l'original
   reste possible.
-- **Durée maximale** (`NUXT_VIDEO_MAX_DURATION`, 3 h) : au-delà, aucun réencodage ; le retrait des pistes de
-  données, la réparation et l'affiche sont faits quand même, puis la tâche finit en échec `TOO_LONG`.
+- **Durée maximale** (`NUXT_VIDEO_MAX_DURATION`, 3 h) : au-delà, aucun réencodage ; si un rendu aurait servi, le
+  retrait des pistes de données, la réparation et l'affiche sont faits quand même, puis la tâche finit en échec
+  `TOO_LONG` (une vidéo trop longue qui n'a besoin d'aucun rendu finit « Traitée »). Durée inconnue : l'encodage
+  est arrêté dès que sa sortie dépasse la limite (`TOO_LONG`).
 - **Versions** : `sanitize` et `repair` créent une nouvelle version (anciennes URL → 302) ; un premier rendu et la
   première affiche ne la changent pas ; un rendu **remplacé** (relance) la change (cache immuable : jamais
   d'autres octets à une ancienne URL). Une tâche vaut pour un **fichier** (`MediaJob.sourceKey`) : changer
@@ -686,10 +689,10 @@ service des médias).
   409 `PROCESSING_DISABLED`.
 - **Contrôle au démarrage** de chaque processus qui exécute des tâches : `ffmpeg -version` (6 ou plus),
   `-encoders` (`libx264` et `aac` exigés ; `libsvtav1` + `libopus` pour l'AV1), `-filters` (`zscale` + `tonemap`
-  pour le HDR), `ffprobe -version`. Un échec désactive le traitement de ce processus avec un message (journal du
-  serveur, « Réglages »), jamais l'arrêt du serveur : corriger, puis redémarrer. ffmpeg devenu inutilisable en
-  cours de route (binaire supprimé ou déplacé) : tâche rendue sans essai compté, boucle arrêtée, nouvelle
-  détection chaque minute, reprise d'elle-même.
+  pour le HDR), `ffprobe -version`. Un échec désactive le traitement de ce processus avec un message (journal de
+  ce processus ; en mode `embedded`, aussi « Réglages »), jamais l'arrêt du serveur : corriger, puis redémarrer.
+  ffmpeg devenu inutilisable en cours de route (binaire supprimé ou déplacé) : tâche rendue sans essai compté,
+  boucle arrêtée, nouvelle détection chaque minute, reprise d'elle-même.
 
 **File** (`MediaJob`, `jobs.ts`) :
 
@@ -704,8 +707,10 @@ service des médias).
   passagers : délai dépassé, ffmpeg tué par un signal, disque plein, base ou stockage indisponibles) ; un échec
   déterministe (pas de vidéo, fichier illisible ou refusé par ffmpeg, trop long, original absent, sortie refusée
   par la vérification) est définitif d'emblée ;
-- **arrêt propre** (SIGTERM, Ctrl+C, rechargement en développement) : ffmpeg arrêté avec ses descendants, tâche
-  rendue à la file **sans compter d'essai**, dossier temporaire supprimé (20 s au plus) ;
+- **arrêt propre** (SIGTERM, ou Ctrl+C sur `pnpm start` / `surge-media worker` ; rechargement à chaud en
+  développement) : ffmpeg arrêté avec ses descendants, tâche rendue à la file **sans compter d'essai**, dossier
+  temporaire supprimé (20 s au plus). Ctrl+C sur `pnpm dev` n'est pas un arrêt propre : ffmpeg s'arrête avec le
+  terminal et la tâche est reprise au démarrage suivant, un essai compté (voir « Arrêt ») ;
 - **rattrapage** au démarrage puis toutes les 5 min : une vidéo « en attente » sans tâche (base restaurée,
   restauration faite pendant que le traitement était inactif) en reçoit une ; dossiers temporaires abandonnés
   supprimés (au démarrage puis toutes les 15 min, ceux de cette installation seulement) ;
@@ -729,7 +734,10 @@ l'appareil est en attente ou en cours, son original et ses rendus répondent `50
 l'étape `sanitize` a enregistré la copie sans la piste (en général quelques secondes, la tâche passant en
 priorité 10), ou en échec définitif (l'avertissement reste dans la fiche : rendre la vidéo privée ou la
 supprimer). Traitement désactivé (`off`), ou inactif à l'envoi (aucune tâche) : jamais de retenue, seulement
-l'avertissement de la fiche (« Piste de données de l'appareil »).
+l'avertissement de la fiche (« Piste de données de l'appareil »). La retenue ne dépend pas de l'activité du
+traitement : tant qu'aucun processus ne traite la file (mode `external` sans processus de travail actif, boucle
+arrêtée ou désactivée en `embedded`), une vidéo à piste de données en attente — y compris restaurée pendant
+l'inactivité — reste indisponible hors liens « admin » jusqu'à son traitement ou le passage en `off`.
 
 **Fichiers hostiles** (ffmpeg décode des fichiers envoyés par des tiers ; arguments construits au seul
 `args.ts`, lancement par `run.ts`) : **format d'entrée imposé** d'après la détection (`-f mov|matroska|avi|…` :
@@ -755,7 +763,10 @@ qui est une liste HLS visant `/etc/passwd` et une URL locale (`tests/video-ffmpe
 - **Stockage** : un rendu (deux avec l'AV1) en plus de l'original pour les vidéos concernées.
 
 **Installer ffmpeg** — contrôle : `ffmpeg -version` et `ffprobe -version` (version 6 ou plus), puis « Réglages ›
-Traitement des vidéos » après redémarrage (version, encodeurs utiles, conversion HDR, AV1, problèmes détectés).
+Traitement des vidéos » après redémarrage (mode `embedded` : version, encodeurs utiles, conversion HDR, AV1,
+problèmes détectés ; mode `external` : machine, version de ffmpeg et tâches simultanées de chaque processus de
+travail signalé — un processus de travail dont ffmpeg est inutilisable dès le démarrage n'y apparaît pas : voir
+son journal).
 Préférer le paquet du système, qui reçoit les correctifs de sécurité :
 
 - **Debian / Ubuntu** : `sudo apt install ffmpeg`. Le paquet d'Ubuntu 24.04 (ffmpeg 6.1.1) a tout ce qui sert
@@ -763,8 +774,8 @@ Préférer le paquet du système, qui reçoit les correctifs de sécurité :
   Debian 12 (ffmpeg 5.1) et Ubuntu 22.04 (4.4) sont trop anciens (« ffmpeg trop ancien » : traitement
   désactivé). `prlimit` vient du paquet `util-linux` (présent sur une installation standard) : sans lui, ffmpeg
   tourne sans limite de mémoire ni de temps processeur, sans message.
-- **macOS** : `brew install ffmpeg`. Pas de `prlimit` (Linux seulement) : pas de limite de mémoire ; priorité et
-  arrêt du groupe de processus comme sous Linux.
+- **macOS** : `brew install ffmpeg`. Pas de `prlimit` (Linux seulement) : ni limite de mémoire ni limite de temps
+  processeur ; priorité et arrêt du groupe de processus comme sous Linux.
 - **Windows** : `winget install Gyan.FFmpeg`, puis une **nouvelle** console (le `PATH` n'est mis à jour que pour
   les consoles ouvertes ensuite) : `ffmpeg -version`. Si le serveur ne le trouve pas (console plus ancienne,
   autre compte, service), indiquer les chemins complets donnés par `where ffmpeg` et `where ffprobe` :
@@ -817,15 +828,20 @@ des vidéos de 512 Mio) et, en stockage local, le dossier des médias ; aucune c
 `--security-opt no-new-privileges`) ; aucun port publié ; réseau limité à la base et au stockage (ffmpeg n'a
 besoin d'aucun réseau) ; limites de processeur et de mémoire du conteneur en plus de `NUXT_VIDEO_CONCURRENCY`,
 `NUXT_VIDEO_THREADS` et `NUXT_VIDEO_MEMORY_LIMIT`. Sonde sans `curl` :
-`node -e "fetch('http://127.0.0.1:3000/api/health').then(r => process.exit(r.ok ? 0 : 1), () => process.exit(1))"`.
+`node -e "fetch('http://127.0.0.1:3000/api/health').then(r => process.exit(r.ok ? 0 : 1), () => process.exit(1))"`
+(port 3000 avec `node .output/server/index.mjs` ; 3001, ou la valeur de `--port`, avec `surge-media worker`).
 
 **Arrêt** : SIGTERM ou Ctrl+C → arrêt propre (tâche rendue sans essai compté, présence effacée : le serveur web
 cesse de le compter dans les 30 s). Arrêt brutal : ffmpeg peut finir seul en priorité la plus basse (borné sous
 Linux par la limite de temps processeur), la tâche est reprise à l'expiration du bail (2 min, un essai compté).
 Windows : `surge-media worker` ne retransmet pas les signaux (le Ctrl+C de la console atteint directement le
 processus de travail, qui s'arrête proprement) — à vérifier sur un poste Windows, comme l'arrêt par `taskkill`.
-En développement (`pnpm dev`, mode `embedded`), ffmpeg reste dans le groupe du terminal : Ctrl+C l'arrête aussi,
-et le bail de sa tâche est rendu échu au démarrage suivant.
+ffmpeg n'y a pas de groupe de processus propre : s'il reçoit lui aussi le Ctrl+C et s'arrête avant que la tâche
+soit rendue, elle peut finir en échec définitif au lieu d'être rendue sans essai (état de la tâche à vérifier après
+un Ctrl+C pendant un encodage, avec `surge-media worker` comme avec `pnpm start`).
+En développement (`pnpm dev`, mode `embedded`), ffmpeg reste dans le groupe du terminal : Ctrl+C l'arrête aussi
+(vérifié sous Linux ; à vérifier sur un poste Windows), et le bail de sa tâche est rendu échu au démarrage suivant
+(reprise, un essai compté).
 
 **Caches entre processus** (mode `external`) : le serveur web garde ses métadonnées de diffusion 60 s. Une version
 plus récente, un rendu ou l'affiche d'une vidéo sans affiche qu'il ne connaît pas sont relus en base avant de
@@ -1953,7 +1969,7 @@ pnpm start                          # node --env-file-if-exists=.env .output/ser
 | MKV, AVI… : l'original se télécharge au lieu d'être lu | normal : ces formats ne sont pas lus par les navigateurs ; la lecture passe par la version H.264 (`sources`), produite par le traitement |
 | Une adresse de vidéo copiée juste après l'envoi redirige (302) | normal : le retrait d'une piste de données ou la réparation d'un WebM crée une nouvelle version ; l'ancienne URL redirige vers la nouvelle |
 | Windows : `ffmpeg -version` fonctionne mais le serveur dit « ffmpeg introuvable ou inutilisable » | à vérifier sur un poste Windows : `PATH` du serveur antérieur à l'installation (ouvrir une nouvelle console, ou chemin complet dans `NUXT_FFMPEG_PATH`, § 7.7), ou binaire bloqué par le « Contrôle intelligent des applications » (comme argon2 et oxc-transform) |
-| En développement : Ctrl+C sur `pnpm dev` pendant un encodage | ffmpeg s'arrête avec le serveur ; au redémarrage, la tâche est reprise (bail rendu échu aussitôt, un essai compté) |
+| En développement : Ctrl+C sur `pnpm dev` pendant un encodage | ffmpeg s'arrête avec le serveur ; au redémarrage, la tâche est reprise (bail rendu échu aussitôt, un essai compté) — vérifié sous Linux ; Windows : à vérifier sur un poste Windows |
 | Média introuvable (404) juste après sa mise à la corbeille | normal : un média en corbeille n'est plus diffusé (sauf aperçu dans l'administration) |
 | `An Application Control policy has blocked this file` (`…binding-win32-x64-msvc…node`) au lancement de Nuxt | Windows (« Contrôle intelligent des applications ») refuse un module natif non signé : voir l'override `oxc-transform` (§ 13) ; pour un autre paquet, tester une version voisine ou débloquer le fichier côté Windows |
 | Projet introuvable (404) alors qu'il existe | l'utilisateur n'en est pas membre (seuls les ADMIN voient tous les projets) |
@@ -3133,8 +3149,8 @@ section « D3 — état de l'implémentation » de l'architecture ; contrats ent
 - `TOO_LONG` n'empêche que les réencodages (pistes GPS retirées, réparation et affiche faites, puis échec) ;
 - mode `auto` : une vidéo entrelacée reçoit aussi un rendu ; mode `never` : un format converti reçoit quand même
   le sien ;
-- affiche extraite en dernier (du rendu H.264 s'il existe) ; reprises après 30 s puis 5 min, le 3e échec étant
-  définitif ;
+- affiche extraite en dernier (du rendu H.264 produit par cet essai, sinon de la source) ; reprises après 30 s
+  puis 5 min, le 3e échec étant définitif ;
 - fils de ffmpeg plafonnés à 16, `MALLOC_ARENA_MAX=2`, `prlimit` borne aussi le temps processeur ;
 - réparation des WebM seulement en VP8/VP9/AV1 avec Opus/Vorbis ;
 - vidéo retenue : priorité 10 dans la file, liens de l'administration signés « admin » ;
@@ -3163,12 +3179,13 @@ navigateur (Chromium, mode `embedded`, vrai ffmpeg) : pastilles, section Traitem
 rafraîchissement toutes les 5 s arrêté à la fin et suspendu onglet masqué, saisie conservée malgré un changement de
 version, annonces des seules transitions, MKV (encadré « Télécharger l'original », puis lecteur sur sa version
 H.264), « Relancer » au clavier, nouvel essai après un ffmpeg tué, corbeille et restauration, extrait `<video>`,
-« Réglages » et dialogue « Traiter les vidéos existantes » au clavier, journal d'audit ; axe-core : 0 violation en fr/en × clair/sombre × 375/1280 px, sans
-défilement horizontal. Chaque module relu par des relecteurs indépendants, avec vérification contradictoire de
+« Réglages » et dialogue « Traiter les vidéos existantes » au clavier, journal d'audit ; axe-core : 0 violation en
+fr/en × clair/sombre × 375/1280 px, sans défilement horizontal. Chaque module relu par des relecteurs indépendants, avec vérification contradictoire de
 chaque défaut : 13 corrigés en phase B (modules A à C), 11 en phase C (module D), 7 au module E, 27 + 7 au module F.
 
-**Non vérifié** : un poste Windows (ffmpeg et Smart App Control, `taskkill`, Ctrl+C de `surge-media worker`, tests
-avec ffmpeg) ; lecture effective du rendu H.264 et capture d'affiche depuis le lecteur (le Chromium de test ne lit
+**Non vérifié** : un poste Windows (ffmpeg et Smart App Control, `taskkill`, priorité la plus basse
+(`IDLE_PRIORITY_CLASS`), Ctrl+C de `surge-media worker` et sur `pnpm dev` pendant un encodage, tests avec
+ffmpeg) ; lecture effective du rendu H.264 et capture d'affiche depuis le lecteur (le Chromium de test ne lit
 pas le H.264) ; changement de source du lecteur pendant la lecture ; PostgreSQL et MySQL/MariaDB réels (migration,
 prise des tâches) ; stockage S3 (copie de l'original dans le dossier temporaire) ; conteneur de travail durci ;
 lecteurs d'écran réels.
@@ -3176,24 +3193,32 @@ lecteurs d'écran réels.
 **Limites connues / suites**
 - Original 3GP/MKV gardé tel quel : un lieu de tournage qu'il contiendrait n'est ni détecté ni retiré (le rendu
   H.264, lui, n'a aucune métadonnée).
-- Mode `external` : formats convertis refusés jusqu'à 30 s après le démarrage d'un processus de travail ; retenue
-  (503) et affiche visibles avec jusqu'à 60 s de retard sur le serveur web (caches) ; processus de travail sur une
-  autre machine : PostgreSQL/MySQL et stockage partagé obligatoires.
+- Mode `external` : formats convertis refusés jusqu'à 30 s après le démarrage d'un processus de travail ; fin d'une
+  retenue (503) vue avec jusqu'à 60 s de retard à l'ancienne URL ou après un échec définitif (cache de diffusion du
+  serveur web) ; processus de travail sur une autre machine : PostgreSQL/MySQL et stockage partagé obligatoires.
+- La retenue (503) ne dépend pas de l'activité du traitement : tant qu'aucun processus ne traite la file (mode
+  `external` sans processus de travail actif, boucle arrêtée ou désactivée en `embedded`), une vidéo à piste de
+  données en attente — y compris restaurée pendant l'inactivité — reste indisponible hors liens « admin » jusqu'à
+  son traitement ou le passage en `off`.
 - Arrêt brutal en production (SIGKILL, panne) : ffmpeg peut finir seul (borné sous Linux par `prlimit --cpu`), la
   tâche est reprise à l'expiration du bail (2 min, un essai compté).
 - API v1 : une page de liste qui contient une vidéo en cours de traitement est relue à chaque revalidation ;
   l'ETag d'un média en cours change aussi à chaque renouvellement du bail (30 s).
 - Un processus de travail sert encore les fichiers statiques publics (`/_nuxt/*`, `public/`), que Nitro sert avant
   les middlewares.
-- Interface : petits écarts relevés et laissés (heure de début de l'essai précédent après un nouvel essai ; aperçu
-  annoncé avec la fin du traitement).
+- Interface : petits écarts relevés et laissés (heure de début de l'essai précédent après un nouvel essai ;
+  « Prochain essai au plus tôt » parfois déjà passé si aucun processus ne reprend la tâche ; guillemets de
+  l'attribut `type` échappés dans l'extrait `<video>` ; aperçu annoncé avec la fin du traitement).
 - Antérieur à D3, observé pendant les essais : un aperçu pré-généré pendant un changement de version peut rester
   orphelin dans le stockage (`variants/<média>/v<n>-…`).
 - Pas de webhook de fin de traitement, de filtre « État » dans la médiathèque, d'accélération matérielle, d'audio
   seul, ni de fichier de plus de 2 Gio.
 - **À vérifier sur un poste Windows** (tâche en attente pour l'utilisateur) : ffmpeg installé par
   `winget install Gyan.FFmpeg` et non bloqué par Smart App Control, arrêt de l'arbre de processus par `taskkill`,
-  Ctrl+C de `surge-media worker`, `pnpm test` avec ffmpeg.
+  priorité la plus basse (`IDLE_PRIORITY_CLASS`), Ctrl+C de `surge-media worker` (et de `pnpm start` en
+  `embedded`) pendant un encodage puis état de la tâche (ffmpeg, sans groupe de processus propre, peut recevoir
+  le Ctrl+C lui aussi), Ctrl+C sur `pnpm dev` pendant un encodage, `pnpm test` avec ffmpeg (le bloc
+  `runTool : processus enfant borné` y est toujours ignoré).
 - Suite : **D4** (HLS multi-débits, planches de survol, manifestes signés), à proposer.
 
 **Après `git pull`**
