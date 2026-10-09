@@ -9,9 +9,9 @@ import { useVideoProcessingSettings } from './settings'
  * Actif (§ 33, raffinement 7) :
  *   - `off` : jamais ; aucune tâche créée, `processingState` reste null (comportement de D2) ;
  *   - `embedded` : quand ffmpeg a été détecté utilisable par ce processus (§ 30.1 : un échec désactive le
- *     traitement, jamais l'arrêt du serveur) et que sa boucle n'est pas arrêtée (ffmpeg devenu
- *     inutilisable en cours de route, `setVideoProcessingHalted`) — sinon les tâches s'accumuleraient
- *     sans être traitées ;
+ *     traitement, jamais l'arrêt du serveur) et que sa boucle n'est pas arrêtée (`setVideoProcessingStopped` :
+ *     ffmpeg inutilisable au démarrage, ou devenu inutilisable en cours de route) — sinon les tâches
+ *     s'accumuleraient sans être traitées ;
  *   - `external` : quand un processus de travail en état de traiter (présence sans `halted`) a écrit sa
  *     présence dans les 5 dernières minutes (WORKER_SEEN_WINDOW_MS) ; le serveur web ne lance jamais ffmpeg.
  * Mis en cache 30 s par processus : la question est posée à chaque envoi. Un changement vu par ce
@@ -26,13 +26,19 @@ let activeCache: { value: boolean, expires: number } | undefined
 let activePending: Promise<boolean> | undefined
 /** Incrémenté à chaque oubli : un calcul commencé avant ne remet pas en cache une réponse périmée. */
 let generation = 0
-/** Boucle de ce processus arrêtée par RunnerHalt (plugin 0.video-processing.ts). */
-let halted = false
+/**
+ * Boucle de ce processus arrêtée (plugin 0.video-processing.ts, états du superviseur de runner.ts) :
+ * `halted` = ffmpeg devenu inutilisable en cours de route (RunnerHalt), détection refaite chaque minute ;
+ * `disabled` = inutilisable dès le démarrage (ou stockage non partagé), rien n'est refait : réglage à
+ * corriger, puis redémarrage. null : boucle en route (ou démarrage en cours).
+ */
+export type VideoProcessingStop = 'halted' | 'disabled'
+let stopped: VideoProcessingStop | null = null
 
 async function computeActive(): Promise<boolean> {
   const settings = useVideoProcessingSettings()
   if (settings.mode === 'off') return false
-  if (settings.mode === 'embedded') return !halted && (await useFfmpegCapabilities()).ok
+  if (settings.mode === 'embedded') return stopped === null && (await useFfmpegCapabilities()).ok
   const workers = await readWorkerPresence(await usePrisma(), new Date())
   return workers.some(worker => worker.active)
 }
@@ -67,19 +73,22 @@ export function invalidateVideoProcessingStatus(): void {
 }
 
 /**
- * Boucle de ce processus arrêtée (`RunnerHalt` : ffmpeg devenu introuvable) ou relancée : en mode
- * `embedded`, le traitement est inactif ici tant qu'elle est arrêtée (formats convertis refusés, aucune
- * tâche créée à l'envoi). Le superviseur refait la détection chaque minute et relance la boucle.
+ * Boucle de ce processus arrêtée (`halted`, `disabled`) ou en route (null) : en mode `embedded`, le
+ * traitement est inactif ici tant qu'elle est arrêtée (formats convertis refusés, aucune tâche créée à
+ * l'envoi). Après `halted`, le superviseur refait la détection chaque minute et relance la boucle.
  */
-export function setVideoProcessingHalted(value: boolean): void {
-  if (halted === value) return
-  halted = value
+export function setVideoProcessingStopped(value: VideoProcessingStop | null): void {
+  if (stopped === value) return
+  stopped = value
   invalidateVideoProcessingStatus()
 }
 
-/** Boucle de ce processus arrêtée faute de ffmpeg utilisable (« Réglages », sonde de santé). */
+/**
+ * Boucle de ce processus arrêtée en cours de route, nouvelle détection de ffmpeg chaque minute
+ * (« Réglages ») ; faux quand ffmpeg était inutilisable dès le démarrage (rien n'est redétecté).
+ */
 export function videoProcessingHalted(): boolean {
-  return halted
+  return stopped === 'halted'
 }
 
 /** Processus de travail connus (présences de moins d'un jour), les plus récents d'abord. */

@@ -346,6 +346,21 @@ describe('GET /api/admin/video-processing', () => {
     expect(body).toMatchObject({ mode: 'embedded', active: true, ffmpeg: { ok: true, version: '7.1', encoders: ['libx264', 'aac'], hdrFilters: true, av1: false, problems: [] } })
   })
 
+  it('mode embedded, boucle arrêtée : `halted` seulement quand une nouvelle détection est prévue', async () => {
+    const status = await import('../server/lib/video-processing/status')
+    // ffmpeg inutilisable dès le démarrage : rien n'est redétecté (corriger, puis redémarrer).
+    status.setVideoProcessingStopped('disabled')
+    const disabled = await callRoute('video-processing', { video: { processing: 'embedded' } }, fakePrisma())
+    expect(disabled.body).toMatchObject({ mode: 'embedded', active: false, halted: false })
+    // Devenu inutilisable en cours de route : nouvelle détection chaque minute.
+    status.setVideoProcessingStopped('halted')
+    const halted = await callRoute('video-processing', { video: { processing: 'embedded' } }, fakePrisma())
+    expect(halted.body).toMatchObject({ mode: 'embedded', active: false, halted: true })
+    status.setVideoProcessingStopped(null)
+    const running = await callRoute('video-processing', { video: { processing: 'embedded' } }, fakePrisma())
+    expect(running.body).toMatchObject({ mode: 'embedded', active: true, halted: false })
+  })
+
   it('mode off : ffmpeg null, traitement inactif', async () => {
     const { body } = await callRoute('video-processing', { video: { processing: 'off' } }, fakePrisma())
     expect(body).toMatchObject({ mode: 'off', active: false, ffmpeg: null })

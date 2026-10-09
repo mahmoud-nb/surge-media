@@ -598,6 +598,7 @@
       "videoTrack": "Video: {codec}",
       "audioTrack": "Sound: {codec}",
       "noAudio": "No sound",
+      "notAnalysed": "Unknown: file not analysed",
       "bitrate": "Average bitrate",
       "size": "Size",
       "version": "File version",
@@ -644,7 +645,8 @@
         "pending": "This video will play here as soon as its compatible version is ready.",
         "unplayable": "Browsers cannot play this video: its format has no compatible version."
       },
-      "posterHintUnplayable": "Upload a JPEG, PNG, WebP, AVIF or GIF image: it is saved as JPEG, without its metadata. The frame shown by the player can be used once the video plays here.",
+      "posterHintUnplayable": "Upload a JPEG, PNG, WebP, AVIF or GIF image: it is saved as JPEG, without its metadata.",
+      "posterHintLater": "The frame shown by the player can be used once the video plays here.",
       "notices": {
         "variable": {
           "title": "Playback varies across browsers",
@@ -684,12 +686,13 @@
         },
         "convertFailed": {
           "title": "Format not playable",
-          "text": "Browsers cannot play this format and its conversion failed (see “Processing”): the original can only be downloaded."
+          "text": "Browsers cannot play this format and its conversion failed (see “Video processing”): the original can only be downloaded."
         },
         "dataTracks": {
           "title": "Device data track",
           "text": "This file contains a data track from the device that recorded it, often GPS positions: anyone who downloads the video can read it.",
-          "held": "This file contains a data track from the device that recorded it, often GPS positions. The processing in progress removes it: until then, the video only plays in the administration (its public address and temporary links answer “503”, try again later).",
+          "held": "This file contains a data track from the device that recorded it, often GPS positions. The processing in progress removes it: until then, the video only plays in the administration, and both its public address and its temporary links answer “503” (unavailable for now).",
+          "heldPrivate": "This file contains a data track from the device that recorded it, often GPS positions. The processing in progress removes it: until then, the video only plays in the administration, and its temporary links answer “503” (unavailable for now).",
           "failed": "This file contains a data track from the device that recorded it, often GPS positions, which processing could not remove: anyone who downloads the video can read it. Make the video private or delete it if this data is sensitive."
         },
         "hdr": {
@@ -730,7 +733,8 @@
       },
       "generate": "Generate a temporary link",
       "temporaryUrl": "Temporary link",
-      "expires": "Valid until {date}."
+      "expires": "Valid until {date}.",
+      "outdated": "The video was updated by processing: create a new temporary link."
     },
     "replace": {
       "title": "Replace the file",
@@ -982,9 +986,10 @@
         "READY": "Processed",
         "FAILED": "Processing failed"
       },
-      "title": "Processing",
-      "never": "This video has never been processed (uploaded before video processing was enabled, or while it was inactive). Processing checks the file, removes device data tracks, extracts a poster image if one is missing and prepares a compatible version when useful.",
-      "queued": "The video is in the queue: processing will start as soon as a worker is available.",
+      "title": "Video processing",
+      "never":"This video has never been processed (uploaded before video processing was enabled, or while it was inactive). Processing checks the file, removes device data tracks, extracts a poster image if one is missing and prepares a compatible version when useful.",
+      "queued": "The video is in the queue: processing will start as soon as the server can take it.",
+      "retryScheduled": "Another attempt is scheduled after a temporary failure.",
       "interrupted": "Processing interrupted: the media item is in the trash. It will resume if the media item is restored.",
       "currentStep": "Current step: {step}",
       "steps": {
@@ -996,7 +1001,7 @@
         "poster": "Extracting the poster image",
         "verify": "Checking the result"
       },
-      "previousError": "Previous attempt failed: {message}",
+      "previousError": "Previous attempt failed. {message}",
       "errors": {
         "NO_VIDEO_TRACK": "The file contains no video track.",
         "UNREADABLE": "The file is unreadable or damaged: it could not be analysed.",
@@ -1030,6 +1035,7 @@
       "run": "Process the video",
       "rerun": "Run processing again",
       "rerunReadyHint": "Redoes the compatible versions with the server's current settings; the original is not modified.",
+      "rerunNoRenditionHint": "No compatible version was produced for this video. Running processing again applies the server's current settings; the original is not modified.",
       "requesting": "Requesting…",
       "requested": "Processing requested: the video is in the queue.",
       "requestErrors": {
@@ -1861,7 +1867,7 @@
           "active": "Videos are processed after upload and converted formats (MKV, AVI…) are accepted.",
           "off": "No video is processed: videos are served as uploaded, and only MP4, WebM and MOV videos are accepted.",
           "halted": "ffmpeg became unusable on this server: processing is suspended and detection runs again every minute. Jobs already created wait in the queue; new videos are not queued and converted formats are refused.",
-          "noFfmpeg": "ffmpeg is not usable on this server (see “ffmpeg”): new videos are not queued and converted formats are refused.",
+          "noFfmpeg": "ffmpeg is not usable on this server (see “ffmpeg”): new videos are not queued and converted formats are refused. Fix the problem, then restart the server.",
           "noWorker": "No worker able to process has reported in the last 5 minutes: new videos are not queued and converted formats are refused."
         },
         "mode": "Mode",
@@ -1898,9 +1904,9 @@
         "unusable": "Unusable",
         "encoders": "Useful encoders found",
         "noEncoders": "None",
-        "hdr": "HDR color conversion",
+        "hdr": "HDR colour conversion",
         "hdrAvailable": "Available: HDR videos are converted to SDR for the H.264 version.",
-        "hdrMissing": "Unavailable (zscale and tonemap filters missing): HDR videos are converted without color correction.",
+        "hdrMissing": "Unavailable (zscale and tonemap filters missing): HDR videos are converted without colour correction.",
         "av1": "AV1 version",
         "av1Available": "Possible (libsvtav1 and libopus found).",
         "av1Missing": "Impossible: the libsvtav1 and libopus encoders are required.",
@@ -1919,7 +1925,7 @@
         "externalNote": "In external mode, each worker applies its own variables: the values below are this web server's.",
         "rendition": "Compatible H.264 version",
         "renditionModes": {
-          "auto": "Only when useful: poorly supported codec, converted format, above 1080p, high bitrate or HDR.",
+          "auto": "Only when useful: poorly supported codec, converted format, above 1080p, high bitrate, HDR or interlaced video.",
           "always": "For every video.",
           "never": "Never, except for converted formats."
         },
@@ -1965,18 +1971,22 @@
       },
       "backfill": {
         "title": "Process existing videos",
-        "description": "Creates a low-priority job for every video never processed (uploaded before processing was enabled, or while it was inactive), excluding the trash. New uploads keep priority and originals are kept.",
+        "description": "Creates a job for every video never processed (uploaded before processing was enabled, or while it was inactive), excluding the trash; they are handled after new uploads. Those that contain a device data track (GPS positions) go first: their file is replaced by a copy without that track (new version, old addresses redirect) and, until then, their public address and temporary links answer “503” (unavailable for now).",
         "count": "No video to process. | One video never processed, excluding the trash. | {count} videos never processed, excluding the trash.",
         "totalDuration": "Total duration: {duration}.",
         "estimate": "Estimated processing time: up to about {duration}.",
-        "estimateNote": "Rough estimate, based on the total duration and the encoding settings: videos that are already compatible are not re-encoded, and the actual speed depends on the machine.",
+        "estimateNote": {
+          "auto": "Rough estimate, based on the total duration and the encoding settings: videos that are already compatible are not re-encoded, and the actual speed depends on the machine.",
+          "always": "Rough estimate, based on the total duration and the encoding settings: every video gets an H.264 version, and the actual speed depends on the machine.",
+          "never": "Rough estimate: no H.264 version is produced (checks, poster, data track removal and WebM repair only), and the actual speed depends on the machine."
+        },
         "estimateShort": "Estimated processing time: less than a minute.",
         "button": "Process existing videos",
         "disabledInactive": "Available when video processing is active.",
         "disabledEmpty": "Nothing to process: every video has already been processed or is queued.",
         "dialog": {
           "title": "Process existing videos?",
-          "description": "No video to queue. | A job will be created for the video never processed, after recent uploads; the original is kept. | A job will be created for each of the {count} videos never processed, after recent uploads; the originals are kept.",
+          "description": "No video to queue. | A job will be created for the video never processed, after new uploads. If it contains a device data track (GPS positions), it goes first, its file is replaced by a copy without that track and, until then, its public address and temporary links answer “503”. | A job will be created for each of the {count} videos never processed, after new uploads. Those that contain a device data track (GPS positions) go first, their file is replaced by a copy without that track and, until then, their public address and temporary links answer “503”.",
           "estimate": "Estimated time: up to about {duration} (rough estimate).",
           "estimateShort": "Estimated time: less than a minute (rough estimate).",
           "submit": "Add to the queue",
@@ -1984,7 +1994,7 @@
         },
         "done": "No video queued: all of them were processed or queued in the meantime. | One video added to the queue. | {count} videos added to the queue.",
         "errors": {
-          "PROCESSING_DISABLED": "Video processing is not active: no job was created. Its status is shown above."
+          "PROCESSING_DISABLED": "Video processing is not active: no job was created. Close this dialog to see its status."
         }
       }
     }

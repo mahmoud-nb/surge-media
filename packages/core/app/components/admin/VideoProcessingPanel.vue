@@ -10,6 +10,7 @@
 import { Download, RefreshCw } from '@lucide/vue'
 import type { ProcessingJobView, ProcessingSnapshot } from '~/composables/useProcessingPoll'
 import { processingInProgress } from '~/composables/useProcessingPoll'
+import { displayedAttempt, failureDetailParts, processingTransition } from '~/utils/processing-view'
 import { codecLabel } from '#shared/utils/video'
 import { JOB_MAX_ATTEMPTS, type ProcessingStateValue } from '#shared/utils/video-processing'
 
@@ -35,6 +36,8 @@ const props = defineProps<{
   inTrash: boolean
   /** Traitement actif sur le serveur (mode `embedded`, ou `external` avec un processus de travail vu). */
   active: boolean
+  /** Le média a une image d'affiche (« affiche non extraite » n'a alors plus lieu d'être). */
+  hasPoster: boolean
 }>()
 
 const emit = defineEmits<{
@@ -63,17 +66,8 @@ const progress = computed(() => {
   return running.value && typeof value === 'number' ? Math.min(1, Math.max(0, value)) : null
 })
 
-/**
- * Essai en cours (« 2 sur 3 ») après un échec passager (`attempts` = essais déjà échoués), ou dernier
- * essai d'une tâche en échec après plusieurs essais (un échec au premier essai est définitif d'emblée :
- * « 1 sur 3 » laisserait croire à d'autres essais).
- */
-const attempt = computed(() => {
-  const value = job.value
-  if (!value || value.attempts === 0) return null
-  if (inProgress.value) return Math.min(value.attempts + 1, JOB_MAX_ATTEMPTS)
-  return props.state === 'FAILED' && value.attempts > 1 ? Math.min(value.attempts, JOB_MAX_ATTEMPTS) : null
-})
+/** Essai en cours (« 2 sur 3 ») après un échec passager, ou « 3 sur 3 » en échec définitif (processing-view.ts). */
+const attempt = computed(() => displayedAttempt(props.state, job.value, interrupted.value))
 
 /** Tâche remise en file après un échec passager : prochain essai au plus tôt (date à venir). */
 const nextAttempt = computed(() => {
@@ -93,6 +87,9 @@ const previousError = computed(() => {
   return t('media.processing.previousError', { message: errorText(value.errorCode) })
 })
 
+/** En attente : nouvel essai programmé après un échec passager, ou simple attente d'un processus. */
+const pendingText = computed(() => (nextAttempt.value ? t('media.processing.retryScheduled') : t('media.processing.queued')))
+
 /**
  * Erreurs dont le détail du serveur (texte fixe de pipeline.ts) ne fait que répéter le message traduit
  * (« Aucune piste vidéo dans le fichier. ») : détail masqué.
@@ -103,16 +100,19 @@ const failure = computed(() => {
   if (props.state !== 'FAILED') return null
   const code = job.value?.errorCode ?? null
   const detail = job.value?.errorDetail ?? null
-  return { message: errorText(code), detail: code && PLAIN_DETAIL_CODES.has(code) ? null : detail }
+  // Parties du détail avec leur langue : texte du serveur en français, sortie de ffmpeg en anglais.
+  const plain = !detail || (code !== null && PLAIN_DETAIL_CODES.has(code))
+  return { message: errorText(code), detail: plain ? null : failureDetailParts(detail) }
 })
 
 /**
- * Avertissements HDR : déjà présentés par la fiche au-dessus du lecteur, avec leur explication (« Couleurs
- * HDR converties », « non converties ») ; ici, seuls les autres (affiche non extraite).
+ * Avertissements HDR : présentés par la fiche au-dessus du lecteur, avec leur explication (« Couleurs HDR
+ * converties », « non converties »), quand ils décrivent le rendu présent ; ici, seuls les autres. Affiche
+ * non extraite : sans objet une fois une affiche choisie.
  */
 const PAGE_NOTICE_WARNINGS: ReadonlySet<string> = new Set(['hdr_converted', 'hdr_unconverted'])
 const warnings = computed(() => (job.value?.warnings ?? [])
-  .filter(code => !PAGE_NOTICE_WARNINGS.has(code))
+  .filter(code => !PAGE_NOTICE_WARNINGS.has(code) && !(code === 'poster_failed' && props.hasPoster))
   .map(code => ({ code, text: t(`media.processing.warnings.${code}`) })))
 
 // ─── Rendus ──────────────────────────────────────────────────────────────────
@@ -183,37 +183,32 @@ async function run() {
 
 // ─── Annonces (changements d'état seulement) ─────────────────────────────────
 
-type Transition = 'started' | 'finished' | 'failed' | 'retry' | 'requeued'
-
-/**
- * Remise en file (en cours → en attente) : échec passager si un essai a été compté, sinon tâche rendue
- * sans échec (serveur arrêté ou redémarré pendant le calcul, jobs.ts `releaseJob`) : « échec » serait faux.
- */
-function transition(before: ProcessingStateValue | null, after: ProcessingStateValue | null, failedAttempt: boolean): Transition | null {
-  if (before === 'PENDING' && after === 'PROCESSING') return 'started'
-  if (before === 'PROCESSING' && after === 'PENDING') return failedAttempt ? 'retry' : 'requeued'
-  if (!processingInProgress(before)) return null
-  if (after === 'READY') return 'finished'
-  return after === 'FAILED' ? 'failed' : null
-}
-
 const announcement = ref('')
-// Navigateur seulement : les changements d'état n'arrivent que par le suivi (useProcessingPoll), qui
-// reporte l'état et la tâche ensemble (un seul passage de l'observateur).
-watch([() => props.mediaId, () => props.state, () => props.processing?.attempts ?? 0], async ([id, state, attempts], [previousId, previousState, previousAttempts]) => {
-  // Autre média (navigation) : pas un changement d'état.
-  const kind = id === previousId ? transition(previousState, state, attempts > previousAttempts) : null
-  if (!kind) return
-  // « Traitement demandé » périmé une fois la tâche terminée (sauf s'il a le focus : il ne disparaît
-  // pas sous le curseur clavier).
-  if ((kind === 'finished' || kind === 'failed') && status.value?.variant === 'success' && !statusEl.value?.contains(document.activeElement)) {
-    status.value = null
-  }
-  // Vidé puis rempli : un même message (deux traitements terminés) est annoncé de nouveau.
-  announcement.value = ''
-  await nextTick()
-  announcement.value = t(`media.processing.announcements.${kind}`)
-})
+/** Vue du traitement comparée par `processingTransition` : la date de création identifie la tâche. */
+function viewOf(state: ProcessingStateValue | null, createdAt: string | null, attempts: number, inTrash: boolean) {
+  return { state, job: createdAt === null ? null : { createdAt, attempts }, inTrash }
+}
+// Navigateur seulement. L'état et la tâche changent par le suivi (useProcessingPoll), par « Relancer » ou
+// par un rechargement de la fiche (restauration, fichier remplacé ici ou dans un autre onglet) : seule une
+// remise en file de la même tâche est une interruption (processing-view.ts).
+watch(
+  [() => props.mediaId, () => props.state, () => props.processing?.createdAt ?? null, () => props.processing?.attempts ?? 0, () => props.inTrash],
+  async ([id, state, createdAt, attempts, inTrash], [previousId, previousState, previousCreatedAt, previousAttempts, previousInTrash]) => {
+    // Autre média (navigation) : pas un changement d'état.
+    if (id !== previousId) return
+    const kind = processingTransition(viewOf(previousState, previousCreatedAt, previousAttempts, previousInTrash), viewOf(state, createdAt, attempts, inTrash))
+    if (!kind) return
+    // « Traitement demandé » périmé une fois la tâche terminée (sauf s'il a le focus : il ne disparaît
+    // pas sous le curseur clavier).
+    if ((kind === 'finished' || kind === 'failed') && status.value?.variant === 'success' && !statusEl.value?.contains(document.activeElement)) {
+      status.value = null
+    }
+    // Vidé puis rempli : un même message (deux traitements terminés) est annoncé de nouveau.
+    announcement.value = ''
+    await nextTick()
+    announcement.value = t(`media.processing.announcements.${kind}`)
+  },
+)
 </script>
 
 <template>
@@ -233,7 +228,7 @@ watch([() => props.mediaId, () => props.state, () => props.processing?.attempts 
       {{ t('media.processing.interrupted') }}
     </p>
     <p v-else-if="state === 'PENDING'" class="text-sm text-foreground">
-      {{ t('media.processing.queued') }}
+      {{ pendingText }}
     </p>
 
     <!-- Étape en cours : barre native (jamais indéterminée : pas d'animation continue) et pourcentage écrit. -->
@@ -259,10 +254,10 @@ watch([() => props.mediaId, () => props.state, () => props.processing?.attempts 
     <!-- « Avertissement » comme la pastille : la vidéo reste servie (original, rendus déjà produits). -->
     <UiAlert v-if="failure" variant="warning">
       <p>{{ failure.message }}</p>
-      <!-- Détail rédigé en français par le serveur (pipeline.ts), quelle que soit la langue de l'interface. -->
+      <!-- Détail rédigé en français par le serveur (pipeline.ts), sortie de ffmpeg en anglais : langue de chaque partie. -->
       <i18n-t v-if="failure.detail" keypath="media.processing.errorDetail" tag="p" scope="global" class="mt-1 text-xs break-words">
         <template #detail>
-          <span lang="fr">{{ failure.detail }}</span>
+          <span v-for="(part, index) in failure.detail" :key="index" :lang="part.lang">{{ part.text }}</span>
         </template>
       </i18n-t>
     </UiAlert>
@@ -401,8 +396,9 @@ watch([() => props.mediaId, () => props.state, () => props.processing?.attempts 
           {{ busy ? t('media.processing.requesting') : state === null ? t('media.processing.run') : t('media.processing.rerun') }}
         </UiButton>
       </div>
+      <!-- Sans rendu (vidéo déjà compatible, ou mode `never`) : « refait les versions » supposerait qu'il y en a. -->
       <p v-if="state === 'READY'" class="text-xs text-muted-foreground">
-        {{ t('media.processing.rerunReadyHint') }}
+        {{ renditions.length > 0 ? t('media.processing.rerunReadyHint') : t('media.processing.rerunNoRenditionHint') }}
       </p>
     </div>
     <p v-else-if="inactiveNote" class="text-sm text-muted-foreground">

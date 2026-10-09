@@ -46,9 +46,10 @@ const numberFormat = computed(() => new Intl.NumberFormat(locale.value))
 // ─── État ────────────────────────────────────────────────────────────────────
 
 /**
- * État résumé : `noFfmpeg` = mode embedded avec un ffmpeg inutilisable dès le démarrage ; `halted` = boucle
- * arrêtée en route (ffmpeg devenu inutilisable, nouvelle détection chaque minute) ; `noWorker` = mode
- * external sans processus de travail en état de traiter vu dans les 5 dernières minutes.
+ * État résumé : `noFfmpeg` = mode embedded avec un ffmpeg inutilisable dès le démarrage (rien n'est
+ * redétecté : corriger, puis redémarrer) ; `halted` = boucle arrêtée en route (ffmpeg devenu inutilisable,
+ * nouvelle détection chaque minute, l'API ne dit `halted` que dans ce cas) ; `noWorker` = mode external
+ * sans processus de travail en état de traiter vu dans les 5 dernières minutes.
  */
 type Status = 'active' | 'off' | 'halted' | 'noFfmpeg' | 'noWorker'
 const STATUS_BADGES: Record<Status, 'success' | 'neutral' | 'warning'> = {
@@ -542,8 +543,9 @@ async function reload() {
               ? t('settings.videoProcessing.backfill.estimate', { duration: backfill.estimate.duration })
               : t('settings.videoProcessing.backfill.estimateShort') }}
           </p>
+          <!-- Selon NUXT_VIDEO_RENDITION : vidéos compatibles non réencodées (auto), toutes (always), aucune (never). -->
           <p class="text-muted-foreground">
-            {{ t('settings.videoProcessing.backfill.estimateNote') }}
+            {{ t(`settings.videoProcessing.backfill.estimateNote.${data.settings.rendition}`) }}
           </p>
         </template>
       </div>

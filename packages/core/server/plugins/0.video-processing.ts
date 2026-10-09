@@ -7,7 +7,7 @@ import { purgeWorkerPresence, removeWorkerPresence, writeWorkerPresence } from '
 import { cleanupJobDirectories, createVideoJobRunner, expireDeadHolderLeases } from '../lib/video-processing/pipeline'
 import { registerJobRunner, superviseJobRunner, type SupervisorState } from '../lib/video-processing/runner'
 import { useVideoProcessingSettings } from '../lib/video-processing/settings'
-import { invalidateVideoProcessingStatus, setVideoProcessingHalted } from '../lib/video-processing/status'
+import { invalidateVideoProcessingStatus, setVideoProcessingStopped } from '../lib/video-processing/status'
 import { useWorkerId } from '../lib/video-processing/worker-id'
 
 /**
@@ -116,8 +116,9 @@ export default defineNitroPlugin((nitroApp) => {
       state = next
       registerJobRunner(runner)
       // Inactif ici tant que la boucle est arrêtée ou désactivée ; un démarrage en cours compte comme actif
-      // (les tâches créées attendent dans la file persistante).
-      setVideoProcessingHalted(next === 'halted' || next === 'disabled')
+      // (les tâches créées attendent dans la file persistante). « Réglages » distingue les deux arrêts :
+      // seul `halted` est suivi d'une nouvelle détection.
+      setVideoProcessingStopped(next === 'halted' || next === 'disabled' ? next : null)
       if (next === 'running') {
         console.info(`[surge-media] Traitement des vidéos ${previous === 'halted' ? 'repris' : 'actif'} (${worker ? 'processus de travail' : 'mode embedded'}, ffmpeg ${capabilities?.version ?? '?'}, ${settings.concurrency} tâche(s) à la fois, ${settings.threads} fil(s)).`)
       }

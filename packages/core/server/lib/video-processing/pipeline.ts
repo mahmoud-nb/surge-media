@@ -130,11 +130,13 @@ export function classifyFailure(error: unknown): JobFailure {
     return { code: 'CONVERSION_FAILED', detail: truncateText(`Enregistrement refusé (${http.data?.code ?? http.statusCode}).`), retryable: transient }
   }
   // Stockage, base, système : passager. Le message complet (chemins du serveur, noms d'utilisateur)
-  // reste dans le journal ; la fiche ne reçoit qu'un résumé fixe et le code système (EACCES, ENOSPC…).
+  // reste dans le journal ; la fiche ne reçoit qu'un résumé fixe et le code système (EACCES, ENOSPC…),
+  // sans parler d'un nouvel essai : le même détail est gardé en échec définitif, et la fiche montre déjà
+  // les essais et le prochain essai.
   console.error('[surge-media] Traitement des vidéos, erreur interne :', error)
   const code = (error as NodeJS.ErrnoException | null)?.code
   const known = typeof code === 'string' && /^[A-Z][A-Z0-9_]{1,31}$/.test(code) ? ` (${code})` : ''
-  return { code: 'CONVERSION_FAILED', detail: `Erreur interne${known} : nouvel essai prévu.`, retryable: true }
+  return { code: 'CONVERSION_FAILED', detail: `Erreur interne${known}.`, retryable: true }
 }
 
 // ─── Avancement et bail ──────────────────────────────────────────────────────
@@ -240,9 +242,10 @@ async function ffmpeg(settings: VideoProcessingSettings, args: string[], options
   }
   catch (error) {
     if (isMissingTool(error)) throw new VideoToolError('FFMPEG_UNAVAILABLE', 'ffmpeg introuvable ou impossible à lancer.')
-    // Machine momentanément saturée (EAGAIN, EMFILE, ENOMEM) : nouvel essai, la boucle continue.
+    // Machine momentanément saturée (EAGAIN, EMFILE, ENOMEM) : nouvel essai, la boucle continue (détail
+    // gardé tel quel en échec définitif : rien sur un nouvel essai).
     const code = (error as NodeJS.ErrnoException | null)?.code
-    throw fail('CONVERSION_FAILED', `Lancement de ffmpeg impossible pour le moment${typeof code === 'string' ? ` (${code})` : ''}.`, true)
+    throw fail('CONVERSION_FAILED', `Lancement de ffmpeg impossible${typeof code === 'string' ? ` (${code})` : ''}.`, true)
   }
   if (result.aborted) {
     options.signal.throwIfAborted()

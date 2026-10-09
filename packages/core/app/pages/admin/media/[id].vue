@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ArchiveRestore, ArrowLeft, Camera, Copy, Download, Film, FolderInput, ImageUp, Link2, Trash2 } from '@lucide/vue'
 import { type ProcessingSnapshot, processingInProgress, useProcessingPoll } from '~/composables/useProcessingPoll'
+import { processingNeedsReload } from '~/utils/processing-view'
 import { MEDIA_TEXT_MAX_LENGTH, mediaMetadataSchema } from '#shared/schemas/media'
 import { videoSnippet } from '#shared/utils/snippets'
 import { htmlTrackKind } from '#shared/utils/text-tracks'
@@ -38,16 +39,70 @@ const video = computed(() => (isVideo.value ? videoMetadata(media.value?.metadat
 const videoDescriptionId = useId()
 /** Tâche en attente ou en cours (avancement suivi, « Optimiser » masqué, avertissements adaptés). */
 const processingRunning = computed(() => isVideo.value && processingInProgress(media.value?.processingState))
+/**
+ * Tâche qui avance vraiment : en attente ou en cours, hors corbeille (la mise à la corbeille annule la
+ * tâche et garde l'état ; la section « Traitement » la dit interrompue). Textes « en préparation ».
+ */
+const processingLive = computed(() => processingRunning.value && !inTrash.value)
 const processingEnabled = computed(() => rules.value?.videoProcessing.active ?? false)
 /** Rendu H.264 présent : la vidéo est lue partout, quel que soit le codec de l'original. */
 const hasH264 = computed(() => media.value?.renditions.some(rendition => rendition.name === 'h264') ?? false)
 /**
+ * Rendu H.264 attendu de la tâche en cours pour une vidéo lue selon les navigateurs : traitement actif,
+ * rendu permis (NUXT_VIDEO_RENDITION=never : formats convertis seulement) et durée dans la limite
+ * (au-delà, la tâche échoue « trop longue » sans rendu).
+ */
+const h264Expected = computed(() => {
+  const config = rules.value?.videoProcessing
+  const duration = media.value?.duration ?? null
+  if (!processingLive.value || !config?.active || config.rendition === 'never') return false
+  return duration === null || duration <= config.maxDuration
+})
+
+const player = useTemplateRef<HTMLVideoElement>('player')
+/**
  * Lecteur : `<source>` dans l'ordre de `sources` (rendus AV1 puis H.264, ou l'original lisible). Clé =
  * leurs adresses : le lecteur n'est recréé que si elles changent (rendu prêt, nouvelle version), pas à
  * chaque rechargement de la fiche (liens « admin » stables pendant une heure).
+ * Changement pendant une lecture, ou quand le lecteur a le focus (rechargement par le suivi du
+ * traitement) : reporté à la pause, à la fin ou à la sortie du focus, et repris au même moment de la
+ * vidéo (même contenu : copie sans perte ou rendu) ; la lecture n'est pas coupée, le focus pas perdu.
+ * Autre média, ou plus aucune source lisible : tout de suite.
  */
-const sourcesKey = computed(() => media.value?.sources.map(source => source.url).join(' ') ?? '')
-const playable = computed(() => (media.value?.sources.length ?? 0) > 0)
+const playerSources = shallowRef(media.value?.sources ?? [])
+let playerMediaId = media.value?.id
+/** Moment de la vidéo à reprendre dans le lecteur recréé (s), ou 0. */
+let resumeAt = 0
+
+function playerInUse(): boolean {
+  const element = player.value
+  return Boolean(element && ((!element.paused && !element.ended) || element === document.activeElement))
+}
+
+function sourcesSignature(sources: readonly { url: string }[]): string {
+  return sources.map(source => source.url).join(' ')
+}
+
+function syncPlayerSources() {
+  const value = media.value
+  const next = value?.sources ?? []
+  const sameMedia = value?.id === playerMediaId
+  // Mêmes adresses : lecteur gardé tel quel.
+  if (sameMedia && sourcesSignature(next) === sourcesSignature(playerSources.value)) return
+  if (sameMedia && next.length > 0 && playerInUse()) return
+  resumeAt = sameMedia && player.value && !player.value.ended ? player.value.currentTime : 0
+  playerMediaId = value?.id
+  playerSources.value = next
+}
+watch(() => media.value?.sources, syncPlayerSources)
+
+function onPlayerMetadata() {
+  if (resumeAt > 0 && player.value) player.value.currentTime = resumeAt
+  resumeAt = 0
+}
+
+const sourcesKey = computed(() => sourcesSignature(playerSources.value))
+const playable = computed(() => playerSources.value.length > 0)
 /**
  * Section « Traitement » : état connu, rendus, ou première fois proposée (traitement actif, droit d'écrire,
  * hors corbeille). Vidéo jamais traitée sans rien à proposer : pas de section.
@@ -69,10 +124,17 @@ const preparationLabel = computed(() => {
   return prepared.map(operation => t(`media.detail.preparationValues.${operation}`)).join(' · ')
 })
 
+/**
+ * Format converti pas encore analysé par le traitement (ou dont l'analyse a échoué) : codecs et son
+ * inconnus — l'analyse de l'envoi n'en lit rien (« Vidéo : ? », « Sans son » seraient faux).
+ */
+const analysed = computed(() => video.value !== null && !(video.value.playback === 'none' && video.value.videoCodec === null))
+
 /** Codecs lisibles (« Vidéo : H.264 », « Son : AAC » ou « Sans son »). */
 const codecLines = computed(() => {
   const meta = video.value
   if (!meta) return []
+  if (!analysed.value) return [t('media.detail.notAnalysed')]
   return [
     t('media.detail.videoTrack', { codec: codecLabel(meta.videoCodec) }),
     meta.audioCodec ? t('media.detail.audioTrack', { codec: codecLabel(meta.audioCodec) }) : t('media.detail.noAudio'),
@@ -102,33 +164,39 @@ const videoNotices = computed(() => {
     if (value.processingState === 'FAILED') add('convertFailed', 'warning', t('media.video.notices.convertFailed.title'), t('media.video.notices.convertFailed.text'))
     else add('converting', 'info', t('media.video.notices.converting.title'), t('media.video.notices.converting.text'))
   }
-  // Codec lu selon le navigateur : sans objet dès que le rendu H.264 existe, « en préparation » avant.
+  // Codec lu selon le navigateur : sans objet dès que le rendu H.264 existe, « en préparation » tant que
+  // la tâche en cours doit le produire.
   if (meta.playback === 'variable' && !hasH264.value) {
-    if (processingRunning.value) add('compatPending', 'info', t('media.video.notices.compatPending.title'), t('media.video.notices.compatPending.text', { codec }))
+    if (h264Expected.value) add('compatPending', 'info', t('media.video.notices.compatPending.title'), t('media.video.notices.compatPending.text', { codec }))
     else add('variable', 'warning', t('media.video.notices.variable.title'), t('media.video.notices.variable.text', { codec }))
   }
   // Pistes de données (positions GPS…) : diffusion retenue (503) jusqu'à leur retrait par le traitement,
   // puis l'avertissement disparaît (la réécriture les retire des métadonnées).
   if (meta.dataTracks.length > 0) {
-    // Même règle que la diffusion (503 tant que le retrait est en attente ou en cours, traitement actif).
-    const held = rules.value ? deliveryHeld(value, rules.value.videoProcessing.mode) : false
-    const exposed = value.visibility === 'PUBLIC'
+    // Même règle que la diffusion (503 tant que le retrait est en attente ou en cours, traitement actif) ;
+    // dans la corbeille, rien n'est servi ni retiré (tâche annulée).
+    const held = !inTrash.value && rules.value ? deliveryHeld(value, rules.value.videoProcessing.mode) : false
+    const exposed = value.visibility === 'PUBLIC' && !inTrash.value
     const text = held
-      ? t('media.video.notices.dataTracks.held')
+      ? t(value.visibility === 'PUBLIC' ? 'media.video.notices.dataTracks.held' : 'media.video.notices.dataTracks.heldPrivate')
       : value.processingState === 'FAILED' ? t('media.video.notices.dataTracks.failed') : t('media.video.notices.dataTracks.text')
     add('dataTracks', held || exposed ? 'warning' : 'info', t('media.video.notices.dataTracks.title'), text)
   }
-  // HDR : couleurs converties en SDR pour le rendu, ou rendu fait sans conversion (filtres absents).
-  if (value.processing?.warnings.includes('hdr_unconverted')) {
-    add('hdrUnconverted', 'warning', t('media.video.notices.hdrUnconverted.title'), t('media.video.notices.hdrUnconverted.text'))
+  // HDR : couleurs converties en SDR pour le rendu, ou rendu fait sans conversion (filtres absents),
+  // d'après la dernière tâche terminée, qui a produit le rendu présent. Tâche en attente, en cours ou en
+  // échec : rien (rendu absent, ou fait par une tâche précédente avec d'autres réglages).
+  const job = value.processing
+  if (hasH264.value && job?.status === 'DONE') {
+    if (job.warnings.includes('hdr_unconverted')) add('hdrUnconverted', 'warning', t('media.video.notices.hdrUnconverted.title'), t('media.video.notices.hdrUnconverted.text'))
+    else if (job.warnings.includes('hdr_converted')) add('hdr', 'info', t('media.video.notices.hdr.title'), t('media.video.notices.hdr.text'))
   }
-  else if (meta.hdr && hasH264.value) add('hdr', 'info', t('media.video.notices.hdr.title'), t('media.video.notices.hdr.text'))
   if (meta.hasLocation) add('location', value.visibility === 'PUBLIC' ? 'warning' : 'info', t('media.video.notices.location.title'), t('media.video.notices.location.text'))
   // Envoyée avant la préparation automatique : l'appareil peut figurer dans le fichier.
   else if (canPrepare.value && preparation.value.includes('metadata')) add('device', 'info', t('media.video.notices.device.title'), t('media.video.notices.device.text'))
   if (meta.faststart === false) add('faststart', 'info', t('media.video.notices.faststart.title'), t('media.video.notices.faststart.text'))
-  // Son sans sous-titres : WCAG 1.2.2 (sous-titres des contenus préenregistrés).
-  if (meta.hasAudio && !value.textTracks.some(track => track.kind === 'SUBTITLES' || track.kind === 'CAPTIONS')) {
+  // Son sans sous-titres : WCAG 1.2.2 (sous-titres des contenus préenregistrés). Format converti pas
+  // encore analysé : présence du son inconnue.
+  if (analysed.value && meta.hasAudio && !value.textTracks.some(track => track.kind === 'SUBTITLES' || track.kind === 'CAPTIONS')) {
     add('captions', 'info', t('media.video.notices.captions.title'), t('media.video.notices.captions.text'))
   }
   // Format converti : durée inconnue jusqu'à l'analyse par le traitement (pas un défaut du fichier).
@@ -248,9 +316,15 @@ const link = ref<{
 } | null>(null)
 const linkError = ref<string>()
 const generating = ref(false)
+/** Lien temporaire retiré par un rechargement automatique (traitement) : un message le remplace. */
+const linkOutdated = ref(false)
+watch(mediaId, () => {
+  linkOutdated.value = false
+})
 
 async function generateLink() {
   linkError.value = undefined
+  linkOutdated.value = false
   generating.value = true
   try {
     const result = await $api(`/api/admin/media/${mediaId.value}/signed-url`, { method: 'POST', body: { expiresIn: Number(duration.value) } })
@@ -315,7 +389,6 @@ async function onFocalSaved() {
 
 // ─── Image d'affiche (vidéos, phase D2) ──────────────────────────────────────
 
-const player = useTemplateRef<HTMLVideoElement>('player')
 const posterInput = useTemplateRef<HTMLInputElement>('posterInput')
 const posterStatusEl = useTemplateRef<HTMLElement>('posterStatusEl')
 const posterStatus = ref<StatusMessage | null>(null)
@@ -429,27 +502,78 @@ async function prepareVideo() {
 
 /**
  * Nouvel état du traitement (suivi toutes les 5 s, ou réponse de « Relancer ») : reporté dans la fiche
- * sans la recharger tant que la version est la même et la tâche en attente ou en cours. Sinon (fichier
- * réécrit par la tâche, rendu remplacé, tâche terminée ou en échec), la fiche entière est rechargée :
- * sources du lecteur, rendus, affiche, métadonnées ; le lien temporaire, lié à la version, est à refaire.
+ * sans la recharger, sauf quand il faut la recharger entière (processingNeedsReload : nouvelle version,
+ * tâche terminée ou en échec, mise à la corbeille ailleurs, rendu H.264 enregistré en cours de tâche).
  * Le formulaire n'est pas touché (observateur sur ses seules valeurs).
  */
 async function applyProcessing(id: string, snapshot: ProcessingSnapshot) {
   const current = data.value
   if (!current || current.media.id !== id) return
   const before = current.media
-  if (snapshot.version !== before.version || !processingInProgress(snapshot.processingState)) {
-    await refresh()
-    link.value = null
+  if (processingNeedsReload(before, snapshot)) {
+    await reloadForProcessing(id)
     return
   }
   if (snapshot.processingState === before.processingState && snapshot.processing?.updatedAt === before.processing?.updatedAt) return
   data.value = { ...current, media: { ...before, processingState: snapshot.processingState, processing: snapshot.processing } }
 }
 
+/** Noms des rendus : un nouveau rendu change les sources du lecteur et de l'extrait. */
+function renditionNames(value: { renditions: readonly { name: string }[] }): string {
+  return value.renditions.map(rendition => rendition.name).join(' ')
+}
+
+/**
+ * Rechargement que l'utilisateur n'a pas demandé (suivi du traitement) :
+ *   - lu à part puis reporté d'un bloc : en échec (serveur redémarré, proxy), la fiche reste telle quelle
+ *     — ni page d'erreur, ni saisie perdue — et la lecture suivante du suivi réessaie ;
+ *   - le focus ne tombe jamais sur <body> : si l'élément qui l'avait disparaît (« Télécharger l'original »
+ *     remplacé par le lecteur, lien temporaire retiré), il va au cadre du lecteur ou au titre de sa
+ *     section (WCAG 2.4.3) ; le lecteur lui-même attend la fin de son utilisation (`playerSources`) ;
+ *   - le lien temporaire n'est retiré que si la version ou les rendus changent (adresse, sources de
+ *     l'extrait), avec un message à sa place.
+ */
+async function reloadForProcessing(id: string) {
+  let fresh: typeof data.value
+  try {
+    fresh = await $api(`/api/admin/media/${id}`)
+  }
+  catch {
+    return
+  }
+  const current = data.value
+  if (!fresh || !current || current.media.id !== id) return
+  const focus = focusFallback()
+  const changed = fresh.media.version !== current.media.version || renditionNames(fresh.media) !== renditionNames(current.media)
+  data.value = fresh
+  if (changed && link.value) {
+    link.value = null
+    linkOutdated.value = true
+  }
+  await restoreFocus(focus)
+}
+
+/**
+ * Élément qui a le focus, et la cible qui le recevra s'il disparaît : cadre du lecteur, ou titre de sa
+ * section (focusable par programme : `tabindex="-1"`).
+ */
+function focusFallback(): { element: HTMLElement, target: HTMLElement | null } | null {
+  const element = document.activeElement
+  if (!(element instanceof HTMLElement) || element === document.body) return null
+  const container = element.closest<HTMLElement>('figure, section')
+  const target = container?.matches('figure') ? container : container?.querySelector<HTMLElement>('h2[tabindex="-1"]')
+  return { element, target: target ?? null }
+}
+
+async function restoreFocus(focus: ReturnType<typeof focusFallback>) {
+  if (!focus) return
+  await nextTick()
+  if (!focus.element.isConnected && focus.target?.isConnected && document.activeElement === document.body) focus.target.focus()
+}
+
 // Suivi dans le navigateur, seulement pendant la tâche (pas dans la corbeille : tâche annulée).
 useProcessingPoll({
-  target: () => (processingRunning.value && !inTrash.value ? media.value?.id ?? null : null),
+  target: () => (processingLive.value ? media.value?.id ?? null : null),
   fetch: (id, signal) => $api(`/api/admin/media/${id}/processing`, { signal }),
   onResult: applyProcessing,
 })
@@ -459,10 +583,16 @@ async function onProcessingRequested(snapshot: ProcessingSnapshot) {
   if (media.value) await applyProcessing(media.value.id, snapshot)
 }
 
+const trashBanner = useTemplateRef<HTMLElement>('trashBanner')
+
 /** Fiche périmée (fichier remplacé, corbeille) signalée par « Relancer ». */
 async function onProcessingStale() {
   await refresh()
   link.value = null
+  // Vidéo jamais traitée mise à la corbeille ailleurs : la section « Traitement » disparaît avec son
+  // message, qui avait le focus ; il va à la bannière de la corbeille, qui l'explique.
+  await nextTick()
+  if (!showProcessing.value && inTrash.value && document.activeElement === document.body) trashBanner.value?.focus()
 }
 
 // ─── Remplacement, corbeille ─────────────────────────────────────────────────
@@ -647,19 +777,22 @@ const pageFlash = flash.consume()
         {{ project?.archivedAt ? t('media.detail.archivedProject') : t('media.detail.readOnly') }}
       </UiAlert>
 
-      <UiAlert v-if="inTrash" variant="warning" :title="t('media.trash.bannerTitle')" class="mb-6">
-        <p>{{ t('media.trash.bannerDescription') }}</p>
-        <div v-if="canDelete" class="mt-3 flex flex-wrap gap-3">
-          <UiButton variant="outline" size="sm" :loading="busy" @click="restore">
-            <ArchiveRestore aria-hidden="true" />
-            {{ t('media.trash.restore') }}
-          </UiButton>
-          <UiButton variant="destructive" size="sm" @click="purgeOpen = true">
-            <Trash2 aria-hidden="true" />
-            {{ t('media.trash.purge') }}
-          </UiButton>
-        </div>
-      </UiAlert>
+      <!-- Focusable par programme : cible du focus quand la section qui l'avait disparaît (mise à la corbeille ailleurs). -->
+      <div v-if="inTrash" ref="trashBanner" tabindex="-1" class="mb-6 rounded-lg">
+        <UiAlert variant="warning" :title="t('media.trash.bannerTitle')">
+          <p>{{ t('media.trash.bannerDescription') }}</p>
+          <div v-if="canDelete" class="mt-3 flex flex-wrap gap-3">
+            <UiButton variant="outline" size="sm" :loading="busy" @click="restore">
+              <ArchiveRestore aria-hidden="true" />
+              {{ t('media.trash.restore') }}
+            </UiButton>
+            <UiButton variant="destructive" size="sm" @click="purgeOpen = true">
+              <Trash2 aria-hidden="true" />
+              {{ t('media.trash.purge') }}
+            </UiButton>
+          </div>
+        </UiAlert>
+      </div>
       <UiAlert v-if="actionError" variant="error" live="assertive" class="mb-6">
         {{ actionError }}
       </UiAlert>
@@ -667,7 +800,8 @@ const pageFlash = flash.consume()
       <div class="grid gap-6 xl:grid-cols-[minmax(0,2fr)_minmax(0,3fr)]">
         <!-- Aperçu et informations -->
         <div class="grid content-start gap-6">
-          <figure :class="cn('overflow-hidden rounded-xl border border-border', isVideo ? 'bg-muted' : 'bg-checker')">
+          <!-- Focusable par programme : cible du focus quand le lien « Télécharger l'original » laisse place au lecteur. -->
+          <figure :tabindex="isVideo ? -1 : undefined" :class="cn('overflow-hidden rounded-xl border border-border', isVideo ? 'bg-muted' : 'bg-checker')">
             <!-- Lecteur natif : commandes au clavier, jamais de lecture automatique (WCAG 1.4.2), métadonnées seules chargées. -->
             <video
               v-if="isVideo && playable"
@@ -682,8 +816,12 @@ const pageFlash = flash.consume()
               :aria-label="displayName"
               :aria-describedby="media.altText ? videoDescriptionId : undefined"
               class="mx-auto block h-auto max-h-[28rem] w-auto max-w-full"
+              @loadedmetadata="onPlayerMetadata"
+              @pause="syncPlayerSources"
+              @ended="syncPlayerSources"
+              @focusout="syncPlayerSources"
             >
-              <source v-for="source in media.sources" :key="source.url" :src="source.url" :type="source.type">
+              <source v-for="source in playerSources" :key="source.url" :src="source.url" :type="source.type">
               <track
                 v-for="track in media.textTracks"
                 :key="track.id"
@@ -702,7 +840,7 @@ const pageFlash = flash.consume()
             <div v-else-if="isVideo" class="flex aspect-video max-h-[28rem] w-full flex-col items-center justify-center gap-3 p-6 text-center">
               <Film class="size-8 text-muted-foreground" aria-hidden="true" />
               <p class="max-w-sm text-sm text-foreground">
-                {{ processingRunning ? t('media.video.placeholder.pending') : t('media.video.placeholder.unplayable') }}
+                {{ processingLive ? t('media.video.placeholder.pending') : t('media.video.placeholder.unplayable') }}
               </p>
               <a :href="media.url" class="inline-flex min-h-6 items-center gap-1.5 rounded-sm text-sm font-medium text-primary underline underline-offset-4">
                 <Download class="size-4" aria-hidden="true" />
@@ -743,6 +881,7 @@ const pageFlash = flash.consume()
             :can-write="canWrite"
             :in-trash="inTrash"
             :active="processingEnabled"
+            :has-poster="Boolean(media.poster)"
             @updated="onProcessingRequested"
             @stale="onProcessingStale"
           />
@@ -794,8 +933,17 @@ const pageFlash = flash.consume()
                 </UiButton>
               </div>
               <input ref="posterInput" type="file" class="hidden" :accept="posterAccept" @change="onPosterFile">
+              <!-- Vidéo pas encore lisible : la capture viendra avec sa version compatible, si la tâche la prépare. -->
               <p class="text-xs text-muted-foreground">
-                {{ playable ? t('media.poster.hint') : t('media.video.posterHintUnplayable') }}
+                <template v-if="playable">
+                  {{ t('media.poster.hint') }}
+                </template>
+                <template v-else>
+                  {{ t('media.video.posterHintUnplayable') }}
+                  <template v-if="processingLive">
+                    {{ t('media.video.posterHintLater') }}
+                  </template>
+                </template>
               </p>
             </template>
           </section>
@@ -1065,7 +1213,8 @@ const pageFlash = flash.consume()
 
           <!-- Liens -->
           <section v-if="!inTrash" aria-labelledby="links-title" class="rounded-xl border border-border bg-surface p-6 shadow-xs">
-            <h2 id="links-title" class="text-lg font-semibold text-foreground">
+            <!-- Focusable par programme : cible du focus quand le lien temporaire est retiré par le suivi du traitement. -->
+            <h2 id="links-title" tabindex="-1" class="rounded-sm text-lg font-semibold text-foreground">
               {{ t('media.links.title') }}
             </h2>
             <div v-if="media.visibility === 'PUBLIC'" class="mt-4 grid gap-2">
@@ -1090,6 +1239,9 @@ const pageFlash = flash.consume()
               </div>
               <UiAlert v-if="linkError" variant="error" live="assertive">
                 {{ linkError }}
+              </UiAlert>
+              <UiAlert v-if="linkOutdated && !link" variant="info" live="polite">
+                {{ t('media.links.outdated') }}
               </UiAlert>
               <div v-if="link" class="grid gap-1">
                 <UiCopyField :label="t('media.links.temporaryUrl')" :value="link.url" />
@@ -1122,7 +1274,7 @@ const pageFlash = flash.consume()
                 {{ t('media.video.snippet.title') }}
               </h3>
               <p class="text-sm text-muted-foreground">
-                {{ processingRunning ? t('media.video.snippet.pending') : t('media.video.snippet.unavailable') }}
+                {{ processingLive ? t('media.video.snippet.pending') : t('media.video.snippet.unavailable') }}
               </p>
             </div>
           </section>
