@@ -5,6 +5,7 @@ import { MEDIA_TEXT_MAX_LENGTH, mediaMetadataSchema } from '#shared/schemas/medi
 import { videoSnippet } from '#shared/utils/snippets'
 import { htmlTrackKind } from '#shared/utils/text-tracks'
 import { codecLabel, videoMetadata } from '#shared/utils/video'
+import { deliveryHeld } from '#shared/utils/video-processing'
 
 // Accès décidé par l'espace du média (bibliothèque ou projet) : vérifié par l'API (404 sinon).
 definePageMeta({ layout: 'admin' })
@@ -47,9 +48,15 @@ const hasH264 = computed(() => media.value?.renditions.some(rendition => renditi
  */
 const sourcesKey = computed(() => media.value?.sources.map(source => source.url).join(' ') ?? '')
 const playable = computed(() => (media.value?.sources.length ?? 0) > 0)
-/** Section « Traitement » : état connu, rendus, ou première fois proposée (traitement actif, droit d'écrire). */
-const showProcessing = computed(() => isVideo.value && media.value !== undefined
-  && (media.value.processingState !== null || media.value.renditions.length > 0 || (processingEnabled.value && canWrite.value)))
+/**
+ * Section « Traitement » : état connu, rendus, ou première fois proposée (traitement actif, droit d'écrire,
+ * hors corbeille). Vidéo jamais traitée sans rien à proposer : pas de section.
+ */
+const showProcessing = computed(() => {
+  const value = media.value
+  if (!isVideo.value || !value) return false
+  return value.processingState !== null || value.renditions.length > 0 || (processingEnabled.value && canWrite.value && !inTrash.value)
+})
 /** MP4/MOV : seuls formats préparés (index en tête, métadonnées d'origine retirées). */
 const preparable = computed(() => video.value?.container === 'mp4' || video.value?.container === 'mov')
 const preparation = computed<readonly string[]>(() => rules.value?.videoPreparation ?? [])
@@ -103,7 +110,8 @@ const videoNotices = computed(() => {
   // Pistes de données (positions GPS…) : diffusion retenue (503) jusqu'à leur retrait par le traitement,
   // puis l'avertissement disparaît (la réécriture les retire des métadonnées).
   if (meta.dataTracks.length > 0) {
-    const held = processingRunning.value && rules.value?.videoProcessing.mode !== 'off'
+    // Même règle que la diffusion (503 tant que le retrait est en attente ou en cours, traitement actif).
+    const held = rules.value ? deliveryHeld(value, rules.value.videoProcessing.mode) : false
     const exposed = value.visibility === 'PUBLIC'
     const text = held
       ? t('media.video.notices.dataTracks.held')

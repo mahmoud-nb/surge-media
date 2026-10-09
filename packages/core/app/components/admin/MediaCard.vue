@@ -11,7 +11,8 @@
  * traitée ni pour un média non concerné. Dans la corbeille, la tâche est annulée : « en attente » ou
  * « en cours » y serait faux (la restauration la relance), seul l'échec reste signalé.
  */
-import { Cog, Film, Hourglass, Lock, Play, TriangleAlert } from '@lucide/vue'
+import { Film, Lock, Play } from '@lucide/vue'
+import { processingInProgress } from '~/composables/useProcessingPoll'
 
 const props = defineProps<{
   media: {
@@ -50,17 +51,11 @@ const details = computed(() => [
   formatBytes(props.media.size, locale.value),
 ].filter(Boolean) as string[])
 
-/** Pastille du traitement : couleur « avertissement » pour l'échec, le texte porte le sens. */
-const PROCESSING_BADGES = {
-  PENDING: { variant: 'primary', icon: Hourglass },
-  PROCESSING: { variant: 'primary', icon: Cog },
-  FAILED: { variant: 'warning', icon: TriangleAlert },
-} as const
-const processing = computed(() => {
-  const state = props.media.processingState
-  if (state !== 'PENDING' && state !== 'PROCESSING' && state !== 'FAILED') return null
-  if (props.media.deletedAt && state !== 'FAILED') return null
-  return { ...PROCESSING_BADGES[state], label: t(`media.processing.states.${state}`) }
+/** État affiché en pastille (même présentation que la fiche) : en attente, en cours ou en échec. */
+const processing = computed<ProcessingStateValue | null>(() => {
+  const state = props.media.processingState ?? null
+  if (state === 'FAILED') return state
+  return processingInProgress(state) && !props.media.deletedAt ? state : null
 })
 </script>
 
@@ -113,10 +108,7 @@ const processing = computed(() => {
           <Lock class="size-3" aria-hidden="true" />
           {{ t('media.visibility.PRIVATE.label') }}
         </UiBadge>
-        <UiBadge v-if="processing" :variant="processing.variant" class="whitespace-normal">
-          <component :is="processing.icon" class="size-3 shrink-0" aria-hidden="true" />
-          {{ processing.label }}
-        </UiBadge>
+        <AdminProcessingStateBadge v-if="processing" :state="processing" class="whitespace-normal" />
       </p>
     </div>
   </article>
