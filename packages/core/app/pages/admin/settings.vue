@@ -3,6 +3,8 @@
  * Réglages de l'installation (permission settings:manage : ADMIN). Section « Transformations
  * d'images » : politique des transformations libres des médias de la bibliothèque, préréglages
  * globaux (utilisables dans tous les projets) et bornes du serveur (variables d'environnement).
+ * Section « Traitement des vidéos » (phase D3) : état en lecture seule (variables NUXT_VIDEO_*),
+ * processus de travail, tâches, et « Traiter les vidéos existantes ».
  */
 definePageMeta({ layout: 'admin', permission: 'settings:manage' })
 
@@ -24,6 +26,18 @@ useSeoMeta({ title: () => t('settings.meta.title') })
         </p>
       </div>
       <AdminTransformSettings :heading-level="3" />
+    </section>
+
+    <section aria-labelledby="settings-video-processing-title" class="mt-12 grid gap-4">
+      <div class="grid max-w-3xl gap-1">
+        <h2 id="settings-video-processing-title" class="text-xl font-semibold text-foreground">
+          {{ t('settings.videoProcessing.title') }}
+        </h2>
+        <p class="text-sm text-muted-foreground">
+          {{ t('settings.videoProcessing.description') }}
+        </p>
+      </div>
+      <AdminVideoProcessingSettings :heading-level="3" />
     </section>
   </div>
 </template>

@@ -6,8 +6,12 @@
  * Vidéo : aperçu tiré de son image d'affiche (phase D2) et pastille « vidéo », sinon une icône ; la
  * durée ; jamais d'élément <video> dans la grille (chaque carte chargerait les métadonnées du fichier).
  * En mode sélection (`selectable`), une case à cocher passe au-dessus du lien étiré.
+ * Traitement d'une vidéo (phase D3, § 37) : pastille de texte à côté de « Privé » tant qu'il est en
+ * attente ou en cours, ou en échec ; icône fixe (aucune animation continue, WCAG 2.2.2) ; rien une fois
+ * traitée ni pour un média non concerné. Dans la corbeille, la tâche est annulée : « en attente » ou
+ * « en cours » y serait faux (la restauration la relance), seul l'échec reste signalé.
  */
-import { Film, Lock, Play } from '@lucide/vue'
+import { Cog, Film, Hourglass, Lock, Play, TriangleAlert } from '@lucide/vue'
 
 const props = defineProps<{
   media: {
@@ -22,6 +26,10 @@ const props = defineProps<{
     duration: number | null
     size: number
     visibility: MediaVisibility
+    /** État du traitement de la vidéo (null : non concerné). */
+    processingState?: ProcessingStateValue | null
+    /** Date de mise à la corbeille (null : média actif). */
+    deletedAt?: string | null
   }
   /** Affiche une case de sélection (actions groupées). */
   selectable?: boolean
@@ -41,6 +49,19 @@ const details = computed(() => [
   props.media.width && props.media.height ? t('media.dimensions', { width: props.media.width, height: props.media.height }) : null,
   formatBytes(props.media.size, locale.value),
 ].filter(Boolean) as string[])
+
+/** Pastille du traitement : couleur « avertissement » pour l'échec, le texte porte le sens. */
+const PROCESSING_BADGES = {
+  PENDING: { variant: 'primary', icon: Hourglass },
+  PROCESSING: { variant: 'primary', icon: Cog },
+  FAILED: { variant: 'warning', icon: TriangleAlert },
+} as const
+const processing = computed(() => {
+  const state = props.media.processingState
+  if (state !== 'PENDING' && state !== 'PROCESSING' && state !== 'FAILED') return null
+  if (props.media.deletedAt && state !== 'FAILED') return null
+  return { ...PROCESSING_BADGES[state], label: t(`media.processing.states.${state}`) }
+})
 </script>
 
 <template>
@@ -86,10 +107,15 @@ const details = computed(() => [
         </template>
         <span v-if="duration" class="sr-only">{{ duration.spoken }}</span>
       </p>
-      <p v-if="media.visibility === 'PRIVATE'">
-        <UiBadge>
+      <!-- Pastilles : retour à la ligne permis (carte de 160 px de large sur un écran de 375 px). -->
+      <p v-if="media.visibility === 'PRIVATE' || processing" class="flex flex-wrap gap-1.5">
+        <UiBadge v-if="media.visibility === 'PRIVATE'">
           <Lock class="size-3" aria-hidden="true" />
           {{ t('media.visibility.PRIVATE.label') }}
+        </UiBadge>
+        <UiBadge v-if="processing" :variant="processing.variant" class="whitespace-normal">
+          <component :is="processing.icon" class="size-3 shrink-0" aria-hidden="true" />
+          {{ processing.label }}
         </UiBadge>
       </p>
     </div>

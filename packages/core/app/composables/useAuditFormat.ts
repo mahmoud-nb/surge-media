@@ -73,6 +73,15 @@ export function useAuditFormat() {
         return t('audit.details.change', { from: t(`media.visibility.${text(data.from)}.label`), to: t(`media.visibility.${text(data.to)}.label`) })
       case 'media.moved':
         return t('audit.details.change', { from: spaceName(data.from), to: spaceName(data.to) })
+      // Traiter les vidéos existantes (phase D3) : `partial` = boucle interrompue par une erreur, les
+      // tâches déjà créées restant en file.
+      case 'media.processing_backfill': {
+        const count = Number(data.count ?? 0)
+        return [
+          t('audit.details.processingBackfill', { count }, count),
+          data.partial ? t('audit.details.processingBackfillPartial') : null,
+        ].filter(Boolean).join(' · ')
+      }
       case 'key.created':
       case 'key.revoked':
       case 'key.deleted':

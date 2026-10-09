@@ -563,6 +563,7 @@
         "IMAGE": "Images: {types}, up to {max} per file.",
         "VIDEO": "Videos: {types}, up to {max} per file."
       },
+      "converted": "{types}: also accepted, with the same maximum size, and converted after upload so that every browser can play them.",
       "visibility": "Visibility of uploaded files",
       "queue": "Ongoing and completed uploads",
       "progress": "Upload progress of {name}",
@@ -638,6 +639,12 @@
     "video": {
       "fallback": "Your browser cannot play this video.",
       "download": "Download the file",
+      "downloadOriginal": "Download the original",
+      "placeholder": {
+        "pending": "This video will play here as soon as its compatible version is ready.",
+        "unplayable": "Browsers cannot play this video: its format has no compatible version."
+      },
+      "posterHintUnplayable": "Upload a JPEG, PNG, WebP, AVIF or GIF image: it is saved as JPEG, without its metadata. The frame shown by the player can be used once the video plays here.",
       "notices": {
         "variable": {
           "title": "Playback varies across browsers",
@@ -666,13 +673,41 @@
         "captions": {
           "title": "No captions",
           "text": "This video has sound but no subtitle track: add one (below) for deaf and hard-of-hearing viewers, and for playback without sound (WCAG 1.2.2)."
+        },
+        "compatPending": {
+          "title": "Compatible version in preparation",
+          "text": "{codec} codec: some browsers or devices will not play the original. An H.264 version, which plays everywhere, is being prepared: the player will offer it as soon as it is ready."
+        },
+        "converting": {
+          "title": "Format converted after upload",
+          "text": "Browsers cannot play this format: the video will play once converted to H.264. Until then, the original is offered for download."
+        },
+        "convertFailed": {
+          "title": "Format not playable",
+          "text": "Browsers cannot play this format and its conversion failed (see “Processing”): the original can only be downloaded."
+        },
+        "dataTracks": {
+          "title": "Device data track",
+          "text": "This file contains a data track from the device that recorded it, often GPS positions: anyone who downloads the video can read it.",
+          "held": "This file contains a data track from the device that recorded it, often GPS positions. The processing in progress removes it: until then, the video only plays in the administration (its public address and temporary links answer “503”, try again later).",
+          "failed": "This file contains a data track from the device that recorded it, often GPS positions, which processing could not remove: anyone who downloads the video can read it. Make the video private or delete it if this data is sensitive."
+        },
+        "hdr": {
+          "title": "HDR colours converted",
+          "text": "This video is HDR: the colours of its compatible H.264 version were converted to SDR to display correctly on every screen. The original keeps its HDR colours."
+        },
+        "hdrUnconverted": {
+          "title": "HDR colours not converted",
+          "text": "This video is HDR, but the server lacks the colour conversion filters: its compatible H.264 version may look dull or washed out."
         }
       },
       "snippet": {
         "title": "Embed the video",
         "description": "Example for a web page: native player with its controls, no autoplay; only the metadata is loaded in advance.",
         "copy": "Copy the video player example",
-        "privateNote": "Example built with the temporary link: the video will no longer play after it expires."
+        "privateNote": "Example built with the temporary link: the video will no longer play after it expires.",
+        "pending": "The example will be offered as soon as the compatible version of the video is ready: browsers cannot play its original format.",
+        "unavailable": "No version of this video can be played by browsers: there is no player example to offer."
       },
       "prepare": {
         "title": "Optimise the video",
@@ -946,6 +981,70 @@
         "PROCESSING": "Processing",
         "READY": "Processed",
         "FAILED": "Processing failed"
+      },
+      "title": "Processing",
+      "never": "This video has never been processed (uploaded before video processing was enabled). Processing checks the file, removes device data tracks, extracts a poster image if one is missing and prepares a compatible version when useful.",
+      "queued": "The video is in the queue: processing will start as soon as a worker is available.",
+      "interrupted": "Processing interrupted: the media item is in the trash. It will resume if the media item is restored.",
+      "currentStep": "Current step: {step}",
+      "steps": {
+        "probe": "Analysing the file",
+        "sanitize": "Removing data tracks",
+        "repair": "Repairing the index (WebM)",
+        "transcode": "H.264 conversion",
+        "av1": "AV1 conversion",
+        "poster": "Extracting the poster image",
+        "verify": "Checking the result"
+      },
+      "previousError": "Previous attempt failed: {message}",
+      "errors": {
+        "NO_VIDEO_TRACK": "The file contains no video track.",
+        "UNREADABLE": "The file is unreadable or damaged: it could not be analysed.",
+        "CONVERSION_FAILED": "The conversion failed, or the version produced did not pass verification.",
+        "TOO_LONG": "The video exceeds the maximum processing duration set on the server: no compatible version was produced.",
+        "TIMEOUT": "Processing exceeded the allowed time.",
+        "SOURCE_MISSING": "The original file cannot be found in storage.",
+        "FFMPEG_UNAVAILABLE": "ffmpeg is missing or unusable on the processing server: contact the administrator.",
+        "unknown": "Processing failed."
+      },
+      "errorDetail": "Technical detail: {detail}",
+      "attempt": "Attempt",
+      "attemptValue": "{current} of {max}",
+      "nextAttempt": "Next attempt",
+      "createdAt": "Requested on",
+      "startedAt": "Started on",
+      "finishedAt": "Finished on",
+      "warningsTitle": "Notes",
+      "warnings": {
+        "hdr_converted": "HDR colours converted to SDR for the compatible version.",
+        "hdr_unconverted": "HDR colours not converted: the conversion filters are missing on the server.",
+        "poster_failed": "The poster image could not be extracted: choose one under “Poster image”."
+      },
+      "renditions": {
+        "title": "Compatible versions",
+        "description": "Versions re-encoded by the server, offered to the player before the original (which stays unchanged).",
+        "definition": "Resolution",
+        "download": "Download {format}"
+      },
+      "run": "Process the video",
+      "rerun": "Run processing again",
+      "rerunReadyHint": "Redoes the compatible versions with the server's current settings; the original is not modified.",
+      "requested": "Processing requested: the video is in the queue.",
+      "requestErrors": {
+        "PROCESSING_DISABLED": "Video processing is not active on this server: try again later or contact the administrator.",
+        "VERSION_CONFLICT": "The file has just been replaced: the page was reloaded. Check the processing status before running it again.",
+        "IN_TRASH": "This media item is in the trash: restore it before processing it.",
+        "KIND_MISMATCH": "Only videos can be processed."
+      },
+      "inactive": {
+        "pending": "Video processing is not active on this server: the task will wait until it is.",
+        "rerun": "Video processing is not active on this server: it cannot be run again for now."
+      },
+      "announcements": {
+        "started": "Video processing started.",
+        "finished": "Video processing finished.",
+        "failed": "Video processing failed.",
+        "retry": "Video processing failed temporarily: it will be retried automatically."
       }
     }
   },
@@ -1597,7 +1696,9 @@
       "projects": "Projects: {names}",
       "deviceTrusted": "For {days} day | For {days} days",
       "deviceForgotten": "This device",
-      "devicesRevoked": "No device | One device | {count} devices"
+      "devicesRevoked": "No device | One device | {count} devices",
+      "processingBackfill": "No video queued | One video queued | {count} videos queued",
+      "processingBackfillPartial": "Stopped by an error: the remaining videos were not queued"
     },
     "fields": {
       "name": "name",
@@ -1735,6 +1836,153 @@
     "transforms": {
       "title": "Image transformations",
       "description": "Free transformations of library media, presets shared by every project and server limits."
+    },
+    "videoProcessing": {
+      "title": "Video processing",
+      "description": "Videos converted by ffmpeg after upload: a version every browser can play, a poster, removal of device data tracks (GPS positions), converted formats (MKV, AVI…). Configured through the server's environment variables: this section is read-only, except for queueing existing videos.",
+      "loadError": "Could not load the video processing status.",
+      "refresh": "Refresh status",
+      "loadedAt": "Status read at {time}",
+      "refreshed": "Video processing status refreshed ({time}).",
+      "status": {
+        "title": "Status",
+        "label": "Processing",
+        "badges": {
+          "active": "Active",
+          "off": "Disabled",
+          "halted": "Halted",
+          "noFfmpeg": "Inactive",
+          "noWorker": "Inactive"
+        },
+        "text": {
+          "active": "Videos are processed after upload and converted formats (MKV, AVI…) are accepted.",
+          "off": "No video is processed: videos are served as uploaded, and only MP4, WebM and MOV are accepted.",
+          "halted": "ffmpeg became unusable on this server: processing is suspended and detection runs again every minute. Jobs already created wait in the queue; new videos are not queued and converted formats are refused.",
+          "noFfmpeg": "ffmpeg is not usable on this server (see “ffmpeg”): new videos are not queued and converted formats are refused.",
+          "noWorker": "No worker able to process has reported in the last 5 minutes: new videos are not queued and converted formats are refused."
+        },
+        "mode": "Mode",
+        "modesLabel": "Available modes (NUXT_VIDEO_PROCESSING variable)",
+        "current": "current mode"
+      },
+      "modes": {
+        "line": "{label} ({value}): {description}",
+        "off": {
+          "label": "Disabled",
+          "description": "no processing; videos are served as uploaded (MP4, WebM and MOV only)."
+        },
+        "embedded": {
+          "label": "Embedded",
+          "description": "this web server processes videos itself, with ffmpeg at low priority; for a single machine."
+        },
+        "external": {
+          "label": "Separate",
+          "description": "workers started separately (“surge-media worker”) process videos; this server only creates the jobs."
+        }
+      },
+      "enable": {
+        "title": "Enable video processing",
+        "text": "Install ffmpeg 6 or later (with the libx264 and aac encoders) on the server, add NUXT_VIDEO_PROCESSING=embedded to its environment — or external, then start workers with “surge-media worker” — and restart it. The other variables (NUXT_VIDEO_…) are described in the installation guide."
+      },
+      "ffmpeg": {
+        "title": "ffmpeg",
+        "notShownOff": "Not detected: video processing is disabled.",
+        "notShownExternal": "This server never runs ffmpeg in external mode: the version used by each worker is shown in their list.",
+        "version": "Version",
+        "unknownVersion": "Unreadable",
+        "state": "Status",
+        "usable": "Usable",
+        "unusable": "Unusable",
+        "encoders": "Useful encoders found",
+        "noEncoders": "None",
+        "hdr": "HDR color conversion",
+        "hdrAvailable": "Available: HDR videos are converted to SDR for the H.264 version.",
+        "hdrMissing": "Unavailable (zscale and tonemap filters missing): HDR videos are converted without color correction.",
+        "av1": "AV1 version",
+        "av1Available": "Possible (libsvtav1 and libopus found).",
+        "av1Missing": "Impossible: the libsvtav1 and libopus encoders are required.",
+        "problemsTitle": "Problems found",
+        "problems": {
+          "ffmpeg_unavailable": "ffmpeg cannot be found or does not start (NUXT_FFMPEG_PATH variable).",
+          "ffmpeg_outdated": "ffmpeg is too old: version 6 or later is required.",
+          "ffprobe_unavailable": "ffprobe cannot be found or does not start (NUXT_FFPROBE_PATH variable).",
+          "libx264_missing": "This ffmpeg lacks the libx264 H.264 encoder.",
+          "aac_missing": "This ffmpeg lacks the aac encoder."
+        }
+      },
+      "encoding": {
+        "title": "Encoding settings",
+        "description": "This server's NUXT_VIDEO_… variables; changing them requires a restart.",
+        "externalNote": "In external mode, each worker applies its own variables: the values below are this web server's.",
+        "rendition": "Compatible H.264 version",
+        "renditionModes": {
+          "auto": "Only when useful: poorly supported codec, converted format, above 1080p, high bitrate or HDR.",
+          "always": "For every video.",
+          "never": "Never, except for converted formats."
+        },
+        "preset": "x264 preset",
+        "crf": "Quality (CRF)",
+        "crfValue": "{crf} (lower: better quality, larger files)",
+        "av1": "Additional AV1 version",
+        "on": "Enabled",
+        "off": "Disabled",
+        "av1Unavailable": "Enabled, but impossible with this ffmpeg",
+        "concurrency": "Simultaneous jobs per process",
+        "threads": "Threads per ffmpeg",
+        "maxDuration": "Maximum video duration"
+      },
+      "workers": {
+        "title": "Workers",
+        "description": "Processes started with “surge-media worker” that reported within the last day, most recent first. A worker is active if it reported within the last 5 minutes.",
+        "states": {
+          "active": "Active",
+          "halted": "Halted: ffmpeg unusable",
+          "absent": "Absent for more than 5 minutes"
+        },
+        "seen": "Last seen: {relative} ({date})",
+        "ffmpegVersion": "ffmpeg {version}",
+        "unknownVersion": "Unknown ffmpeg version",
+        "concurrency": "no simultaneous jobs | one job at a time | {count} simultaneous jobs",
+        "identifier": "Identifier: {id}",
+        "unknownHost": "Unknown machine",
+        "empty": {
+          "off": "No workers: video processing is disabled.",
+          "embedded": "No separate workers: this server processes videos itself (embedded mode).",
+          "external": "No worker has reported within the last day. Start “surge-media worker” on a machine that shares this server's database and storage."
+        }
+      },
+      "jobs": {
+        "title": "Jobs",
+        "description": "Recorded processing jobs, by status.",
+        "queued": "Queued",
+        "running": "Running",
+        "done": "Done",
+        "failed": "Failed",
+        "cancelled": "Cancelled"
+      },
+      "backfill": {
+        "title": "Process existing videos",
+        "description": "Creates a low-priority job for every video never processed (uploaded before processing was enabled, or while it was inactive), excluding the trash. New uploads keep priority and originals are kept.",
+        "count": "No video left unprocessed. | One video never processed, excluding the trash. | {count} videos never processed, excluding the trash.",
+        "totalDuration": "Total duration: {duration}.",
+        "estimate": "Estimated processing time: up to about {duration}.",
+        "estimateNote": "Rough estimate, based on the total duration and the encoding settings: videos that are already compatible are not re-encoded, and the actual speed depends on the machine.",
+        "lessThanMinute": "less than a minute",
+        "button": "Process existing videos",
+        "disabledInactive": "Available when video processing is active.",
+        "disabledEmpty": "Nothing to process: every video has already been processed or is queued.",
+        "dialog": {
+          "title": "Process existing videos?",
+          "description": "No video to queue. | A job will be created for the video never processed, after recent uploads; the original is kept. | A job will be created for each of the {count} videos never processed, after recent uploads; the originals are kept.",
+          "estimate": "Estimated time: up to about {duration} (rough estimate).",
+          "submit": "Add to the queue",
+          "submitting": "Adding to the queue…"
+        },
+        "done": "No video queued: all of them were processed or queued in the meantime. | One video added to the queue. | {count} videos added to the queue.",
+        "errors": {
+          "PROCESSING_DISABLED": "Video processing is not active: no job was created. Its status is shown above."
+        }
+      }
     }
   },
   "transforms": {

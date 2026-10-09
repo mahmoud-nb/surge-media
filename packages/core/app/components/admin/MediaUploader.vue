@@ -6,6 +6,8 @@
  * genre ; quitter la page pendant un envoi demande une confirmation (envoi de vidéo long). Vidéo
  * créée : une image d'affiche est capturée dans le navigateur pendant l'envoi puis jointe au média
  * (phase D2) ; si le navigateur ne sait pas décoder la vidéo, elle reste sans affiche.
+ * Traitement des vidéos actif (phase D3) : les formats convertis après l'envoi (MKV, AVI…) ont leur
+ * propre ligne d'aide et leurs extensions dans `accept` ; inactif, rien ne change.
  *
  *   création     : <AdminMediaUploader :rules="rules" @uploaded="refresh" />
  *   remplacement : <AdminMediaUploader :rules="rules" :endpoint="`/api/admin/media/${id}/file`" method="PUT" :multiple="false" :kinds="[kind]" />
@@ -47,7 +49,7 @@ const emit = defineEmits<{
 
 const { t, locale } = useI18n()
 const { $api } = useNuxtApp()
-const { send, precheck, errorMessage, acceptedMimeTypes, acceptedExtensions, kindsOf, maxSizeFor } = useMediaUpload()
+const { send, precheck, errorMessage, acceptAttribute, acceptedExtensions, convertedExtensions, kindsOf, maxSizeFor } = useMediaUpload()
 
 const inputId = useId()
 const helpId = useId()
@@ -78,15 +80,22 @@ async function attachPoster<T extends { id: string }>(media: T, capture: Promise
   }
 }
 
-const accept = computed(() => acceptedMimeTypes(props.rules, props.kinds).join(','))
-/** Une ligne par genre : formats et taille maximale. */
-const constraints = computed(() => kindsOf(props.rules, props.kinds).map(kind => ({
-  kind,
-  text: t(`media.upload.constraintsByKind.${kind}`, {
-    types: acceptedExtensions(props.rules, [kind]),
-    max: formatBytes(maxSizeFor(props.rules, kind), locale.value),
-  }),
-})))
+const accept = computed(() => acceptAttribute(props.rules, props.kinds))
+/** Formats convertis après l'envoi (traitement des vidéos actif), présentés sur leur propre ligne. */
+const converted = computed(() => convertedExtensions(props.rules, props.kinds))
+/** Une ligne par genre : formats et taille maximale ; puis les formats convertis, s'il y en a. */
+const constraints = computed(() => [
+  ...kindsOf(props.rules, props.kinds).map(kind => ({
+    key: kind,
+    text: t(`media.upload.constraintsByKind.${kind}`, {
+      types: acceptedExtensions(props.rules, [kind], { withConverted: false }),
+      max: formatBytes(maxSizeFor(props.rules, kind), locale.value),
+    }),
+  })),
+  ...(converted.value.length > 0
+    ? [{ key: 'converted', text: t('media.upload.converted', { types: converted.value.map(extension => extension.toUpperCase()).join(', ') }) }]
+    : []),
+])
 const visibilityOptions = computed(() => MEDIA_VISIBILITIES.map(value => ({ value, label: t(`media.visibility.${value}.label`) })))
 
 async function enqueue(files: File[]) {
@@ -192,7 +201,7 @@ onBeforeUnmount(() => window.removeEventListener('beforeunload', confirmLeave))
         </label>
       </div>
       <p :id="helpId" class="grid gap-0.5 text-sm text-muted-foreground">
-        <span v-for="line in constraints" :key="line.kind">{{ line.text }}</span>
+        <span v-for="line in constraints" :key="line.key">{{ line.text }}</span>
       </p>
     </div>
 
