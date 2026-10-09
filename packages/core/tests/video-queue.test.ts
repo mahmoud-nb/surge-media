@@ -1127,11 +1127,11 @@ describe('pipeline : suite donnée aux erreurs', async () => {
       expect(failure.detail.length).toBeLessThanOrEqual(191)
       // Chemins avec espaces (nom d'utilisateur Windows, dossier « surge media ») : rien ne passe.
       const windows = Object.assign(new Error('EACCES: permission denied, mkdtemp \'C:\\Users\\Jean Dupont\\AppData\\Local\\Temp\\surge-media-job-x\''), { code: 'EACCES' })
-      expect(classifyFailure(windows)).toEqual({ code: 'CONVERSION_FAILED', detail: 'Erreur interne (EACCES) : nouvel essai prévu.', retryable: true })
+      expect(classifyFailure(windows)).toEqual({ code: 'CONVERSION_FAILED', detail: 'Erreur interne (EACCES).', retryable: true })
       const spaced = Object.assign(new Error('ENOSPC: no space left on device, open \'/srv/surge media/storage/a.mp4\''), { code: 'ENOSPC' })
       expect(classifyFailure(spaced).detail).not.toMatch(/Dupont|media|storage/)
       // Code inattendu (texte libre) : jamais recopié.
-      expect(classifyFailure(Object.assign(new Error('x'), { code: 'see /etc/passwd' })).detail).toBe('Erreur interne : nouvel essai prévu.')
+      expect(classifyFailure(Object.assign(new Error('x'), { code: 'see /etc/passwd' })).detail).toBe('Erreur interne.')
       // Le message complet reste dans le journal du serveur.
       expect(errorLog).toHaveBeenCalled()
     }

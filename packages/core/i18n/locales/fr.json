@@ -598,6 +598,7 @@
       "videoTrack": "Vidéo : {codec}",
       "audioTrack": "Son : {codec}",
       "noAudio": "Sans son",
+      "notAnalysed": "Inconnus : fichier non analysé",
       "bitrate": "Débit moyen",
       "size": "Taille",
       "version": "Version du fichier",
@@ -644,7 +645,8 @@
         "pending": "Cette vidéo sera lisible ici dès que sa version compatible sera prête.",
         "unplayable": "Cette vidéo ne peut pas être lue par les navigateurs : son format n'a pas de version compatible."
       },
-      "posterHintUnplayable": "Envoyez une image JPEG, PNG, WebP, AVIF ou GIF : elle est enregistrée en JPEG, sans ses métadonnées. L'image affichée par le lecteur pourra être utilisée quand la vidéo sera lisible ici.",
+      "posterHintUnplayable": "Envoyez une image JPEG, PNG, WebP, AVIF ou GIF : elle est enregistrée en JPEG, sans ses métadonnées.",
+      "posterHintLater": "L'image affichée par le lecteur pourra être utilisée quand la vidéo sera lisible ici.",
       "notices": {
         "variable": {
           "title": "Lecture variable selon les navigateurs",
@@ -689,7 +691,8 @@
         "dataTracks": {
           "title": "Piste de données de l'appareil",
           "text": "Ce fichier contient une piste de données de l'appareil qui l'a filmé, souvent des positions GPS : toute personne qui télécharge la vidéo peut la lire.",
-          "held": "Ce fichier contient une piste de données de l'appareil qui l'a filmé, souvent des positions GPS. Le traitement en cours la retire : d'ici là, la vidéo n'est lue que dans l'administration (son adresse publique et ses liens temporaires répondent « 503 », réessayer plus tard).",
+          "held": "Ce fichier contient une piste de données de l'appareil qui l'a filmé, souvent des positions GPS. Le traitement en cours la retire : d'ici là, la vidéo n'est lue que dans l'administration, et son adresse publique comme ses liens temporaires répondent « 503 » (indisponible pour l'instant).",
+          "heldPrivate": "Ce fichier contient une piste de données de l'appareil qui l'a filmé, souvent des positions GPS. Le traitement en cours la retire : d'ici là, la vidéo n'est lue que dans l'administration, et ses liens temporaires répondent « 503 » (indisponible pour l'instant).",
           "failed": "Ce fichier contient une piste de données de l'appareil qui l'a filmé, souvent des positions GPS, que le traitement n'a pas pu retirer : toute personne qui télécharge la vidéo peut la lire. Rendez la vidéo privée ou supprimez-la si ces données sont sensibles."
         },
         "hdr": {
@@ -730,7 +733,8 @@
       },
       "generate": "Générer un lien temporaire",
       "temporaryUrl": "Lien temporaire",
-      "expires": "Valable jusqu'au {date}."
+      "expires": "Valable jusqu'au {date}.",
+      "outdated": "La vidéo a été mise à jour par le traitement : créez un nouveau lien temporaire."
     },
     "replace": {
       "title": "Remplacer le fichier",
@@ -985,6 +989,7 @@
       "title": "Traitement",
       "never": "Cette vidéo n'a jamais été traitée (envoyée avant l'activation du traitement des vidéos, ou pendant qu'il était inactif). Le traitement vérifie le fichier, retire les pistes de données de l'appareil, extrait une image d'affiche s'il en manque une et prépare une version compatible quand elle est utile.",
       "queued": "La vidéo est dans la file d'attente : le traitement commencera dès qu'un processus sera disponible.",
+      "retryScheduled": "Un nouvel essai est prévu après un échec passager.",
       "interrupted": "Traitement interrompu : le média est dans la corbeille. Il reprendra si le média est restauré.",
       "currentStep": "Étape en cours : {step}",
       "steps": {
@@ -996,7 +1001,7 @@
         "poster": "Extraction de l'image d'affiche",
         "verify": "Vérification du résultat"
       },
-      "previousError": "Échec de l'essai précédent : {message}",
+      "previousError": "Échec de l'essai précédent. {message}",
       "errors": {
         "NO_VIDEO_TRACK": "Le fichier ne contient aucune piste vidéo.",
         "UNREADABLE": "Le fichier est illisible ou endommagé : il n'a pas pu être analysé.",
@@ -1030,6 +1035,7 @@
       "run": "Traiter la vidéo",
       "rerun": "Relancer le traitement",
       "rerunReadyHint": "Refait les versions compatibles avec les réglages actuels du serveur ; l'original n'est pas modifié.",
+      "rerunNoRenditionHint": "Aucune version compatible n'a été produite pour cette vidéo. Relancer le traitement applique les réglages actuels du serveur ; l'original n'est pas modifié.",
       "requesting": "Demande en cours…",
       "requested": "Traitement demandé : la vidéo est dans la file d'attente.",
       "requestErrors": {
@@ -1861,7 +1867,7 @@
           "active": "Les vidéos sont traitées après l'envoi et les formats convertis (MKV, AVI…) sont acceptés.",
           "off": "Aucune vidéo n'est traitée : elles sont servies telles qu'envoyées, et seules les vidéos MP4, WebM et MOV sont acceptées.",
           "halted": "ffmpeg est devenu inutilisable sur ce serveur : le traitement est suspendu, une nouvelle détection a lieu chaque minute. Les tâches déjà créées attendent dans la file ; les nouvelles vidéos ne sont pas mises en file et les formats convertis sont refusés.",
-          "noFfmpeg": "ffmpeg n'est pas utilisable sur ce serveur (voir « ffmpeg ») : les nouvelles vidéos ne sont pas mises en file et les formats convertis sont refusés.",
+          "noFfmpeg": "ffmpeg n'est pas utilisable sur ce serveur (voir « ffmpeg ») : les nouvelles vidéos ne sont pas mises en file et les formats convertis sont refusés. Corrigez le problème, puis redémarrez le serveur.",
           "noWorker": "Aucun processus de travail en état de traiter ne s'est signalé depuis 5 minutes : les nouvelles vidéos ne sont pas mises en file et les formats convertis sont refusés."
         },
         "mode": "Mode",
@@ -1919,7 +1925,7 @@
         "externalNote": "En mode external, chaque processus de travail applique ses propres variables : les valeurs ci-dessous sont celles de ce serveur web.",
         "rendition": "Version compatible H.264",
         "renditionModes": {
-          "auto": "Seulement quand elle sert : codec peu compatible, format converti, plus de 1080p, débit élevé ou HDR.",
+          "auto": "Seulement quand elle sert : codec peu compatible, format converti, plus de 1080p, débit élevé, HDR ou vidéo entrelacée.",
           "always": "Pour chaque vidéo.",
           "never": "Jamais, sauf pour les formats convertis."
         },
@@ -1965,18 +1971,22 @@
       },
       "backfill": {
         "title": "Traiter les vidéos existantes",
-        "description": "Crée une tâche de priorité basse pour chaque vidéo jamais traitée (envoyée avant l'activation du traitement, ou pendant qu'il était inactif), hors corbeille. Les nouveaux envois restent prioritaires et les originaux sont conservés.",
+        "description": "Crée une tâche pour chaque vidéo jamais traitée (envoyée avant l'activation du traitement, ou pendant qu'il était inactif), hors corbeille ; elles passent après les nouveaux envois. Celles qui contiennent une piste de données de l'appareil (positions GPS) passent en premier : leur fichier est remplacé par une copie sans cette piste (nouvelle version, les anciennes adresses redirigent) et, d'ici là, leur adresse publique et leurs liens temporaires répondent « 503 » (indisponible pour l'instant).",
         "count": "Aucune vidéo à traiter. | Une vidéo jamais traitée, hors corbeille. | {count} vidéos jamais traitées, hors corbeille.",
         "totalDuration": "Durée totale : {duration}.",
         "estimate": "Temps de traitement estimé : jusqu'à environ {duration}.",
-        "estimateNote": "Estimation grossière, d'après la durée totale et les réglages d'encodage : les vidéos déjà compatibles ne sont pas réencodées, et la vitesse réelle dépend de la machine.",
+        "estimateNote": {
+          "auto": "Estimation grossière, d'après la durée totale et les réglages d'encodage : les vidéos déjà compatibles ne sont pas réencodées, et la vitesse réelle dépend de la machine.",
+          "always": "Estimation grossière, d'après la durée totale et les réglages d'encodage : chaque vidéo reçoit une version H.264, et la vitesse réelle dépend de la machine.",
+          "never": "Estimation grossière : aucune version H.264 n'est produite (vérification, affiche, retrait des pistes de données et réparation des WebM seulement), et la vitesse réelle dépend de la machine."
+        },
         "estimateShort": "Temps de traitement estimé : moins d'une minute.",
         "button": "Traiter les vidéos existantes",
         "disabledInactive": "Disponible quand le traitement des vidéos est actif.",
         "disabledEmpty": "Rien à traiter : toutes les vidéos ont déjà été traitées ou sont en file.",
         "dialog": {
           "title": "Traiter les vidéos existantes ?",
-          "description": "Aucune vidéo à mettre en file. | Une tâche sera créée pour la vidéo jamais traitée, après les envois récents ; l'original est conservé. | Une tâche sera créée pour chacune des {count} vidéos jamais traitées, après les envois récents ; les originaux sont conservés.",
+          "description": "Aucune vidéo à mettre en file. | Une tâche sera créée pour la vidéo jamais traitée, après les nouveaux envois. Si elle contient une piste de données de l'appareil (positions GPS), elle passe en premier, son fichier est remplacé par une copie sans cette piste et, d'ici là, son adresse publique et ses liens temporaires répondent « 503 ». | Une tâche sera créée pour chacune des {count} vidéos jamais traitées, après les nouveaux envois. Celles qui contiennent une piste de données de l'appareil (positions GPS) passent en premier, leur fichier est remplacé par une copie sans cette piste et, d'ici là, leur adresse publique et leurs liens temporaires répondent « 503 ».",
           "estimate": "Temps estimé : jusqu'à environ {duration} (estimation grossière).",
           "estimateShort": "Temps estimé : moins d'une minute (estimation grossière).",
           "submit": "Ajouter à la file",
@@ -1984,7 +1994,7 @@
         },
         "done": "Aucune vidéo ajoutée à la file : toutes ont été traitées ou mises en file entre-temps. | Une vidéo ajoutée à la file. | {count} vidéos ajoutées à la file.",
         "errors": {
-          "PROCESSING_DISABLED": "Le traitement des vidéos n'est pas actif : aucune tâche n'a été créée. Son état est indiqué ci-dessus."
+          "PROCESSING_DISABLED": "Le traitement des vidéos n'est pas actif : aucune tâche n'a été créée. Fermez cette fenêtre pour voir son état."
         }
       }
     }

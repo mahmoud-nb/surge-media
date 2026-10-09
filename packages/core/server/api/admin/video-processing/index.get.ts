@@ -6,7 +6,8 @@ import { backfillCandidates, jobCounts, listWorkers, videoProcessingActive, vide
  * GET /api/admin/video-processing — état du traitement des vidéos pour « Réglages » (phase D3, § 35,
  * § 37), réservé aux administrateurs (permission de plateforme `settings:manage`) :
  *   - `mode`, `role`, `active` (formats convertis acceptés, tâches créées à l'envoi), `halted` (boucle de
- *     ce processus arrêtée faute de ffmpeg utilisable, mode `embedded`) ;
+ *     ce processus arrêtée en cours de route, ffmpeg devenu inutilisable : nouvelle détection chaque
+ *     minute ; faux quand ffmpeg était inutilisable dès le démarrage, rien n'étant alors redétecté) ;
  *   - `settings` : réglages NUXT_VIDEO_* en vigueur (jamais les chemins des binaires) ;
  *   - `ffmpeg` : capacités détectées par ce processus, null quand il ne lance jamais ffmpeg (mode `off`,
  *     ou serveur web en mode `external` : voir alors `workers[].version`) ;
