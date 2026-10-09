@@ -5,9 +5,10 @@
 > français, avec le « Journal des étapes »). En cas de divergence, **le code fait foi**, puis
 > `setup.md`, puis ce fichier.
 >
-> **État décrit** : commit `919a113` (**étape 18, envoi des liens par e-mail**, 2026-10-04 ; § 8), après `608b8f6` (**étape 17,
-> appareils de confiance** ; § 7.2) et `7a42f45` (**étape 16, rôle Gestionnaire** ; § 7.1, § 8, § 9.10) + **étape 19, tableau de bord**
-> (2026-10-04 ; § 9.20), non commitée au moment de la rédaction : vérifier `git log`. Étapes terminées : 1 (monorepo, core, base), 2 (UI, auth, rôles),
+> **État décrit** : commit `dbf3aa7` (**étape 22, D3 — traitement des vidéos par ffmpeg**, 2026-10-09 ; § 9.23 ; documentation de
+> D3 écrite ensuite, non commitée au moment de la rédaction : vérifier `git log`), après `919a113` (**étape 18, envoi des liens par
+> e-mail**, 2026-10-04 ; § 8), `608b8f6` (**étape 17, appareils de confiance** ; § 7.2) et `7a42f45` (**étape 16, rôle Gestionnaire** ;
+> § 7.1, § 8, § 9.10), **étape 19, tableau de bord** (2026-10-04 ; § 9.20). Étapes terminées : 1 (monorepo, core, base), 2 (UI, auth, rôles),
 > 3 (utilisateurs), 4 (médias, phase A), 5 = **B1** (projets, espaces, autorisations), 6 = **B2**
 > (identifiants d'API, origines, mode sudo, journal d'audit), 7 = **B3** (API publique v1 en lecture),
 > 8 = **B4** (API v1 en écriture, jetons délégués `sm_dt_`, file bornée des traitements, pré-génération),
@@ -21,8 +22,12 @@
 > terminées** (`.claude/architecture-phase-c.md` : décisions CD1 à CD12, écarts en tête). **Phase D = vidéos** : architecture
 > `.claude/architecture-phase-d.md` (DD1 à DD14) **validée le 2026-10-05** ; **D1 faite** le 2026-10-05 (étape 20 : envoi, stockage,
 > CRUD, diffusion directe sans transcodage ; § 9.21 ; commit `bda9cfb`) ; **D2 faite** le 2026-10-06 (DD15 à DD24 validées le 2026-10-05,
-> étape 21 : préparation des MP4/MOV — index en tête, lieu et appareil retirés —, image d'affiche, sous-titres WebVTT ; § 9.22), non
-> commitée au moment de la rédaction. Suite (D3 : ffmpeg dans un processus séparé ; D4 : streaming adaptatif) **à proposer et faire valider**. **Correctifs du 2026-10-05** (non commités au moment de la
+> étape 21 : préparation des MP4/MOV — index en tête, lieu et appareil retirés —, image d'affiche, sous-titres WebVTT ; § 9.22) ;
+> **D3 faite** le 2026-10-09 (DD25 à DD36 validées le 2026-10-06, étape 22 : traitement des vidéos par ffmpeg hors du chemin des
+> requêtes — file persistante, modes `off`/`embedded`/`external`, processus de travail, rendus H.264/AV1, retrait des pistes GPS,
+> réparation des WebM, affiche du serveur, formats convertis, `sources[]` ; § 9.23 ; commits `bf5e58a` à `dbf3aa7` sur `main`,
+> état final : `.claude/architecture-phase-d.md`, section « D3 — état de l'implémentation »). Suite : vérifications sous Windows
+> (§ 21), puis D4 (streaming adaptatif HLS) **à proposer et faire valider**. **Correctifs du 2026-10-05** (non commités au moment de la
 > rédaction ; § 7.6, § 9.4, § 9.6, § 18) : fermeture des flux interrompus de `/m/`, corps JSON bornés (1 Mio, 30 s), envois arrêtés
 > après 60 s sans donnée. Architecture de la phase B :
 > `.claude/architecture-phase-b.md` (en-tête = écarts B1 à B5).
@@ -96,7 +101,7 @@ surge-media/                         monorepo pnpm (workspaces packages/*), dép
    ├─ shared/                        code partagé app/serveur/CLI (auto-import de shared/utils et shared/types)
    ├─ prisma/                        schema.prisma + migrations/<fournisseur>/ + schema.snapshot.prisma
    ├─ prisma.config.ts               config Prisma 7 (URL, dossier de migrations selon DATABASE_PROVIDER)
-   ├─ cli/                           CLI surge-media (init, db migrate, db reset), i18n fr/en
+   ├─ cli/                           CLI surge-media (init, db migrate, db reset, worker — D3), i18n fr/en
    ├─ scripts/                       db-migration.ts, i18n-check.ts, check-contrast.ts
    ├─ tests/                         Vitest : permissions, signing, projects, credentials, api (modules purs)
    ├─ i18n/locales/                  fr.json (référence), en.json
@@ -133,8 +138,12 @@ Couches serveur :
   **`useReauth`** (`run(action)` : rejoue l'action après confirmation du mot de passe ; `ReauthCancelledError`/`isReauthCancelled`),
   **useAuditFormat** (étape 19 : `actionLabel`, `actorName`, `actorDetails`, `projectName`, `details` d'une entrée du journal ; type
   `AuditEntryView` à importer explicitement depuis `~/composables/useAuditFormat`),
-  **`useCredentialLabels`** (libellés d'environnement, tri, options de portées, messages d'erreur des identifiants).
-- `utils/` (auto-importés) : `cn` (clsx + tailwind-merge), `redirect.ts` (`safeAdminRedirect`), `validation.ts` (`fieldErrors`), `api-error.ts` (`apiError`), `format.ts` (`formatBytes`, `formatPercent`).
+  **`useCredentialLabels`** (libellés d'environnement, tri, options de portées, messages d'erreur des identifiants),
+  **`useProcessingPoll`** (D3 : suivi du traitement d'une vidéo toutes les 5 s, types `ProcessingSnapshot`/`ProcessingJobView`,
+  `processingInProgress`, § 9.23).
+- `utils/` (auto-importés) : `cn` (clsx + tailwind-merge), `redirect.ts` (`safeAdminRedirect`), `validation.ts` (`fieldErrors`), `api-error.ts` (`apiError`), `format.ts` (`formatBytes`, `formatPercent`),
+  `video-frame.ts` (D2 : capture d'affiche), **`processing-view.ts`** (D3, pur, testé : `processingTransition`, `processingNeedsReload`,
+  `displayedAttempt`, `failureDetailParts`).
 - `components/ui/` (`<Ui…>`) : Button, Input, FormField, Alert, Badge, Select, Switch, PasswordInput, Dialog, Pagination, RadioCards,
   **CheckboxGroup** (cartes à cocher, fieldset/legend, `id` de la 1re case), CopyField, **CopyButton** (bouton compact + annonce `role=status`).
 - `components/app/` (`<App…>`) : Logo, SkipLink, ThemeSwitcher, LocaleSwitcher.
@@ -147,6 +156,8 @@ Couches serveur :
   préréglages), **ReauthDialog** (dans `layouts/admin.vue`), **SecretPanel** (valeur affichée une fois, focus sur le titre, `defineExpose({ focus })`),
   **ScopeList**, **TokenStatusBadge** (prop `kind: key|token` pour l'accord en français). `UpcomingSection` supprimé en B2.
   **`admin/dashboard/`** (étape 19, `<AdminDashboard…>`) : StatCard, Shortcuts, UploadsChart, Attention, Projects, Activity, Account (§ 9.20).
+  D2 : **TextTracksPanel** ; D3 (§ 9.23) : **VideoProcessingPanel** (section « Traitement » de la fiche), **VideoProcessingSettings**
+  (section « Traitement des vidéos » de « Réglages »), **ProcessingStateBadge** (état du traitement, carte et fiche).
 - `pages/` : `index` (accueil), `login`, `password/[token]`, `admin/index` (tableau de bord), `admin/users/{index,new,[id]}`,
   `admin/media/{index (bibliothèque),[id]}`, `admin/projects/{index,new}`, `admin/projects/[id]/{index (aperçu, réglages, archivage, suppression),media,members}`,
   `admin/projects/[id]/keys/{index,new}`, `admin/projects/[id]/origins`, `admin/tokens/{index,new}` (`tokens:personal`), `admin/audit` (`audit:read`),
@@ -166,10 +177,12 @@ Couches serveur :
 - `routes/m/[...path].ts` (diffusion des médias, sans cookie ; Bearer, Range, OPTIONS depuis B3).
 - `api/v1/**` (API publique, § 9.12).
 - `middleware/api-v1.ts` (entrée de l'API v1), `middleware/csrf.ts`, **`middleware/body-limit.ts`** (2026-10-05 : `req.rawBody` = lecture
-  différée et bornée, § 7.6).
+  différée et bornée, § 7.6), **`middleware/0.server-role.ts`** (D3 : processus de travail → `/api/health` seulement, 404 sinon).
 - `plugins/` : `auth-session.ts` (hooks nuxt-auth-utils), `bootstrap-admin.ts` (avertissements au démarrage), `database.ts` (déconnexion Prisma à l'arrêt),
   `site-url.ts` (avertit en production si `NUXT_SITE_URL` est vide), `search-backfill.ts` (indexe la recherche des médias existants),
-  `delegated-usage.ts` (purge horaire des compteurs de jetons délégués expirés).
+  `delegated-usage.ts` (purge horaire des compteurs de jetons délégués expirés), `http-timeouts.ts` (D1), `variant-keys.ts` (C1),
+  **`0.video-processing.ts`** (D3 : boucle des tâches vidéo, avant `database.ts`). En rôle `worker`, `bootstrap-admin`, `site-url`,
+  `search-backfill`, `variant-keys` et `delegated-usage` ne font rien (`isWorkerRole`).
 - `utils/` (auto-importés par Nitro) : `prisma.ts` (`usePrisma`, `textContains`, `textSearch`, `isUniqueViolation`, `disconnectPrisma`), `auth.ts`, `password.ts`, `rate-limit.ts`, `users.ts` (`toUserSummary` + `invitedBy`, `USER_SUMMARY_INCLUDE`,
   `visibleUsersWhere`, `userListWhere(query, actor)`, `findVisibleUserOr404` — étape 16), `password-tokens.ts`,
   **`access.ts`** (`Space`, `LIBRARY`, `spaceFor`, `spaceOfMedia`, `sameSpace`, `describeAccess`, `resolveSpaceAccess`, `assertScope`, `requireSpaceAccess`, `requireMediaAccess` ; vérif. de type enum `ProjectRole`),
@@ -192,7 +205,11 @@ Couches serveur :
   (§ 9.21) ; D2 : **`media/video/prepare.ts`** (préparation des MP4/MOV, pur, testé), **`media/text-track.ts`** (analyse et réécriture
   WebVTT/SRT, pur, testé), **`media/tracks.ts`** (service des pistes), `media/keys.ts` (`posterKey`, `trackKey`), `api/tracks.ts`,
   `shared/utils/text-tracks.ts`, `app/utils/video-frame.ts` (capture d'affiche), `AdminTextTracksPanel`, routes `[id]/{poster.put,poster.delete,
-  prepare.post}`, `[id]/tracks/**` et leurs équivalents v1 (§ 9.22) ; C4 : routes
+  prepare.post}`, `[id]/tracks/**` et leurs équivalents v1 (§ 9.22) ; D3 (§ 9.23) : **`video-processing/`** (`settings`, `ffmpeg`,
+  `run`, `args`, `ffprobe`, `plan`, `jobs`, `runner`, `pipeline`, `status`, `worker-id` ; tout nouveau code du traitement vidéo va là,
+  jamais dans `media/processing.ts`, qui est la file des images), **`media/{sources,renditions}.ts`**, `media/keys.ts` (`renditionKey`),
+  plugin `server/plugins/0.video-processing.ts`, middleware `server/middleware/0.server-role.ts`, routes
+  `api/admin/media/[id]/{process.post,processing.get}.ts`, `api/admin/video-processing/{index.get,backfill.post}.ts` ; C4 : routes
   `api/admin/media/[id]/{transform.get,links.post}.ts` (§ 9.19). Les nouveaux modules **importent explicitement** les utilitaires de
   `#shared/utils/*` (un auto-import non injecté a causé un `ReferenceError` en production, voir § 18).
   Les **types** exportés de `server/utils` (ex. `Space`) s'importent explicitement (`import type { Space } from '../../utils/access'`).
@@ -215,7 +232,12 @@ Couches serveur :
 - `utils/media.ts` (MEDIA_KINDS, MEDIA_VISIBILITIES, ACCEPTED_MEDIA_TYPES (+ VIDEO depuis D1), ACCEPTED_MIME_TYPES, MEDIA_SIZE_CEILING, DEFAULT_UPLOAD_SIZES,
   UploadSizes, ENABLED_MEDIA_KINDS, mediaKindForMime, extensionForMime, SIGNED_URL_DURATIONS, SIGNED_URL_MAX_TTL, MEDIA_ERROR_CODES) — auto-importé ;
   `utils/video.ts` (D1 : `VideoMetadata`, `videoPlayback`, `codecLabel`, `videoMetadata`, `videoSourceType`, `VIDEO_MAX_DIMENSION` — importer
-  explicitement `#shared/utils/video` dans les composants) ; `utils/snippets.ts` + `videoSnippet` (D1).
+  explicitement `#shared/utils/video` dans les composants ; D3 : `PLAYABLE_VIDEO_CONTAINERS` / `CONVERTED_VIDEO_CONTAINERS`,
+  `isConvertedContainer`, `VIDEO_CONTAINER_BY_MIME`, `playback` `none`, champs `dataTracks`, `hdr`, `rewrites`) ; `utils/snippets.ts` +
+  `videoSnippet` (D1 ; D3 : `sources`). D3 : `utils/media.ts` + `CONVERTED_VIDEO_TYPES`, `CONVERTED_MIME_TYPES`, `acceptedMimeTypes(actif)`,
+  codes `PROCESSING_DISABLED`, `PROCESSING_PENDING` ; **`utils/video-processing.ts`** (modes, rôles, `RENDITION_MODES`, `X264_PRESETS`,
+  `PROCESSING_STATES`, `MEDIA_JOB_STATUSES`, `API_PROCESSING_STATUSES`, `JOB_STEPS`, `VIDEO_JOB_ERROR_CODES`, `VIDEO_JOB_WARNINGS`,
+  `RENDITION_NAMES`, `RENDITION_FORMATS`, constantes de la file, `retryDelay`, `truncateText`, `deliveryHeld` — pur, testé).
 - `utils/api.ts` (`API_ERRORS` catalogue code → statut + titre, `API_CREDENTIAL_TYPES` (+ `DELEGATED`, type `ApiCredentialType`),
   `API_MEDIA_SORTS`, limites, `API_LINK_TTL` 3600 / `API_LINK_BUCKET` 900, `API_SIGNED_URL_TARGETS` (C3 : + `transform`),
   `API_SIGNED_URLS_MAX` 100, `API_DEFAULT_TRANSFORM_FORMAT` `webp` ; B4 : `DELEGATED_TOKEN_PREFIX`,
@@ -227,7 +249,9 @@ Couches serveur :
   `apiMediaUploadFieldsSchema`, `apiMediaUpdateSchema`, `apiDuplicateBodySchema`, `apiUploadConstraintsSchema`, `apiDelegatedTokenBodySchema`,
   `delegatedTokenClaimsSchema` ; réponses : `apiMediaSchema` (+ `projectId`), `apiMediaListSchema`, `apiProjectSchema`, `apiProjectListSchema`,
   `apiMeSchema` (+ `delegated`), `apiSignedUrlSchema`, `apiDelegatedTokenSchema`, `apiProblemSchema` ; C3 : `apiSignedUrlsBodySchema`,
-  `apiSignedUrlListSchema`, `apiSignedUrlErrorSchema`, `API_SIGNED_URL_ITEM_ERRORS` ; `schemas/media.ts` : `focalPointSchema`).
+  `apiSignedUrlListSchema`, `apiSignedUrlErrorSchema`, `API_SIGNED_URL_ITEM_ERRORS` ; `schemas/media.ts` : `focalPointSchema` ; D3 :
+  `apiMediaSourceSchema`, `apiMediaProcessingSchema`, `Media.sources`/`processing`, `SignedUrl.sources`, types convertis dans
+  `apiUploadConstraintsSchema`).
 - `schemas/{auth,users,media,projects,credentials}.ts` (zod ; projects : `updateProjectSchema` accepte `publicListing` ; credentials : `createPersonalTokenSchema`, `createProjectKeySchema`, `rotateKeySchema`,
   `addOriginSchema` (normalise), `confirmPasswordSchema`, `auditQuerySchema`, `AUDIT_PAGE_SIZE` = 50) — import explicite `#shared/schemas/…` (media : + `spaceQuerySchema`, `mediaTargetSchema`, param `project`).
 - `types/auth.d.ts` (augmentation `#auth-utils` : User, UserSession, SecureSessionData).
@@ -244,7 +268,7 @@ Identifiants : `String @id @default(cuid())` partout. Horodatages `createdAt @de
 | **PasswordToken** | `userId`, `purpose PasswordTokenPurpose`, `tokenHash @unique`, `expiresAt`, `usedAt?`, `createdById?` | user (Cascade), createdBy (SetNull) ; index userId |
 | **Project** | `name`, `slug @unique`, `description?`, `archivedAt?` (lecture seule), `publicListing` (B3, défaut false), `transformPolicy` (C2, OPEN par défaut), `createdById?` | createdBy (SetNull), members, media, folders, accessTokens (clés), tokenGrants (`AccessTokenProject`), allowedOrigins, transformPresets (C2) |
 | **TransformPreset** (C2) | `projectId?` (null = global), `name`, `transformation` (canonique, sans format), `description?` | projet (Cascade) ; index projectId ; unicité des noms par niveau : application (§ 9.17) |
-| **Setting** (C2) | `key @id`, `value Json`, `updatedAt` | réglages de l'installation (`transforms.libraryPolicy`) |
+| **Setting** (C2) | `key @id`, `value Json`, `updatedAt` | réglages de l'installation (`transforms.libraryPolicy`) ; D3 : présences des processus de travail (`videoWorker:<id>`, réécrites toutes les 60 s, purgées après 1 jour) |
 | **ProjectMember** | `projectId`, `userId`, `role ProjectRole`, `createdAt`, `updatedAt` | `@@id([projectId, userId])`, project et user (Cascade) ; index userId |
 | **AccessToken** (B2) | `type TokenType`, `name`, `projectId?` (clés), `environment?` (clés), `userId?` (PAT), `allProjects`, `includeLibrary`, `prefix`, `tokenHash @unique` (SHA-256 hex), `publicValue?` (clé publique seulement), `scopes` (espaces, ordre canonique), `expiresAt?`, `lastUsedAt?`, `lastUsedIp?` (B3), `revokedAt?`, `replacedById?` (rotation), `createdById?` | project (Cascade), user (`AccessTokenOwner`, Cascade), createdBy (`AccessTokenCreatedBy`, SetNull), replacedBy/replaces (`AccessTokenRotation`, SetNull), projects ; index projectId, userId, replacedById |
 | **AccessTokenProject** (B2) | `tokenId`, `projectId` | `@@id([tokenId, projectId])`, Cascade des deux côtés ; index projectId |
@@ -253,12 +277,15 @@ Identifiants : `String @id @default(cuid())` partout. Horodatages `createdAt @de
 | **CacheRevision** (B3) | `scope @id` (`project:<id>` \| `library`), `revision Int`, `updatedAt` | aucune relation |
 | **AuditEvent** (B2) | `at`, `actorUserId?`, `tokenId?` (B3), `projectId?`, `action`, `targetType?`, `targetId?`, `ipAddress?`, `data Json?` (`label` lisible + détails) | **aucune clé étrangère** (survit aux suppressions) ; index (projectId, at), (actorUserId, at), at |
 | **Folder** | `projectId?` (null = bibliothèque), `parentId?`, `name` | projet (Cascade), arbre (`FolderTree`, Cascade : jamais déclenché, la suppression exige un dossier vide ou remonte le contenu), media (SetNull) ; index (projectId, parentId) — utilisé depuis B5 (§ 9.14) |
-| **Media** | `projectId?` (**null = bibliothèque** ; un seul espace), `folderId?`, `kind MediaKind`, `visibility Visibility @default(PUBLIC)`, `storageKey @unique` (clé opaque), `version Int @default(1)`, `originalName`, `mimeType`, `size Int` (octets, ≤ 2 Gio sous PG/MySQL), `checksum` (SHA-256 hex), `width?`, `height?`, `duration?`, `title?`, `altText?`, `searchTitle?`, `searchName` (défaut `''` = à indexer), `searchAlt?` (B3, normalisées), `metadata Json?`, `focalX?`, `focalY?` (C3 : point d'intérêt, fractions 0 à 1, 4 décimales ; affiche d'une vidéo depuis D2), `posterKey? @unique`, `posterWidth?`, `posterHeight?`, `posterSize?`, `posterTime?` (D2 : image d'affiche, JPEG normalisé `variants/<média>/poster-….jpg`), `uploadedById?`, `uploadedByTokenId?` (B4, identifiant d'API ou émetteur d'un jeton délégué), `uploadSubject?` (B4, sujet final d'un jeton délégué), `duplicatedFromId?` (provenance d'une copie), `deletedAt?` (corbeille) | project (**Restrict** : un projet n'emporte jamais ses médias), folder (SetNull), uploadedBy (SetNull), uploadedByToken (`MediaUploadedByToken`, SetNull ; index), duplicatedFrom/duplicates (`MediaDuplicates`, SetNull), variants ; index (projectId, deletedAt, createdAt), (projectId, checksum), folderId, deletedAt, duplicatedFromId |
+| **Media** | `projectId?` (**null = bibliothèque** ; un seul espace), `folderId?`, `kind MediaKind`, `visibility Visibility @default(PUBLIC)`, `storageKey @unique` (clé opaque), `version Int @default(1)`, `originalName`, `mimeType`, `size Int` (octets, ≤ 2 Gio sous PG/MySQL), `checksum` (SHA-256 hex), `width?`, `height?`, `duration?`, `title?`, `altText?`, `searchTitle?`, `searchName` (défaut `''` = à indexer), `searchAlt?` (B3, normalisées), `metadata Json?`, `focalX?`, `focalY?` (C3 : point d'intérêt, fractions 0 à 1, 4 décimales ; affiche d'une vidéo depuis D2), `posterKey? @unique`, `posterWidth?`, `posterHeight?`, `posterSize?`, `posterTime?` (D2 : image d'affiche, JPEG normalisé `variants/<média>/poster-….jpg`), `processingState ProcessingState?` (D3 : résumé de la dernière tâche vidéo, null = non concerné), `uploadedById?`, `uploadedByTokenId?` (B4, identifiant d'API ou émetteur d'un jeton délégué), `uploadSubject?` (B4, sujet final d'un jeton délégué), `duplicatedFromId?` (provenance d'une copie), `deletedAt?` (corbeille) | project (**Restrict** : un projet n'emporte jamais ses médias), folder (SetNull), uploadedBy (SetNull), uploadedByToken (`MediaUploadedByToken`, SetNull ; index), duplicatedFrom/duplicates (`MediaDuplicates`, SetNull), variants, textTracks, jobs, renditions ; index (projectId, deletedAt, createdAt), (projectId, checksum), folderId, deletedAt, duplicatedFromId |
+| **MediaJob** (D3) | `mediaId`, `sourceKey` (clé de l'original visé : un autre fichier rend la tâche caduque), `status MediaJobStatus @default(QUEUED)`, `priority` (0 envoi, 10 piste de données, −10 existant), `attempts`, `runAfter`, `lockedBy?` (`<hôte>:<pid>:<aléa>`), `leaseUntil?`, `step?`, `progress?` (0–1), `result Json?` (`steps`, `warnings`, `renditions`), `errorCode?`, `errorDetail?` (≤ 191, sans chemin), `createdAt`, `updatedAt`, `startedAt?`, `finishedAt?` | media (Cascade) ; index (status, runAfter, priority), mediaId |
+| **MediaRendition** (D3) | `mediaId`, `name` (`h264` \| `av1`), `container` (mp4 \| webm), `mimeType`, `codecs` (RFC 6381), `width`, `height`, `duration`, `bitrate`, `size`, `checksum`, `storageKey @unique` (`variants/<média>/rendition-<nom>-<aléa>.<ext>`, **sans version**), `createdAt` | media (Cascade) ; `@@unique([mediaId, name])` |
 | **MediaTextTrack** (D2) | `mediaId`, `kind TextTrackKind` (SUBTITLES, CAPTIONS, DESCRIPTIONS, CHAPTERS), `language` (BCP 47 canonique), `label`, `isDefault`, `storageKey @unique` (`variants/<média>/track-….vtt`), `size`, `checksum`, `cueCount`, `sourceFormat` (vtt, srt), dates | media (Cascade) ; index mediaId |
 | **MediaVariant** | `mediaId`, `transformation` (`v<n>/<opération effective>.<format>` depuis C1, ex. `v3/size_480x320,q_72.webp`), `storageKey @unique`, `format` (webp…), `size`, `width`, `height` | media (Cascade) ; `@@unique([mediaId, transformation])` |
 
 Enums : `Role { ADMIN MANAGER DEVELOPER EDITOR }` (MANAGER : étape 16), `ProjectRole { OWNER DEVELOPER EDITOR }`, `TokenType { PERSONAL SECRET PUBLISHABLE }`, `PasswordTokenPurpose { INVITATION RESET }`,
-`MediaKind { IMAGE VIDEO AUDIO DOCUMENT OTHER }`, `Visibility { PUBLIC PRIVATE }`.
+`MediaKind { IMAGE VIDEO AUDIO DOCUMENT OTHER }`, `Visibility { PUBLIC PRIVATE }` ; D3 : `ProcessingState { PENDING PROCESSING READY FAILED }`,
+`MediaJobStatus { QUEUED RUNNING DONE FAILED CANCELLED }`.
 
 **Migrations** (une par fournisseur : `prisma/migrations/{sqlite,postgresql,mysql}/`) :
 `20260926142611_init`, `20260926151906_update_roles` (VIEWER → EDITOR avec reprise de données ajoutée
@@ -275,7 +302,9 @@ par `ADD VALUE` est inutilisable dans la même transaction — ; reprise à la m
 OWNER, autres ramenées au plafond ; vérifiée sur une copie SQLite ; générée sous le nom `d1_manager_role` puis renommée avant commit, ligne
 `_prisma_migrations` de la base de dev renommée à la main), `20261004151952_trusted_devices` (étape 17 : table `TrustedDevice`, rien à la main), `20261005215018_video_poster_tracks` (D2 : colonnes
 `Media.poster*`, table `MediaTextTrack` ; appliquée à la base de dev **à la main** — même SQL et même empreinte SHA-256 que `migrate deploy`,
-qui échouait « database is locked » tant que le `nuxt dev` tournait ; `migrate status` la reconnaît).
+qui échouait « database is locked » tant que le `nuxt dev` tournait ; `migrate status` la reconnaît), `20261006211348_d3_video_processing`
+(D3 : `Media.processingState`, tables `MediaJob`, `MediaRendition`, deux enums ; SQLite, PostgreSQL, MySQL ; rien à la main ; à appliquer par
+`pnpm db:migrate` après un pull ; `db:migration --check` vert le 2026-10-09).
 
 **Règles de portabilité** (schéma commun SQLite / PostgreSQL / MySQL) : pas d'attribut `@db.*`, pas de
 `String[]`, chaînes ≤ 191 caractères sous MySQL (validées par zod/API), enums et Json acceptés
@@ -307,6 +336,16 @@ Ne jamais modifier une migration publiée.
 | `NUXT_MEDIA_MAX_VIDEO_UPLOAD_SIZE` | 536870912 (512 Mio) | taille max d'une **vidéo** (D1), plafonnée à 2147483647 (`MEDIA_SIZE_CEILING`) |
 | `NUXT_MEDIA_UPLOAD_TIMEOUT` | 3600 | secondes : `server.requestTimeout` de Node relevé par `http-timeouts.ts` (D1) |
 | `NUXT_MEDIA_VIDEO_PREPARE` | `faststart,metadata` | préparation des MP4/MOV à l'envoi (D2) : `faststart`, `metadata`, les deux, `none` ; lu une fois (`useVideoPreparation`) |
+| `NUXT_VIDEO_PROCESSING` | `off` | traitement des vidéos par ffmpeg (D3, § 9.23) : `off` \| `embedded` \| `external` |
+| `NUXT_SERVER_ROLE` | `web` | `worker` = processus de travail (tâches vidéo seulement, ne sert que `/api/health`) ; posé par `surge-media worker` |
+| `NUXT_FFMPEG_PATH` / `NUXT_FFPROBE_PATH` | `ffmpeg` / `ffprobe` | binaires du système (≥ 6 ; `libx264` et `aac` exigés) |
+| `NUXT_VIDEO_CONCURRENCY` | 1 | tâches simultanées par processus (1 à 16) |
+| `NUXT_VIDEO_THREADS` | 0 (= moitié des cœurs) | fils par ffmpeg (0 à 64 accepté, 16 au plus appliqués : `MAX_THREADS` d'`args.ts`) |
+| `NUXT_VIDEO_RENDITION` | `auto` | rendu H.264 : `auto` (seulement s'il sert) \| `always` \| `never` (formats convertis toujours rendus) |
+| `NUXT_VIDEO_PRESET` / `NUXT_VIDEO_CRF` | `veryfast` / 23 | préréglage x264 (`X264_PRESETS`) / qualité 0 à 51 |
+| `NUXT_VIDEO_AV1` | off | rendu AV1/Opus en plus (`libsvtav1` + `libopus`) |
+| `NUXT_VIDEO_MAX_DURATION` | 10800 | s (1 à 86 400) ; au-delà, aucun réencodage, échec `TOO_LONG` |
+| `NUXT_VIDEO_MEMORY_LIMIT` | 4096 | Mio par ffmpeg (Linux, `prlimit --as`), 0 = sans limite |
 | `NUXT_MEDIA_SIGNING_SECRET` | généré par `db:init` | HMAC des liens signés ; repli : dérivé du secret de session |
 | `NUXT_MEDIA_PREVIOUS_SIGNING_SECRET` | vide | ancien secret accepté pendant une rotation (sélection par `kid`) |
 | `NUXT_MEDIA_STORAGE_DRIVER` | `local` | `local` \| `s3` |
@@ -330,6 +369,8 @@ En production, `.env` n'est lu que par le script `start` (`node --env-file-if-ex
 - `optimization.keyedComposables: [{ name: 'useApiFetch', argumentLength: 3 }]`.
 - `runtimeConfig`: `siteUrl`, `api { rateLimit { publishable, secret, personal, delegated, uploads, authFailures } }`, `session { name: 'surge-media-session', password: '', maxAge: 43200, cookie { sameSite: 'lax', secure: true } }`,
   `bootstrapAdmin { email, password }`, `media { maxUploadSize, signingSecret, previousSigningSecret, publicUrl, processing { concurrency, queue }, storage { driver, root, prefix, s3 {…} } }`.
+  D3 : `serverRole`, `ffmpegPath`, `ffprobePath`, `video { processing, concurrency, threads, rendition, preset, crf, av1, maxDuration,
+  memoryLimit }` (lus par `resolveVideoProcessingSettings` ; sans rapport avec `media.processing`, la file des images).
 - `routeRules` : `'/**'` → `X-Content-Type-Options: nosniff`, `X-Frame-Options: DENY`, `Referrer-Policy: strict-origin-when-cross-origin` ;
   `'/admin/**'`, `'/login'`, `'/password/**'` → `Cache-Control: no-store`, `X-Robots-Tag: noindex, nofollow`.
 - `colorMode { classSuffix: '', storage: 'cookie', storageKey: 'surge-media-color-mode' }`.
@@ -523,15 +564,19 @@ URL signées, visibilité, normalisation des clés anti-traversée.
 
 - Types acceptés : `ACCEPTED_MEDIA_TYPES` (`shared/utils/media.ts`) — v1 : IMAGE = `image/jpeg→jpg`, `image/png→png`, `image/webp→webp`,
   `image/avif→avif`, `image/gif→gif`. **SVG exclu** (script). HEIC, TIFF non acceptés.
-- Détection du type réel : `server/lib/media/sniff.ts` (256 premiers octets, signatures JPEG, PNG, GIF87a/89a, RIFF…WEBP, boîte ISO `ftyp`
-  avec marque avif/avis). Liste d'autorisation stricte ; nom et Content-Type client ignorés.
+- Détection du type réel : `server/lib/media/sniff.ts` (`SNIFF_HEADER_BYTES` = **1024** premiers octets depuis D3 — 256 avant —, signatures
+  JPEG, PNG, GIF87a/89a, RIFF…WEBP, boîte ISO `ftyp` avec marque avif/avis ; vidéos : § 9.21 et § 9.23). Liste d'autorisation stricte ;
+  nom et Content-Type client ignorés. Reconnaître un format ne suffit pas à l'accepter (formats convertis : seulement si le traitement
+  des vidéos est actif).
 - Gestionnaires (`server/lib/media/handlers/`) : interface `MediaTypeHandler { kind, inspect(path, mime) → { width, height, duration,
   metadata }, preview?(Readable) → { data, mimeType, extension, width, height } }` ; registre `handlerFor(kind)`.
 - Image (`handlers/image.ts`) : `sharp.cache(false)` (verrous Windows) ; en-tête lu sans limite puis contrôle `largeur × hauteur de page
   × pages ≤ 100 Mpx` → `DIMENSIONS_TOO_LARGE` ; illisible → `UNREADABLE_FILE` ; orientation EXIF 5–8 = dimensions permutées ;
   metadata JSON : `format, orientation, space, hasAlpha, pages, animated, density, hasExif, hasIccProfile`.
   Aperçu : première image, `rotate()`, `resize` 480×480 `inside` sans agrandissement, WebP q72, **sans métadonnées**.
-- **Vidéo (D1, § 9.21)** : MP4, WebM, MOV ; gestionnaire sans `transform` (`hasDerivedFiles` faux : ni aperçu, ni dérivé), `queued: false`.
+- **Vidéo (D1, § 9.21)** : MP4, WebM, MOV ; gestionnaire sans `transform` (`hasDerivedFiles` faux sauf avec une affiche, D2), `queued: false`.
+  D3 (§ 9.23) : MKV, AVI, 3GP/3G2, MPEG-TS/M2TS, OGV, WMV acceptés **seulement si le traitement est actif** (`CONVERTED_VIDEO_TYPES`),
+  ébauche de métadonnées à l'envoi, analysés et convertis par la tâche.
 - Ajouter un genre (audio, document) : signature dans `sniff.ts` + types et limite dans `shared/utils/media.ts` + gestionnaire au registre
   (+ Range dans `MediaStorage` pour la vidéo).
 
@@ -543,11 +588,15 @@ URL signées, visibilité, normalisation des clés anti-traversée.
    écriture dans un dossier temporaire `surge-media-upload-*` avec SHA-256 et taille au fil de l'eau ; dépassement → 413 `FILE_TOO_LARGE`
    (`data.maxSize`) ; fichier vide ou absent → 400 `NO_FILE` ; `cleanup()` ne lève jamais (retries, simple avertissement) ;
    **inactivité** (2026-10-05) : aucune donnée pendant `UPLOAD_IDLE_TIMEOUT_MS` (60 s) → `unpipe`, flux du fichier détruit,
-   `Connection: close`, 408 `UPLOAD_TIMEOUT` (`data.timeout`) ; `file.catch(() => {})` évite un rejet non traité.
+   `Connection: close`, 408 `UPLOAD_TIMEOUT` (`data.timeout`) ; `file.catch(() => {})` évite un rejet non traité. Depuis D1, règles
+   `UploadRules` (`limits.ts`) : type décidé dès les `SNIFF_HEADER_BYTES` (1024 depuis D3) premiers octets reçus → 415 / 422 / limite du
+   genre aussitôt ; D3 : types de base = `acceptedMimeTypes(await videoProcessingActive())` (admin, remplacement, `withApiUpload`,
+   `analyze`), restreints par un jeton délégué (intersection, jamais élargis) ; aucun type restant → 415 d'emblée.
 3. `sanitizeFilename` : basename, NFC, sans caractères de contrôle, ≤ 191 (extension préservée), défaut `media`.
 4. Champs texte (`title`, `altText`, `visibility`) validés par `mediaMetadataSchema` (400 avec issues zod si invalide).
 5. `analyze` : `sniffMimeType` → genre → gestionnaire, sinon 415 `UNSUPPORTED_TYPE` (`data.accepted`) ; `inspect`.
 6. `storage.put` puis `prisma.media.create` (espace de la requête, visibilité PUBLIC par défaut) ; échec base → suppression du fichier.
+   D3 : vidéo et traitement actif (ou format converti) → tâche `MediaJob` créée dans la même écriture, `processingState` PENDING (§ 9.23).
 
 **Duplication** (`duplicateMedia(media, target, actor)`) : refus si corbeille (409 `IN_TRASH`) ; `storage.copy` vers une nouvelle
 clé `originals/…` ; nouvelle ligne (version 1, mêmes kind/visibility/originalName/mimeType/size/checksum/dimensions/title/altText/metadata,
@@ -560,16 +609,23 @@ clé `originals/…` ; nouvelle ligne (version 1, mêmes kind/visibility/origina
 - `PUT /file` : mêmes contrôles ; genre différent → 422 `KIND_MISMATCH` (en pratique un non-image échoue avant, en 415) ; nouvelle clé ;
   `updateMany where { id, version }` avec `version: { increment: 1 }` → 0 ligne = 409 `VERSION_CONFLICT` (nouvelle clé supprimée) ;
   puis suppression de l'ancien original, des `MediaVariant` de l'ancienne version (`transformation startsWith v<old>/`) et des fichiers
-  `variants/<id>/v<old>-*`. Titre, texte alternatif, visibilité conservés ; `originalName` = nouveau fichier.
+  `variants/<id>/v<old>-*`. Titre, texte alternatif, visibilité conservés ; `originalName` = nouveau fichier. D3 (vidéo) : même
+  transaction (`commitFile`, écriture conditionnelle d'abord) : tâches actives annulées, lignes `MediaRendition` supprimées (fichiers
+  après validation), nouvelle tâche si le traitement est actif, sinon `processingState` remis à null.
 - PATCH : `title`, `altText` (texte vide → null), `visibility`.
 - Corbeille : `deletedAt` ; restauration ; suppression définitive **uniquement depuis la corbeille** (409 `NOT_IN_TRASH`) : ligne supprimée
-  d'abord (variants en cascade), puis original + `variants/<id>/` (échec physique = fichier orphelin journalisé).
+  d'abord (variants en cascade), puis original + `variants/<id>/` (échec physique = fichier orphelin journalisé). D3 : corbeille =
+  tâches vidéo actives annulées (état gardé) ; restauration = nouvelle tâche si actif et état ≠ READY ; purge : tâches et rendus en
+  cascade, fichiers des rendus sous `variants/<id>/`.
 
 ### 9.6 Diffusion (`server/routes/m/[...path].ts`, `server/lib/media/delivery.ts`)
 
 - URL : `/m/<id>/v<version>/<nom>.<ext>` (original) · `/m/<id>/v<version>/<préréglage|paramètres>/<nom>.<format>` (dérivé, C1 :
   § 9.16 ; aperçu = `preview/<nom>.webp`). `<nom>` = slug ASCII de `title || originalName` (≤ 80), **purement indicatif**. Grammaire :
   3–4 segments, id `^[a-z0-9]{8,64}$`, version `v\d{1,9}` ; sinon 404. Méthodes GET/HEAD (autres → 405 + `Allow`). HEAD : 200 avec en-têtes seuls.
+- Vidéos : pistes `…/tracks/<piste>.vtt` (D2, § 9.22) ; rendus `…/renditions/h264.mp4|av1.webm` (D3, droit signé de l'original),
+  **503 `PROCESSING_PENDING`** (`Retry-After: 30`) sur l'original et les rendus d'une vidéo dont la piste de données n'est pas encore
+  retirée (sauf lien « admin »), original d'un format converti en `Content-Disposition: attachment` (§ 9.23).
 - Version différente de la courante → **302** vers l'URL courante, même transformation (`Cache-Control: no-cache`) ; **404** si le média est en corbeille.
 - Accès (`authorizeDelivery`, **synchrone, sans cookie ni session** depuis B1) :
 
@@ -1051,8 +1107,10 @@ Référence d'exploitation : `setup.md` § 8.4. Aucune migration. Écarts : en-t
 
 Architecture validée : `.claude/architecture-phase-d.md` (DD1–DD14, écarts de D1 en tête). Référence d'exploitation : `setup.md` § 7.7.
 
-- **Détection** (`sniff.ts`, `detectMimeType(header)` pure) : `ftyp` (AVIF d'abord ; HEIF, 3GP, audio M4A/M4B refusés ; `qt  ` → MOV ;
-  marques MP4 vidéo connues → MP4) ; EBML `DocType` = `webm` (Matroska refusé). `SNIFF_HEADER_BYTES` = 256.
+- **Détection** (`sniff.ts`, `detectMimeType(header)` pure) : `ftyp` (AVIF d'abord ; HEIF, audio M4A/M4B non reconnus ; `qt  ` → MOV ;
+  marques MP4 vidéo connues → MP4) ; EBML `DocType` = `webm`. **Depuis D3** (§ 9.23) : marque principale `3g*` → `video/3gpp`(`2`),
+  `DocType` `matroska` → `video/x-matroska`, AVI, ASF/WMV, Ogg Theora, MPEG-TS/M2TS (4 paquets de 188 ou 192 octets, examiné après GIF)
+  **reconnus**, mais acceptés seulement si le traitement des vidéos est actif ; `SNIFF_HEADER_BYTES` = 1024 (256 en D1).
 - **Lecteur d'en-têtes** (`server/lib/media/video/`, purs, testés) : `ByteSource` (lectures par positions ; ≤ 20 000 lectures, ≤ 1 Mio par
   lecture), `VideoProbeError` (`unreadable` | `no-video`). ISO BMFF (`isobmff.ts`) : `mvhd`, `tkhd` (identifiant, matrice → rotation,
   dimensions 16.16), `mdhd`, `hdlr` (QuickTime `mhlr` compris), `stsd` (avcC, hvcC, av1C, vpcC, esds — y compris dans `wave` —, versions
@@ -1064,12 +1122,13 @@ Architecture validée : `.claude/architecture-phase-d.md` (DD1–DD14, écarts d
   `Cluster` (≤ 16 Mio). `codecs.ts` : chaînes RFC 6381. `probe.ts` : dimensions affichées (quart de tour → permutées), bornes
   1–16 384, durée 3 décimales, débit, `playback`.
 - **Métadonnées** (`Media.metadata`, `VideoMetadata`) : `container, videoCodec, audioCodec, codecs, hasAudio, rotation, bitrate, faststart
-  (null en WebM), hasLocation, playback (broad | variable)`. `Media.duration` (s, null si inconnue). Aucune migration.
+  (null en WebM), hasLocation, playback (broad | variable)`. `Media.duration` (s, null si inconnue). Aucune migration. D2 : `prepared`,
+  `durationEstimated` ; D3 : `playback` `none` (format converti), `dataTracks`, `hdr`, `rewrites`, `videoCodec` null possible (§ 9.23).
 - **Envoi** : `receiveUpload(event, UploadRules)` (§ 9.4) ; `analyze` : gestionnaire `queued: false` → hors `runProcessing` ; `UNSUPPORTED_TYPE`
   d'un gestionnaire (sans piste vidéo) → 415 avec `accepted` et `detail` (`problemDetail` les combine). Remplacement : `expectedKind`
   (admin `[id]/file.put`, v1 `withApiUpload(…, media.kind)`) → 422 `KIND_MISMATCH` dès les premiers octets.
-- **Diffusion** : `/m/` inchangé (original, `Range`, 304, HEAD ; dérivés → 404) ; `adminMediaPaths` : vidéo **6 h** (tranche 1 h).
-- **API v1** : contrat inchangé (`kind`, `duration`, `previewUrl`/`urlTemplate` null), OpenAPI : section « Vidéos »/« Videos » d'`INFO_FR`/`EN`,
+- **Diffusion** : `/m/` inchangé (original, `Range`, 304, HEAD ; dérivés → 404 sans affiche) ; `adminMediaPaths` : vidéo **6 h** (tranche 1 h).
+- **API v1** : contrat inchangé en D1 (`kind`, `duration`, `previewUrl`/`urlTemplate` null ; D3 : `sources`, `processing`), OpenAPI : section « Vidéos »/« Videos » d'`INFO_FR`/`EN`,
   descriptions de `uploadMedia`, `replaceMediaFile`, champs `width`, `height`, `duration`, `url`, `previewUrl`.
 - **Interface** : `AdminMediaUploader` (prop `kinds`, aide par genre `media.upload.constraintsByKind.*`, `beforeunload` pendant un envoi,
   icône `Upload`), `useMediaUpload` (`kindsOf`, `maxSizeFor`, `CLIENT_TYPE_ALIASES` `video/x-m4v`, `image/jpg` ; `FILE_TOO_LARGE` avec
@@ -1088,7 +1147,7 @@ Format d'erreur (h3) : `{ statusCode, statusMessage, message, data? }` ; **codes
 
 | Méthode + chemin | Accès | Entrée | Sortie / statuts |
 | --- | --- | --- | --- |
-| GET `/api/health` | public | — | 200/503 `{ status, checks { database, storage, imageProcessing } }` (statuts seulement) |
+| GET `/api/health` | public | — | 200/503 `{ status, checks { database, storage, imageProcessing }, videoProcessing { mode, workers, queued } }` (statuts seulement ; `videoProcessing` D3, hors `checks`, sans effet sur le statut, valeurs null en `off`) ; seule route servie par un processus de travail |
 | POST `/api/auth/login` | public (CSRF) | `{ email, password }` | 200 `{ user }` + cookie · 400 · 401 · 429 |
 | POST `/api/auth/logout` | cookie | — | `{ loggedOut: true }` |
 | POST `/api/auth/confirm-password` | cookie (CSRF) | `{ password, trustDevice? }` | `{ verifiedUntil, trustedUntil }` (+ cookie de confiance) · 422 `PASSWORD_INCORRECT` · 429 |
@@ -1109,11 +1168,13 @@ Format d'erreur (h3) : `{ statusCode, statusMessage, message, data? }` ; **codes
 | GET `/api/admin/config/mail` | `users:invite` | — | `{ enabled }` |
 | POST `/api/admin/users/:id/password-link` | `users:invite` (gestionnaire : invitation non acceptée de ses invités) | — | `{ path, purpose, expiresAt }` · 409 si inactif (sans code) · 409 `INVITATION_ACCEPTED` · 404 |
 | DELETE `/api/admin/users/:id/sessions` | `users:manage` | — | `{ revoked }` |
-| GET `/api/admin/config/media` | session | — | `{ maxUploadSize (la plus grande), maxUploadSizes { IMAGE, VIDEO }, acceptedTypes, signedUrlDurations, videoPreparation }` |
+| GET `/api/admin/config/media` | session | — | `{ maxUploadSize (la plus grande), maxUploadSizes { IMAGE, VIDEO }, acceptedTypes (D3 : + formats convertis si actif), signedUrlDurations, videoPreparation, videoProcessing { mode, active, convertedTypes, rendition, maxDuration } }` |
 | GET `/api/admin/spaces` | session | `?scope=` (défaut `media:upload`) | `{ spaces: ({ type: 'library' } \| { type: 'project', id, name })[] }` |
 | GET `/api/admin/media` | `media:read` (espace) | `?project&folder&recursive=1&q&kind&visibility&status=active\|trash&sort=newest\|oldest\|name\|size&page` | `{ items: MediaSummary[], total, page, pageSize: 24, space, projectRole, scopes }` · 404 |
 | POST `/api/admin/media` | `media:upload` (espace) | `?project` + multipart `file` + `title?`, `altText?`, `visibility?` | 201 `{ media: MediaDetail }` · 400/403/404/413/415/422 |
-| GET `/api/admin/media/:id` | `media:read` | — | `{ media: MediaDetail, publicUrl (absolue \| null), transforms (image : { policy, presets, formats, maxDimension } \| null), space, projectRole, scopes }` (corbeille comprise) · 404 |
+| GET `/api/admin/media/:id` | `media:read` | — | `{ media: MediaDetail, publicUrl (absolue \| null), publicPosterUrl, publicTrackUrls (D2), publicSources (D3 : sources absolues permanentes d'une vidéo publique, sinon []), transforms (image ou vidéo avec affiche : { policy, presets, formats, maxDimension } \| null), space, projectRole, scopes }` (corbeille comprise) · 404 |
+| GET `/api/admin/media/:id/processing` | `media:read` (corbeille comprise) | — | `{ version, processingState, processing }` (D3, suivi toutes les 5 s, `no-store`) · 404 |
+| POST `/api/admin/media/:id/process` | `media:write` | — | `{ media }` (D3 : « Traiter » / « Relancer » : tâche active annulée, nouvelle tâche) · 422 `KIND_MISMATCH` · 409 `IN_TRASH` / `PROCESSING_DISABLED` / `VERSION_CONFLICT` |
 | GET `/api/admin/media/:id/transform` | `media:read` | `?preset=\|transform=&format=` | image (non enregistrée) + `X-Transform-Width\|Height\|Operation` · 400 `INVALID_TRANSFORM` (`param`) · 404 `PRESET_NOT_FOUND` · 409 `IN_TRASH` · 503 |
 | POST `/api/admin/media/:id/links` | `media:read` | `{ items: [{ preset? \| transform?, format }] (1–4), expiresIn? }` | `{ items: [{ url, query, expiresAt } \| { error: { code, param?, detail? } }] }` · 409 `IN_TRASH` |
 | PATCH `/api/admin/media/:id` | `media:write` | `{ title?, altText?, visibility?, folderId?, focalPoint? }` | `{ media }` · `focalPoint` modifié : version + 1, 409 `VERSION_CONFLICT` / `IN_TRASH`, 400 hors images |
@@ -1124,7 +1185,7 @@ Format d'erreur (h3) : `{ statusCode, statusMessage, message, data? }` ; **codes
 | PATCH / DELETE `/api/admin/media/:id/tracks/:trackId`, PUT `…/file` | `media:write` | `{ kind?, language?, label?, isDefault? }` / — / multipart `file` | `{ media }` · 404 `TRACK_NOT_FOUND` |
 | DELETE `/api/admin/media/:id[?permanent=true]` | `media:delete` | — | 204 · 409 `NOT_IN_TRASH` |
 | POST `/api/admin/media/:id/restore` | `media:delete` | — | `{ media }` |
-| POST `/api/admin/media/:id/signed-url` | `media:read` | `{ expiresIn }` (60–604800) | `{ url (absolue), expiresAt, posterUrl, tracks: [{ id, url }] }` (public : URL permanentes, `expiresAt: null`) · 409 `IN_TRASH` |
+| POST `/api/admin/media/:id/signed-url` | `media:read` | `{ expiresIn }` (60–604800) | `{ url (absolue), expiresAt, posterUrl, tracks: [{ id, url }], sources: VideoSource[] (D3, droit `original`, même échéance) }` (public : URL permanentes, `expiresAt: null`) · 409 `IN_TRASH` |
 | POST `/api/admin/media/:id/duplicate` | `media:read` + `media:upload` (cible) | `{ projectId: string \| null }` | 201 `{ media }` · 404 · 403 · 409 `IN_TRASH` |
 | POST `/api/admin/media/:id/move` | `media:delete` + `media:upload` (cible) | `{ projectId: string \| null }` | `{ media }` (même espace : inchangé) · 404 · 403 · 409 `IN_TRASH` |
 | GET `/api/admin/projects` | session | `?q&status=active\|archived&page` | `{ items: ProjectSummary[], total, page, pageSize: 20 }` |
@@ -1153,16 +1214,18 @@ Format d'erreur (h3) : `{ statusCode, statusMessage, message, data? }` ; **codes
 | PATCH `/api/admin/media?project=` | `media:write` | `{ ids (≤ 100), folderId \| null }` | `{ moved }` |
 | GET · PATCH `/api/admin/transforms?project=` | `project:read` · `project:settings` ; sans `project` : `settings:manage` | — · `{ policy }` | `{ level, canEdit, policy, presets, limits }` |
 | POST `/api/admin/presets?project=` · PATCH / DELETE `/api/admin/presets/:id` | `project:settings` ou `settings:manage` (selon le niveau) | `{ name, transformation, description? }` | 201 `{ preset }` · `{ preset }` · 204 ; 400 `INVALID_TRANSFORM` (`param`), 404 `PRESET_NOT_FOUND`, 409 `PRESET_NAME_TAKEN` / `PRESET_LIMIT_REACHED` |
+| GET `/api/admin/video-processing` | `settings:manage` | — | `{ mode, role, active, halted, settings { concurrency, threads, rendition, preset, crf, av1, maxDuration }, ffmpeg { ok, version, major, encoders, hdrFilters, av1, problems } \| null, workers: [{ id, host, seenAt, version, concurrency, active, halted }], jobs { queued, running, done, failed, cancelled }, backfill { count, totalDuration } }` (D3, `no-store` ; jamais les chemins des binaires ni la limite mémoire) |
+| POST `/api/admin/video-processing/backfill` | `settings:manage` | — | `{ count }` (D3 : tâches de priorité −10 pour les vidéos jamais traitées ; audit `media.processing_backfill`) · 409 `PROCESSING_DISABLED` |
 | GET `/api/admin/audit` | `audit:read` | `?category&project&page` | `{ items, total, page, pageSize: 50, filterProject }` |
-| GET\|HEAD `/m/...` | selon § 9.6 (sans cookie ; Bearer depuis B3) | `Range` | fichier en flux · 206/302/304/401/403/404/405/416 ; OPTIONS 204 |
+| GET\|HEAD `/m/...` | selon § 9.6 (sans cookie ; Bearer depuis B3) | `Range` | fichier en flux · 206/302/304/401/403/404/405/416 ; 503 `PROCESSING_PENDING` (D3, retenue) ; OPTIONS 204 |
 | GET `/api/v1/me` | tout identifiant valable | — | `Me` (credential, user, project, access) |
 | GET `/api/v1/projects` | `project:read` | `?limit&cursor` | `{ items: Project[], nextCursor }` |
 | GET `/api/v1/projects/:projectId` | `project:read` | — | `Project` (dont `transformPolicy`, C2) · 404 `PROJECT_NOT_FOUND` · 403 `PROJECT_ARCHIVED` |
 | GET `/api/v1/projects/:projectId/presets` | `media:read`, toute clé | — | `{ items: Preset[] }` (`name, transformation, description, level`) · ETag → 304 |
-| GET `/api/v1/projects/:projectId/media` | `media:read` | `?q&kind&visibility&ids&sort&limit&cursor&withTotal` | `{ items: Media[], nextCursor, total? }` · 304 · 400 `INVALID_REQUEST`/`INVALID_CURSOR` · 403 `LISTING_DISABLED` |
-| GET `/api/v1/projects/:projectId/media/:mediaId` | `media:read` | — | `Media` · 304 · 404 `MEDIA_NOT_FOUND` |
-| POST `/api/v1/projects/:projectId/media/:mediaId/signed-url` | `media:read`, pas une clé publique (délégué : ≤ 3600 s) | `{ target?: file\|preset\|transform\|derived\|track, preset?, transform?, format?, trackId?, expiresIn? }` | `{ url, query, expiresAt }` · 400 `INVALID_TRANSFORM` · 403 `CREDENTIAL_NOT_ALLOWED` / `TRANSFORM_NOT_ALLOWED` · 404 `PRESET_NOT_FOUND` |
-| POST `/api/v1/projects/:projectId/signed-urls` | idem | `{ items: [{ mediaId, target?, preset?, transform?, format? }] (1–100), expiresIn? }` | `{ items: [{ url, query, expiresAt } \| { error: { code, detail? } }] }` |
+| GET `/api/v1/projects/:projectId/media` | `media:read` | `?q&kind&visibility&ids&sort&limit&cursor&withTotal` | `{ items: Media[], nextCursor, total? }` · 304 (page avec une vidéo en attente ou en cours : relue, ETag avec ses tâches, D3) · 400 `INVALID_REQUEST`/`INVALID_CURSOR` · 403 `LISTING_DISABLED` |
+| GET `/api/v1/projects/:projectId/media/:mediaId` | `media:read` | — | `Media` (D3 : + `sources`, `processing` ; ETag avec l'avancement) · 304 · 404 `MEDIA_NOT_FOUND` |
+| POST `/api/v1/projects/:projectId/media/:mediaId/signed-url` | `media:read`, pas une clé publique (délégué : ≤ 3600 s) | `{ target?: file\|preset\|transform\|derived\|track, preset?, transform?, format?, trackId?, expiresIn? }` | `{ url, query, expiresAt, sources? }` (`sources` : cible `file` d'une vidéo, D3) · 400 `INVALID_TRANSFORM` · 403 `CREDENTIAL_NOT_ALLOWED` / `TRANSFORM_NOT_ALLOWED` · 404 `PRESET_NOT_FOUND` |
+| POST `/api/v1/projects/:projectId/signed-urls` | idem | `{ items: [{ mediaId, target?, preset?, transform?, format? }] (1–100), expiresIn? }` | `{ items: [{ url, query, expiresAt, sources? } \| { error: { code, detail? } }] }` |
 | POST `/api/v1/projects/:projectId/media` | `media:upload` (secret, PAT, délégué) | multipart `file` + `title?`, `altText?`, `visibility?` | 201 `Media` + `Location` · 400/403 `UPLOAD_LIMIT_REACHED`/413/415/422/429/503 |
 | PATCH `/api/v1/projects/:projectId/media/:mediaId` | `media:write` | `{ title?, altText?, visibility?, folderId?, focalPoint? }` (strict) | `Media` · 400 · 404 · 409 `VERSION_CONFLICT` |
 | PUT `/api/v1/projects/:projectId/media/:mediaId/file` | `media:write` | multipart `file` | `Media` (version + 1) · 409 `VERSION_CONFLICT` · 415/422 |
@@ -1181,15 +1244,17 @@ Contrats de données :
 - `SessionUser` : `{ id, email, name, role, locale }` ; session client : `{ user, loggedInAt }`.
 - `UserSummary` (`toUserSummary`) : `{ id, email, name, role, locale, isActive, status, lastLoginAt, createdAt, invitedBy { id, name, email } | null }` (jamais d'empreinte ; `invitedBy` : étape 16).
 - `MediaSummary` (`toMediaSummary`) : `{ id, projectId, folderId (B5), kind, visibility, originalName, title, altText, mimeType, extension, size, width,
-  height, duration, version, focalPoint (C3), url, previewUrl, uploadedBy { id, name, email } | null, createdAt, updatedAt, deletedAt }` ;
-  `MediaDetail` = + `checksum`, `metadata`, `duplicatedFromId` ; B4 : + `uploadedByToken { id, name, type, prefix } | null`, `uploadSubject`. `url`/`previewUrl` sont des chemins **relatifs**, signés `scope=admin`
-  si privé ou en corbeille ; les adresses à copier (`publicUrl`, `signed-url`) sont **absolues** (`mediaBaseUrl`).
+  height, duration, version, processingState (D3), focalPoint (C3), url, previewUrl, poster (D2) | null, uploadedBy { id, name, email } | null, createdAt, updatedAt, deletedAt }` ;
+  `MediaDetail` = + `checksum`, `metadata`, `duplicatedFromId` ; B4 : + `uploadedByToken { id, name, type, prefix } | null`, `uploadSubject` ; D2 : + `textTracks` ;
+  D3 : + `processing` (dernière tâche, `status` = statut de la tâche) | null, `renditions[]`, `sources[]` (§ 9.23). `url`/`previewUrl` sont des chemins **relatifs**, signés `scope=admin`
+  si privé, en corbeille ou retenu (D3) ; les adresses à copier (`publicUrl`, `signed-url`) sont **absolues** (`mediaBaseUrl`).
 - `describeAccess(access)` → `{ space: { type: 'library', project: null } | { type: 'project', project: { id, name, slug, archivedAt } },
   projectRole, scopes }` (joint aux réponses média/membres).
 - Codes métier : utilisateurs `EMAIL_TAKEN, SELF_ACTION, LAST_ADMIN, TOKEN_INVALID, ROLE_NOT_INVITABLE, PROJECTS_REQUIRED,
   PROJECT_UNAVAILABLE, ROLE_NOT_ASSIGNABLE, INVITATION_ACCEPTED, MAIL_NOT_CONFIGURED, MAIL_FAILED` (`userError` accepte 422) ; médias `NO_FILE, MULTIPART_REQUIRED,
   FILE_TOO_LARGE, UNSUPPORTED_TYPE, UNREADABLE_FILE, DIMENSIONS_TOO_LARGE, KIND_MISMATCH, VERSION_CONFLICT, NOT_IN_TRASH, IN_TRASH,
-  MEDIA_FORBIDDEN, SIGNATURE_INVALID, SIGNATURE_EXPIRED, UPLOAD_TIMEOUT` (408, 2026-10-05) ; corps des requêtes `BODY_TOO_LARGE` (413),
+  MEDIA_FORBIDDEN, SIGNATURE_INVALID, SIGNATURE_EXPIRED, UPLOAD_TIMEOUT` (408, 2026-10-05), `PROCESSING_DISABLED` (409, D3),
+  `PROCESSING_PENDING` (503 + `Retry-After`, D3) ; corps des requêtes `BODY_TOO_LARGE` (413),
   `REQUEST_TIMEOUT` (408) (middleware, aussi dans `API_ERRORS` avec `UPLOAD_TIMEOUT`, ajoutés d'office par `bodyErrors` aux opérations
   OpenAPI à corps) ; projets `SLUG_TAKEN, PROJECT_ARCHIVED, PROJECT_NOT_ARCHIVED, LAST_OWNER,
   ALREADY_MEMBER, ROLE_NOT_ASSIGNABLE, USER_NOT_FOUND, LIBRARY_NOT_ALLOWED` (`projectError`, traduits `projects.errors.*`) ; identifiants `TOKEN_NOT_ACTIVE,
@@ -1223,6 +1288,11 @@ Contrats de données :
    (origines du projet) → `POST …/media` Bearer délégué → `resolvePrincipal` (signature, émetteur en cache) → `browserGuard` (origine) →
    `requireApiProject` (portées ∩ émetteur) → `withApiUpload` (débit « uploads », réservation `maxFiles`, taille/types) → `createMedia`
    (provenance émetteur + sujet) → aperçu pré-généré → 201.
+12. **Traitement d'une vidéo** (D3, § 9.23) : envoi (traitement actif) → `createMedia` crée le média PENDING **et** sa `MediaJob` dans la
+   même écriture → `notifyJobQueued` (`embedded`) ou recherche toutes les 5 s (worker) → prise atomique (PROCESSING) → `probe` → plan →
+   `sanitize`/`repair` (nouvelle version, retenue 503 levée) → `transcode` (rendu H.264, sans nouvelle version s'il n'existait pas) →
+   `poster` (si aucune affiche) → READY ; la fiche suit `GET …/processing` toutes les 5 s et ne recharge le média qu'aux changements de
+   version ou d'état ; l'API v1 expose `processing` et `sources` (ETag qui suit l'avancement).
 
 ## 12. Frontend : conventions et patrons
 
@@ -1254,7 +1324,9 @@ Contrats de données :
 
 - `@nuxtjs/i18n`, stratégie `no_prefix`, cookie `surge-media-locale`, détection navigateur, repli `fr`. `useAppHead` synchronise
   `<html lang dir>`. Sélecteur `AppLocaleSwitcher` (bouton de divulgation, noms des langues dans leur langue, attribut `lang`).
-- Fichiers `i18n/locales/fr.json` (référence) et `en.json` — 1331 clés depuis D2 (D2 : `media.poster.*`, `media.tracks.*`, `media.video.prepare.*`, `media.video.notices.{device,estimated,captions}`) (C2 : `transforms.*`, `settings.*` ; étape 10 : `apiDocs.*`, `admin.nav.apiDocs`, `permissions.api.docs`). Espaces de noms : `app, a11y, nav, footer, theme, locale, form,
+- Fichiers `i18n/locales/fr.json` (référence) et `en.json` — **1528 clés** depuis D3 (D3 : `media.processing.*`, `media.video.notices.{compatPending,
+  converting,convertFailed,dataTracks,hdr,hdrUnconverted}`, `media.upload.converted`, `settings.videoProcessing.*`,
+  `audit.details.processingBackfill*`) ; 1331 clés après D2 (D2 : `media.poster.*`, `media.tracks.*`, `media.video.prepare.*`, `media.video.notices.{device,estimated,captions}`) (C2 : `transforms.*`, `settings.*` ; étape 10 : `apiDocs.*`, `admin.nav.apiDocs`, `permissions.api.docs`). Espaces de noms : `app, a11y, nav, footer, theme, locale, form,
   validation, auth, common, landing, login, admin, roles, permissions, errors, pagination, users, password, media, projectRoles, space,
   projects, reauth, scopes, credentials, apiKeys, origins, tokens, audit, apiDocs`. Clés de portées : `scopes.<a>.<b>.{label,short,description}`
   (`scope.replace(':', '.')`) ; statuts accordés : `credentials.status.{key,token}.*` ; actions d'audit : `audit.actions.<catégorie>.<verbe>`.
@@ -1291,6 +1363,13 @@ Contrats de données :
 - `db migrate` : vérifie la cohérence `.env` / schéma, `prisma generate` puis `migrate deploy`.
 - `db reset [--provider --url --yes]` : `migrate reset --force` (destructif, confirmation). **Prisma 7 refuse `migrate reset` lancé par un
   agent IA** : l'utilisateur doit le lancer lui-même.
+- **`worker [--port 3001]`** (D3, `cli/worker.ts`) : processus de travail du traitement des vidéos (`NUXT_VIDEO_PROCESSING=external`).
+  Exige la build (`.output/server/index.mjs`, sinon `error.buildMissing`) ; lance `node --env-file-if-exists=.env <entrée>` depuis le dossier
+  du core avec `NUXT_SERVER_ROLE=worker`, `PORT` et `NITRO_PORT` (port 1 à 65 535, défaut 3001 pour ne pas gêner le serveur web) ; variables
+  du shell prioritaires sur `.env`. POSIX : SIGINT/SIGTERM transmis (arrêt propre : ffmpeg tué, tâche rendue à la file), code de sortie
+  repris. **Windows : rien n'est transmis** (`child.kill` y tuerait le processus sans crochet `close`, tâche non rendue, essai compté) ; le
+  Ctrl+C de la console parvient de lui-même au processus de travail et la CLI attend sa fin — **à vérifier sur un poste Windows**. En dépôt :
+  `pnpm cli worker`. Pas de `VAR=x commande` dans les scripts (syntaxe absente sous Windows).
 - La CLI exécute la CLI Prisma installée (`prisma` est en dependencies, pas devDependencies).
 - Recherche du dossier core : `--cwd`, sinon dossier courant, sinon package installé (doit contenir `prisma/schema.prisma`).
 
@@ -1346,6 +1425,18 @@ Contrats de données :
 | OpenAPI : `defineRouteMeta` littéral par route + composants zod, français + `x-i18n` (étape 10) | doc à côté du code, route nouvelle visible d'office, une seule source de schémas ; langue de référence du projet ; contrôles en test |
 | Scalar embarqué (npm, version exacte) dans `/admin/api`, pas l'UI Nitro (CDN) ni `@scalar/nuxt` | aucun script tiers dans une page authentifiée, accès par permission, données réelles injectées, thème/langue de l'admin |
 | Clé injectée = **clé publique** ; secrets jamais injectés (étape 10) | valeurs des secrets non relisibles ; `SECRET_IN_BROWSER` conservé ; « jeton de console » écarté (colonne retirée le 2026-10-02) |
+| DD25 : ffmpeg/ffprobe **du système** (≥ 6, `libx264` + `aac` contrôlés au démarrage), processus enfant sans shell (D3) | ni `ffmpeg-static` (70–80 Mo, GPL, traçage Nitro + pnpm, Smart App Control) ni WASM ; mis à jour par le système ; un échec désactive le traitement, jamais le serveur |
+| DD26 : modes `off` (défaut) / `embedded` / `external`, processus de travail = **même build** + `NUXT_SERVER_ROLE=worker`, ffmpeg en **priorité la plus basse** | une seule image pour les deux rôles (le code des médias dépend des imports automatiques de Nitro) ; mesuré (§ 29.3) : en priorité normale, p99 du serveur web × 3 et débit − 30 % |
+| DD27 : file persistante en base (`MediaJob` : prise atomique portable, bail 2 min, 3 essais, priorités) + `Media.processingState` | ni Redis ni BullMQ ; SQLite/PostgreSQL/MySQL sans `SKIP LOCKED` ; reprise après un arrêt ; listes sans jointure |
+| DD28 : **sans perte → remplace l'original** (nouvelle version) ; **réencodage → rendu** à côté de l'original conservé | sinon les positions GPS resteraient publiques à l'URL de l'original ; un réencodage perd de la qualité |
+| DD29 : un rendu H.264/AAC ≤ 1080p **seulement s'il sert** (`auto`), `veryfast` CRF 23, HDR → SDR ; AV1 en option désactivée | aucun calcul ni stockage pour une vidéo déjà lue partout ; plusieurs définitions n'ont d'intérêt qu'avec HLS (D4) |
+| DD30 : affiche côté serveur seulement sans affiche, jamais d'écrasement | l'affiche choisie par l'utilisateur l'emporte toujours ; vignettes = dérivés de l'affiche (D2) |
+| DD31 : réparation WebM et retrait des pistes de données par copie sans réencodage + filtre de D2 ; **diffusion retenue (503) jusqu'au nettoyage** | une seule règle des métadonnées ; vie privée avant disponibilité (choix délégué par l'utilisateur) |
+| DD32 : MKV, AVI, 3GP, MPEG-TS/M2TS, OGV, WMV acceptés **seulement si le traitement est actif**, original en téléchargement | illisibles par `<video>` sans conversion ; refus immédiat impossible (ffprobe ne tourne jamais dans une requête) |
+| DD33 : table `MediaRendition`, `/m/<id>/v<n>/renditions/<nom>.<ext>`, droit signé `file` couvrant les rendus ; clés sans version (écart) | un rendu n'est pas une transformation d'image (ni quota, ni génération à la demande) ; une signature pour toutes les `<source>` |
+| DD34 : API v1 `processing` et `sources[]` **ajoutés** ; administration : relancer, traiter l'existant, état ; pas de webhooks | contrat compatible ; attente par `ETag` / `If-None-Match` |
+| DD35 : défenses du § 36 (format imposé, protocole `file`, délais, priorité, fils, mémoire, réanalyse des sorties), arguments construits dans `args.ts` seulement | ffmpeg décode des fichiers de tiers : plus grande surface d'attaque du projet (attaque connue : liste HLS déguisée) |
+| DD36 : interface du § 37, livrée en modules A à F (étape 22) | revues indépendantes par module avant la suite |
 
 ## 17. Règles métier et contraintes
 
@@ -1353,8 +1444,14 @@ Contrats de données :
 - Un ADMIN ne peut pas agir sur son propre rôle/statut/compte ; il reste toujours au moins un ADMIN actif (hors course concurrente extrême).
 - Comptes créés uniquement par un administrateur ; e-mail immuable ; mot de passe 12–128 caractères ; e-mails en minuscules.
 - Médias : un seul fichier par envoi ; images JPEG/PNG/WebP/AVIF/GIF, 25 Mio par défaut, 100 Mpx max ; vidéos MP4/WebM/MOV (D1), 512 Mio par
-  défaut, 2 Gio − 1 au plus, servies telles qu'envoyées (ni aperçu, ni transformation, ni point d'intérêt), avec une piste vidéo, 16 384 px
-  par côté au plus ; type et taille contrôlés dès les premiers octets ; un remplacement garde le genre ; nom d'origine = métadonnée seulement.
+  défaut, 2 Gio − 1 au plus, avec une piste vidéo, 16 384 px par côté au plus (aperçu, transformations et point d'intérêt seulement par leur
+  affiche, D2) ; type et taille contrôlés dès les premiers octets ; un remplacement garde le genre ; nom d'origine = métadonnée seulement.
+- Vidéos traitées (D3, mode ≠ `off` et traitement actif) : MKV, AVI, 3GP/3G2, MPEG-TS/M2TS, OGV, WMV acceptés en plus (limite des vidéos),
+  jamais lus tels quels (original en téléchargement, lecture par le rendu H.264) ; une réécriture sans perte (pistes de données, WebM) remplace
+  l'original (nouvelle version), un réencodage produit un rendu à côté (original gardé) ; au plus un rendu `h264` et un `av1` par vidéo ;
+  affiche du serveur seulement sans affiche ; vidéo à piste de données : original et rendus en 503 sauf lien « admin » jusqu'au nettoyage ;
+  durée > `NUXT_VIDEO_MAX_DURATION` : aucun réencodage (`TOO_LONG`) ; 3 essais ; « Relancer » = `media:write`, « Traiter les vidéos
+  existantes » = `settings:manage` ; l'API v1 n'expose jamais le détail technique d'un échec.
 - Un média en corbeille n'est plus diffusé (sauf aperçu admin) et ne peut pas recevoir de lien signé ; purge seulement depuis la corbeille.
 - Lien signé lié à (média, version, dérivé, échéance) ; 7 jours maximum.
 - Longueurs de texte ≤ 191 (MySQL) ; tout texte d'API validé par zod partagé.
@@ -1519,6 +1616,32 @@ Contrats de données :
 - **Panneau du navigateur intégré masqué** (`document.hidden`) : ni image dessinée, ni `requestVideoFrameCallback`, ni événements `close` des
   `<dialog>` (en attente jusqu'au prochain rendu ; une capture d'écran les déclenche) — ne pas les prendre pour des défauts de l'application.
 - **Bash** : un `<<'EOF'` contenant des chemins `[trackId]` a tronqué un fichier ; préférer l'outil d'écriture de fichiers pour le code.
+- **Tests sous Node 22** : `text-track.test.ts` échoue (le `TextDecoder('windows-1252')` de Node 22 décode en Latin-1) ; **Node 24 exigé**
+  (`engines`). Module natif **`better-sqlite3`** compilé pour la version de Node de l'installation (dans le nuage, serveurs de dev sous
+  Node 22 et tests sous Node 24) : en local, `pnpm install` sous Node 24 suffit ; ne pas mélanger les versions de Node sur un même
+  `node_modules`.
+- **Traitement des vidéos en développement** (D3) : chaque modification de fichier recharge Nitro → crochet `close` → tâche en cours rendue
+  à la file sans essai (la fiche annonce « interrompu sur le serveur, sans échec ») ; modifier `fr.json`/`en.json` fait de même, et Vite a
+  pu servir l'ancienne langue jusqu'au redémarrage. **Ctrl+C sur `nuxt dev`** arrête tout sans `close` : ffmpeg, laissé dans le groupe du
+  terminal en dev (`detached` faux), reçoit le même signal ; au démarrage suivant, `expireDeadHolderLeases` rend échu le bail des tâches d'un
+  processus disparu de la même machine, puis la reprise ordinaire les remet en file **avec un essai compté**. Production, arrêt brutal
+  (SIGKILL, panne) : ffmpeg peut finir seul en priorité la plus basse (Linux : borné par `prlimit --cpu`), tâche reprise à l'expiration du bail
+  (2 min, un essai compté).
+- **SQLite partagé par le serveur web et un processus de travail** : une transaction interactive qui lit puis écrit peut échouer aussitôt
+  (`SQLITE_BUSY` sans attente) si l'autre processus a écrit entre-temps → transactions de la file et du service **qui commencent par
+  écrire** (verrou pris d'emblée, attente de 10 s : `timeout` de l'adaptateur dans `server/utils/prisma.ts`) et **aucune exception
+  volontaire après une écriture** (better-sqlite3 n'a qu'une connexion par processus : une requête concurrente du même processus peut
+  s'exécuter dans la transaction ouverte et partir avec son annulation).
+- **Prisma `updateMany` met à jour `@updatedAt`** (vérifié avec Prisma 7 sur une copie de la base) : l'ETag v1 d'une vidéo en cours de
+  traitement repose sur `MediaJob.updatedAt` (avancement, battement de 30 s) ; une écriture en SQL brut devrait le poser elle-même.
+- **MPEG-TS et GIF** commencent tous deux par `0x47` : la signature TS (4 paquets complets) est examinée en dernier. `.mts`/`.m2ts` sont
+  détectés `video/mp2t` mais `convertedTypes` ne liste que `ts` : l'envoi ajoute ces extensions (alias). Un MOV est annoncé `video/mp4` dans
+  `sources` (`canPlayType('video/quicktime')` répond non dans Chrome et Firefox, qui ignoreraient la source).
+- **Chromium du nuage** (Playwright) : ne lit pas le H.264 (`canPlayType` vide) — la lecture réelle des rendus et la capture d'affiche
+  depuis un rendu restent à vérifier dans un vrai navigateur.
+- **ffmpeg sous Windows** : builds courants non signés, Smart App Control peut les bloquer comme argon2 ; arrêt de l'arbre par `taskkill /T
+  /F`, priorité `IDLE_PRIORITY_CLASS`, aucune limite mémoire ni processeur (`prlimit` : Linux seulement) — **à vérifier sur un poste
+  Windows** (tâche en attente pour l'utilisateur, § 21). Les tests ffmpeg y sont « ignorés » si ffmpeg manque.
 - Pas d'outil de copie entre stockages, pas de nettoyage des fichiers orphelins ni des liens de mot de passe utilisés.
 - Originaux diffusés avec leurs EXIF (GPS possible).
 - Tests automatisés limités aux modules purs (Vitest, depuis B1) : API et interface vérifiées par scripts ad hoc et audits
@@ -1561,6 +1684,13 @@ Contrats de données :
 - Toute écriture de médias passe par le service médias (qui appelle `mediaChanged`) — jamais de `prisma.media.update` direct depuis une
   route, sinon caches de diffusion et ETag de liste deviennent faux.
 - Valeur secrète à afficher une fois : `useFlash().set({ …, payload })` puis `AdminSecretPanel` sur la page suivante (disparaît au rechargement).
+- Traitement des vidéos (D3) : tout nouveau code dans `server/lib/video-processing/` (jamais `server/lib/media/processing.ts`, file des
+  images) ; **tous les arguments de ffmpeg et ffprobe construits dans `args.ts` seulement** (format d'entrée imposé, `-protocol_whitelist
+  file`, chemins `file:` absolus), lancés par `runTool` (`run.ts`) ; règles de décision pures et testées (`plan.ts`, `deliveryHeld`,
+  `videoSources`, `processing-view.ts`) ; toute écriture d'un résultat de tâche passe par le service médias, dans une transaction qui
+  renouvelle d'abord le bail puis vérifie le fichier (`storageKey = sourceKey`, hors corbeille) ; transactions qui commencent par écrire ;
+  l'ordre de `sources` ne se décide que dans `server/lib/media/sources.ts` ; messages de ffmpeg jamais renvoyés tels quels (codes +
+  résumé sans chemin) ; textes de l'interface en `fr.json`/`en.json`, annonces seulement aux changements d'état.
 - Après chaque étape : `pnpm typecheck`, `pnpm test`, `pnpm i18n:check`, `pnpm a11y:contrast` (si couleurs), `db:migration --check`, build de prod,
   audit axe fr/en × clair/sombre, **mise à jour de `setup.md`** (sections + Journal des étapes : ajouté, vérifié, limites, « après git pull »)
   et de ce fichier.
@@ -1569,15 +1699,29 @@ Contrats de données :
 
 ## 20. Vérification (outils et méthode)
 
-- Commandes : `pnpm typecheck`, `pnpm test` (Vitest), `pnpm i18n:check`, `pnpm a11y:contrast`,
+- Commandes : `pnpm typecheck`, `pnpm test` (Vitest, **Node 24** : sous Node 22, `text-track.test.ts` échoue), `pnpm i18n:check`, `pnpm a11y:contrast`,
   `pnpm --filter @surge-media/core db:migration --check`, `pnpm build` puis `pnpm start` (config `core-start` de `.claude/launch.json`).
+  Tests ffmpeg (`video-ffmpeg.test.ts`) : exécutés seulement si `ffmpeg` répond (`describe.skipIf`), sinon signalés « ignorés » ; AV1 si
+  `libsvtav1`, limites `prlimit` sous Linux seulement.
 - Tests d'API faits jusqu'ici avec des scripts Node temporaires (fetch + FormData + cookie), rejoués en dev **et** en prod ;
   S3 testé contre `s3rver` (faux S3 local, `pnpm dlx s3rver@3.7.1 --port 4568 --configure-bucket surge-media`).
 - Interface : navigateur intégré (pilotage par JS quand le panneau ne s'affiche pas), audits axe injectés depuis jsDelivr.
-- Automatisé dans le dépôt depuis B1 : tests unitaires Vitest des modules purs (214 tests depuis l'étape 19, dont `mail` et `dashboard` : `tests/{permissions,signing,projects,credentials,api,openapi,delegated,processing,folders,transforms,image-transform}.test.ts` ;
-  `image-transform` exécute le vrai pipeline sharp). Le reste (API, interface, axe) reste manuel
+- Automatisé dans le dépôt depuis B1 : tests unitaires Vitest des modules purs (214 tests à l'étape 19, dont `mail` et `dashboard` : `tests/{permissions,signing,projects,credentials,api,openapi,delegated,processing,folders,transforms,image-transform}.test.ts` ;
+  `image-transform` exécute le vrai pipeline sharp ; **526 tests en 27 fichiers depuis D3**, dont `video-ffmpeg` qui exécute le vrai ffmpeg,
+  et des tests de routes Nitro appelées directement avec leurs globales simulées : `video-admin`, `video-routes`). Le reste (API, interface, axe) reste manuel
   (piste : tests d'intégration API + Playwright + @axe-core/playwright).
 - Viewport du navigateur intégré : 1024 px (DPR 1,25) ; les mises en page à 5 colonnes doivent attendre `xl`.
+- D3 (traitement des vidéos, session du nuage, Linux, ffmpeg 6.1.1) : **2026-10-09** `pnpm typecheck` vert, `pnpm test` **526 tests en
+  27 fichiers** (Node 24), `pnpm i18n:check` 1528 clés / 1419 appels `t()`, `pnpm db:migration --check` vert (schéma inchangé depuis la
+  migration de D3) ; aucune dépendance npm ajoutée. Essais réels (bases et stockages copiés, mode `embedded` en dev, build de production +
+  `surge-media worker` en `external`) : HEVC, HEVC HLG → SDR, MKV → rendu + original en téléchargement, GoPro `gpmd` → 503 puis v2 sans
+  piste, WebM réparé, remplacement / corbeille / restauration / duplication pendant un encodage, ffprobe retiré puis revenu, Ctrl+C,
+  SIGTERM, plantage → reprise par le bail, 4 processus sur une même base SQLite (80 tâches, aucune double prise). Interface (module F) :
+  Chromium de Playwright sur un serveur de dev en `embedded` avec ffmpeg réel — axe **0 violation** fr/en × clair/sombre × 375/1280 px, pas
+  de défilement horizontal à 375 px, suivi toutes les 5,0 s (78 requêtes pour une tâche de 4 min) arrêté à la fin, pause onglet masqué,
+  saisie conservée, focus, annonces, nouvel essai après ffmpeg tué, corbeille et restauration, extrait, dialogue de « Réglages » au clavier.
+  Chaque module revu par des relecteurs indépendants avec vérification contradictoire : 13 défauts corrigés en phase B (modules A à C), 11 en
+  phase C (module D), 7 dans le module E, 27 + 7 dans le module F. Détail : architecture, section « D3 — état de l'implémentation ».
 - D1 (vidéos) : `tests/video.test.ts` (30, fichiers fabriqués boîte par boîte + 3 enregistrements réels) ; `video-test.mjs [base]` (60
   scénarios, compte/projet/clé/jeton délégué jetables, nettoyage par identifiants) ; `keepalive-repro.mjs`, `v1-reset-repro.mjs`,
   `v1-socket-repro.mjs`, `h3-early-refusal-bench.mjs <h3 dist>`, `early-response-bench.mjs`, `request-timeout-bench.mjs` (diagnostics) ;
@@ -1657,7 +1801,10 @@ garde-fous, signatures de transformation et permanentes) ; **C2** (politique des
 page « Réglages », onglet « Transformations », API v1 `presets`) ; **C3** (`urlTemplate`, `focalPoint` et nouvelle version, liens signés
 de transformation et de préréglage, lot `signed-urls`, OpenAPI, point d'intérêt dans la fiche média) ; **C4** (générateur d'adresses :
 aperçu à la volée, adresses signées si nécessaire, extraits HTML). **Phase C terminée.** **Étape 16** : rôle Gestionnaire (invitations,
-administration limitée à ses projets, bibliothèque gérée par l'ADMIN).
+administration limitée à ses projets, bibliothèque gérée par l'ADMIN). Étapes 17 à 19 (appareils de confiance, e-mails, tableau de bord).
+**Phase D (vidéos)** : **D1** (envoi, stockage, diffusion directe, § 9.21), **D2** (préparation, affiche, sous-titres, § 9.22), **D3 terminée
+le 2026-10-09** (traitement par ffmpeg hors du chemin des requêtes : file persistante, processus de travail, rendus, retrait des pistes GPS,
+réparation des WebM, affiche du serveur, formats convertis, `sources[]` / `processing`, interface ; § 9.23).
 
 **Section vide** : aucune (la section « à venir » des jetons a été remplacée en B2).
 
@@ -1704,6 +1851,184 @@ d'exploitation : `setup.md` § 7.7.
 - **Écarts à la proposition** : métadonnées de l'appareil retirées (ajout de l'utilisateur) par liste de ce qui est conservé ; bourrage gardé
   quand rien d'autre ne change ; correctif `deletePrefix` du stockage local (les dérivés des anciennes versions n'étaient jamais supprimés).
 
+### 9.23 Vidéos : traitement par ffmpeg (phase D3, étape 22)
+
+Architecture validée le 2026-10-06 : `.claude/architecture-phase-d.md` § 28 à § 42 (DD25–DD36 ; choix délégués par l'utilisateur : DD28 tel
+que proposé, DD31 avec retenue de la diffusion, DD32 liste complète) ; **état final, écarts, vérifications et limites** : section « D3 — état
+de l'implémentation » du même document ; contrats entre modules : `.claude/d3-implementation-notes.md`. Référence d'exploitation : `setup.md`
+étape 22 et § 7.7. Migration `d3_video_processing`. **Aucune dépendance npm** : ffmpeg ≥ 6 et ffprobe du **système**, facultatifs (mode `off`
+par défaut = comportement de D2). Faite le 2026-10-09.
+
+- **Modes et rôles** (`video-processing/settings.ts` : `resolveVideoProcessingSettings` pur, valeur invalide → défaut + avertissement ;
+  `useVideoProcessingSettings` lu une fois, changement = redémarrage) : `NUXT_VIDEO_PROCESSING` = `off` (aucune tâche, `processingState`
+  reste null, formats convertis refusés) | `embedded` (le serveur web exécute les tâches) | `external` (des processus de travail les
+  exécutent, le serveur web ne fait que les créer). **Processus de travail** = même build lancé avec `NUXT_SERVER_ROLE=worker` (ou
+  `surge-media worker [--port 3001]`, § 15) : ne sert que `/api/health` (`middleware/0.server-role.ts` : 404 texte brut ; fichiers statiques
+  servis avant par Nitro), plugins `bootstrap-admin`, `site-url`, `search-backfill`, `variant-keys`, `delegated-usage` inactifs ; sur une
+  autre machine : PostgreSQL/MySQL et stockage partagés (SQLite : même machine seulement).
+- **Démarrage** (`plugins/0.video-processing.ts`, nommé « 0. » pour que son crochet `close` passe avant la déconnexion de Prisma) : `off`
+  → rien (avertissement si rôle worker) ; web en `external` → rien ; sinon superviseur (`superviseJobRunner`, `runner.ts`) : détection
+  (`ffmpeg.ts`, `detectFfmpeg` ne lève jamais : ≥ 6, `libx264`, `aac`, ffprobe exigés ; `zscale` + `tonemap` → HDR ; `libsvtav1` + `libopus`
+  → AV1 ; échec → traitement désactivé avec message, jamais l'arrêt du serveur), préparation (worker : stockage partagé vérifié sur les 3
+  derniers originaux ; en dev, `expireDeadHolderLeases` ; dossiers temporaires abandonnés supprimés ; rattrapage), boucle. Base indisponible
+  → nouvel essai après 5 s, délai doublé jusqu'à 60 s ; ffmpeg devenu inutilisable en route (`RunnerHalt`) → boucle arrêtée, détection refaite chaque minute.
+- **Actif** (`status.ts`, `videoProcessingActive()`, cache 30 s, 5 s après une erreur de lecture) : `embedded` = ffmpeg utilisable et boucle
+  non arrêtée ; `external` = une présence de worker sans `halted` vue depuis moins de 5 min (`WORKER_SEEN_WINDOW_MS`). Actif → tâches créées
+  à l'envoi, formats convertis acceptés, « Relancer » et « Traiter les vidéos existantes » permis (sinon 409 `PROCESSING_DISABLED`).
+  `setVideoProcessingStopped` : **`halted`** (arrêtée en route, redétection chaque minute ; seul cas où l'API dit `halted: true`) ≠
+  **`disabled`** (inutilisable dès le démarrage, ou stockage non partagé : corriger, puis redémarrer).
+- **File** (`jobs.ts`, magasin injecté `JobStore` testé en mémoire ; constantes de `shared/utils/video-processing.ts`) : une `MediaJob` par
+  **fichier** (`sourceKey`), créée **dans la même écriture** que lui (création imbriquée de `createMedia`, `commitFile` pour remplacement et
+  « Optimiser », `restoreMedia`, `requestProcessing`, `backfillProcessing`, `copyProcessing`). **Prise** atomique portable sans `SKIP LOCKED`
+  (lots de 5 tâches QUEUED prêtes, priorité desc puis ancienneté, `updateMany({ id, status: 'QUEUED' })`, compte 0 = prise ailleurs) + média
+  PROCESSING dans la même transaction (fichier changé → tâche annulée sans calcul). **Bail** 2 min, **battement** 30 s (`renewLease`
+  conditionné à `id`, `lockedBy`, `RUNNING` ; compte 0 = annulée ou reprise → signal d'arrêt, ffmpeg tué, rien écrit) ; avancement écrit au
+  plus toutes les 5 s (tâche seule, sans `mediaChanged`). **Essais** : erreur passagère (délai, ffmpeg tué par un signal, disque plein,
+  E/S, base ou stockage) → nouvel essai après 30 s puis 5 min (`retryDelay`), 3 essais, puis FAILED ; erreur déterministe (`NO_VIDEO_TRACK`,
+  `UNREADABLE`, `TOO_LONG`, `SOURCE_MISSING`, sortie refusée par la vérification) → FAILED aussitôt ; `FFMPEG_UNAVAILABLE` → tâche rendue sans
+  essai (`releaseJob`), boucle arrêtée. Arrêt propre (`close` : SIGTERM, rechargement de dev) → tâche rendue sans essai, ffmpeg tué,
+  dossier supprimé (`stop` résout toujours). Entretien toutes les 30 s : baux échus (`reapExpiredLeases` : +1 essai ou FAILED), dossiers
+  abandonnés (15 min), **rattrapage** toutes les 5 min (`catchUpJobs` : média PENDING/PROCESSING sans tâche active → nouvelle tâche ; deux
+  rattrapages simultanés → la plus ancienne gardée). **Priorités** : 0 envoi, **10** vidéo à piste de données (`HELD_PRIORITY`,
+  `jobPriority`), −10 vidéos existantes (`BACKFILL_PRIORITY`). Runner : `NUXT_VIDEO_CONCURRENCY` tâches, recherche toutes les 5 s file
+  vide, réveil immédiat en `embedded` (`notifyJobQueued` après l'écriture). **Présence** d'un worker (`Setting` `videoWorker:<id>` : hôte,
+  pid, version, encodeurs, concurrence, `halted`) toutes les 60 s, effacée à l'arrêt propre, purgée après 1 jour ; identifiant
+  `<hôte>:<pid>:<aléa>` ≤ 179 car. (`worker-id.ts` ; l'aléa distingue les rechargements de dev et les conteneurs de pid 1). Transactions
+  courtes **qui commencent par écrire** et sans exception volontaire après une écriture (SQLite partagé : délai d'attente 10 s,
+  `JOB_TRANSACTION` : attente 10 s, délai 20 s).
+- **États** (`Media.processingState`) : null (image, traitement inactif à l'envoi, fichier remplacé pendant l'inactivité) → PENDING (créée
+  ou remise en file) → PROCESSING (prise) → READY | FAILED ; écrits dans la transaction de la tâche, seulement si `storageKey = sourceKey` et
+  hors corbeille, puis `mediaChanged`. Corbeille : tâches actives CANCELLED, état gardé ; restauration : nouvelle tâche si actif et état ≠
+  READY (inactif : PROCESSING → PENDING, repris par le rattrapage) ; duplication : rendus copiés (`storage.copy`), état repris (READY complet
+  sans calcul, sinon tâche propre si actif, sans refaire les rendus copiés) ; un format converti reçoit toujours sa tâche (`processesFile`).
+- **Pipeline** (`pipeline.ts`) : validité (média présent, hors corbeille, fichier = `sourceKey`) ; source lue en place (stockage local,
+  `localPath`) ou copiée dans le dossier de la tâche (`surge-media-job-<installation>-<tâche>-<aléa>`, installation = empreinte du dossier de
+  lancement et de `DATABASE_URL`) ; `probe` (ffprobe JSON) → `applyProbeResult` (format converti : dimensions, durée, codecs, son, rotation,
+  débit, HDR, **sans nouvelle version** ; MP4/MOV/WebM : courbe HDR seulement) → `planVideoJob` → étapes `sanitize`, `repair`, `transcode`,
+  `av1`, `poster` dans cet ordre, chaque sortie **vérifiée par le lecteur de D1** (`probeVideoFile` : codec, dimensions du plan, son, durée ±
+  0,5 s ou 2 % — 2 s ou 10 % si estimée —, taille ≤ 2 Gio − 1 ; sinon `CONVERSION_FAILED`) → READY (avertissements dans `result`) ou FAILED
+  (`errorCode`, `errorDetail` ≤ 191 car. sans chemin). Délais : analyse 60 s, affiche 120 s, copie 10 min, encodage 10 × durée + 120 s
+  (24 h au plus ; durée inconnue → `maxDuration`).
+- **Plan** (`plan.ts`, pur) : sans flux vidéo → `NO_VIDEO_TRACK` ; dimensions hors 1–16 384 → `UNREADABLE` ; `sanitize` = MP4/MOV avec
+  pistes de données (ffprobe ou `metadata.dataTracks`) ; `repair` = WebM sans durée aux codecs copiables en WebM (VP8/VP9/AV1 + Opus/Vorbis,
+  `webmCopyable`) ; **rendu utile** = format converti **toujours** (même `never`), sinon `always` oui, `never` non, `auto` si lecture ≠
+  `broad`, petit côté > 1080, débit > 10 Mbit/s, HDR ou images entrelacées ; `transcode` si utile et H.264 pas déjà fait par cette tâche
+  (`existing` = `result.renditions` ; une relance refait tout) ; `av1` si utile + `NUXT_VIDEO_AV1` + encodeurs ; `poster` si aucune affiche ;
+  durée > `maxDuration` → réencodages retirés, autres étapes faites puis `TOO_LONG` sans nouvel essai ; `toneMap` si HDR + filtres
+  (avertissement `hdr_converted` / `hdr_unconverted` seulement avec un réencodage) ; cible `scaledDimensions` (petit côté ≤ 1080, paire,
+  jamais agrandie).
+- **Rendus** (`MediaRendition`, `RENDITION_NAMES` = `av1`, `h264`, ordre de `sources`) : clé `renditionKey` **indépendante de la version** ;
+  URL `/m/<id>/v<version courante>/renditions/h264.mp4|av1.webm` (`renditionPath`, segment `renditions` réservé, autre nom → 404) ; règles
+  de l'original (droit signé `file` — jamais `derived` ni permanent, `admin` oui —, `Range`, ETag = 32 hex de l'empreinte du rendu, cache
+  immuable public, Bearer, corbeille → 404) ; ancienne version → 302 vers le rendu courant, sinon l'original ; rendu inconnu du cache →
+  relecture en base (≤ 1 par seconde et par média) puis 404 ; téléchargé sous le nom du média + extension du rendu. Rendu **créé** : même
+  version ; rendu **remplacé** (relance) : version + 1, dérivés de l'ancienne version et ancien fichier supprimés. Supprimés quand le fichier
+  change (lignes dans la transaction de `commitFile`, fichiers après) et à la purge. H.264 : MP4 « faststart », High 8 bits 4:2:0, CRF et
+  préréglage réglables, petit côté ≤ 1080, `-fpsmax 60`, image clé toutes les 2 s, désentrelacement `bwdif` image par image, rotation
+  appliquée, HDR → SDR BT.709 (`zscale` + `tonemap` hable), AAC 128 kbit/s stéréo 48 kHz ou sans son, aucune métadonnée d'origine. AV1 :
+  WebM SVT-AV1 préréglage 10, CRF 35, Opus 96 kbit/s.
+- **Réécritures sans perte** (DD28) : `sanitize` (copie de la vidéo principale et des sons seulement ; pistes `gpmd`, `camm`, `mebx`,
+  `djmd`, `dbgi`, `mett`, `rtmd` ou gestionnaires `meta`/`camm`/`data`, détectées dès l'envoi par le lecteur de D1) et `repair` (copie en
+  WebM : durée et `Cues` écrites) → `commitRewrittenFile` = chemin d'« Optimiser » (réanalyse D1, préparation de D2, **nouvelle version**,
+  anciennes URL → 302, ancien original supprimé), `hdr` et `rewrites` (`dataTracks`, `webmIndex`) fusionnés dans `metadata` ; la tâche
+  **continue** sur le nouveau fichier (`sourceKey` mis à jour dans la transaction, option `carry` de `commitFile`) ; version changée sans
+  nouveau fichier (affiche, point d'intérêt) → relue, 3 essais.
+- **Affiche du serveur** (DD30) : seulement si `posterKey` null ; instants `posterTimes` (10 % de la durée, 5 s au plus, puis + 1 s, + 2 s,
+  ≤ 90 %), image de luminance moyenne < 16 (sharp `stats`) écartée ; extraite du rendu H.264 s'il existe (SDR), sinon de la source (tone
+  mapping si HDR) ; `normalizePoster` dans la file des images (5 essais si `SERVER_BUSY`) ; écriture conditionnelle (`posterKey` null, même
+  fichier, hors corbeille) **sans nouvelle version** ; affiche choisie entre-temps par l'utilisateur → la nôtre supprimée ; échec =
+  avertissement `poster_failed`, jamais un échec de tâche.
+- **Formats convertis** (DD32, `CONVERTED_VIDEO_TYPES` : `video/x-matroska` mkv, `video/x-msvideo` avi, `video/3gpp` 3gp, `video/3gpp2` 3g2,
+  `video/mp2t` ts — `.mts`/`.m2ts` compris —, `video/ogg` ogv, `video/x-ms-wmv` wmv) : limite des vidéos ; à l'envoi, pas d'analyse D1
+  (`width`/`height`/`duration` null, métadonnées d'ébauche `playback: 'none'`, codecs null) ; format d'entrée **imposé** à ffmpeg
+  (`INPUT_FORMATS` : mp4/mov/3gp → `mov`, webm/mkv → `matroska`, `avi`, ts → `mpegts`, ogv → `ogg`, wmv → `asf`) ; original servi en
+  `Content-Disposition: attachment` (`originalDisposition`) ; `sources` vide tant que le rendu H.264 n'existe pas. FLV, MPEG-PS, RealMedia :
+  jamais.
+- **Retenue 503** (DD31, `deliveryHeld` pur + `holdApplies`) : vidéo à `metadata.dataTracks` non vide, état PENDING ou PROCESSING, mode ≠
+  `off` → original et rendus répondent **503 `PROCESSING_PENDING`** (`Retry-After: 30`, `no-store`, CORS `*`, `Retry-After` exposé), après le
+  contrôle d'accès et avant le 304, pour **tout accès sauf le lien « admin »** (adresse publique, lien signé, Bearer) ; affiche, dérivés et
+  pistes jamais retenus ; levée par la réécriture, l'échec définitif ou le mode `off`. `adminMediaPaths` signe « admin » l'original et les
+  rendus d'une vidéo publique retenue. Mode `off` : avertissement seulement.
+- **Contrats v1** (ajouts seulement) : `Media.sources: MediaSource[]` (`{ url, type, width, height, bitrate, size, rendition: 'av1' | 'h264' |
+  null }`, `videoSources` de `media/sources.ts`, **seul juge de l'ordre** : rendus AV1 puis H.264 ; sans H.264, l'original s'il est lisible —
+  en dernier recours après un AV1 seul — ; `[]` pour une image ou un format converti sans rendu ; MOV annoncé `video/mp4` ; même signature
+  `file` que `url`) ; `Media.processing: { status: pending | processing | ready | failed, progress (0–1, seulement tâche RUNNING), error (code
+  connu, seulement FAILED), updatedAt } | null`, jamais `errorDetail` ; `signed-url` / `signed-urls` cible `file` d'une vidéo → `sources`
+  signées à la même échéance ; `upload.types` des jetons délégués accepte les types convertis. **ETag** du détail
+  `W/"id-version-updatedAt[-état.tâche.updatedAtMs][-échéance]"` (suit l'avancement, et chaque battement de 30 s) ; **liste** : 304 sans
+  requête par la révision, mais une page qui contient une vidéo PENDING/PROCESSING reçoit un ETag qui inclut ses tâches
+  (`activeProcessingParts`), jamais égal à celui de la révision seule (relue à chaque revalidation). OpenAPI : composants `MediaSource`,
+  `MediaProcessing`, section « Vidéos » réécrite fr/en, `PROCESSING_PENDING` dans les erreurs de `/m/` ; `PROCESSING_DISABLED` hors
+  `API_ERRORS` (aucune route v1 ne le renvoie).
+- **Contrats admin** : `MediaSummary.processingState` (majuscules) ; `MediaDetail.processing` (`mediaProcessingDetail` : null si
+  `processingState` null ; sinon dernière tâche `{ status, step, progress, attempts, errorCode, errorDetail, warnings, createdAt, startedAt,
+  finishedAt, runAfter, updatedAt }`, **`status` = statut de la tâche** QUEUED…CANCELLED — l'état du média est `processingState`),
+  `renditions[]` (`name, container, mimeType, codecs, width, height, duration, bitrate, size, url`), `sources[]` (liens « admin » si privé, en
+  corbeille ou retenu). **Dernière tâche** (`LATEST_JOB`, `PROCESSING_INCLUDE` de `sources.ts`) : `finishedAt` null d'abord, puis `finishedAt`
+  desc, `createdAt` desc, `id` desc. Listes : `MEDIA_LIST_INCLUDE` léger (ni pistes, ni rendus, ni tâches).
+- **Routes** (§ 10) : `POST /api/admin/media/:id/process` (« Traiter » / « Relancer », `media:write`, non journalisé) ; `GET
+  /api/admin/media/:id/processing` (suivi léger, `media:read`, `no-store`) ; `GET /api/admin/video-processing` et `POST …/backfill`
+  (`settings:manage`, audit `media.processing_backfill` `{ count[, partial] }` dès qu'une tâche est créée, même si une erreur interrompt la
+  boucle) ; `GET [id]` → `publicSources` ; `POST [id]/signed-url` → `sources` ; `config/media` → `acceptedTypes` dynamique + `videoProcessing` ;
+  `/api/health` → `videoProcessing { mode, workers, queued }` hors `checks` (null en `off` ou base en échec ; `workers` = présences actives +
+  1 pour un serveur `embedded` dont la boucle tourne ; jamais d'effet sur le statut, ni hôte ni version).
+- **Interface** : `AdminProcessingStateBadge` (`media.processing.states.*`, icône fixe : sablier, roue, coche, triangle ; échec en
+  « avertissement », la vidéo restant servie) sur `AdminMediaCard` (PENDING/PROCESSING hors corbeille, FAILED partout, rien pour READY) et
+  dans la fiche. `AdminVideoProcessingPanel` (section « Traitement » si état connu, rendus, ou traitement actif + `media:write` hors
+  corbeille) : étape, `<progress max="1">` nommé par l'étape + pourcentage écrit (jamais indéterminé), « Essai n sur 3 » (FAILED : seulement
+  « 3 sur 3 », `displayedAttempt`), dates (« Interrompu le » pour une tâche annulée par la corbeille), « Prochain essai au plus tôt », erreur
+  traduite + détail technique découpé en parties `lang` fr/en (`failureDetailParts` ; masqué pour `NO_VIDEO_TRACK` et `SOURCE_MISSING`),
+  remarques (HDR montré au-dessus du lecteur, `poster_failed` masqué avec une affiche), « Versions compatibles » (format, définition,
+  débit, taille, téléchargement), « Traiter la vidéo » / « Relancer le traitement » (`aria-disabled` + « Demande en cours… », focus sur le
+  message de résultat), annonces `role="status"` aux seules transitions (`processingTransition` : début, fin, échec, nouvel essai, remise en
+  file sans échec ; rien pour une nouvelle tâche ni autour de la corbeille). **Suivi** (`useProcessingPoll`) : `GET …/processing` toutes les
+  5 s, navigateur seulement, tant que PENDING/PROCESSING hors corbeille (`processingLive`), une requête à la fois, pause onglet masqué, arrêt
+  sur 403/404 ; champs de tâche fusionnés sans rechargement ; rechargement complet (`$api`, page gardée en cas d'échec) seulement si la
+  version ou l'état changent, si la tâche a été annulée ailleurs, ou une fois quand la même tâche dépasse `transcode` sans H.264 affiché
+  (`processingNeedsReload`) ; formulaire suivi sur l'id et les valeurs du serveur (saisie conservée). **Lecteur** : `<source>` dans l'ordre
+  de `sources`, recréé seulement si leurs adresses changent, changement reporté pendant la lecture ou le focus puis repris au même instant ;
+  sans source, cadre de même taille + « Télécharger l'original » ; lien temporaire abandonné seulement si la version ou les rendus changent
+  (message poli) ; focus replacé si l'élément focalisé disparaît. **Avertissements** : `compatPending` (au lieu de `variable` : traitement
+  actif, `rendition` ≠ `never`, durée ≤ max), `variable` masqué avec un H.264, `dataTracks` (`held` / `heldPrivate` d'après `deliveryHeld`,
+  `failed`, exposé), `hdr` / `hdrUnconverted` (H.264 présent et dernière tâche DONE), `converting` / `convertFailed` ; « Optimiser » masqué
+  pendant un traitement ; extrait `videoSnippet({ sources })` (`publicSources` ou `link.sources`), remplacé par une explication si la liste
+  est vide. **Réglages** (`AdminVideoProcessingSettings`, section « Traitement des vidéos ») : lecture seule (état Actif / Désactivé / Arrêté
+  / Inactif, mode, ffmpeg, encodage, processus de travail, tâches par statut), bouton « Actualiser », aucun rafraîchissement automatique ;
+  « Traiter les vidéos existantes » : nombre, durée totale, estimation « jusqu'à environ » = n × 1 s + durée × coût ÷ (fils × tâches en
+  parallèle), coût = 2 × facteur du préréglage (veryfast 1, medium 1,9) + 3 si AV1, 0 en `never` ; dialogue `UiDialog`, focus sur le titre de
+  la section après succès, bouton désactivé avec sa raison visible. **Envoi** : ligne `media.upload.converted` et extensions
+  `.mkv,.avi,.3gp,.3g2,.ts,.mts,.m2ts,.ogv,.wmv` dans `accept` seulement si actif ; alias de types Windows (`video/vnd.dlna.mpeg-tts`,
+  `video/avi`, `video/msvideo`, `video/x-ms-asf`). **Journal** : « n vidéos ajoutées à la file » (+ « Interrompu par une erreur… »).
+  i18n : 1528 clés.
+- **Sécurité** (DD35) : arguments construits **uniquement** dans `args.ts` (pur, testé) — format d'entrée imposé (`-f`),
+  `-protocol_whitelist file` avant `-i`, chemins absolus `file:`, `-enable_drefs 0` (MOV/MP4), `-max_pixels` 16 384², `-fs` 2 Gio − 1,
+  `-max_muxing_queue_size 1024`, fils ≤ 16, `-nostdin -hide_banner -loglevel error` ; `run.ts` — `spawn` sans shell, priorité 19
+  (`os.setPriority`, `IDLE_PRIORITY_CLASS` sous Windows), groupe de processus POSIX tué d'un coup (`detached`, sauf en dev), `taskkill /pid
+  <pid> /T /F` sous Windows, sous Linux `prlimit --as=<mémoire> --cpu=<délai × cœurs>` si l'outil existe, environnement réduit (`PATH`,
+  `TEMP`… ; jamais `NUXT_*`, `DATABASE_URL`, clés S3, mandataires ; `MALLOC_ARENA_MAX=2`, `SVT_LOG=1`), durée de sortie bornée
+  (`maxOutputSeconds` + 10 s), 64 Kio de fin des erreurs, 8 Mio de sortie standard ; messages de ffmpeg jamais renvoyés tels quels
+  (`toolFailure` retire les chemins). Testé : liste HLS déguisée en AVI visant `file:///etc/passwd` et une URL locale → échec propre, aucune
+  lecture ni requête.
+- **Fichiers** (`packages/core`) : `server/lib/video-processing/*` (11 modules), `server/lib/media/{sources,renditions}.ts` (nouveaux),
+  `service.ts` (file, écritures du worker, contrats), `sniff.ts`, `limits.ts`, `upload.ts`, `delivery.ts`, `delivery-path.ts`, `cache.ts`,
+  `urls.ts`, `keys.ts`, `video/probe.ts`, `handlers/video.ts`, `server/lib/storage/*` (`localPath`), `server/lib/api/{serializers,signed-urls,
+  openapi,problem}.ts`, `server/utils/prisma.ts` (délai SQLite 10 s), `server/plugins/0.video-processing.ts`, `server/middleware/0.server-role.ts`,
+  routes (§ 10), `server/routes/m/[...path].ts`, `cli/{worker,index}.ts` + `cli/i18n/{fr,en}.ts`, `shared/utils/{video-processing,video,media,
+  snippets,audit}.ts`, `shared/schemas/api.ts`, `app/components/admin/{VideoProcessingPanel,VideoProcessingSettings,ProcessingStateBadge}.vue`
+  (nouveaux), `MediaCard.vue`, `MediaUploader.vue`, `app/pages/admin/media/[id].vue`, `app/pages/admin/settings.vue`,
+  `app/composables/{useProcessingPoll,useMediaUpload,useAuditFormat}.ts`, `app/utils/processing-view.ts`, `nuxt.config.ts`, `.env.example`.
+- **Tests** : `tests/video-processing.test.ts` (réglages, arguments, progression, ffprobe, plan, règles pures), `video-ffmpeg.test.ts` (vrai
+  ffmpeg sur des vidéos fabriquées par `lavfi` ; `describe.skipIf(!hasFfmpeg)` : **ignorés sans ffmpeg**, jamais réussis en silence ; AV1 si
+  `libsvtav1` ; `prlimit` sous Linux ; fichier hostile), `video-queue.test.ts` (prise, bail, reprise, rattrapage, runner, superviseur),
+  `renditions-delivery.test.ts`, `video.test.ts` (signatures, pistes de données, ébauches), `video-sources.test.ts`, `video-admin.test.ts`,
+  `api-video.test.ts`, `video-routes.test.ts`, `processing-view.test.ts` ; `api`, `openapi`, `transforms` (extrait `<video>`) mis à jour.
+  526 tests en 27 fichiers (Node 24).
+- **Écarts à la proposition** (détail : section « D3 — état de l'implémentation » de l'architecture) : validité d'une tâche par fichier et
+  clés de rendus sans version ; `TOO_LONG` n'empêche que les réencodages ; rendu aussi pour une source entrelacée, et toujours pour un format
+  converti ; fils plafonnés à 16 ; réparation WebM limitée aux codecs WebM ; priorité 10 des vidéos retenues ; route de suivi légère ;
+  `processing.status` admin = statut de la tâche ; MOV annoncé `video/mp4` ; `halted` / `disabled` ; `/api/health` compte le serveur
+  `embedded` comme un processus de travail.
+
 **Architecture de la phase B validée** (toutes les décisions D1–D15 confirmées le 2026-09-29) : `.claude/architecture-phase-b.md`
 — contrats détaillés des sous-étapes suivantes (types de jetons et formats, API v1, CORS, cache, transformations).
 
@@ -1715,12 +2040,16 @@ d'exploitation : `setup.md` § 7.7.
 - **Phase C (terminée)** : `.claude/architecture-phase-c.md`. C1 : § 9.16 et `setup.md` étape 11 ; C2 : § 9.17, étape 12 ; C3 : § 9.18,
   étape 13 ; C4 : § 9.19, étape 14.
 - **Phase D (vidéos)** : architecture `.claude/architecture-phase-d.md` validée le 2026-10-05 ; **D1 faite** (§ 9.21, `setup.md` étape 20) ;
-  **D2 faite** (§ 9.22, `setup.md` étape 21). **D3 validée le 2026-10-06 (§ 28–42, DD25–DD36), EN COURS** : fondations et modules A
-  (ffmpeg), B (diffusion), C (détection), D (file, pipeline, service, processus de travail) faits, revus et vérifiés (449 tests) ;
-  restent E (contrats API/admin), F (interface), documentation (`setup.md` étape 22, § 9.23 ici) — état détaillé et reste à faire :
+  **D2 faite** (§ 9.22, `setup.md` étape 21). **D3 validée le 2026-10-06 (§ 28–42, DD25–DD36), TERMINÉE le 2026-10-09** (§ 9.23,
+  `setup.md` étape 22) : fondations, modules A (ffmpeg), B (diffusion), C (détection), D (file, pipeline, service, processus de travail),
+  E (contrats API v1 et administration), F (interface) faits, revus et vérifiés (526 tests) — état final, écarts, vérifications et limites :
   `.claude/architecture-phase-d.md`, section « D3 — état de l'implémentation » ; contrats des modules : `.claude/d3-implementation-notes.md`.
-  Ensuite D4 (HLS) ; transverses : envois reprenables / directs vers S3, `BigInt` au-delà de 2 Gio, délestage de la
-  diffusion, `<SmVideo>`. Audio et documents : phases ultérieures (DD13). `@surge-media/client` + composants (Vue d'abord) : en attente.
+  **Reste avant D4** : vérifications sur le poste Windows de l'utilisateur (ffmpeg non bloqué par Smart App Control, `taskkill`, Ctrl+C de
+  `surge-media worker`, tests ffmpeg) ; scénario HTTP `d3-test.mjs` facultatif (dans le dépôt seulement avec son accord) ; décisions de
+  l'utilisateur en attente (§ 22). **Ensuite D4** (streaming adaptatif HLS, planches de survol, manifestes signés) **à proposer et faire
+  valider** ; transverses : envois reprenables / directs vers S3, `BigInt` au-delà de 2 Gio, délestage de la diffusion, webhooks de fin de
+  traitement, accélération matérielle, filtre « État » de la médiathèque, `<SmVideo>`. Audio et documents : phases ultérieures (DD13).
+  `@surge-media/client` + composants (Vue d'abord) : en attente.
 - Pistes étape 19 : widgets masquables / réordonnables (préférence par compte), cache des agrégats pour de très grandes
   bibliothèques, médias récents en vignettes, journal par projet pour les propriétaires.
 - Pistes étape 18 : « Envoyer un e-mail de test » (Réglages ou CLI), envoi automatique à la création d'un compte, file d'envoi, alerte à
@@ -1765,6 +2094,16 @@ d'exploitation : `setup.md` § 7.7.
   testé seulement via `prisma dev` (PGlite) jusqu'à l'étape 1, et `db reset` jamais exécuté dessus.
 - **S3 réel** (AWS, R2, MinIO) jamais testé (seulement `s3rver`) ; `MediaStorage.copy` (CopyObject) et la lecture par plage (`Range`) testés seulement en local.
 - Lecteurs d'écran réels jamais testés.
+- **D3 sous Windows** (poste de l'utilisateur) **non vérifié** : ffmpeg (`winget install Gyan.FFmpeg`) éventuellement bloqué par Smart App
+  Control, arrêt de l'arbre par `taskkill /T /F`, priorité `IDLE_PRIORITY_CLASS`, Ctrl+C de `surge-media worker` (rien n'est transmis par la
+  CLI : le Ctrl+C de la console doit atteindre le processus de travail et l'arrêter proprement), Ctrl+C de `nuxt dev` pendant un encodage,
+  tests ffmpeg — tâche en attente pour l'utilisateur. Aucune limite mémoire ni processeur par ffmpeg hors Linux (`prlimit`).
+- D3 vérifié avec SQLite et le stockage local : aucun essai consigné avec S3 (original copié dans le dossier de la tâche), PostgreSQL ou
+  MySQL (l'ordre `nulls: 'first'` de la « dernière tâche » n'a été essayé que sous SQLite). Lecture réelle des rendus H.264 dans un navigateur
+  non vérifiée (Chromium du nuage sans H.264), ni le report du changement de sources pendant une lecture.
+- **Décisions de l'utilisateur en attente** (D3) : sa vidéo de téléphone (Samsung, projet « My Phone », envoyée avant D2, publique) contient
+  encore son lieu de tournage — l'« Optimiser », la rendre privée ou la laisser ; les 8 dérivés orphelins de `landscape.jpg` (anciennes versions,
+  laissés avant le correctif `deletePrefix` de D2) — les supprimer à la main ou non.
 - Démarrage de la build de production : bloqué à l'étape 10 (argon2, Smart App Control), mais **fonctionnel le 2026-10-01 en C1**.
 - **Override `oxc-transform` 0.141.0** hors de la plage de Nuxt 3.21 : fonctionne (typecheck, dev, build), mais à surveiller et retirer.
 - Environnement local actuel (non versionné, indicatif) : compte `admin@surge-media.test` (ADMIN, créé par amorçage ; mot de passe dans

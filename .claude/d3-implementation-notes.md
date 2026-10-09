@@ -1,5 +1,7 @@
 # D3 — notes d'implémentation (spécification de travail des modules, 2026-10-07/08)
 
+> **Implémentation terminée le 2026-10-09** (modules A à F) : l'état final, les écarts, les vérifications et les limites sont dans `.claude/architecture-phase-d.md`, section « D3 — état de l'implémentation ».
+
 > Document de travail écrit pendant l'implémentation de D3 dans le nuage (en anglais, comme il a été transmis
 > aux agents). Il complète `.claude/architecture-phase-d.md` § 28–42 (proposition validée) et fixe les contrats
 > entre modules. **État et suite : voir `.claude/architecture-phase-d.md`, section « D3 — état de

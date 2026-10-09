@@ -7,7 +7,9 @@
 > § 28 à § 42, décisions DD25 à DD36 ; l'utilisateur a délégué les choix ouverts (« le plus recommandé et performant ») :
 > DD28 tel que proposé (sans perte → original remplacé) ; **DD31 : diffusion publique de l'original retenue tant que le
 > retrait d'une piste de métadonnées est en attente** (§ 32.4, l'alternative devient la règle) ; DD32 : liste complète.
-> D4 et transverses (§ 14) : à proposer plus tard.
+> **D3 FAITE (2026-10-09)** : `setup.md` étape 22 et § 7.7, `.claude/project-context.md` § 9.23 ; état final, écarts,
+> vérifications et limites : dernière section de ce document (« D3 — état de l'implémentation »). D4 et transverses (§ 14,
+> § 42) : à proposer plus tard.
 >
 > Écarts et précisions de D2 :
 > - **Appareil** : retrait par une liste de ce qui est conservé (§ 18.3), y compris boîtes de premier niveau (`uuid` portant la
@@ -58,7 +60,8 @@
 1. Une vidéo est un **média comme les autres** (`kind = VIDEO`) : même espace, dossiers, visibilité, corbeille,
    remplacement versionné, duplication, déplacement, droits, journal, API v1. **Aucune migration** de base en D1.
 2. Formats acceptés : **MP4, WebM, MOV** (QuickTime), reconnus **d'après le contenu** (signature + structure), jamais
-   d'après le nom ou le type annoncé. MKV, AVI, 3GP, MPEG-TS, OGV… refusés (415).
+   d'après le nom ou le type annoncé. MKV, AVI, 3GP, MPEG-TS, OGV… refusés (415) — *depuis D3 : acceptés une fois convertis
+   quand le traitement des vidéos est actif (§ 33, DD32)*.
 3. Analyse **sans ffmpeg** : lecteur maison des en-têtes (ISO BMFF pour MP4/MOV, EBML pour WebM) en TypeScript pur,
    testé : dimensions affichées (rotation comprise), durée, codecs, présence d'audio, « faststart », lieu de tournage.
    Lecture de quelques Kio, mémoire constante, quelques millisecondes.
@@ -118,6 +121,10 @@ fichiers > 2 Gio, audio, documents, composants `@surge-media/vue`.
 - **Refusés (415 `UNSUPPORTED_TYPE`)** : Matroska `.mkv` (`DocType` = `matroska`), AVI, WMV/ASF, FLV, MPEG-TS/PS, OGV,
   3GP, ancien QuickTime sans `ftyp`. Motif : lecture dans les navigateurs impossible ou aléatoire sans transcodage ;
   ils pourront être acceptés avec le transcodage (D3).
+  > **Changé par D3 (2026-10-09)** : Matroska, AVI, WMV/ASF, Ogg Theora, MPEG-TS/M2TS et 3GP/3G2 sont désormais **reconnus**
+  > par `sniff.ts` (types `CONVERTED_VIDEO_TYPES`) et **acceptés seulement quand le traitement des vidéos est actif**
+  > (`acceptedMimeTypes`), puis convertis (§ 33) ; sinon toujours 415. FLV, MPEG-PS, RealMedia et l'ancien QuickTime sans
+  > `ftyp` restent refusés.
 - Fichier ISO BMFF **sans piste vidéo** (audio seul) → 415 (le genre AUDIO viendra plus tard) ; structure illisible
   ou incohérente → 422 `UNREADABLE_FILE`.
 - `sniff.ts` devient une **fonction pure** sur l'en-tête (`detectMimeType(header)`, testée) appelée aussi pendant la
@@ -177,6 +184,10 @@ navigateurs ; une version compatible pourra être produite automatiquement dans 
   type non accepté : 415 immédiat ; sinon la limite du genre s'applique au flux (413 `FILE_TOO_LARGE`,
   `data.maxSize` = limite du genre). Le pré-contrôle `Content-Length` utilise la plus grande limite des genres admis
   pour l'appelant. Aujourd'hui un fichier refusé est d'abord entièrement reçu.
+  > **Changé par D3 (2026-10-09)** : `SNIFF_HEADER_BYTES` = **1024** octets (plusieurs paquets MPEG-TS de 188 ou 192 octets à
+  > vérifier) ; les types de base des règles d'envoi suivent l'état du traitement (`acceptedMimeTypes(await
+  > videoProcessingActive())` : formats convertis en plus quand il est actif, avec la limite des vidéos) ; une restriction
+  > (jeton délégué) qui ne laisse aucun type refuse d'emblée (415, et non 413).
 - Jeton délégué : `upload.maxSize` borné par la limite du genre détecté ; `upload.types` peut contenir les types vidéo.
 - `GET /api/admin/config/media` : + `maxUploadSizes: { IMAGE, VIDEO }` (`maxUploadSize` conservé = la plus grande).
 
@@ -734,9 +745,11 @@ proposable ensuite) ; envois reprenables, fichiers > 2 Gio ; composant `<SmVideo
 
 ---
 
-# D3 — Traitements vidéo avec ffmpeg, hors du processus web (PROPOSÉE le 2026-10-06, en attente de validation)
+# D3 — Traitements vidéo avec ffmpeg, hors du processus web (VALIDÉE le 2026-10-06, FAITE le 2026-10-09)
 
-> Proposée le 2026-10-06 à la suite de D2. Rien n'est codé avant validation. Applique les règles de performance de DD12
+> Proposée le 2026-10-06 à la suite de D2 et validée le même jour (choix délégués : voir le statut en tête du document).
+> Texte de la proposition conservé tel que validé ; **ce qui a changé à l'implémentation** est dans la dernière section
+> (« D3 — état de l'implémentation », liste « Écarts »), qui l'emporte. Applique les règles de performance de DD12
 > (§ 12) : aucun traitement lourd dans le chemin d'une requête, processus séparé, file persistante, **désactivé par
 > défaut**. Une installation sans ffmpeg se comporte exactement comme après D2.
 
@@ -1201,12 +1214,21 @@ fichiers > 2 Gio ; filtre « État » dans la médiathèque ; composant `<SmVide
 
 ---
 
-# D3 — état de l'implémentation (2026-10-08, session du nuage)
+# D3 — état de l'implémentation (2026-10-09, FAITE)
 
 > Spécification de travail des modules (contrats, propriété des fichiers, raffinements) :
-> `.claude/d3-implementation-notes.md`. **Étape 22 de `setup.md` pas encore écrite** (à faire à la fin de D3).
+> `.claude/d3-implementation-notes.md`. Exploitation : `setup.md` étape 22 et § 7.7 ; référence technique :
+> `.claude/project-context.md` § 9.23. Là où cette section et la proposition (§ 28–42) diffèrent, cette section l'emporte ;
+> **le code fait foi**.
 
-## Fait (branche `main-7i2ki7`, fusionnée dans `main`)
+## Fait
+
+Fondations et modules A à D : branche `main-7i2ki7`, fusionnée dans `main` ; modules E et F : directement sur `main`.
+Commits : `bf5e58a` (fondations), `3936d29` (phase B : modules A, B, C), `6d8cfcf` (phase C : module D), `94efe2a`
+(corrections de la revue de la phase C, notes de passation), `5a39f6c` (sources partagées `sources[]`), `f0b86b4` et
+`bbfc4c9` (module E et corrections), `ca5db72` (libellés partagés des états), `f67eeed`, `0992965` et `dbf3aa7` (module F et
+corrections). **Aucune dépendance npm** ajoutée : ffmpeg ≥ 6 est une dépendance **du système**, facultative (mode `off` par
+défaut, comportement de D2). Migration `20261006211348_d3_video_processing` (SQLite, PostgreSQL, MySQL ; rien à la main).
 
 | Module | Contenu | Fichiers principaux |
 | --- | --- | --- |
@@ -1214,62 +1236,114 @@ fichiers > 2 Gio ; filtre « État » dans la médiathèque ; composant `<SmVide
 | A — ffmpeg | détection, exécution bornée (priorité 19, groupe de processus, `prlimit` mémoire + temps processeur, environnement réduit, délais, garde de durée de sortie), arguments (format imposé, `-protocol_whitelist file`, `-enable_drefs 0`, `-max_pixels`, `-fs`, désentrelacement `bwdif`, `-fpsmax 60`, HDR → SDR), ffprobe, plan pur | `server/lib/video-processing/{ffmpeg,run,args,ffprobe,plan}.ts` |
 | B — diffusion | cible `renditions`, retenue 503, liens « admin » pour une vidéo publique retenue, relecture du cache (rendu inconnu, affiche d'une vidéo sans affiche, version plus récente), téléchargement des originaux non lisibles | `server/lib/media/{delivery-path,delivery,cache,urls,renditions,keys}.ts`, `server/routes/m/[...path].ts` |
 | C — détection | 3GP, MKV, AVI, WMV, Ogg Theora, MPEG-TS/M2TS ; pistes de données (`gpmd`, `camm`, `mebx`, `djmd`…) ; règles d'envoi par intersection ; 415 (et non 413 « 0 octet ») quand aucun type n'est admis | `server/lib/media/{sniff,limits,upload}.ts`, `video/probe.ts`, `handlers/video.ts` |
-| D — file et pipeline | file persistante (prise atomique, bail, reprise, rattrapage périodique, présence), boucle + superviseur (nouvel essai au démarrage, reprise après une panne de ffmpeg), pipeline (probe, sanitize, repair, transcode, av1, poster, vérification de chaque sortie par le lecteur de D1), intégration au service (création, remplacement, corbeille, restauration, duplication, relance, traitement de l'existant), rôle `worker`, `surge-media worker`, `.env.example` | `server/lib/video-processing/{jobs,runner,pipeline,status,worker-id}.ts`, `server/lib/media/service.ts`, `server/plugins/0.video-processing.ts`, `server/middleware/0.server-role.ts`, `cli/worker.ts` |
+| D — file et pipeline | file persistante (prise atomique, bail, reprise, rattrapage périodique, présence), boucle + superviseur (nouvel essai au démarrage, reprise après une panne de ffmpeg), pipeline (probe, sanitize, repair, transcode, av1, poster, vérification de chaque sortie par le lecteur de D1), intégration au service (création, remplacement, corbeille, restauration, duplication, relance, traitement de l'existant), rôle `worker`, `surge-media worker`, `.env.example`, délai d'attente SQLite de 10 s | `server/lib/video-processing/{jobs,runner,pipeline,status,worker-id}.ts`, `server/lib/media/service.ts`, `server/plugins/0.video-processing.ts`, `server/middleware/0.server-role.ts`, `server/utils/prisma.ts`, `cli/worker.ts` |
+| E — contrats | API v1 : `Media.sources[]` (ordre décidé par la seule fonction `videoSources`), `Media.processing`, `sources` des liens signés (cible `file`), ETag du détail qui suit l'avancement, ETag des pages de liste avec leurs tâches actives, types convertis dans `upload.types` des jetons délégués, OpenAPI fr/en (composants `MediaSource`, `MediaProcessing`, section « Vidéos », `PROCESSING_PENDING` sur `/m/`) ; administration : `processingState`, `processing`, `renditions`, `sources`, `publicSources`, routes `process`, `processing`, `video-processing`, `video-processing/backfill` (audit `media.processing_backfill`), `/api/health` (`videoProcessing`), `config/media` (`videoProcessing`), `videoSnippet` avec `sources` | `server/lib/media/sources.ts`, `shared/schemas/api.ts`, `server/lib/api/{serializers,signed-urls,openapi,problem}.ts`, `server/lib/media/service.ts` (représentations), `server/api/admin/media/[id].get.ts`, `[id]/{signed-url.post,process.post,processing.get}.ts`, `server/api/admin/video-processing/{index.get,backfill.post}.ts`, `server/api/health.get.ts`, `server/api/admin/config/media.get.ts`, `server/api/v1/projects/[projectId]/media/index.get.ts`, `shared/utils/{snippets,audit}.ts` |
+| F — interface | pastille d'état commune (cartes, fiche), section « Traitement » de la fiche (étape, `<progress>` + pourcentage, essais, dates, erreur traduite et détail technique, remarques, versions compatibles, « Traiter la vidéo » / « Relancer le traitement »), suivi léger toutes les 5 s sans réinitialiser les formulaires, lecteur à `<source>` (changement reporté pendant une lecture), avertissements (`compatPending`, `dataTracks`, `hdr`, `hdrUnconverted`, `converting`, `convertFailed`), section « Traitement des vidéos » de « Réglages » (état, ffmpeg, encodage, processus de travail, tâches, « Traiter les vidéos existantes » avec estimation), aide et `accept` des formats convertis, journal ; côté serveur : arrêt `halted` / `disabled`, `config/media` complété (`rendition`, `maxDuration`) ; i18n fr/en (1528 clés) | `app/components/admin/{VideoProcessingPanel,VideoProcessingSettings,ProcessingStateBadge,MediaCard,MediaUploader}.vue`, `app/pages/admin/media/[id].vue`, `app/pages/admin/settings.vue`, `app/composables/{useProcessingPoll,useMediaUpload,useAuditFormat}.ts`, `app/utils/processing-view.ts`, `i18n/locales/{fr,en}.json`, `server/lib/video-processing/status.ts` |
 
-Chaque module a été revu par des relecteurs indépendants (défauts reproduits puis corrigés, chacun avec un test) :
-13 défauts en phase B, 11 en phase C (dont 3 majeurs : réécriture annulée par un changement de version
-concurrent, processus arrêté qui se disait actif, nettoyage des dossiers temporaires d'une autre installation).
+Chaque module a été revu par des relecteurs indépendants, avec vérification contradictoire (défaut reproduit, corrigé,
+couvert par un test qui échoue sur l'ancien code) : **13 défauts** corrigés en phase B (modules A à C), **11** en phase C
+(module D ; dont 3 majeurs : réécriture annulée par un changement de version concurrent, processus arrêté qui se disait
+actif, nettoyage des dossiers temporaires d'une autre installation), **7** dans le module E (dont : « dernière tâche » qui
+pouvait être le doublon annulé d'un rattrapage, formats convertis jamais lisibles en `never`, audit perdu d'un traitement de
+l'existant interrompu en route, `processing` de l'ancien fichier affiché après un remplacement pendant l'inactivité) et
+**27 + 7** dans le module F (27 relevés par la revue, 7 trouvés pendant les essais dans un navigateur).
 
 ## Écarts à la proposition (§ 28–42)
 
 - **Validité d'une tâche par fichier** (`MediaJob.sourceKey`, pas la version) ; **clés des rendus indépendantes de
-  la version** (`variants/<média>/rendition-<nom>-<aléa>.<ext>`) : un changement d'affiche ou de point d'intérêt ne
-  touche ni les tâches ni les rendus ; remplacer un rendu existant (relance) change la version.
+  la version** (`variants/<média>/rendition-<nom>-<aléa>.<ext>`, pas de colonne `version` dans `MediaRendition`) : un
+  changement d'affiche ou de point d'intérêt ne touche ni les tâches ni les rendus ; remplacer un rendu existant (relance)
+  change la version, en créer un ne la change pas.
+- Réécriture sans perte : la tâche **continue** sur le nouveau fichier (`sourceKey` mis à jour dans la même transaction) au
+  lieu d'être annulée et recréée.
+- **Ordre des étapes** : `probe`, `sanitize`, `repair`, `transcode`, `av1`, puis `poster` en dernier (extraite du rendu
+  H.264 s'il existe, et laisse à l'affiche capturée par le navigateur le temps d'arriver) ; `verify` n'est pas une étape
+  du plan mais suit chaque sortie.
+- **Reprise différée** de 30 s puis 5 min ; le 3ᵉ échec est définitif (la proposition citait aussi 30 min).
 - `TOO_LONG` n'empêche que les réencodages : retrait des pistes GPS, réparation et affiche sont faits, puis échec.
 - Mode `auto` : une source **entrelacée** reçoit aussi un rendu (les navigateurs ne désentrelacent pas).
-- Mode `never` : un **format converti** reçoit quand même son rendu (accepté pour être converti, illisible sans).
-- Fils de ffmpeg plafonnés à 16 (mémoire sous `prlimit`), `MALLOC_ARENA_MAX=2`.
+- Mode `never` : un **format converti** reçoit quand même son rendu H.264 (et AV1 si activé) : accepté pour être converti,
+  il serait illisible sans.
+- Fils de ffmpeg plafonnés à 16 (mémoire sous `prlimit`), `MALLOC_ARENA_MAX=2` ; réglage ajouté `NUXT_VIDEO_MEMORY_LIMIT`
+  (4096 Mio, `prlimit --as`, Linux) et temps processeur borné (`prlimit --cpu`) pour un ffmpeg devenu orphelin.
 - Réparation WebM seulement pour VP8/VP9/AV1 + Opus/Vorbis (sinon le rendu H.264 suffit).
 - Vidéo dont la diffusion est retenue : priorité 10 dans la file ; ses liens d'administration sont signés « admin ».
-- « Actif » (mode `embedded`) exige aussi que la boucle tourne ; processus de travail arrêté : présence `halted`,
-  effacée à l'arrêt propre.
+- « Actif » (mode `embedded`) exige aussi que la boucle tourne. Arrêt de la boucle en deux cas distincts (« Réglages ») :
+  **`halted`** = ffmpeg devenu inutilisable en route, nouvelle détection chaque minute (badge « Arrêté » ; seul cas où
+  `GET /api/admin/video-processing` renvoie `halted: true`) ; **`disabled`** = inutilisable dès le démarrage ou stockage
+  non partagé, rien n'est redétecté (badge « Inactif », « Corrigez le problème, puis redémarrez le serveur. »). Processus
+  de travail arrêté : présence `halted`, effacée à l'arrêt propre.
+- **`/api/health`** compte comme processus de travail le serveur `embedded` dont la boucle tourne (il n'écrit pas de
+  présence) : sans cela, une règle de supervision « `workers` = 0 et `queued` > 0 » se déclencherait toujours.
 - Développement : ffmpeg reste dans le groupe du terminal (Ctrl+C sur `nuxt dev` l'arrête) ; au démarrage suivant,
-  le bail de ses tâches est rendu échu aussitôt. Windows : la CLI `worker` ne retransmet pas les signaux (le Ctrl+C
-  de la console suffit ; `child.kill` y tuerait le processus sans arrêt propre).
-- Point de rafraîchissement léger prévu pour la fiche (`GET /api/admin/media/:id/processing`, module E).
+  le bail de ses tâches est rendu échu aussitôt (puis reprise ordinaire, un essai compté). Windows : la CLI `worker` ne
+  retransmet pas les signaux (le Ctrl+C de la console suffit ; `child.kill` y tuerait le processus sans arrêt propre) —
+  à vérifier sur un poste Windows.
+- **Route de suivi légère** (non prévue) : `GET /api/admin/media/:id/processing` → `{ version, processingState,
+  processing }`, interrogée toutes les 5 s par la fiche (un rechargement complet réinitialiserait les formulaires et
+  re-signerait les liens).
+- Administration : **`processingState` = état du média** ; `processing.status` = **statut de la dernière tâche**
+  (QUEUED, RUNNING, DONE, FAILED, CANCELLED), avec `errorDetail` assaini, `runAfter`, `updatedAt` (les notes parlaient de
+  `state`) ; `processing` vaut null quand `processingState` est null, comme dans l'API v1. API v1 : `processing.status` =
+  état du média en minuscules, jamais `errorDetail`.
+- **« Dernière tâche »** (`LATEST_JOB`, `server/lib/media/sources.ts`) : la tâche active d'abord (`finishedAt` null), puis
+  `finishedAt` décroissant, `createdAt`, `id` — et non simplement la plus récente (deux rattrapages simultanés gardent la plus
+  ancienne et annulent l'autre).
+- **MOV annoncé `video/mp4`** dans `sources` (`videoSourceType`) : `canPlayType('video/quicktime')` répond « non » dans
+  Chrome et Firefox, qui ignoreraient la source ; le fichier reste servi tel quel.
+- **ETag** : détail v1 = `W/"id-version-updatedAt[-état.tâche.updatedAtMs][-échéance]"` (suit l'avancement) ; liste :
+  304 sans requête par la révision de l'espace, sauf une page contenant une vidéo en attente ou en cours, dont l'ETag
+  inclut ses tâches (jamais égal à celui de la révision seule) et qui est relue à chaque revalidation.
+- `config/media` renvoie aussi `rendition` et `maxDuration` : la fiche n'annonce une « version compatible en
+  préparation » que si la tâche doit la produire.
+- Audit : `media.processing_backfill` (catégorie `media`, `{ count }`, `partial: true` si une erreur interrompt la
+  boucle après au moins une tâche) ; « Relancer » n'est pas journalisé (comme « Optimiser » et la restauration).
 
-## Vérifié (2026-10-08)
+## Vérifié
 
-- `pnpm test` : **449 tests** (22 fichiers ; ffmpeg réel dans `tests/video-ffmpeg.test.ts`, ignoré sans ffmpeg),
-  `pnpm typecheck`, `pnpm db:migration --check`, `pnpm i18n:check` : verts (Node 24).
-- Serveur de développement, mode `embedded`, base et stockage copiés : HEVC → prête en 2 s (affiche du serveur) ;
-  ffprobe retiré en cours de route → tâche rendue sans essai compté, traitement inactif (MKV refusé 415), reprise
-  automatique 56 s après son retour ; Ctrl+C pendant un encodage → aucun ffmpeg orphelin, reprise au redémarrage ;
-  dossier temporaire d'une autre installation conservé. Bancs des relecteurs rejoués : défauts disparus.
+- **Contrôles finaux du 2026-10-09** : `pnpm typecheck` vert ; `pnpm test` **526 tests en 27 fichiers** (Node 24 exigé :
+  sous Node 22, `text-track.test.ts` échoue) ; `pnpm i18n:check` 1528 clés, 1419 appels `t()` ; `pnpm db:migration
+  --check` vert (schéma inchangé depuis la migration de D3).
+- Phase C (2026-10-08), serveur de développement, mode `embedded`, base et stockage copiés : HEVC → prête en 2 s
+  (affiche du serveur) ; ffprobe retiré en cours de route → tâche rendue sans essai compté, traitement inactif (MKV refusé
+  415), reprise automatique 56 s après son retour ; Ctrl+C pendant un encodage → aucun ffmpeg orphelin, reprise au
+  redémarrage ; dossier temporaire d'une autre installation conservé. Bancs des relecteurs rejoués : défauts disparus.
 - Pendant la phase C (relecteurs et implémentation) : build de production + `surge-media worker` en mode `external`
   (prise en 4,6 s, présence, 404 hors `/api/health`, SIGTERM → tâche rendue), HEVC HLG → SDR, MKV → rendu +
   original en téléchargement, GoPro `gpmd` → 503 puis v2 sans piste, WebM réparé, remplacement / corbeille /
   restauration / duplication pendant un encodage, plantage → reprise par le bail, 4 processus sur une même base
   SQLite (80 tâches, aucune double prise).
+- Module E : `pnpm typecheck`, tests (511 après les corrections), `pnpm i18n:check` ; sur une copie de la base de dev,
+  Prisma 7 `updateMany` met bien à jour `@updatedAt` (base de l'ETag qui suit l'avancement) ; nouvel ordre de la
+  « dernière tâche » vérifié sur une vraie base SQLite (pas sous PostgreSQL ni MySQL).
+- Module F, Chromium de Playwright contre un serveur de développement en `embedded` avec ffmpeg réel (base copiée) :
+  vidéos HEVC, H.264, MKV, MKV sans piste vidéo (son seul), MOV privé, GoPro avec piste de données, MOV HLG HDR, MKV de 60 s et 4 min ;
+  pastilles des cartes ; section « Traitement » de l'attente à la fin ; suivi toutes les 5,0 s (78 requêtes pour une
+  tâche de 4 min), arrêté à la fin, en pause onglet masqué, repris après une restauration ; texte saisi dans le titre
+  conservé à chaque changement d'état et au passage v1 → v2 ; annonces aux seules transitions ; « Traiter » /
+  « Relancer » au clavier (`aria-disabled`, second Entrée ignoré, focus sur le message) ; ffmpeg tué en plein encodage →
+  « Essai 2 sur 3 », prochain essai, puis reprise annoncée ; corbeille et restauration ; extrait public et privé ;
+  dialogue « Traiter les vidéos existantes » au clavier ; `accept` et aide de l'envoi ; page du journal. **axe : 0
+  violation** en fr/en × clair/sombre × 375/1280 px, aucun défilement horizontal à 375 px. Après les corrections de la
+  revue : 0 violation sur « Réglages » et six états de la fiche (56 chargements), états simulés en modifiant les
+  réponses de l'API.
+- **Non vérifié** : lecture réelle du rendu H.264 (ce Chromium ne lit pas le H.264 ; fichier contrôlé par ffprobe), report
+  du changement de sources pendant une lecture, focus sur la bannière de la corbeille après un refus ; tout le
+  comportement sous Windows (ci-dessous) ; S3, PostgreSQL et MySQL avec D3.
 
 ## Reste à faire
 
-1. **Module E — contrats** : `Media.processing` et `Media.sources[]` (API v1, OpenAPI fr/en, `mediaEtag` avec
-   l'avancement), `MediaSummary.processingState`, `MediaDetail.processing/renditions/sources`, routes
-   `POST /api/admin/media/:id/process`, `GET /api/admin/media/:id/processing`, `GET /api/admin/video-processing`,
-   `POST /api/admin/video-processing/backfill` (journal), `/api/health` (`videoProcessing`), `config/media`
-   (`videoProcessing`), `videoSnippet` avec `sources`, types convertis dans `upload.types` des jetons délégués.
-   Les fonctions du service existent déjà : `requestProcessing`, `backfillProcessing`, `processingDetail`,
-   `listWorkers`, `jobCounts`, `backfillCandidates`, `videoProcessingActive`.
-2. **Module F — interface** : pastille d'état des cartes, section « Traitement » de la fiche (rafraîchie toutes
-   les 5 s seulement pendant le traitement, sans réinitialiser les formulaires), lecteur avec `<source>`, liste des
-   rendus, avertissements (`compatPending`, `dataTracks`, `hdr`, `converting`), section « Traitement des vidéos »
-   de « Réglages », aide d'envoi des formats convertis ; i18n fr/en, axe fr/en × clair/sombre.
-3. **Documentation** : `setup.md` étape 22 et § 7.7 (modes, processus de travail, Docker, mandataire, dépannage
-   ffmpeg/Smart App Control), `project-context.md` § 9.23 ; textes « 256 premiers octets » et « Matroska refusé »
-   à corriger (setup.md, project-context § 9.4 et § 9.21, § 6 de ce document).
-4. **Sous Windows (poste de l'utilisateur)** : ffmpeg installé et non bloqué par Smart App Control, `taskkill`,
-   Ctrl+C de `surge-media worker`, tests ffmpeg.
+1. **Sous Windows (poste de l'utilisateur)** — comportements écrits pour Windows mais jamais exécutés : ffmpeg installé
+   (`winget install Gyan.FFmpeg`) et non bloqué par Smart App Control ; arrêt de l'arbre de processus par `taskkill
+   /pid <pid> /T /F` (délai, annulation, arrêt du serveur) ; priorité `IDLE_PRIORITY_CLASS` ; Ctrl+C de
+   `surge-media worker` (la CLI ne transmet rien : le processus de travail doit s'arrêter proprement et rendre sa tâche
+   sans essai compté) ; Ctrl+C de `nuxt dev` pendant un encodage ; `pnpm test` avec ffmpeg (tests `video-ffmpeg`
+   exécutés, pas ignorés) ; lecture du rendu H.264 dans un vrai navigateur.
+2. **Scénario HTTP `d3-test.mjs`** (§ 40) : facultatif, et dans le dépôt seulement avec l'accord de l'utilisateur.
+3. **Décisions de l'utilisateur en attente** : sa vidéo de téléphone publique (Samsung, projet « My Phone », envoyée avant
+   D2) contient encore son lieu de tournage — « Optimiser » (nouvelle version sans le lieu), la rendre privée ou la laisser ;
+   les 8 dérivés orphelins de `landscape.jpg` (anciennes versions, laissés avant le correctif `deletePrefix` de D2) — les
+   supprimer à la main ou non.
 
 ## Limites connues
 
@@ -1278,7 +1352,18 @@ concurrent, processus arrêté qui se disait actif, nettoyage des dossiers tempo
 - Mode `external` : formats convertis refusés jusqu'à 30 s après le démarrage d'un processus de travail ; retenue
   (503) et affiche visibles avec jusqu'à 60 s de retard sur le serveur web (caches) ; processus de travail sur une
   autre machine : PostgreSQL/MySQL et stockage partagé obligatoires.
-- Production, arrêt brutal (SIGKILL, panne) : ffmpeg peut finir seul (borné par `prlimit --cpu`), la tâche est
-  reprise à l'expiration du bail (2 min, un essai compté).
+- Retenue (503) maintenue tant que la tâche attend : sans processus de travail actif (`external`) ou boucle arrêtée
+  (`embedded`), une vidéo à piste de données en attente reste indisponible hors liens « admin » jusqu'à son traitement
+  ou le passage en `off`.
+- Production, arrêt brutal (SIGKILL, panne) : ffmpeg peut finir seul (borné par `prlimit --cpu` sous Linux), la tâche
+  est reprise à l'expiration du bail (2 min, un essai compté). Hors Linux : ni limite mémoire ni limite de temps
+  processeur par ffmpeg.
+- Pendant une tâche, l'ETag v1 d'une vidéo change aussi à chaque battement de 30 s (le bail renouvelé change
+  `MediaJob.updatedAt`) ; une page de liste qui contient une vidéo en attente ou en cours est relue à chaque
+  revalidation.
+- Une vidéo dont les métadonnées seraient illisibles n'aurait pas l'original dans `sources` (`videoSources` exige des
+  métadonnées vidéo) ; tous les chemins d'envoi en écrivent : cas sans exemple aujourd'hui.
+- Fiche : « Prochain essai au plus tôt » peut afficher une heure passée si aucun processus ne reprend la tâche ; après un
+  échec passager, « Commencé le » garde l'heure de l'essai précédent jusqu'à la reprise.
 - Antérieur à D3, observé pendant les essais : un aperçu pré-généré pendant un changement de version peut rester
   orphelin dans le stockage (`variants/<média>/v<n>-…`).
