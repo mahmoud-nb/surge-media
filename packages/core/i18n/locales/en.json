@@ -983,7 +983,7 @@
         "FAILED": "Processing failed"
       },
       "title": "Processing",
-      "never": "This video has never been processed (uploaded before video processing was enabled). Processing checks the file, removes device data tracks, extracts a poster image if one is missing and prepares a compatible version when useful.",
+      "never": "This video has never been processed (uploaded before video processing was enabled, or while it was inactive). Processing checks the file, removes device data tracks, extracts a poster image if one is missing and prepares a compatible version when useful.",
       "queued": "The video is in the queue: processing will start as soon as a worker is available.",
       "interrupted": "Processing interrupted: the media item is in the trash. It will resume if the media item is restored.",
       "currentStep": "Current step: {step}",
@@ -1010,10 +1010,11 @@
       "errorDetail": "Technical detail: {detail}",
       "attempt": "Attempt",
       "attemptValue": "{current} of {max}",
-      "nextAttempt": "Next attempt",
+      "nextAttempt": "Next attempt no earlier than",
       "createdAt": "Requested on",
       "startedAt": "Started on",
       "finishedAt": "Finished on",
+      "cancelledAt": "Interrupted on",
       "warningsTitle": "Notes",
       "warnings": {
         "hdr_converted": "HDR colours converted to SDR for the compatible version.",
@@ -1022,13 +1023,14 @@
       },
       "renditions": {
         "title": "Compatible versions",
-        "description": "Versions re-encoded by the server, offered to the player before the original (which stays unchanged).",
+        "description": "Versions re-encoded by the server: the player uses them instead of the original, which stays unchanged.",
         "definition": "Resolution",
         "download": "Download {format}"
       },
       "run": "Process the video",
       "rerun": "Run processing again",
       "rerunReadyHint": "Redoes the compatible versions with the server's current settings; the original is not modified.",
+      "requesting": "Requesting…",
       "requested": "Processing requested: the video is in the queue.",
       "requestErrors": {
         "PROCESSING_DISABLED": "Video processing is not active on this server: try again later or contact the administrator.",
@@ -1044,7 +1046,8 @@
         "started": "Video processing started.",
         "finished": "Video processing finished.",
         "failed": "Video processing failed.",
-        "retry": "Video processing failed temporarily: it will be retried automatically."
+        "retry": "Video processing failed temporarily: it will be retried automatically.",
+        "requeued": "Video processing was interrupted on the server, without failing: it will resume automatically."
       }
     }
   },
@@ -1856,7 +1859,7 @@
         },
         "text": {
           "active": "Videos are processed after upload and converted formats (MKV, AVI…) are accepted.",
-          "off": "No video is processed: videos are served as uploaded, and only MP4, WebM and MOV are accepted.",
+          "off": "No video is processed: videos are served as uploaded, and only MP4, WebM and MOV videos are accepted.",
           "halted": "ffmpeg became unusable on this server: processing is suspended and detection runs again every minute. Jobs already created wait in the queue; new videos are not queued and converted formats are refused.",
           "noFfmpeg": "ffmpeg is not usable on this server (see “ffmpeg”): new videos are not queued and converted formats are refused.",
           "noWorker": "No worker able to process has reported in the last 5 minutes: new videos are not queued and converted formats are refused."
@@ -1889,7 +1892,7 @@
         "notShownOff": "Not detected: video processing is disabled.",
         "notShownExternal": "This server never runs ffmpeg in external mode: the version used by each worker is shown in their list.",
         "version": "Version",
-        "unknownVersion": "Unreadable",
+        "unknownVersion": "Unknown",
         "state": "Status",
         "usable": "Usable",
         "unusable": "Unusable",
@@ -1963,11 +1966,11 @@
       "backfill": {
         "title": "Process existing videos",
         "description": "Creates a low-priority job for every video never processed (uploaded before processing was enabled, or while it was inactive), excluding the trash. New uploads keep priority and originals are kept.",
-        "count": "No video left unprocessed. | One video never processed, excluding the trash. | {count} videos never processed, excluding the trash.",
+        "count": "No video to process. | One video never processed, excluding the trash. | {count} videos never processed, excluding the trash.",
         "totalDuration": "Total duration: {duration}.",
         "estimate": "Estimated processing time: up to about {duration}.",
         "estimateNote": "Rough estimate, based on the total duration and the encoding settings: videos that are already compatible are not re-encoded, and the actual speed depends on the machine.",
-        "lessThanMinute": "less than a minute",
+        "estimateShort": "Estimated processing time: less than a minute.",
         "button": "Process existing videos",
         "disabledInactive": "Available when video processing is active.",
         "disabledEmpty": "Nothing to process: every video has already been processed or is queued.",
@@ -1975,6 +1978,7 @@
           "title": "Process existing videos?",
           "description": "No video to queue. | A job will be created for the video never processed, after recent uploads; the original is kept. | A job will be created for each of the {count} videos never processed, after recent uploads; the originals are kept.",
           "estimate": "Estimated time: up to about {duration} (rough estimate).",
+          "estimateShort": "Estimated time: less than a minute (rough estimate).",
           "submit": "Add to the queue",
           "submitting": "Adding to the queue…"
         },

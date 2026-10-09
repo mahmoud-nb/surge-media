@@ -118,8 +118,10 @@ const JOB_COUNTS = ['queued', 'running', 'done', 'failed', 'cancelled'] as const
  *
  *   coût = 2 × facteur du préréglage x264 (+ 3 si l'AV1 est activé et possible), en secondes de calcul
  *          d'un fil par seconde de vidéo : 1,7 mesuré, arrondi à 2 (parallélisme imparfait) ; AV1 =
- *          1,5 × le H.264 ; préréglage `medium` ≈ 1,7 × `veryfast` (mesuré), ordres de grandeur pour les
- *          autres. 0 en mode `never` (aucun réencodage, formats convertis mis à part) ;
+ *          1,5 × le H.264 (temps processeur mesuré) ; préréglage `medium` ≈ 1,9 × `veryfast` (temps
+ *          processeur mesuré), ordres de grandeur pour les autres. 0 en mode `never` (seuls les formats
+ *          convertis y sont réencodés, et une vidéo jamais traitée n'en est pas un : envoyée quand le
+ *          traitement était inactif) ;
  *   tâches en parallèle = `concurrency` de ce serveur (embedded) ou somme des `concurrency` des
  *          processus de travail actifs (external, 1 au moins).
  *
@@ -132,7 +134,7 @@ const PRESET_COST: Readonly<Record<string, number>> = {
   veryfast: 1,
   faster: 1.2,
   fast: 1.4,
-  medium: 1.7,
+  medium: 1.9,
   slow: 2.5,
   slower: 5,
   veryslow: 10,
@@ -151,9 +153,12 @@ function estimateSeconds(state: ProcessingState): number {
   return backfill.count * OVERHEAD_PER_VIDEO + (backfill.totalDuration * cost) / (Math.max(1, settings.threads) * parallel)
 }
 
-/** Durée arrondie pour une estimation (« environ 1 heure et 40 minutes », jamais à la seconde près). */
-function roughDuration(seconds: number): string {
-  if (seconds < 60) return t('settings.videoProcessing.backfill.lessThanMinute')
+/**
+ * Durée arrondie pour une estimation (« environ 1 heure et 40 minutes », jamais à la seconde près) ; null
+ * sous la minute (phrase à part : « jusqu'à environ moins d'une minute » ne se dit pas).
+ */
+function roughDuration(seconds: number): string | null {
+  if (seconds < 60) return null
   const step = seconds < 3600 ? 60 : seconds < 86_400 ? 600 : 3600
   return formatDuration(Math.max(step, Math.round(seconds / step) * step), locale.value)
 }
@@ -165,7 +170,8 @@ const backfill = computed(() => {
   return {
     count,
     totalDuration: totalDuration > 0 ? formatDuration(totalDuration < 60 ? totalDuration : Math.round(totalDuration / 60) * 60, locale.value) : null,
-    estimate: count > 0 ? roughDuration(estimateSeconds(state)) : null,
+    /** Estimation (vidéos à traiter seulement) ; `duration` null : moins d'une minute. */
+    estimate: count > 0 ? { duration: roughDuration(estimateSeconds(state)) } : null,
     /** Raison pour laquelle le bouton est désactivé, ou null. */
     disabledReason: !state.active
       ? t('settings.videoProcessing.backfill.disabledInactive')
@@ -304,7 +310,10 @@ async function reload() {
       </div>
 
       <UiAlert v-if="data.mode === 'off'" variant="info" :title="t('settings.videoProcessing.enable.title')" class="mt-5">
-        <p>{{ t('settings.videoProcessing.enable.text') }}</p>
+        <!-- « NUXT_VIDEO_PROCESSING=embedded » d'un seul tenant : coupé au besoin (écran de 375 px). -->
+        <p class="wrap-anywhere">
+          {{ t('settings.videoProcessing.enable.text') }}
+        </p>
       </UiAlert>
     </section>
 
@@ -528,7 +537,11 @@ async function reload() {
           {{ t('settings.videoProcessing.backfill.totalDuration', { duration: backfill.totalDuration }) }}
         </p>
         <template v-if="backfill.estimate">
-          <p>{{ t('settings.videoProcessing.backfill.estimate', { duration: backfill.estimate }) }}</p>
+          <p>
+            {{ backfill.estimate.duration
+              ? t('settings.videoProcessing.backfill.estimate', { duration: backfill.estimate.duration })
+              : t('settings.videoProcessing.backfill.estimateShort') }}
+          </p>
           <p class="text-muted-foreground">
             {{ t('settings.videoProcessing.backfill.estimateNote') }}
           </p>
@@ -563,7 +576,9 @@ async function reload() {
     >
       <div class="grid gap-3 text-sm">
         <p v-if="backfill.estimate" class="text-foreground">
-          {{ t('settings.videoProcessing.backfill.dialog.estimate', { duration: backfill.estimate }) }}
+          {{ backfill.estimate.duration
+            ? t('settings.videoProcessing.backfill.dialog.estimate', { duration: backfill.estimate.duration })
+            : t('settings.videoProcessing.backfill.dialog.estimateShort') }}
         </p>
         <UiAlert v-if="backfillError" variant="error" live="assertive">
           {{ backfillError }}

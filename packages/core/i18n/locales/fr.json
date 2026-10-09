@@ -983,7 +983,7 @@
         "FAILED": "Échec du traitement"
       },
       "title": "Traitement",
-      "never": "Cette vidéo n'a jamais été traitée (envoyée avant l'activation du traitement des vidéos). Le traitement vérifie le fichier, retire les pistes de données de l'appareil, extrait une image d'affiche s'il en manque une et prépare une version compatible quand elle est utile.",
+      "never": "Cette vidéo n'a jamais été traitée (envoyée avant l'activation du traitement des vidéos, ou pendant qu'il était inactif). Le traitement vérifie le fichier, retire les pistes de données de l'appareil, extrait une image d'affiche s'il en manque une et prépare une version compatible quand elle est utile.",
       "queued": "La vidéo est dans la file d'attente : le traitement commencera dès qu'un processus sera disponible.",
       "interrupted": "Traitement interrompu : le média est dans la corbeille. Il reprendra si le média est restauré.",
       "currentStep": "Étape en cours : {step}",
@@ -1010,10 +1010,11 @@
       "errorDetail": "Détail technique : {detail}",
       "attempt": "Essai",
       "attemptValue": "{current} sur {max}",
-      "nextAttempt": "Prochain essai",
+      "nextAttempt": "Prochain essai au plus tôt",
       "createdAt": "Demandé le",
       "startedAt": "Commencé le",
       "finishedAt": "Terminé le",
+      "cancelledAt": "Interrompu le",
       "warningsTitle": "Remarques",
       "warnings": {
         "hdr_converted": "Couleurs HDR converties en SDR pour la version compatible.",
@@ -1022,13 +1023,14 @@
       },
       "renditions": {
         "title": "Versions compatibles",
-        "description": "Versions réencodées par le serveur, proposées au lecteur avant l'original (qui reste inchangé).",
+        "description": "Versions réencodées par le serveur : le lecteur les utilise à la place de l'original, qui reste inchangé.",
         "definition": "Définition",
         "download": "Télécharger {format}"
       },
       "run": "Traiter la vidéo",
       "rerun": "Relancer le traitement",
       "rerunReadyHint": "Refait les versions compatibles avec les réglages actuels du serveur ; l'original n'est pas modifié.",
+      "requesting": "Demande en cours…",
       "requested": "Traitement demandé : la vidéo est dans la file d'attente.",
       "requestErrors": {
         "PROCESSING_DISABLED": "Le traitement des vidéos n'est pas actif sur ce serveur : réessayez plus tard ou contactez l'administrateur.",
@@ -1044,7 +1046,8 @@
         "started": "Traitement de la vidéo commencé.",
         "finished": "Traitement de la vidéo terminé.",
         "failed": "Échec du traitement de la vidéo.",
-        "retry": "Échec passager du traitement de la vidéo : un nouvel essai aura lieu automatiquement."
+        "retry": "Échec passager du traitement de la vidéo : un nouvel essai aura lieu automatiquement.",
+        "requeued": "Traitement de la vidéo interrompu sur le serveur, sans échec : il reprendra automatiquement."
       }
     }
   },
@@ -1856,7 +1859,7 @@
         },
         "text": {
           "active": "Les vidéos sont traitées après l'envoi et les formats convertis (MKV, AVI…) sont acceptés.",
-          "off": "Aucune vidéo n'est traitée : elles sont servies telles qu'envoyées, et seuls les formats MP4, WebM et MOV sont acceptés.",
+          "off": "Aucune vidéo n'est traitée : elles sont servies telles qu'envoyées, et seules les vidéos MP4, WebM et MOV sont acceptées.",
           "halted": "ffmpeg est devenu inutilisable sur ce serveur : le traitement est suspendu, une nouvelle détection a lieu chaque minute. Les tâches déjà créées attendent dans la file ; les nouvelles vidéos ne sont pas mises en file et les formats convertis sont refusés.",
           "noFfmpeg": "ffmpeg n'est pas utilisable sur ce serveur (voir « ffmpeg ») : les nouvelles vidéos ne sont pas mises en file et les formats convertis sont refusés.",
           "noWorker": "Aucun processus de travail en état de traiter ne s'est signalé depuis 5 minutes : les nouvelles vidéos ne sont pas mises en file et les formats convertis sont refusés."
@@ -1889,7 +1892,7 @@
         "notShownOff": "Non détecté : le traitement des vidéos est désactivé.",
         "notShownExternal": "Ce serveur ne lance jamais ffmpeg en mode external : la version utilisée par chaque processus de travail figure dans leur liste.",
         "version": "Version",
-        "unknownVersion": "Illisible",
+        "unknownVersion": "Inconnue",
         "state": "État",
         "usable": "Utilisable",
         "unusable": "Inutilisable",
@@ -1963,11 +1966,11 @@
       "backfill": {
         "title": "Traiter les vidéos existantes",
         "description": "Crée une tâche de priorité basse pour chaque vidéo jamais traitée (envoyée avant l'activation du traitement, ou pendant qu'il était inactif), hors corbeille. Les nouveaux envois restent prioritaires et les originaux sont conservés.",
-        "count": "Aucune vidéo jamais traitée. | Une vidéo jamais traitée, hors corbeille. | {count} vidéos jamais traitées, hors corbeille.",
+        "count": "Aucune vidéo à traiter. | Une vidéo jamais traitée, hors corbeille. | {count} vidéos jamais traitées, hors corbeille.",
         "totalDuration": "Durée totale : {duration}.",
         "estimate": "Temps de traitement estimé : jusqu'à environ {duration}.",
         "estimateNote": "Estimation grossière, d'après la durée totale et les réglages d'encodage : les vidéos déjà compatibles ne sont pas réencodées, et la vitesse réelle dépend de la machine.",
-        "lessThanMinute": "moins d'une minute",
+        "estimateShort": "Temps de traitement estimé : moins d'une minute.",
         "button": "Traiter les vidéos existantes",
         "disabledInactive": "Disponible quand le traitement des vidéos est actif.",
         "disabledEmpty": "Rien à traiter : toutes les vidéos ont déjà été traitées ou sont en file.",
@@ -1975,6 +1978,7 @@
           "title": "Traiter les vidéos existantes ?",
           "description": "Aucune vidéo à mettre en file. | Une tâche sera créée pour la vidéo jamais traitée, après les envois récents ; l'original est conservé. | Une tâche sera créée pour chacune des {count} vidéos jamais traitées, après les envois récents ; les originaux sont conservés.",
           "estimate": "Temps estimé : jusqu'à environ {duration} (estimation grossière).",
+          "estimateShort": "Temps estimé : moins d'une minute (estimation grossière).",
           "submit": "Ajouter à la file",
           "submitting": "Ajout à la file en cours…"
         },

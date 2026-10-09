@@ -49,13 +49,6 @@ const { $api } = useNuxtApp()
 const titleId = useId()
 const stepId = useId()
 
-const STATE_BADGES: Record<ProcessingStateValue, 'neutral' | 'primary' | 'success' | 'danger'> = {
-  PENDING: 'neutral',
-  PROCESSING: 'primary',
-  READY: 'success',
-  FAILED: 'danger',
-}
-
 const inProgress = computed(() => processingInProgress(props.state))
 const job = computed(() => props.processing)
 
@@ -70,12 +63,16 @@ const progress = computed(() => {
   return running.value && typeof value === 'number' ? Math.min(1, Math.max(0, value)) : null
 })
 
-/** Essai en cours (« 2 sur 3 ») après un échec passager, ou essai qui a échoué en dernier. */
+/**
+ * Essai en cours (« 2 sur 3 ») après un échec passager (`attempts` = essais déjà échoués), ou dernier
+ * essai d'une tâche en échec après plusieurs essais (un échec au premier essai est définitif d'emblée :
+ * « 1 sur 3 » laisserait croire à d'autres essais).
+ */
 const attempt = computed(() => {
   const value = job.value
   if (!value || value.attempts === 0) return null
   if (inProgress.value) return Math.min(value.attempts + 1, JOB_MAX_ATTEMPTS)
-  return props.state === 'FAILED' ? Math.min(value.attempts, JOB_MAX_ATTEMPTS) : null
+  return props.state === 'FAILED' && value.attempts > 1 ? Math.min(value.attempts, JOB_MAX_ATTEMPTS) : null
 })
 
 /** Tâche remise en file après un échec passager : prochain essai au plus tôt (date à venir). */
@@ -96,11 +93,27 @@ const previousError = computed(() => {
   return t('media.processing.previousError', { message: errorText(value.errorCode) })
 })
 
-const failure = computed(() => (props.state === 'FAILED'
-  ? { message: errorText(job.value?.errorCode ?? null), detail: job.value?.errorDetail ?? null }
-  : null))
+/**
+ * Erreurs dont le détail du serveur (texte fixe de pipeline.ts) ne fait que répéter le message traduit
+ * (« Aucune piste vidéo dans le fichier. ») : détail masqué.
+ */
+const PLAIN_DETAIL_CODES: ReadonlySet<string> = new Set(['NO_VIDEO_TRACK', 'SOURCE_MISSING'])
 
-const warnings = computed(() => (job.value?.warnings ?? []).map(code => ({ code, text: t(`media.processing.warnings.${code}`) })))
+const failure = computed(() => {
+  if (props.state !== 'FAILED') return null
+  const code = job.value?.errorCode ?? null
+  const detail = job.value?.errorDetail ?? null
+  return { message: errorText(code), detail: code && PLAIN_DETAIL_CODES.has(code) ? null : detail }
+})
+
+/**
+ * Avertissements HDR : déjà présentés par la fiche au-dessus du lecteur, avec leur explication (« Couleurs
+ * HDR converties », « non converties ») ; ici, seuls les autres (affiche non extraite).
+ */
+const PAGE_NOTICE_WARNINGS: ReadonlySet<string> = new Set(['hdr_converted', 'hdr_unconverted'])
+const warnings = computed(() => (job.value?.warnings ?? [])
+  .filter(code => !PAGE_NOTICE_WARNINGS.has(code))
+  .map(code => ({ code, text: t(`media.processing.warnings.${code}`) })))
 
 // ─── Rendus ──────────────────────────────────────────────────────────────────
 
@@ -131,6 +144,10 @@ const inactiveNote = computed(() => {
 const busy = ref(false)
 const status = ref<{ variant: 'success' | 'error', message: string } | null>(null)
 const statusEl = useTemplateRef<HTMLElement>('statusEl')
+// Autre média dans la même page (navigation) : le message de l'ancien n'a plus de sens.
+watch(() => props.mediaId, () => {
+  status.value = null
+})
 
 /** Message d'un refus du serveur ; `stale` : la fiche ne reflète plus le média (à recharger). */
 function requestError(error: unknown): { message: string, stale: boolean } {
@@ -166,21 +183,32 @@ async function run() {
 
 // ─── Annonces (changements d'état seulement) ─────────────────────────────────
 
-type Transition = 'started' | 'finished' | 'failed' | 'retry'
+type Transition = 'started' | 'finished' | 'failed' | 'retry' | 'requeued'
 
-function transition(before: ProcessingStateValue | null, after: ProcessingStateValue | null): Transition | null {
+/**
+ * Remise en file (en cours → en attente) : échec passager si un essai a été compté, sinon tâche rendue
+ * sans échec (serveur arrêté ou redémarré pendant le calcul, jobs.ts `releaseJob`) : « échec » serait faux.
+ */
+function transition(before: ProcessingStateValue | null, after: ProcessingStateValue | null, failedAttempt: boolean): Transition | null {
   if (before === 'PENDING' && after === 'PROCESSING') return 'started'
-  if (before === 'PROCESSING' && after === 'PENDING') return 'retry'
+  if (before === 'PROCESSING' && after === 'PENDING') return failedAttempt ? 'retry' : 'requeued'
   if (!processingInProgress(before)) return null
   if (after === 'READY') return 'finished'
   return after === 'FAILED' ? 'failed' : null
 }
 
 const announcement = ref('')
-watch([() => props.mediaId, () => props.state], async ([id, state], [previousId, previousState]) => {
+// Navigateur seulement : les changements d'état n'arrivent que par le suivi (useProcessingPoll), qui
+// reporte l'état et la tâche ensemble (un seul passage de l'observateur).
+watch([() => props.mediaId, () => props.state, () => props.processing?.attempts ?? 0], async ([id, state, attempts], [previousId, previousState, previousAttempts]) => {
   // Autre média (navigation) : pas un changement d'état.
-  const kind = id === previousId ? transition(previousState, state) : null
+  const kind = id === previousId ? transition(previousState, state, attempts > previousAttempts) : null
   if (!kind) return
+  // « Traitement demandé » périmé une fois la tâche terminée (sauf s'il a le focus : il ne disparaît
+  // pas sous le curseur clavier).
+  if ((kind === 'finished' || kind === 'failed') && status.value?.variant === 'success' && !statusEl.value?.contains(document.activeElement)) {
+    status.value = null
+  }
   // Vidé puis rempli : un même message (deux traitements terminés) est annoncé de nouveau.
   announcement.value = ''
   await nextTick()
@@ -194,9 +222,8 @@ watch([() => props.mediaId, () => props.state], async ([id, state], [previousId,
       <h2 :id="titleId" class="text-base font-semibold text-foreground">
         {{ t('media.processing.title') }}
       </h2>
-      <UiBadge v-if="state" :variant="STATE_BADGES[state]">
-        {{ t(`media.processing.states.${state}`) }}
-      </UiBadge>
+      <!-- Même pastille que la carte ; tâche annulée par la corbeille : « en attente » ou « en cours » serait faux. -->
+      <AdminProcessingStateBadge v-if="state && !interrupted" :state="state" class="whitespace-normal" />
     </div>
 
     <p v-if="state === null" class="text-sm text-muted-foreground">
@@ -229,11 +256,15 @@ watch([() => props.mediaId, () => props.state], async ([id, state], [previousId,
       {{ previousError }}
     </p>
 
-    <UiAlert v-if="failure" variant="error">
+    <!-- « Avertissement » comme la pastille : la vidéo reste servie (original, rendus déjà produits). -->
+    <UiAlert v-if="failure" variant="warning">
       <p>{{ failure.message }}</p>
-      <p v-if="failure.detail" class="mt-1 text-xs break-words">
-        {{ t('media.processing.errorDetail', { detail: failure.detail }) }}
-      </p>
+      <!-- Détail rédigé en français par le serveur (pipeline.ts), quelle que soit la langue de l'interface. -->
+      <i18n-t v-if="failure.detail" keypath="media.processing.errorDetail" tag="p" scope="global" class="mt-1 text-xs break-words">
+        <template #detail>
+          <span lang="fr">{{ failure.detail }}</span>
+        </template>
+      </i18n-t>
     </UiAlert>
 
     <dl v-if="job" class="grid gap-x-6 gap-y-3 text-sm sm:grid-cols-2">
@@ -270,8 +301,9 @@ watch([() => props.mediaId, () => props.state], async ([id, state], [previousId,
         </dd>
       </div>
       <div v-if="job.finishedAt" class="grid gap-0.5">
+        <!-- Tâche annulée (mise à la corbeille) : interrompue, pas « terminée ». -->
         <dt class="text-muted-foreground">
-          {{ t('media.processing.finishedAt') }}
+          {{ job.status === 'CANCELLED' ? t('media.processing.cancelledAt') : t('media.processing.finishedAt') }}
         </dt>
         <dd class="font-medium text-foreground">
           <NuxtTime :datetime="job.finishedAt" :locale="locale" date-style="medium" time-style="short" />
@@ -290,7 +322,7 @@ watch([() => props.mediaId, () => props.state], async ([id, state], [previousId,
       </ul>
     </div>
 
-    <!-- Rendus : versions réencodées servies avant l'original (sources du lecteur). -->
+    <!-- Rendus : versions réencodées, sources du lecteur à la place de l'original (contrat `sources[]`). -->
     <div v-if="renditionItems.length > 0" class="grid gap-3 border-t border-border pt-4">
       <div>
         <h3 class="text-sm font-semibold text-foreground">
@@ -363,9 +395,10 @@ watch([() => props.mediaId, () => props.state], async ([id, state], [previousId,
 
     <div v-if="canRun" class="grid gap-2">
       <div>
-        <UiButton variant="secondary" :loading="busy" @click="run">
+        <!-- Pas d'indicateur animé (WCAG 2.2.2) ni de `disabled` (le focus resterait perdu) : texte « en cours ». -->
+        <UiButton variant="secondary" :aria-disabled="busy || undefined" @click="run">
           <RefreshCw aria-hidden="true" />
-          {{ state === null ? t('media.processing.run') : t('media.processing.rerun') }}
+          {{ busy ? t('media.processing.requesting') : state === null ? t('media.processing.run') : t('media.processing.rerun') }}
         </UiButton>
       </div>
       <p v-if="state === 'READY'" class="text-xs text-muted-foreground">
