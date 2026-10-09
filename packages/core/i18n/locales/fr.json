@@ -563,6 +563,7 @@
         "IMAGE": "Images : {types}, {max} au plus par fichier.",
         "VIDEO": "Vidéos : {types}, {max} au plus par fichier."
       },
+      "converted": "{types} : acceptés aussi, avec la même taille maximale, et convertis après l'envoi pour être lus dans tous les navigateurs.",
       "visibility": "Visibilité des fichiers envoyés",
       "queue": "Envois en cours et terminés",
       "progress": "Progression de l'envoi de {name}",
@@ -638,6 +639,12 @@
     "video": {
       "fallback": "Votre navigateur ne peut pas lire cette vidéo.",
       "download": "Télécharger le fichier",
+      "downloadOriginal": "Télécharger l'original",
+      "placeholder": {
+        "pending": "Cette vidéo sera lisible ici dès que sa version compatible sera prête.",
+        "unplayable": "Cette vidéo ne peut pas être lue par les navigateurs : son format n'a pas de version compatible."
+      },
+      "posterHintUnplayable": "Envoyez une image JPEG, PNG, WebP, AVIF ou GIF : elle est enregistrée en JPEG, sans ses métadonnées. L'image affichée par le lecteur pourra être utilisée quand la vidéo sera lisible ici.",
       "notices": {
         "variable": {
           "title": "Lecture variable selon les navigateurs",
@@ -666,13 +673,41 @@
         "captions": {
           "title": "Pas de sous-titres",
           "text": "Cette vidéo a du son mais aucune piste de sous-titres : ajoutez-en (ci-dessous) pour les personnes sourdes ou malentendantes, et pour les lectures sans le son (WCAG 1.2.2)."
+        },
+        "compatPending": {
+          "title": "Version compatible en préparation",
+          "text": "Codec {codec} : certains navigateurs ou appareils ne liront pas l'original. Une version H.264, lue partout, est en cours de préparation : le lecteur la proposera dès qu'elle sera prête."
+        },
+        "converting": {
+          "title": "Format converti après l'envoi",
+          "text": "Les navigateurs ne lisent pas ce format : la vidéo sera lisible une fois convertie en H.264. En attendant, l'original est proposé en téléchargement."
+        },
+        "convertFailed": {
+          "title": "Format non lisible",
+          "text": "Les navigateurs ne lisent pas ce format et sa conversion a échoué (voir « Traitement ») : seul le téléchargement de l'original est possible."
+        },
+        "dataTracks": {
+          "title": "Piste de données de l'appareil",
+          "text": "Ce fichier contient une piste de données de l'appareil qui l'a filmé, souvent des positions GPS : toute personne qui télécharge la vidéo peut la lire.",
+          "held": "Ce fichier contient une piste de données de l'appareil qui l'a filmé, souvent des positions GPS. Le traitement en cours la retire : d'ici là, la vidéo n'est lue que dans l'administration (son adresse publique et ses liens temporaires répondent « 503 », réessayer plus tard).",
+          "failed": "Ce fichier contient une piste de données de l'appareil qui l'a filmé, souvent des positions GPS, que le traitement n'a pas pu retirer : toute personne qui télécharge la vidéo peut la lire. Rendez la vidéo privée ou supprimez-la si ces données sont sensibles."
+        },
+        "hdr": {
+          "title": "Couleurs HDR converties",
+          "text": "Cette vidéo est en HDR : les couleurs de sa version compatible H.264 ont été converties en SDR pour s'afficher correctement sur tous les écrans. L'original garde ses couleurs HDR."
+        },
+        "hdrUnconverted": {
+          "title": "Couleurs HDR non converties",
+          "text": "Cette vidéo est en HDR, mais le serveur n'a pas les filtres de conversion des couleurs : sa version compatible H.264 peut avoir des couleurs ternes ou délavées."
         }
       },
       "snippet": {
         "title": "Intégrer la vidéo",
         "description": "Exemple pour une page web : lecteur natif avec ses commandes, sans lecture automatique ; seules les métadonnées sont chargées à l'avance.",
         "copy": "Copier l'exemple de lecteur vidéo",
-        "privateNote": "Exemple construit avec le lien temporaire : la vidéo ne sera plus lue après son échéance."
+        "privateNote": "Exemple construit avec le lien temporaire : la vidéo ne sera plus lue après son échéance.",
+        "pending": "L'exemple sera proposé dès que la version compatible de la vidéo sera prête : les navigateurs ne lisent pas son format d'origine.",
+        "unavailable": "Aucune version de cette vidéo n'est lisible par les navigateurs : pas d'exemple de lecteur à proposer."
       },
       "prepare": {
         "title": "Optimiser la vidéo",
@@ -946,6 +981,70 @@
         "PROCESSING": "Traitement en cours",
         "READY": "Traitée",
         "FAILED": "Échec du traitement"
+      },
+      "title": "Traitement",
+      "never": "Cette vidéo n'a jamais été traitée (envoyée avant l'activation du traitement des vidéos). Le traitement vérifie le fichier, retire les pistes de données de l'appareil, extrait une image d'affiche s'il en manque une et prépare une version compatible quand elle est utile.",
+      "queued": "La vidéo est dans la file d'attente : le traitement commencera dès qu'un processus sera disponible.",
+      "interrupted": "Traitement interrompu : le média est dans la corbeille. Il reprendra si le média est restauré.",
+      "currentStep": "Étape en cours : {step}",
+      "steps": {
+        "probe": "Analyse du fichier",
+        "sanitize": "Retrait des pistes de données",
+        "repair": "Réparation de l'index (WebM)",
+        "transcode": "Conversion H.264",
+        "av1": "Conversion AV1",
+        "poster": "Extraction de l'image d'affiche",
+        "verify": "Vérification du résultat"
+      },
+      "previousError": "Échec de l'essai précédent : {message}",
+      "errors": {
+        "NO_VIDEO_TRACK": "Le fichier ne contient aucune piste vidéo.",
+        "UNREADABLE": "Le fichier est illisible ou endommagé : il n'a pas pu être analysé.",
+        "CONVERSION_FAILED": "La conversion a échoué, ou la version produite n'a pas passé la vérification.",
+        "TOO_LONG": "La vidéo dépasse la durée maximale de traitement fixée sur le serveur : aucune version compatible n'a été produite.",
+        "TIMEOUT": "Le traitement a dépassé le délai autorisé.",
+        "SOURCE_MISSING": "Le fichier original est introuvable dans le stockage.",
+        "FFMPEG_UNAVAILABLE": "ffmpeg est absent ou inutilisable sur le serveur de traitement : contactez l'administrateur.",
+        "unknown": "Le traitement a échoué."
+      },
+      "errorDetail": "Détail technique : {detail}",
+      "attempt": "Essai",
+      "attemptValue": "{current} sur {max}",
+      "nextAttempt": "Prochain essai",
+      "createdAt": "Demandé le",
+      "startedAt": "Commencé le",
+      "finishedAt": "Terminé le",
+      "warningsTitle": "Remarques",
+      "warnings": {
+        "hdr_converted": "Couleurs HDR converties en SDR pour la version compatible.",
+        "hdr_unconverted": "Couleurs HDR non converties : les filtres de conversion manquent sur le serveur.",
+        "poster_failed": "L'image d'affiche n'a pas pu être extraite : choisissez-en une dans « Image d'affiche »."
+      },
+      "renditions": {
+        "title": "Versions compatibles",
+        "description": "Versions réencodées par le serveur, proposées au lecteur avant l'original (qui reste inchangé).",
+        "definition": "Définition",
+        "download": "Télécharger {format}"
+      },
+      "run": "Traiter la vidéo",
+      "rerun": "Relancer le traitement",
+      "rerunReadyHint": "Refait les versions compatibles avec les réglages actuels du serveur ; l'original n'est pas modifié.",
+      "requested": "Traitement demandé : la vidéo est dans la file d'attente.",
+      "requestErrors": {
+        "PROCESSING_DISABLED": "Le traitement des vidéos n'est pas actif sur ce serveur : réessayez plus tard ou contactez l'administrateur.",
+        "VERSION_CONFLICT": "Le fichier vient d'être remplacé : la fiche a été rechargée. Vérifiez l'état du traitement avant de le relancer.",
+        "IN_TRASH": "Ce média est dans la corbeille : restaurez-le avant de le traiter.",
+        "KIND_MISMATCH": "Seules les vidéos peuvent être traitées."
+      },
+      "inactive": {
+        "pending": "Le traitement des vidéos n'est pas actif sur ce serveur : la tâche attendra qu'il le soit.",
+        "rerun": "Le traitement des vidéos n'est pas actif sur ce serveur : il ne peut pas être relancé pour l'instant."
+      },
+      "announcements": {
+        "started": "Traitement de la vidéo commencé.",
+        "finished": "Traitement de la vidéo terminé.",
+        "failed": "Échec du traitement de la vidéo.",
+        "retry": "Échec passager du traitement de la vidéo : un nouvel essai aura lieu automatiquement."
       }
     }
   },
@@ -1597,7 +1696,9 @@
       "projects": "Projets : {names}",
       "deviceTrusted": "Pendant {days} jour | Pendant {days} jours",
       "deviceForgotten": "Cet appareil",
-      "devicesRevoked": "Aucun appareil | Un appareil | {count} appareils"
+      "devicesRevoked": "Aucun appareil | Un appareil | {count} appareils",
+      "processingBackfill": "Aucune vidéo ajoutée à la file | Une vidéo ajoutée à la file | {count} vidéos ajoutées à la file",
+      "processingBackfillPartial": "Interrompu par une erreur : les vidéos restantes n'ont pas été ajoutées"
     },
     "fields": {
       "name": "nom",
@@ -1735,6 +1836,153 @@
     "transforms": {
       "title": "Transformations d'images",
       "description": "Transformations libres des médias de la bibliothèque, préréglages communs à tous les projets et limites du serveur."
+    },
+    "videoProcessing": {
+      "title": "Traitement des vidéos",
+      "description": "Conversion des vidéos par ffmpeg après l'envoi : version lisible par tous les navigateurs, affiche, retrait des pistes de données de l'appareil (positions GPS), formats convertis (MKV, AVI…). Réglé par les variables d'environnement du serveur : section en lecture seule, sauf la mise en file des vidéos existantes.",
+      "loadError": "Impossible de charger l'état du traitement des vidéos.",
+      "refresh": "Actualiser l'état",
+      "loadedAt": "État lu à {time}",
+      "refreshed": "État du traitement des vidéos actualisé ({time}).",
+      "status": {
+        "title": "État",
+        "label": "Traitement",
+        "badges": {
+          "active": "Actif",
+          "off": "Désactivé",
+          "halted": "Arrêté",
+          "noFfmpeg": "Inactif",
+          "noWorker": "Inactif"
+        },
+        "text": {
+          "active": "Les vidéos sont traitées après l'envoi et les formats convertis (MKV, AVI…) sont acceptés.",
+          "off": "Aucune vidéo n'est traitée : elles sont servies telles qu'envoyées, et seuls les formats MP4, WebM et MOV sont acceptés.",
+          "halted": "ffmpeg est devenu inutilisable sur ce serveur : le traitement est suspendu, une nouvelle détection a lieu chaque minute. Les tâches déjà créées attendent dans la file ; les nouvelles vidéos ne sont pas mises en file et les formats convertis sont refusés.",
+          "noFfmpeg": "ffmpeg n'est pas utilisable sur ce serveur (voir « ffmpeg ») : les nouvelles vidéos ne sont pas mises en file et les formats convertis sont refusés.",
+          "noWorker": "Aucun processus de travail en état de traiter ne s'est signalé depuis 5 minutes : les nouvelles vidéos ne sont pas mises en file et les formats convertis sont refusés."
+        },
+        "mode": "Mode",
+        "modesLabel": "Modes possibles (variable NUXT_VIDEO_PROCESSING)",
+        "current": "mode actuel"
+      },
+      "modes": {
+        "line": "{label} ({value}) : {description}",
+        "off": {
+          "label": "Désactivé",
+          "description": "aucun traitement ; les vidéos sont servies telles qu'envoyées (MP4, WebM et MOV seulement)."
+        },
+        "embedded": {
+          "label": "Intégré",
+          "description": "ce serveur web traite lui-même les vidéos, ffmpeg en priorité basse ; pour une seule machine."
+        },
+        "external": {
+          "label": "Séparé",
+          "description": "des processus de travail lancés à part (« surge-media worker ») traitent les vidéos ; ce serveur ne fait que créer les tâches."
+        }
+      },
+      "enable": {
+        "title": "Activer le traitement des vidéos",
+        "text": "Installez ffmpeg 6 ou plus récent (avec les encodeurs libx264 et aac) sur le serveur, ajoutez NUXT_VIDEO_PROCESSING=embedded à son environnement — ou external, puis lancez des processus de travail avec « surge-media worker » — et redémarrez-le. Les autres variables (NUXT_VIDEO_…) sont décrites dans la documentation d'installation."
+      },
+      "ffmpeg": {
+        "title": "ffmpeg",
+        "notShownOff": "Non détecté : le traitement des vidéos est désactivé.",
+        "notShownExternal": "Ce serveur ne lance jamais ffmpeg en mode external : la version utilisée par chaque processus de travail figure dans leur liste.",
+        "version": "Version",
+        "unknownVersion": "Illisible",
+        "state": "État",
+        "usable": "Utilisable",
+        "unusable": "Inutilisable",
+        "encoders": "Encodeurs utiles présents",
+        "noEncoders": "Aucun",
+        "hdr": "Conversion des couleurs HDR",
+        "hdrAvailable": "Disponible : les vidéos HDR sont converties en SDR pour la version H.264.",
+        "hdrMissing": "Indisponible (filtres zscale et tonemap absents) : les vidéos HDR sont converties sans correction des couleurs.",
+        "av1": "Version AV1",
+        "av1Available": "Possible (libsvtav1 et libopus présents).",
+        "av1Missing": "Impossible : les encodeurs libsvtav1 et libopus sont nécessaires.",
+        "problemsTitle": "Problèmes détectés",
+        "problems": {
+          "ffmpeg_unavailable": "ffmpeg est introuvable ou ne démarre pas (variable NUXT_FFMPEG_PATH).",
+          "ffmpeg_outdated": "ffmpeg est trop ancien : la version 6 au moins est nécessaire.",
+          "ffprobe_unavailable": "ffprobe est introuvable ou ne démarre pas (variable NUXT_FFPROBE_PATH).",
+          "libx264_missing": "L'encodeur H.264 libx264 manque à ce ffmpeg.",
+          "aac_missing": "L'encodeur aac manque à ce ffmpeg."
+        }
+      },
+      "encoding": {
+        "title": "Réglages d'encodage",
+        "description": "Variables NUXT_VIDEO_… de ce serveur ; une modification demande un redémarrage.",
+        "externalNote": "En mode external, chaque processus de travail applique ses propres variables : les valeurs ci-dessous sont celles de ce serveur web.",
+        "rendition": "Version compatible H.264",
+        "renditionModes": {
+          "auto": "Seulement quand elle sert : codec peu compatible, format converti, plus de 1080p, débit élevé ou HDR.",
+          "always": "Pour chaque vidéo.",
+          "never": "Jamais, sauf pour les formats convertis."
+        },
+        "preset": "Préréglage x264",
+        "crf": "Qualité (CRF)",
+        "crfValue": "{crf} (plus bas : meilleure qualité, fichiers plus lourds)",
+        "av1": "Version AV1 en plus",
+        "on": "Activée",
+        "off": "Désactivée",
+        "av1Unavailable": "Activée, mais impossible avec ce ffmpeg",
+        "concurrency": "Tâches simultanées par processus",
+        "threads": "Fils de calcul par ffmpeg",
+        "maxDuration": "Durée maximale d'une vidéo"
+      },
+      "workers": {
+        "title": "Processus de travail",
+        "description": "Processus lancés par « surge-media worker » qui se sont signalés depuis moins d'un jour, les plus récents d'abord. Un processus est actif s'il s'est signalé dans les 5 dernières minutes.",
+        "states": {
+          "active": "Actif",
+          "halted": "Arrêté : ffmpeg inutilisable",
+          "absent": "Absent depuis plus de 5 minutes"
+        },
+        "seen": "Dernier signe de vie : {relative} ({date})",
+        "ffmpegVersion": "ffmpeg {version}",
+        "unknownVersion": "Version de ffmpeg inconnue",
+        "concurrency": "aucune tâche simultanée | une tâche à la fois | {count} tâches simultanées",
+        "identifier": "Identifiant : {id}",
+        "unknownHost": "Machine inconnue",
+        "empty": {
+          "off": "Aucun processus de travail : le traitement des vidéos est désactivé.",
+          "embedded": "Aucun processus de travail séparé : ce serveur traite lui-même les vidéos (mode embedded).",
+          "external": "Aucun processus de travail ne s'est signalé depuis un jour. Lancez « surge-media worker » sur une machine qui partage la base de données et le stockage de ce serveur."
+        }
+      },
+      "jobs": {
+        "title": "Tâches",
+        "description": "Tâches de traitement enregistrées, par statut.",
+        "queued": "En attente",
+        "running": "En cours",
+        "done": "Terminées",
+        "failed": "En échec",
+        "cancelled": "Annulées"
+      },
+      "backfill": {
+        "title": "Traiter les vidéos existantes",
+        "description": "Crée une tâche de priorité basse pour chaque vidéo jamais traitée (envoyée avant l'activation du traitement, ou pendant qu'il était inactif), hors corbeille. Les nouveaux envois restent prioritaires et les originaux sont conservés.",
+        "count": "Aucune vidéo jamais traitée. | Une vidéo jamais traitée, hors corbeille. | {count} vidéos jamais traitées, hors corbeille.",
+        "totalDuration": "Durée totale : {duration}.",
+        "estimate": "Temps de traitement estimé : jusqu'à environ {duration}.",
+        "estimateNote": "Estimation grossière, d'après la durée totale et les réglages d'encodage : les vidéos déjà compatibles ne sont pas réencodées, et la vitesse réelle dépend de la machine.",
+        "lessThanMinute": "moins d'une minute",
+        "button": "Traiter les vidéos existantes",
+        "disabledInactive": "Disponible quand le traitement des vidéos est actif.",
+        "disabledEmpty": "Rien à traiter : toutes les vidéos ont déjà été traitées ou sont en file.",
+        "dialog": {
+          "title": "Traiter les vidéos existantes ?",
+          "description": "Aucune vidéo à mettre en file. | Une tâche sera créée pour la vidéo jamais traitée, après les envois récents ; l'original est conservé. | Une tâche sera créée pour chacune des {count} vidéos jamais traitées, après les envois récents ; les originaux sont conservés.",
+          "estimate": "Temps estimé : jusqu'à environ {duration} (estimation grossière).",
+          "submit": "Ajouter à la file",
+          "submitting": "Ajout à la file en cours…"
+        },
+        "done": "Aucune vidéo ajoutée à la file : toutes ont été traitées ou mises en file entre-temps. | Une vidéo ajoutée à la file. | {count} vidéos ajoutées à la file.",
+        "errors": {
+          "PROCESSING_DISABLED": "Le traitement des vidéos n'est pas actif : aucune tâche n'a été créée. Son état est indiqué ci-dessus."
+        }
+      }
     }
   },
   "transforms": {

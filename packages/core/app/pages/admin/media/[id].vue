@@ -1,5 +1,6 @@
 <script setup lang="ts">
-import { ArchiveRestore, ArrowLeft, Camera, Copy, FolderInput, ImageUp, Link2, Trash2 } from '@lucide/vue'
+import { ArchiveRestore, ArrowLeft, Camera, Copy, Download, Film, FolderInput, ImageUp, Link2, Trash2 } from '@lucide/vue'
+import { type ProcessingSnapshot, processingInProgress, useProcessingPoll } from '~/composables/useProcessingPoll'
 import { MEDIA_TEXT_MAX_LENGTH, mediaMetadataSchema } from '#shared/schemas/media'
 import { videoSnippet } from '#shared/utils/snippets'
 import { htmlTrackKind } from '#shared/utils/text-tracks'
@@ -29,11 +30,26 @@ const media = computed(() => data.value?.media)
 const displayName = computed(() => media.value?.title || media.value?.originalName || '')
 const inTrash = computed(() => Boolean(media.value?.deletedAt))
 
-// ─── Vidéo (phase D : servie telle qu'envoyée, MP4/MOV préparés à l'envoi) ───
+// ─── Vidéo (phase D : MP4/MOV préparés à l'envoi, traitement par ffmpeg en D3) ───
 
 const isVideo = computed(() => media.value?.kind === 'VIDEO')
 const video = computed(() => (isVideo.value ? videoMetadata(media.value?.metadata) : null))
 const videoDescriptionId = useId()
+/** Tâche en attente ou en cours (avancement suivi, « Optimiser » masqué, avertissements adaptés). */
+const processingRunning = computed(() => isVideo.value && processingInProgress(media.value?.processingState))
+const processingEnabled = computed(() => rules.value?.videoProcessing.active ?? false)
+/** Rendu H.264 présent : la vidéo est lue partout, quel que soit le codec de l'original. */
+const hasH264 = computed(() => media.value?.renditions.some(rendition => rendition.name === 'h264') ?? false)
+/**
+ * Lecteur : `<source>` dans l'ordre de `sources` (rendus AV1 puis H.264, ou l'original lisible). Clé =
+ * leurs adresses : le lecteur n'est recréé que si elles changent (rendu prêt, nouvelle version), pas à
+ * chaque rechargement de la fiche (liens « admin » stables pendant une heure).
+ */
+const sourcesKey = computed(() => media.value?.sources.map(source => source.url).join(' ') ?? '')
+const playable = computed(() => (media.value?.sources.length ?? 0) > 0)
+/** Section « Traitement » : état connu, rendus, ou première fois proposée (traitement actif, droit d'écrire). */
+const showProcessing = computed(() => isVideo.value && media.value !== undefined
+  && (media.value.processingState !== null || media.value.renditions.length > 0 || (processingEnabled.value && canWrite.value)))
 /** MP4/MOV : seuls formats préparés (index en tête, métadonnées d'origine retirées). */
 const preparable = computed(() => video.value?.container === 'mp4' || video.value?.container === 'mov')
 const preparation = computed<readonly string[]>(() => rules.value?.videoPreparation ?? [])
@@ -56,23 +72,62 @@ const codecLines = computed(() => {
   ]
 })
 
-/** Points d'attention d'une vidéo servie telle quelle : compatibilité, lieu de tournage, index, durée. */
+interface VideoNotice {
+  key: string
+  variant: 'info' | 'warning'
+  title: string
+  text: string
+}
+
+/**
+ * Points d'attention d'une vidéo : compatibilité (et rendu en préparation), format converti, pistes de
+ * données de l'appareil, HDR, lieu de tournage, index, sous-titres, durée.
+ */
 const videoNotices = computed(() => {
   const meta = video.value
   const value = media.value
   if (!meta || !value) return []
-  const notices: { key: string, variant: 'info' | 'warning', text: string }[] = []
-  if (meta.playback === 'variable') notices.push({ key: 'variable', variant: 'warning', text: t('media.video.notices.variable.text', { codec: codecLabel(meta.videoCodec) }) })
-  if (meta.hasLocation) notices.push({ key: 'location', variant: value.visibility === 'PUBLIC' ? 'warning' : 'info', text: t('media.video.notices.location.text') })
+  const notices: VideoNotice[] = []
+  const add = (key: string, variant: VideoNotice['variant'], title: string, text: string) => notices.push({ key, variant, title, text })
+  const codec = codecLabel(meta.videoCodec)
+  // Format converti (MKV, AVI…) : jamais lu tel quel, seulement par son rendu H.264.
+  if (meta.playback === 'none' && !hasH264.value) {
+    if (value.processingState === 'FAILED') add('convertFailed', 'warning', t('media.video.notices.convertFailed.title'), t('media.video.notices.convertFailed.text'))
+    else add('converting', 'info', t('media.video.notices.converting.title'), t('media.video.notices.converting.text'))
+  }
+  // Codec lu selon le navigateur : sans objet dès que le rendu H.264 existe, « en préparation » avant.
+  if (meta.playback === 'variable' && !hasH264.value) {
+    if (processingRunning.value) add('compatPending', 'info', t('media.video.notices.compatPending.title'), t('media.video.notices.compatPending.text', { codec }))
+    else add('variable', 'warning', t('media.video.notices.variable.title'), t('media.video.notices.variable.text', { codec }))
+  }
+  // Pistes de données (positions GPS…) : diffusion retenue (503) jusqu'à leur retrait par le traitement,
+  // puis l'avertissement disparaît (la réécriture les retire des métadonnées).
+  if (meta.dataTracks.length > 0) {
+    const held = processingRunning.value && rules.value?.videoProcessing.mode !== 'off'
+    const exposed = value.visibility === 'PUBLIC'
+    const text = held
+      ? t('media.video.notices.dataTracks.held')
+      : value.processingState === 'FAILED' ? t('media.video.notices.dataTracks.failed') : t('media.video.notices.dataTracks.text')
+    add('dataTracks', held || exposed ? 'warning' : 'info', t('media.video.notices.dataTracks.title'), text)
+  }
+  // HDR : couleurs converties en SDR pour le rendu, ou rendu fait sans conversion (filtres absents).
+  if (value.processing?.warnings.includes('hdr_unconverted')) {
+    add('hdrUnconverted', 'warning', t('media.video.notices.hdrUnconverted.title'), t('media.video.notices.hdrUnconverted.text'))
+  }
+  else if (meta.hdr && hasH264.value) add('hdr', 'info', t('media.video.notices.hdr.title'), t('media.video.notices.hdr.text'))
+  if (meta.hasLocation) add('location', value.visibility === 'PUBLIC' ? 'warning' : 'info', t('media.video.notices.location.title'), t('media.video.notices.location.text'))
   // Envoyée avant la préparation automatique : l'appareil peut figurer dans le fichier.
-  else if (canPrepare.value && preparation.value.includes('metadata')) notices.push({ key: 'device', variant: 'info', text: t('media.video.notices.device.text') })
-  if (meta.faststart === false) notices.push({ key: 'faststart', variant: 'info', text: t('media.video.notices.faststart.text') })
+  else if (canPrepare.value && preparation.value.includes('metadata')) add('device', 'info', t('media.video.notices.device.title'), t('media.video.notices.device.text'))
+  if (meta.faststart === false) add('faststart', 'info', t('media.video.notices.faststart.title'), t('media.video.notices.faststart.text'))
   // Son sans sous-titres : WCAG 1.2.2 (sous-titres des contenus préenregistrés).
   if (meta.hasAudio && !value.textTracks.some(track => track.kind === 'SUBTITLES' || track.kind === 'CAPTIONS')) {
-    notices.push({ key: 'captions', variant: 'info', text: t('media.video.notices.captions.text') })
+    add('captions', 'info', t('media.video.notices.captions.title'), t('media.video.notices.captions.text'))
   }
-  if (value.duration === null) notices.push({ key: 'duration', variant: 'info', text: t('media.video.notices.duration.text') })
-  else if (meta.durationEstimated) notices.push({ key: 'estimated', variant: 'info', text: t('media.video.notices.estimated.text') })
+  // Format converti : durée inconnue jusqu'à l'analyse par le traitement (pas un défaut du fichier).
+  if (value.duration === null) {
+    if (meta.playback !== 'none') add('duration', 'info', t('media.video.notices.duration.title'), t('media.video.notices.duration.text'))
+  }
+  else if (meta.durationEstimated) add('estimated', 'info', t('media.video.notices.estimated.title'), t('media.video.notices.estimated.text'))
   return notices
 })
 
@@ -100,8 +155,12 @@ const project = computed(() => space.value?.project ?? null)
 const scopes = computed<readonly string[]>(() => data.value?.scopes ?? [])
 const canWrite = computed(() => scopes.value.includes('media:write'))
 const canDelete = computed(() => scopes.value.includes('media:delete'))
-/** « Optimiser » : vidéo MP4/MOV jamais examinée (envoyée avant D2), préparation activée sur le serveur. */
-const canPrepare = computed(() => canWrite.value && !inTrash.value && preparable.value && preparation.value.length > 0 && video.value?.prepared === null)
+/**
+ * « Optimiser » : vidéo MP4/MOV jamais examinée (envoyée avant D2), préparation activée sur le serveur.
+ * Masqué pendant un traitement : le nouveau fichier annulerait la tâche en cours.
+ */
+const canPrepare = computed(() => canWrite.value && !inTrash.value && preparable.value && preparation.value.length > 0
+  && video.value?.prepared === null && !processingRunning.value)
 const spaceLabel = computed(() => (project.value ? t('space.project', { name: project.value.name }) : t('space.library')))
 
 /** Liste d'où l'on vient : médias du projet ou bibliothèque (corbeille le cas échéant). */
@@ -128,8 +187,11 @@ onBeforeUnmount(() => {
 
 const FIELD_IDS = { title: 'media-title', altText: 'media-alt', visibility: 'media-visibility' } as const
 const form = reactive<{ title: string, altText: string, visibility: MediaVisibility | '' }>({ title: '', altText: '', visibility: '' })
-watch(media, (value) => {
-  if (value) Object.assign(form, { title: value.title ?? '', altText: value.altText ?? '', visibility: value.visibility })
+// Recopié seulement quand le média ou ces valeurs changent sur le serveur : le suivi du traitement et
+// les rechargements qui ne les touchent pas (affiche, pistes, rendu prêt…) gardent la saisie en cours.
+// Sources séparées : chaque valeur est comparée à la précédente (un nouvel objet `media` ne suffit pas).
+watch([() => media.value?.id, () => media.value?.title, () => media.value?.altText, () => media.value?.visibility], ([id, title, altText, visibility]) => {
+  if (id && visibility) Object.assign(form, { title: title ?? '', altText: altText ?? '', visibility })
 }, { immediate: true })
 
 const { validate, message, clear } = useFormValidation(mediaMetadataSchema, FIELD_IDS)
@@ -168,7 +230,14 @@ const durationId = useId()
 const duration = ref(String(SIGNED_URL_DURATIONS[0]))
 const DURATION_KEYS: Record<(typeof SIGNED_URL_DURATIONS)[number], string> = { 3600: 'hour', 86400: 'day', 604800: 'week' }
 const durationOptions = computed(() => SIGNED_URL_DURATIONS.map(seconds => ({ value: String(seconds), label: t(`media.links.durations.${DURATION_KEYS[seconds]}`) })))
-const link = ref<{ url: string, expiresAt: string, posterUrl: string | null, tracks: { id: string, url: string }[] } | null>(null)
+/** Lien temporaire et adresses signées jusqu'à la même échéance (affiche, pistes, sources du lecteur). */
+const link = ref<{
+  url: string
+  expiresAt: string
+  posterUrl: string | null
+  tracks: { id: string, url: string }[]
+  sources: { url: string, type: string }[]
+} | null>(null)
 const linkError = ref<string>()
 const generating = ref(false)
 
@@ -177,7 +246,7 @@ async function generateLink() {
   generating.value = true
   try {
     const result = await $api(`/api/admin/media/${mediaId.value}/signed-url`, { method: 'POST', body: { expiresIn: Number(duration.value) } })
-    link.value = { url: result.url, expiresAt: String(result.expiresAt), posterUrl: result.posterUrl, tracks: result.tracks }
+    link.value = { url: result.url, expiresAt: String(result.expiresAt), posterUrl: result.posterUrl, tracks: result.tracks, sources: result.sources }
   }
   catch {
     linkError.value = t('common.unexpectedError')
@@ -187,10 +256,22 @@ async function generateLink() {
   }
 }
 
+/**
+ * Sources de l'extrait <video> : permanentes (public) ou signées avec le lien temporaire (privé) ; null
+ * tant que le lien n'est pas créé. [] : aucune source lisible (format converti sans rendu).
+ */
+const snippetSources = computed(() => {
+  const value = media.value
+  if (!value || !video.value) return null
+  return value.visibility === 'PUBLIC' ? (publicUrl.value ? data.value?.publicSources ?? [] : null) : link.value?.sources ?? null
+})
+
 /** Extrait <video> : adresse publique, ou lien temporaire une fois créé (média privé). */
 const snippet = computed(() => {
   const value = media.value
-  if (!value || !video.value) return null
+  const sources = snippetSources.value
+  // Sans source lisible, l'extrait proposerait l'original (MKV…) qu'aucun navigateur ne lit.
+  if (!value || !video.value || !sources?.length) return null
   const isPublic = value.visibility === 'PUBLIC'
   const url = isPublic ? publicUrl.value : link.value?.url
   if (!url) return null
@@ -200,6 +281,7 @@ const snippet = computed(() => {
     url,
     mimeType: value.mimeType,
     codecs: video.value.codecs,
+    sources,
     width: value.width,
     height: value.height,
     label: value.altText || value.title || '',
@@ -213,6 +295,9 @@ const snippet = computed(() => {
     })),
   })
 })
+
+/** Aucune source lisible (format converti sans rendu) : pas d'extrait, une explication à la place. */
+const snippetUnavailable = computed(() => snippetSources.value?.length === 0)
 
 /** Nouveau point d'intérêt = nouvelle version : adresses rechargées, lien temporaire périmé. */
 async function onFocalSaved() {
@@ -330,6 +415,46 @@ async function prepareVideo() {
     await nextTick()
     prepareStatusEl.value?.focus()
   }
+}
+
+// ─── Traitement (vidéos, phase D3) ───────────────────────────────────────────
+
+/**
+ * Nouvel état du traitement (suivi toutes les 5 s, ou réponse de « Relancer ») : reporté dans la fiche
+ * sans la recharger tant que la version est la même et la tâche en attente ou en cours. Sinon (fichier
+ * réécrit par la tâche, rendu remplacé, tâche terminée ou en échec), la fiche entière est rechargée :
+ * sources du lecteur, rendus, affiche, métadonnées ; le lien temporaire, lié à la version, est à refaire.
+ * Le formulaire n'est pas touché (observateur sur ses seules valeurs).
+ */
+async function applyProcessing(id: string, snapshot: ProcessingSnapshot) {
+  const current = data.value
+  if (!current || current.media.id !== id) return
+  const before = current.media
+  if (snapshot.version !== before.version || !processingInProgress(snapshot.processingState)) {
+    await refresh()
+    link.value = null
+    return
+  }
+  if (snapshot.processingState === before.processingState && snapshot.processing?.updatedAt === before.processing?.updatedAt) return
+  data.value = { ...current, media: { ...before, processingState: snapshot.processingState, processing: snapshot.processing } }
+}
+
+// Suivi dans le navigateur, seulement pendant la tâche (pas dans la corbeille : tâche annulée).
+useProcessingPoll({
+  target: () => (processingRunning.value && !inTrash.value ? media.value?.id ?? null : null),
+  fetch: (id, signal) => $api(`/api/admin/media/${id}/processing`, { signal }),
+  onResult: applyProcessing,
+})
+
+/** « Traiter » / « Relancer » accepté : tâche en file, état reporté sans recharger la fiche. */
+async function onProcessingRequested(snapshot: ProcessingSnapshot) {
+  if (media.value) await applyProcessing(media.value.id, snapshot)
+}
+
+/** Fiche périmée (fichier remplacé, corbeille) signalée par « Relancer ». */
+async function onProcessingStale() {
+  await refresh()
+  link.value = null
 }
 
 // ─── Remplacement, corbeille ─────────────────────────────────────────────────
@@ -537,9 +662,9 @@ const pageFlash = flash.consume()
           <figure :class="cn('overflow-hidden rounded-xl border border-border', isVideo ? 'bg-muted' : 'bg-checker')">
             <!-- Lecteur natif : commandes au clavier, jamais de lecture automatique (WCAG 1.4.2), métadonnées seules chargées. -->
             <video
-              v-if="isVideo"
+              v-if="isVideo && playable"
+              :key="sourcesKey"
               ref="player"
-              :src="media.url"
               :poster="media.poster?.url ?? undefined"
               controls
               preload="metadata"
@@ -550,6 +675,7 @@ const pageFlash = flash.consume()
               :aria-describedby="media.altText ? videoDescriptionId : undefined"
               class="mx-auto block h-auto max-h-[28rem] w-auto max-w-full"
             >
+              <source v-for="source in media.sources" :key="source.url" :src="source.url" :type="source.type">
               <track
                 v-for="track in media.textTracks"
                 :key="track.id"
@@ -564,6 +690,17 @@ const pageFlash = flash.consume()
                 <a :href="media.url" class="text-primary underline underline-offset-4">{{ t('media.video.download') }}</a>
               </p>
             </video>
+            <!-- Aucune source lisible (format converti sans rendu) : même emplacement, original en téléchargement. -->
+            <div v-else-if="isVideo" class="flex aspect-video max-h-[28rem] w-full flex-col items-center justify-center gap-3 p-6 text-center">
+              <Film class="size-8 text-muted-foreground" aria-hidden="true" />
+              <p class="max-w-sm text-sm text-foreground">
+                {{ processingRunning ? t('media.video.placeholder.pending') : t('media.video.placeholder.unplayable') }}
+              </p>
+              <a :href="media.url" class="inline-flex min-h-6 items-center gap-1.5 rounded-sm text-sm font-medium text-primary underline underline-offset-4">
+                <Download class="size-4" aria-hidden="true" />
+                {{ t('media.video.downloadOriginal') }}
+              </a>
+            </div>
             <img
               v-else
               :src="media.url"
@@ -578,7 +715,7 @@ const pageFlash = flash.consume()
           </figure>
 
           <div v-if="videoNotices.length > 0 || prepareStatus" class="grid gap-3">
-            <UiAlert v-for="notice in videoNotices" :key="notice.key" :variant="notice.variant" :title="t(`media.video.notices.${notice.key}.title`)">
+            <UiAlert v-for="notice in videoNotices" :key="notice.key" :variant="notice.variant" :title="notice.title">
               {{ notice.text }}
             </UiAlert>
             <div v-if="prepareStatus" ref="prepareStatusEl" tabindex="-1" class="rounded-lg">
@@ -587,6 +724,20 @@ const pageFlash = flash.consume()
               </UiAlert>
             </div>
           </div>
+
+          <!-- Traitement par ffmpeg (phase D3) : état, avancement suivi pendant la tâche, rendus, « Relancer ». -->
+          <AdminVideoProcessingPanel
+            v-if="showProcessing"
+            :media-id="media.id"
+            :state="media.processingState"
+            :processing="media.processing"
+            :renditions="media.renditions"
+            :can-write="canWrite"
+            :in-trash="inTrash"
+            :active="processingEnabled"
+            @updated="onProcessingRequested"
+            @stale="onProcessingStale"
+          />
 
           <!-- Image d'affiche : vignette, attribut poster, source des dérivés de la vidéo. -->
           <section v-if="isVideo && !inTrash" aria-labelledby="poster-title" class="grid gap-4 rounded-xl border border-border bg-surface p-5 shadow-xs">
@@ -620,7 +771,8 @@ const pageFlash = flash.consume()
             </div>
             <template v-if="canWrite">
               <div class="flex flex-wrap gap-2">
-                <UiButton variant="secondary" :loading="posterBusy === 'capture'" :disabled="posterBusy !== null" @click="useDisplayedFrame">
+                <!-- Capture : seulement avec un lecteur (format converti sans rendu : rien à afficher). -->
+                <UiButton v-if="playable" variant="secondary" :loading="posterBusy === 'capture'" :disabled="posterBusy !== null" @click="useDisplayedFrame">
                   <Camera aria-hidden="true" />
                   {{ t('media.poster.capture') }}
                 </UiButton>
@@ -635,7 +787,7 @@ const pageFlash = flash.consume()
               </div>
               <input ref="posterInput" type="file" class="hidden" :accept="posterAccept" @change="onPosterFile">
               <p class="text-xs text-muted-foreground">
-                {{ t('media.poster.hint') }}
+                {{ playable ? t('media.poster.hint') : t('media.video.posterHintUnplayable') }}
               </p>
             </template>
           </section>
@@ -956,6 +1108,14 @@ const pageFlash = flash.consume()
                 </template>
               </p>
               <pre class="rounded-lg border border-border bg-muted p-3 font-mono text-xs break-all whitespace-pre-wrap text-foreground"><code>{{ snippet }}</code></pre>
+            </div>
+            <div v-else-if="snippetUnavailable" class="mt-5 grid gap-2 border-t border-border pt-5">
+              <h3 class="text-sm font-semibold text-foreground">
+                {{ t('media.video.snippet.title') }}
+              </h3>
+              <p class="text-sm text-muted-foreground">
+                {{ processingRunning ? t('media.video.snippet.pending') : t('media.video.snippet.unavailable') }}
+              </p>
             </div>
           </section>
 
