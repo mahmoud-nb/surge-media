@@ -54,22 +54,29 @@ export function parseFfmpegVersion(output: string): { version: string, major: nu
   return { version, major: major !== null && major > 0 ? major : null }
 }
 
-/** Noms des encodeurs de `ffmpeg -encoders` (lignes ` V....D libx264  …` après la légende). */
+/**
+ * Noms des encodeurs de `ffmpeg -encoders` (lignes ` V....D libx264  …` après la légende). Nombre de colonnes
+ * d'indicateurs libre : il change d'une version de ffmpeg à l'autre (voir `parseFilters`).
+ */
 export function parseEncoders(output: string): Set<string> {
   const encoders = new Set<string>()
   for (const line of output.split(/\r?\n/)) {
-    const match = /^\s([VAS][A-Z.]{5})\s+(\S+)/.exec(line)
+    const match = /^\s([VAS][A-Z.]{3,7})\s+(\S+)/.exec(line)
     // La légende (` V..... = Video`) a la même forme : son « nom » est `=`.
     if (match && match[2] !== '=') encoders.add(match[2]!)
   }
   return encoders
 }
 
-/** Noms des filtres de `ffmpeg -filters` (lignes ` .SC zscale  V->V  …`). */
+/**
+ * Noms des filtres de `ffmpeg -filters` : lignes ` .SC zscale  V->V  …` jusqu'à ffmpeg 7, ` .S zscale  V->V  …`
+ * depuis ffmpeg 8 (colonne « commandes » retirée). Le nombre de colonnes d'indicateurs n'est donc pas fixé ;
+ * la colonne des entrées et sorties (`V->V`) distingue les lignes de filtres de la légende.
+ */
 export function parseFilters(output: string): Set<string> {
   const filters = new Set<string>()
   for (const line of output.split(/\r?\n/)) {
-    const match = /^\s[A-Z.]{3}\s+(\S+)\s+\S*->\S*/.exec(line)
+    const match = /^\s[A-Z.|]{1,5}\s+(\S+)\s+\S*->\S*/.exec(line)
     if (match) filters.add(match[1]!)
   }
   return filters

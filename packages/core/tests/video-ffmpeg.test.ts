@@ -146,6 +146,11 @@ const video = (size: string, rate: number, duration: number, source = 'testsrc2'
   ['-f', 'lavfi', '-i', `${source}${source.includes('=') ? ':' : '='}size=${size}:rate=${rate}:duration=${duration}`]
 const tone = (duration: number) => ['-f', 'lavfi', '-i', `sine=frequency=440:sample_rate=48000:duration=${duration}`]
 const X264 = ['-c:v', 'libx264', '-preset', 'ultrafast', '-pix_fmt', 'yuv420p']
+/**
+ * HEVC HLG : couleurs écrites aussi dans le flux (VUI de x265). Les versions récentes de ffmpeg (développement,
+ * octobre 2026) n'y reportent plus `-color_trc`/`-color_primaries` seuls : le fichier serait alors SDR pour ffprobe.
+ */
+const HLG_X265 = 'log-level=error:colorprim=bt2020:transfer=arib-std-b67:colormatrix=bt2020nc'
 
 /** Lance ffmpeg avec des arguments construits par args.ts ; échec → erreur avec la fin du journal. */
 async function ffmpeg(args: string[], onProgress?: (seconds: number) => void) {
@@ -200,7 +205,7 @@ describe.skipIf(!hasFfmpeg)('ffmpeg réel (vidéos fabriquées par lavfi)', { ti
     }
     await Promise.all([
       // Téléphone : HEVC 10 bits HLG + AAC, puis tourné d'un quart de tour (matrice d'affichage) et localisé.
-      generate(file('hlg-source.mov'), [...video('320x180', 30, 1), ...tone(1), '-c:v', 'libx265', '-x265-params', 'log-level=error', '-pix_fmt', 'yuv420p10le', '-tag:v', 'hvc1',
+      generate(file('hlg-source.mov'), [...video('320x180', 30, 1), ...tone(1), '-c:v', 'libx265', '-x265-params', HLG_X265, '-pix_fmt', 'yuv420p10le', '-tag:v', 'hvc1',
         '-color_primaries', 'bt2020', '-color_trc', 'arib-std-b67', '-colorspace', 'bt2020nc', '-c:a', 'aac', '-shortest'])
         .then(() => generate(add('iphone', 'mov'), ['-display_rotation:v:0', '-90', '-i', file('hlg-source.mov'), '-c', 'copy', '-metadata', 'location=+48.8584+002.2945/'])),
       generate(add('fast', 'mkv'), [...video('320x180', 120, 1), ...tone(1), ...X264, '-c:a', 'aac', '-shortest']),
@@ -465,7 +470,7 @@ describe.skipIf(!hasFfmpeg)('ffmpeg réel (vidéos fabriquées par lavfi)', { ti
 
   it('4K HDR (HLG) sous la limite mémoire par défaut (4 Gio), même avec 64 fils demandés (bornés à 16)', { timeout: 120_000 }, async () => {
     const source = file('hlg-4k.mov')
-    await generate(source, [...video('3840x2160', 30, 1), '-c:v', 'libx265', '-preset', 'ultrafast', '-x265-params', 'log-level=error', '-pix_fmt', 'yuv420p10le',
+    await generate(source, [...video('3840x2160', 30, 1), '-c:v', 'libx265', '-preset', 'ultrafast', '-x265-params', HLG_X265, '-pix_fmt', 'yuv420p10le',
       '-tag:v', 'hvc1', '-color_primaries', 'bt2020', '-color_trc', 'arib-std-b67', '-colorspace', 'bt2020nc'])
     const analysis = await runFfprobe(settings, 'mov', source)
     expect(analysis.video).toMatchObject({ width: 3840, height: 2160, hdr: 'hlg', bitDepth: 10 })
