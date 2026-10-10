@@ -45,6 +45,10 @@ export default defineNuxtConfig({
     // URL publique de l'installation (ex. https://media.example.com), demandée par
     // `surge-media init` ; à défaut, déduite de chaque requête — NUXT_SITE_URL
     siteUrl: '',
+    // Mandataires inverses de confiance pour X-Forwarded-For (adresse IP réelle du client) : true = boucle
+    // locale et réseaux privés (Docker), false = en-tête ignoré, ou liste d'adresses / plages CIDR
+    // (server/lib/http/client-ip.ts) — NUXT_TRUST_PROXY. Texte : Nitro peut en faire un booléen (destr), géré.
+    trustProxy: 'true',
     // nuxt-auth-utils : cookie scellé HTTP-only (secret : NUXT_SESSION_PASSWORD).
     session: {
       name: 'surge-media-session',

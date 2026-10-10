@@ -194,6 +194,9 @@ changent, `pnpm a11y:contrast`.
 - **SQLite** convient à **un seul serveur** et à un **trafic modéré** : chaque accès à la base bloque le processus, et
   les écritures de plusieurs processus s'attendent. Pour un trafic soutenu, plusieurs processus ou plusieurs
   serveurs : PostgreSQL ou MySQL (mesures et seuils : § 12.1 ; le tableau de bord signale une base sous pression).
+  Le serveur passe la base en **WAL** au démarrage et le vérifie (avertissement si SQLite le refuse : partage réseau,
+  fichier en lecture seule) ; attente d'un verrou : 10 s. Une seule connexion par processus avec Prisma 7 :
+  `?connection_limit=1` (réglage du moteur Rust de Prisma ≤ 6) est inutile, et les paramètres de l'URL sont ignorés.
 
 ### 6.2 La CLI `surge-media`
 
@@ -255,6 +258,7 @@ Le fichier `packages/core/.env` est créé par `pnpm db:init` à partir de `.env
 | `NUXT_BOOTSTRAP_ADMIN_PASSWORD` | — | mot de passe d'amorçage (12 caractères minimum) |
 | `SURGE_MEDIA_LANG` | locale système, sinon `fr` | langue de la CLI |
 | `NUXT_SITE_URL` | demandée par `db:init` | URL publique de l'installation ; sans valeur, déduite de chaque requête (avertissement au démarrage en production) |
+| `NUXT_TRUST_PROXY` | `true` | mandataires inverses de confiance pour `X-Forwarded-For` (adresse IP réelle du client : limites de débit, journal d'audit, sessions) : `true` = boucle locale et réseaux privés (Docker), `false` = en-tête ignoré, ou liste d'adresses / plages CIDR avec `loopback` et `private` (§ 12) |
 | `NUXT_MEDIA_PUBLIC_URL` | — (= `NUXT_SITE_URL`) | base des adresses de diffusion `/m/…` si elle diffère : CDN, sous-domaine dédié (§ 7.4) |
 | `NUXT_MEDIA_MAX_UPLOAD_SIZE` | `26214400` (25 Mio) | taille maximale d'une **image** envoyée, en octets |
 | `NUXT_MEDIA_MAX_VIDEO_UPLOAD_SIZE` | `536870912` (512 Mio) | taille maximale d'une **vidéo** envoyée, en octets ; `2147483647` (2 Gio − 1) au plus, plafond de la colonne `Media.size` (§ 7.7) |
@@ -1830,9 +1834,18 @@ pnpm start                          # node --env-file-if-exists=.env .output/ser
   un CDN ou un domaine dédié (§ 7.4).
 - `NUXT_SESSION_PASSWORD` est obligatoire et doit rester stable ; servez l'application en **HTTPS**
   (cookie `Secure`), derrière un proxy qui transmet l'en-tête `Host` d'origine (contrôle CSRF).
-- Derrière un proxy, le limiteur de connexion voit l'IP du proxy : la limite par IP (50 échecs / 15 min)
-  s'applique alors à tous les utilisateurs. La prise en compte de `X-Forwarded-For` (proxy de
-  confiance) est à ajouter avant un déploiement à fort trafic.
+- **Derrière un mandataire inverse** (Docker + nginx, Traefik, Caddy…) : l'adresse IP réelle du client est lue dans
+  `X-Forwarded-For` quand la connexion vient d'un mandataire de confiance (`NUXT_TRUST_PROXY`, défaut `true` : boucle
+  locale et réseaux privés, dont les réseaux de Docker). Elle sert aux limites de débit (connexion, API v1,
+  transformations de `/m/`), au journal d'audit, aux sessions et aux appareils de confiance. Lecture de droite à
+  gauche : la première adresse qui n'est pas un mandataire de confiance est le client, une adresse ajoutée par le
+  client lui-même est ignorée, et un client qui joint directement le serveur depuis Internet ne peut rien usurper.
+  Le mandataire doit **ajouter** l'adresse de son client (nginx : `proxy_set_header X-Forwarded-For
+  $proxy_add_x_forwarded_for;` ; Traefik et Caddy le font d'office) et transmettre `Host`. Mandataire sur une
+  adresse publique, ou CDN devant lui : lister ses adresses (`NUXT_TRUST_PROXY="private,203.0.113.10"`, plages
+  CIDR acceptées). Ne publiez pas le port du conteneur de l'application : seul le mandataire doit l'atteindre (le
+  proxy de Docker peut présenter un client extérieur avec l'adresse privée de la passerelle) ; sans mandataire,
+  `NUXT_TRUST_PROXY=false`.
 - Le client Prisma est lié au fournisseur choisi : tout changement de fournisseur impose un rebuild.
 - `GET /api/health` : 200 si base, stockage et sharp répondent, 503 sinon (sonde Docker / orchestrateur). Le
   bloc `videoProcessing: { mode, workers, queued }` est une information hors `checks`, qui ne change jamais le
@@ -1849,7 +1862,7 @@ pnpm start                          # node --env-file-if-exists=.env .output/ser
   § 12.1) ; redémarrer après tout changement de `.env`.
 - API v1 : définir `NUXT_SITE_URL` (adresses absolues de l'API et de la spécification) ; limitation de
   débit et caches en mémoire du processus (plusieurs instances : prévoir Redis, pas encore branché) ;
-  derrière un proxy, l'IP vue par les limiteurs est celle du proxy (voir plus haut).
+  derrière un mandataire, les limiteurs voient l'adresse réelle du client (`NUXT_TRUST_PROXY`, voir plus haut).
 - Traitements d'images : ajuster `NUXT_MEDIA_PROCESSING_CONCURRENCY` (défaut : nombre de cœurs) à la
   mémoire disponible (une image de 100 Mpx décodée occupe plusieurs centaines de Mo) ; une file pleine
   répond 503 avec `Retry-After`.
@@ -1958,10 +1971,10 @@ observation ; le journal du serveur l'annonce aussi (au plus toutes les 15 minut
 - Au-delà d'un processus : **PostgreSQL ou MySQL**, puis plusieurs instances derrière un répartiteur. Les limites
   de débit et les caches restent **par processus** (Redis pas encore branché) : chaque limite est alors multipliée
   par le nombre d'instances.
-- **Limites de débit par défaut** de l'API v1 (§ 6.3) : une clé publique a 300 requêtes/min **par adresse IP** ;
-  derrière un mandataire, sans prise en charge de `X-Forwarded-For` (pas encore faite), tous les visiteurs ont
-  l'adresse du mandataire et partagent ces 300 requêtes/min (idem pour les 60 transformations libres par minute
-  de `/m/`) : relever `NUXT_API_RATE_LIMIT_*` et `NUXT_MEDIA_TRANSFORM_RATE_LIMIT` selon le trafic attendu.
+- **Limites de débit par défaut** de l'API v1 (§ 6.3) : une clé publique a 300 requêtes/min **par adresse IP** du
+  client (adresse réelle derrière un mandataire, `NUXT_TRUST_PROXY`, § 12) ; 60 transformations libres par minute
+  et par IP sur `/m/` : relever `NUXT_API_RATE_LIMIT_*` et `NUXT_MEDIA_TRANSFORM_RATE_LIMIT` selon le trafic attendu
+  (un CDN devant `/m/` concentre ses requêtes sur ses propres adresses : déclarer ses plages comme mandataires).
 - **Mesurer sur la machine cible** : le même portable a donné des débits 7 fois plus faibles sur batterie.
 
 ## 13. Choix techniques et versions épinglées
@@ -2068,6 +2081,7 @@ observation ; le journal du serveur l'annonce aussi (au plus toutes les 15 minut
 | Une adresse de vidéo copiée juste après l'envoi redirige (302) | normal : le retrait d'une piste de données ou la réparation d'un WebM crée une nouvelle version ; l'ancienne URL redirige vers la nouvelle |
 | Windows : `ffmpeg -version` fonctionne mais le serveur dit « ffmpeg introuvable ou inutilisable » | `PATH` du serveur antérieur à l'installation (ouvrir une nouvelle console, ou chemin complet dans `NUXT_FFMPEG_PATH`, § 7.7), ou binaire bloqué par le « Contrôle intelligent des applications » (comme argon2 et oxc-transform) |
 | En développement : Ctrl+C sur `pnpm dev` pendant un encodage | ffmpeg s'arrête avec le serveur ; au redémarrage, la tâche est reprise (bail rendu échu aussitôt, un essai compté) — vérifié sous Linux ; Windows : non rejoué (le Ctrl+C de `surge-media worker` et de `pnpm start` l'a été, § 7.7) |
+| Journal d'audit, sessions ou limites de débit : adresse du mandataire (`172.x`, `10.x`) au lieu de celle du client | mandataire sur une adresse publique (la lister dans `NUXT_TRUST_PROXY`), `NUXT_TRUST_PROXY=false`, ou mandataire qui n'ajoute pas `X-Forwarded-For` (nginx : `proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;`) ; une entrée invalide du réglage est signalée au démarrage |
 | Tableau de bord : « La base SQLite est sous pression » ou « Trafic élevé pour une base SQLite » | constat mesuré par le serveur (§ 12.1) : attentes de verrou dépassées (requêtes en échec), opérations lentes, base occupant le processus ; passer à PostgreSQL ou MySQL si le trafic est durable, ne pas faire écrire plusieurs processus dans la même base. Le constat reste affiché 24 h |
 | Requêtes de `/m/` sans réponse jusqu'au délai du client (connexions persistantes, mandataire nginx `keepalive`) | corrigé le 2026-10-10 (`responseReady`, § 12.1) : la réponse attend sa connexion avant d'envoyer le fichier |
 | Débit faible (≈ 100 à 800 requêtes/s), processeur saturé, même sur des réponses 304 | corrigé le 2026-10-10 : configuration d'exécution calculée une fois (§ 12.1). Une variable d'environnement changée sans redémarrage n'est plus vue : redémarrer |
@@ -3390,3 +3404,36 @@ pnpm install          # aucune nouvelle dépendance, aucune migration
 ```
 Redémarrer le serveur (nouveaux plugins). Avec SQLite en production, un message rappelle ses limites au démarrage ;
 le tableau de bord (ADMIN) signale une base sous pression.
+
+### Maintenance — 2026-10-10 (suite) — Adresse IP réelle derrière un mandataire, WAL vérifié
+
+**Cadre** : décisions de l'utilisateur après le test de charge — déploiement en Docker derrière un mandataire inverse :
+prendre en compte `X-Forwarded-For` pour que les limites de débit et le journal d'audit voient la vraie adresse du
+client ; garder l'attente du verrou SQLite à 10 s et s'assurer que le mode WAL est actif.
+
+**Ajouté**
+- `NUXT_TRUST_PROXY` (défaut `true` : boucle locale et réseaux privés ; `false` ; ou liste d'adresses et de plages
+  CIDR avec `loopback` / `private`), § 6.3 et § 12. `server/lib/http/client-ip.ts` (pur, testé : normalisation des
+  adresses, mandataires de confiance par `net.BlockList`, lecture de droite à gauche) et plugin
+  `server/plugins/client-ip.ts`, qui pose `event.context.clientAddress` une fois par requête avant tout crochet :
+  `getRequestIP(event)` de h3 le rend en priorité, d'où une seule adresse partout (limiteurs de connexion, de l'API v1
+  et de `/m/`, journal d'audit, sessions, appareils de confiance, dernière utilisation des identifiants), sans
+  modifier ces modules. Pas le « plus à gauche » de h3 (`xForwardedFor: true`) ni le `trust proxy: true` d'Express :
+  usurpables quand le mandataire ajoute à l'en-tête reçu.
+- WAL : le résultat de `PRAGMA journal_mode = WAL` est vérifié (avertissement si SQLite garde un autre mode).
+  `?connection_limit=1` n'a pas été ajouté : il réglait le pool du moteur Rust de Prisma ≤ 6, absent avec les
+  « driver adapters » (une seule connexion par processus, transactions déjà sérialisées).
+
+**Vérifié** : 14 tests (`tests/client-ip.test.ts` : usurpations, IPv6, ports, en-têtes multiples ou démesurés,
+listes) ; Vitest **553 tests** en 29 fichiers ; typecheck ; i18n. De bout en bout sur la build de production d'une copie
+isolée : avec le défaut, 32 échecs d'authentification « depuis » A → A limité (429), B derrière le même mandataire non
+limité, « A, C » → C retenu, « C, A » → A retenu, IP de la session et du journal d'audit = client réel (adresse usurpée
+à gauche ignorée) ; avec `false` et avec une liste sans la boucle locale : en-tête ignoré partout, entrée invalide
+signalée au démarrage. WAL constaté sur la base de la copie et sur celle de développement.
+
+**Après `git pull`**
+```bash
+pnpm install          # aucune nouvelle dépendance, aucune migration
+```
+Redémarrer le serveur. En Docker derrière un mandataire : rien à régler si le mandataire est sur un réseau privé et
+ajoute `X-Forwarded-For` (sinon § 12) ; ne pas publier le port du conteneur de l'application.

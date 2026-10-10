@@ -12,7 +12,13 @@ import { useDatabasePressureMonitor } from '../lib/database/pressure'
  * leurs écritures sont courtes (une tâche, un état), mais se succèdent. better-sqlite3 attend de façon
  * synchrone : une attente longue bloque le processus, d'où un délai borné plutôt qu'infini. Seules les
  * instructions isolées et les transactions qui commencent par une écriture profitent de ce délai
- * (video-processing/jobs.ts) ; une transaction qui lit puis écrit peut échouer aussitôt.
+ * (video-processing/jobs.ts) ; une transaction qui lit puis écrit peut échouer aussitôt. 10 s confirmées par
+ * l'utilisateur le 2026-10-10 (éviter les écritures en échec plutôt que raccourcir l'attente).
+ *
+ * Une seule connexion par processus : l'adaptateur better-sqlite3 de Prisma 7 ouvre un seul fichier et
+ * sérialise les transactions (verrou interne). Le paramètre d'URL `?connection_limit=1` réglait le pool du
+ * moteur Rust de Prisma ≤ 6, absent avec les « driver adapters » : inutile ici (les paramètres de l'URL sont
+ * ignorés par `sqliteFilePath`, la CLI Prisma des migrations les accepte).
  */
 const SQLITE_BUSY_TIMEOUT_MS = 10_000
 
@@ -80,7 +86,11 @@ function withPressureMonitor(client: PrismaClient): PrismaClient {
  */
 async function enableWal(client: PrismaClient): Promise<void> {
   try {
-    await client.$queryRawUnsafe('PRAGMA journal_mode = WAL')
+    // SQLite rend le mode obtenu : sans erreur, il garde son mode actuel quand WAL est impossible (partage
+    // réseau, fichier en lecture seule) — d'où la vérification du résultat.
+    const rows = await client.$queryRawUnsafe<{ journal_mode?: unknown }[]>('PRAGMA journal_mode = WAL')
+    const mode = String(rows[0]?.journal_mode ?? '').toLowerCase()
+    if (mode !== 'wal') console.warn(`[surge-media] SQLite : mode WAL refusé (mode « ${mode || 'inconnu'} » conservé) : les lectures attendront les écritures. Base sur un disque local requise.`)
   }
   catch (error) {
     console.warn('[surge-media] SQLite : mode WAL non activé (base occupée ?), le mode par défaut reste utilisé.', error)

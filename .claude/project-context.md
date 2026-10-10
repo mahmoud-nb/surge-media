@@ -8,7 +8,8 @@
 > **Maintenance du 2026-10-10** (après `89938e2`, non commitée au moment de la rédaction ; § 9.24, `setup.md` § 12.1 et journal) :
 > test global sous Windows et montée en charge — deux correctifs de débit et de fiabilité (configuration d'exécution calculée une
 > fois, réponses de `/m/` jamais envoyées en keep-alive), **alerte « base SQLite sous pression »** au tableau de bord, vérifications
-> D3 sous Windows faites (Ctrl+C, priorité, `taskkill`).
+> D3 sous Windows faites (Ctrl+C, priorité, `taskkill`). **Suite** (décisions de l'utilisateur) : adresse IP réelle derrière un
+> mandataire (`NUXT_TRUST_PROXY`, § 9.24), WAL vérifié au démarrage, attente du verrou SQLite gardée à 10 s.
 >
 > **État décrit** : commit `dbf3aa7` (**étape 22, D3 — traitement des vidéos par ffmpeg**, 2026-10-09 ; § 9.23 ; documentation de
 > D3 écrite ensuite — brouillon commité en `fbfcfaa`, version finale non commitée au moment de la rédaction : vérifier `git log`), après `919a113` (**étape 18, envoi des liens par
@@ -192,7 +193,7 @@ Traitement des vidéos (D3) : `service.ts` crée les `MediaJob` → boucle `plug
   `site-url.ts` (avertit en production si `NUXT_SITE_URL` est vide), `search-backfill.ts` (indexe la recherche des médias existants),
   `delegated-usage.ts` (purge horaire des compteurs de jetons délégués expirés), `http-timeouts.ts` (D1), `variant-keys.ts` (C1),
   **`0.video-processing.ts`** (D3 : boucle des tâches vidéo, avant `database.ts`), **`runtime-config.ts`** (2026-10-10 : configuration
-  d'exécution calculée une fois, § 9.24), **`database-pressure.ts`** (2026-10-10 : alerte SQLite, § 9.24). En rôle `worker`, `bootstrap-admin`, `site-url`,
+  d'exécution calculée une fois, § 9.24), **`database-pressure.ts`** (2026-10-10 : alerte SQLite, § 9.24), **`client-ip.ts`** (2026-10-10 : `X-Forwarded-For`, § 9.24). En rôle `worker`, `bootstrap-admin`, `site-url`,
   `search-backfill`, `variant-keys` et `delegated-usage` ne font rien (`isWorkerRole`).
 - `utils/` (auto-importés par Nitro) : `prisma.ts` (`usePrisma`, `textContains`, `textSearch`, `isUniqueViolation`, `disconnectPrisma`), `auth.ts`, `password.ts`, `rate-limit.ts`, `users.ts` (`toUserSummary` + `invitedBy`, `USER_SUMMARY_INCLUDE`,
   `visibleUsersWhere`, `userListWhere(query, actor)`, `findVisibleUserOr404` — étape 16), `password-tokens.ts`,
@@ -211,7 +212,8 @@ Traitement des vidéos (D3) : `service.ts` crée les `MediaJob` → boucle `plug
   `server/plugins/variant-keys.ts` (§ 9.16) ; C2 : **`transforms/service.ts`** (politique, préréglages, § 9.17), `server/utils/transforms.ts` ;
   C3 : **`api/{signature-plan,signed-urls}.ts`** (liens signés de l'API, § 9.18 ; réutilisés par l'administration en C4) ;
   2026-10-05 : **`http/{body,stream}.ts`** (purs, testés : `readLimitedBody`, `BodyReadError`, `BODY_MAX_SIZE`, `BODY_READ_TIMEOUT_MS` ;
-  `closeWithResponse` ; 2026-10-10 : `responseReady`), **`http/runtime-config.ts`** (2026-10-10 : `sharesRuntimeConfig`, `hookEvent`),
+  `closeWithResponse` ; 2026-10-10 : `responseReady`), **`http/client-ip.ts`** (2026-10-10 : adresse réelle derrière un mandataire),
+  **`http/runtime-config.ts`** (2026-10-10 : `sharesRuntimeConfig`, `hookEvent`),
   **`database/pressure.ts`** (2026-10-10 : compteurs, constat `Setting`, § 9.24) ; D1 : **`media/limits.ts`** (limites par genre, `UploadRules`, `uploadRules`, `useUploadSizes`), **`media/video/`**
   (`source`, `isobmff`, `ebml`, `codecs`, `probe` : lecteur d'en-têtes pur, testé), `handlers/video.ts`, plugin `server/plugins/http-timeouts.ts`
   (§ 9.21) ; D2 : **`media/video/prepare.ts`** (préparation des MP4/MOV, pur, testé), **`media/text-track.ts`** (analyse et réécriture
@@ -345,6 +347,7 @@ Ne jamais modifier une migration publiée.
 | `NUXT_PUBLIC_TRUSTED_DEVICE_DAYS` | 15 | appareils de confiance (étape 17) : jours sans ressaisie pour les actions sensibles, 0 = désactivé (et appareils existants ignorés), ≤ 365 ; lu côté client (case) et serveur |
 | `NUXT_BOOTSTRAP_ADMIN_EMAIL` / `_PASSWORD` | — | compte d'amorçage (§ 7.5) |
 | `NUXT_SITE_URL` | demandée par `db:init` (`--site-url`) | URL publique de l'installation ; vide = origine de la requête (avertissement en prod) |
+| `NUXT_TRUST_PROXY` | `true` | mandataires de confiance pour `X-Forwarded-For` (2026-10-10) : `true` = boucle locale + réseaux privés, `false`, ou liste IP/CIDR + `loopback`/`private` ; adresse réelle dans `event.context.clientAddress` (§ 9.24) |
 | `NUXT_MEDIA_PUBLIC_URL` | vide (= `NUXT_SITE_URL`) | base des URL de diffusion (CDN, sous-domaine) ; `mediaBaseUrl(event)` |
 | `NUXT_MEDIA_MAX_UPLOAD_SIZE` | 26214400 (25 Mio) | taille max d'une **image** envoyée |
 | `NUXT_MEDIA_MAX_VIDEO_UPLOAD_SIZE` | 536870912 (512 Mio) | taille max d'une **vidéo** (D1), plafonnée à 2147483647 (`MEDIA_SIZE_CEILING`) |
@@ -1456,6 +1459,7 @@ Contrats de données :
 | DD34 : API v1 `processing` et `sources[]` **ajoutés** ; administration : relancer, traiter l'existant, état ; pas de webhooks | contrat compatible ; attente par `ETag` / `If-None-Match` |
 | DD35 : défenses du § 36 (format imposé, protocole `file`, délais, priorité, fils, mémoire, réanalyse des sorties), arguments construits dans `args.ts` seulement | ffmpeg décode des fichiers de tiers : plus grande surface d'attaque du projet (attaque connue : liste HLS déguisée) |
 | Configuration d'exécution partagée par requête (plugin `runtime-config.ts`, `beforeEach` de hookable), gelée pour `/m/`, `/api/`, `/_nuxt/`, copiée pour les pages (2026-10-10) | Nitro 2 la reconstruit à chaque `useRuntimeConfig(event)`, appelé par @nuxtjs/i18n sur toutes les requêtes : 80 % du processeur, × 2 à × 19 une fois corrigé ; variables lues au démarrage seulement |
+| Adresse IP du client par mandataires de confiance lus de droite à gauche, posée dans `event.context.clientAddress` ; défaut réseaux privés (2026-10-10) | décision de l'utilisateur (Docker derrière mandataire) ; défaut de Rails ; ni le plus à gauche (h3, Express `true`) usurpable, ni une modification de chaque appel à `getRequestIP` |
 | `responseReady` avant tout `sendStream` (2026-10-10) | h3 1.15 n'envoie rien si `res.socket` est nul (réponse en file derrière la précédente en keep-alive) |
 | Alerte SQLite mesurée (extension Prisma `$allOperations`, constat partagé dans `Setting`, 24 h) plutôt qu'un simple avertissement permanent (2026-10-10) | SQLite synchrone : le temps passé dans la base = temps bloqué ; signaler les symptômes réels (verrous, lenteurs, charge) et le trafic élevé ; coût mesuré 0 sur `/m/`, 3–4 % sur l'API |
 | DD36 : interface du § 37, livrée en modules A à F (étape 22) | revues indépendantes par module avant la suite |
@@ -1518,7 +1522,9 @@ Contrats de données :
 - Props de slot à tiret → camelCase (d'où `v-bind` d'un objet dans `UiFormField`).
 - `aspect-ratio` seul se laisse étirer par une image haute (image en `absolute inset-0` dans les cartes).
 - vue-i18n : `@` / `|` dans les messages ; clés numériques évitées (`hour/day/week`).
-- Limiteur de connexion **en mémoire** (instance unique) ; derrière un proxy, l'IP vue est celle du proxy (X-Forwarded-For non géré).
+- Limiteur de connexion **en mémoire** (instance unique). Derrière un mandataire : adresse réelle par `NUXT_TRUST_PROXY` (2026-10-10,
+  § 9.24) ; toujours passer par `getRequestIP(event)` **sans** `xForwardedFor` (h3 prendrait l'adresse la plus à gauche, usurpable),
+  jamais `req.socket.remoteAddress`.
 - Contrôle CSRF basé sur `Host` : un proxy doit transmettre l'en-tête `Host` d'origine.
 - Cookie `Secure` : HTTPS obligatoire hors localhost.
 - Recherche SQLite : casse ignorée seulement pour l'ASCII (atténué par la recherche en minuscules), accents non ignorés.
@@ -2144,6 +2150,13 @@ SQLite pose problème. Référence d'exploitation : `setup.md` § 12.1 (tableaux
   pendant un encodage, `surge-media worker` puis `pnpm start` en `embedded` : arrêt < 1 s, ffmpeg arrêté (lancé avec
   `windowsHide` → `CREATE_NO_WINDOW`, hors de la console : il ne reçoit pas le Ctrl+C), tâche `QUEUED` sans essai compté,
   reprise et terminée. Non rejoué : Ctrl+C sur `pnpm dev`.
+- **Suite : adresse IP réelle** (décision de l'utilisateur : Docker derrière un mandataire inverse) — `server/lib/http/client-ip.ts`
+  (`normalizeIp`, `trustedProxies` par `net.BlockList`, `resolveClientIp` : de droite à gauche, première adresse non fiable =
+  client, 20 entrées au plus), plugin `client-ip.ts` (`beforeEach` → `event.context.clientAddress`, que `getRequestIP` de h3 rend
+  d'abord : limiteurs, audit, sessions, appareils, `lastUsedIp` sans toucher leur code). `runtimeConfig.trustProxy` = `'true'`
+  (texte : un défaut booléen typait la variable en booléen ; Nitro rend `false` booléen depuis l'environnement, géré). Vérifié de bout
+  en bout (limiteur d'échecs de l'API v1, IP de session et d'audit, usurpation « A, C », modes `false` et liste). WAL : résultat du
+  pragma vérifié ; `?connection_limit=1` inutile avec les « driver adapters » (une connexion par processus).
 - Scénarios rejoués sur la build finale : 787 contrôles (rôles, appareils, B2 à B5, C1 à C4, corps, envois bloqués, tableau
   de bord) ; 539 tests Vitest.
 
@@ -2184,7 +2197,7 @@ SQLite pose problème. Référence d'exploitation : `setup.md` § 12.1 (tableaux
   le SDK (clé dédiée par projet), `urlTemplate` signé pour un média public en politique `signed` (aujourd'hui : lien signé à la demande).
 - Pistes C2 : aperçu du rendu dans le dialogue d'un préréglage (avec C4), purge des dérivés d'un préréglage modifié ou supprimé,
   unicité des noms garantie en base, préréglages par l'API (jeton personnel), politique par environnement de clé.
-- Pistes C1 : sortie GIF/animations, `X-Forwarded-For` de confiance (débit par IP derrière un CDN), limiteur partagé (Redis),
+- Pistes C1 : sortie GIF/animations, `X-Forwarded-For` de confiance (fait le 2026-10-10 : `NUXT_TRUST_PROXY`), limiteur partagé (Redis),
   purge des dérivés jamais redemandés.
 - Pistes B5 : glisser-déposer vers un dossier, arbre complet en barre latérale, déplacement d'un dossier vers un autre espace,
   étiquettes (classement transversal), journalisation des opérations sur les dossiers, unicité des noms garantie en base (colonne
@@ -2192,14 +2205,14 @@ SQLite pose problème. Référence d'exploitation : `setup.md` § 12.1 (tableaux
 - Pistes B4 : restauration / suppression définitive / déplacement par l'API, `If-Match` sur PATCH/PUT, clé d'idempotence des envois,
   restriction des écritures d'un jeton délégué aux médias de son sujet, compteur d'envois restants dans `/me`, révocation individuelle
   (liste de `jti`), journal de l'émission (échantillonné), file des traitements partagée (multi-instances), priorité des tâches de fond.
-- Pistes B3 : cache L2 Redis et limiteurs partagés, `X-Forwarded-For` de confiance, cache serveur des résultats de liste, option « liste
+- Pistes B3 : cache L2 Redis et limiteurs partagés, cache serveur des résultats de liste, option « liste
   publique cachable » (CDN), limitation de débit sur `/m/` (l'interface de documentation est faite : étape 10).
 - Pistes étape 10 : requêtes d'essai authentifiées par un jeton délégué de test émis par l'admin (le « jeton de console » est écarté),
   signaler à Scalar ses écarts d'accessibilité (client de requêtes), `h1` de Scalar.
 - Pistes B2 : révocation des jetons d'autrui par un ADMIN (fiche utilisateur), journal par projet pour les propriétaires, purge du journal,
   sudo pour les actions sensibles sur les comptes (liens de mot de passe, rôles), limiteur de confirmation partagé (Redis).
 - Autres pistes notées : commande CLI de secours admin, page « Mon compte », SMTP, copie entre stockages, nettoyage des orphelins,
-  tests d'intégration automatisés, limiteur partagé (Redis), X-Forwarded-For de confiance, modèle de distribution/publication npm,
+  tests d'intégration automatisés, limiteur partagé (Redis), modèle de distribution/publication npm,
   retrait de l'override oxc-transform.
 
 ## 22. Points incertains ou à confirmer
@@ -2218,8 +2231,9 @@ SQLite pose problème. Référence d'exploitation : `setup.md` § 12.1 (tableaux
   poste (non signé). Sous Windows, un ffmpeg tué de l'extérieur sort avec le code 1 : la règle « tué par un signal → passager »
   (`runFailure`, `code === null`) ne s'y applique pas (échec définitif) — sans effet sur les arrêts faits par `runTool`.
 - **Montée en charge** (§ 9.24) : seuils de l'alerte SQLite choisis d'après un portable récent (à confirmer sur un serveur réel) ;
-  pas de `X-Forwarded-For` (limites par IP partagées derrière un mandataire) ; limites et caches par processus ; délai de verrou
-  SQLite de 10 s (processus figé) gardé tel quel — à rediscuter avec l'utilisateur.
+  limites et caches par processus ; délai de verrou SQLite de 10 s (processus figé) **confirmé par l'utilisateur** le 2026-10-10.
+  `NUXT_TRUST_PROXY=true` par défaut (choix fait pour un déploiement Docker derrière mandataire) : un réseau privé non maîtrisé qui
+  joindrait directement le serveur pourrait usurper une adresse (documenté : `false` sans mandataire).
 - D3 vérifié avec SQLite et le stockage local : aucun essai consigné avec S3 (original copié dans le dossier de la tâche), PostgreSQL ou
   MySQL (l'ordre `nulls: 'first'` de la « dernière tâche » n'a été essayé que sous SQLite). Lecture réelle des rendus H.264 dans un navigateur
   non vérifiée (Chromium du nuage sans H.264), ni le report du changement de sources pendant une lecture.
