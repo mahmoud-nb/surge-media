@@ -1,0 +1,20 @@
+# Contexte de build de l'image Docker (Dockerfile) : sources seulement, ni dépendances, ni builds, ni données.
+.git
+.idea
+.claude
+**/node_modules
+**/.output
+**/.nuxt
+**/.nitro
+**/.cache
+**/dist
+**/data
+**/server/generated
+**/coverage
+**/*.log
+**/.env
+**/.env.*
+!**/.env.example
+**/tests
+setup.md
+docker/compose*.yaml

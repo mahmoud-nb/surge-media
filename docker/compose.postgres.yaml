@@ -1,0 +1,57 @@
+# surgeMedia avec PostgreSQL et un processus de travail pour les vidéos. Guide : setup.md, § 12.2.
+#
+#   POSTGRES_PASSWORD=… docker compose -f docker/compose.postgres.yaml up -d
+#
+# (ou un fichier docker/.env avec POSTGRES_PASSWORD=…). Image construite localement : SURGE_MEDIA_IMAGE=surge-media.
+# MySQL / MariaDB : remplacer le service postgres (ex. mariadb:11) et DATABASE_URL par mysql://….
+
+x-surge-media: &surge-media
+  image: ${SURGE_MEDIA_IMAGE:-ghcr.io/mahmoud-nb/surge-media:latest}
+  restart: unless-stopped
+  environment:
+    DATABASE_URL: postgresql://surge:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD est requis}@postgres:5432/surge_media
+    NUXT_SITE_URL: ${NUXT_SITE_URL:-http://localhost:3000}
+    NUXT_BOOTSTRAP_ADMIN_EMAIL: ${NUXT_BOOTSTRAP_ADMIN_EMAIL:-}
+    NUXT_BOOTSTRAP_ADMIN_PASSWORD: ${NUXT_BOOTSTRAP_ADMIN_PASSWORD:-}
+    # Vidéos traitées par le service « worker » ; les deux services reçoivent les mêmes variables.
+    NUXT_VIDEO_PROCESSING: external
+  # Médias (stockage local) et secrets générés, partagés par le serveur web et le processus de travail.
+  volumes:
+    - data:/app/data
+  stop_grace_period: 30s
+
+services:
+  surge-media:
+    <<: *surge-media
+    ports:
+      - "127.0.0.1:3000:3000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  # Processus de travail : exécute les traitements vidéo (ffmpeg), ne sert que /api/health, sans port publié.
+  worker:
+    <<: *surge-media
+    command: worker
+    depends_on:
+      surge-media:
+        condition: service_healthy
+
+  postgres:
+    image: postgres:17
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: surge
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD est requis}
+      POSTGRES_DB: surge_media
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U surge -d surge_media"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    volumes:
+      - postgres:/var/lib/postgresql/data
+
+volumes:
+  data:
+  postgres:

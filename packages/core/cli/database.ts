@@ -15,6 +15,7 @@ import {
 } from '../shared/database'
 import type { Translate } from './i18n'
 import { readEnvFile, updateEnvFile } from './lib/env-file'
+import { generateClients } from './lib/generate'
 import { runPrisma } from './lib/prisma'
 import { ENV_EXAMPLE_FILE, ENV_FILE, SCHEMA_FILE } from './lib/project'
 import { readSchemaProvider, writeSchemaProvider } from './lib/schema'
@@ -65,12 +66,12 @@ export async function runInit(ctx: CliContext, args: TargetArgs & { skipMigrate?
   }
 
   await applyTarget(ctx, target, args.skipMigrate ? 'skip' : 'deploy', { NUXT_SITE_URL: siteUrl })
-  if (current.provider && current.provider !== target.provider) note(t('note.rebuild'))
+  if (current.provider && current.provider !== target.provider) note(t('note.providerChanged'))
   outro(t('outro.init'))
 }
 
 /**
- * `surge-media db migrate` : après une mise à jour, régénère le client Prisma et
+ * `surge-media db migrate` : après une mise à jour, régénère les clients Prisma s'il le faut et
  * applique les migrations en attente, sans toucher à la configuration.
  */
 export async function runMigrate(ctx: CliContext): Promise<void> {
@@ -86,7 +87,7 @@ export async function runMigrate(ctx: CliContext): Promise<void> {
     fail(t('error.providerMismatch', { schema: schemaProvider ?? '?', env: target.provider }))
   }
 
-  await prismaStep(ctx, ['generate'], t('step.generate'), t('step.generateDone'), target)
+  await generateStep(ctx, target)
   await prismaStep(ctx, ['migrate', 'deploy'], t('step.migrate'), t('step.migrateDone'), target)
   outro(t('outro.migrate'))
 }
@@ -108,7 +109,7 @@ export async function runReset(ctx: CliContext, args: TargetArgs): Promise<void>
   }
 
   await applyTarget(ctx, target, 'reset')
-  if (current.provider !== target.provider) note(t('note.rebuild'))
+  if (current.provider !== target.provider) note(t('note.providerChanged'))
   outro(t('outro.reset'))
 }
 
@@ -249,7 +250,7 @@ function showSummary(ctx: CliContext, target: DatabaseTarget, siteUrl?: string):
   )
 }
 
-/** Écrit la configuration (.env + schéma), génère le client Prisma puis migre la base. */
+/** Écrit la configuration (.env + schéma), génère les clients Prisma s'il le faut puis migre la base. */
 async function applyTarget(ctx: CliContext, target: DatabaseTarget, mode: MigrationMode, extra: Record<string, string> = {}): Promise<void> {
   const { t, root } = ctx
 
@@ -276,7 +277,7 @@ async function applyTarget(ctx: CliContext, target: DatabaseTarget, mode: Migrat
     mkdirSync(dirname(resolve(root, sqliteFilePath(target.url))), { recursive: true })
   }
 
-  await prismaStep(ctx, ['generate'], t('step.generate'), t('step.generateDone'), target)
+  await generateStep(ctx, target)
 
   if (mode === 'deploy') {
     await prismaStep(ctx, ['migrate', 'deploy'], t('step.migrate'), t('step.migrateDone'), target)
@@ -286,6 +287,23 @@ async function applyTarget(ctx: CliContext, target: DatabaseTarget, mode: Migrat
   }
   else {
     log.info(t('step.migrateSkipped'))
+  }
+}
+
+/** Clients Prisma des trois fournisseurs (cli/lib/generate.ts) : rien n'est refait s'ils sont à jour. */
+async function generateStep(ctx: CliContext, target: DatabaseTarget): Promise<void> {
+  const progress = spinner()
+  progress.start(ctx.t('step.generate'))
+  try {
+    const { generated } = await generateClients(ctx.root, {
+      env: { DATABASE_PROVIDER: target.provider, DATABASE_URL: target.url },
+    })
+    progress.stop(ctx.t(generated ? 'step.generateDone' : 'step.generateUpToDate'))
+  }
+  catch (error) {
+    progress.error(ctx.t('error.command', { command: 'prisma generate' }))
+    log.message(error instanceof Error ? error.message : String(error))
+    process.exit(1)
   }
 }
 

@@ -398,9 +398,11 @@ En production, `.env` n'est lu que par le script `start` (`node --env-file-if-ex
 
 Racine : `dev`, `build`, `typecheck`, `test`, `cli`, `db:init`, `db:migrate`, `db:reset`, `db:studio`, `i18n:check`, `a11y:contrast` (tous délégués au core).
 Core : `test` = `vitest run`.
-Core : `dev` / `build` / `typecheck` lancent d'abord `prisma generate` ; `build` = `prisma generate && nuxt build && tsdown` ;
-`start` = serveur de prod ; `postinstall` = `nuxt prepare && prisma generate` (**cet ordre est obligatoire**) ;
-`cli`, `db:init|migrate|reset` (via tsx), `db:generate`, `db:studio`, `db:migration`, `i18n:check`, `a11y:contrast`.
+Core : `dev` / `build` / `typecheck` lancent d'abord `tsx scripts/prisma-generate.ts` (**un client Prisma par fournisseur**,
+`cli/lib/generate.ts`, rien de refait si schéma et version de Prisma inchangés) ; `build` = génération + `nuxt build` + `tsdown` ;
+`start` = serveur de prod ; `postinstall` = `nuxt prepare && tsx scripts/prisma-generate.ts` (**cet ordre est obligatoire**) ;
+`db:generate` = régénération forcée ;
+`cli`, `db:init|migrate|reset` (via tsx), `db:studio`, `db:migration`, `i18n:check`, `a11y:contrast`.
 
 ## 7. Authentification, sessions, rôles
 
@@ -1292,8 +1294,9 @@ Contrats de données :
 4. **Envoi d'un média** : XHR multipart (`?project=`) → requireSpaceAccess(media:upload) → busboy → temp + SHA-256 → sniff → sharp inspect → storage.put → DB → 201 →
    la médiathèque se rafraîchit (`@done`).
 5. **Affichage** : `<img src="/m/...">` → route → accès → original ou aperçu (généré à la 1re demande) → flux depuis le stockage.
-6. **Changement de fournisseur de base** : `pnpm db:init` / `db:reset` → `.env` + `provider` réécrit + `prisma generate` + migrations
-   (données non transférées ; rebuild nécessaire car le client Prisma dépend du fournisseur).
+6. **Changement de fournisseur de base** : `pnpm db:init` / `db:reset` → `.env` + `provider` réécrit + clients régénérés s'il le faut +
+   migrations (données non transférées) ; **aucun rebuild** depuis le 2026-10-10 : la build contient les trois clients, `usePrisma`
+   charge celui de `DATABASE_PROVIDER` (`server/utils/prisma.ts`, `CLIENT_MODULES`) ; redémarrer suffit.
 7. **Duplication** (fiche média) : `GET /api/admin/spaces?scope=media:upload` → choix → `POST …/duplicate` (read ici + upload cible) →
    `storage.copy` + ligne → redirection vers la copie avec message flash.
 8. **Fin de vie d'un projet** : archiver (`PATCH archived: true`, lecture seule) → Supprimer… (dialogue : bibliothèque ou purge +
@@ -1377,8 +1380,8 @@ Contrats de données :
 
 - citty + @clack/prompts ; build tsdown → `dist/cli/index.mjs` (bin `surge-media`) ; en dépôt : `pnpm cli …` / `pnpm db:*` (tsx).
 - `init [--provider --url --yes --skip-migrate --cwd --lang]` : écrit `.env` (depuis `.env.example`, sans écraser les autres variables),
-  réécrit `provider`, `prisma generate`, `migrate deploy`, **génère `NUXT_SESSION_PASSWORD` et `NUXT_MEDIA_SIGNING_SECRET` s'ils manquent**.
-- `db migrate` : vérifie la cohérence `.env` / schéma, `prisma generate` puis `migrate deploy`.
+  réécrit `provider`, génère les trois clients s'il le faut, `migrate deploy`, **génère `NUXT_SESSION_PASSWORD` et `NUXT_MEDIA_SIGNING_SECRET` s'ils manquent**.
+- `db migrate` : vérifie la cohérence `.env` / schéma, génère les clients s'il le faut puis `migrate deploy`.
 - `db reset [--provider --url --yes]` : `migrate reset --force` (destructif, confirmation). **Prisma 7 refuse `migrate reset` lancé par un
   agent IA** : l'utilisateur doit le lancer lui-même.
 - **`worker [--port 3001]`** (D3, `cli/worker.ts`) : processus de travail du traitement des vidéos (`NUXT_VIDEO_PROCESSING=external`).
@@ -1460,6 +1463,8 @@ Contrats de données :
 | DD35 : défenses du § 36 (format imposé, protocole `file`, délais, priorité, fils, mémoire, réanalyse des sorties), arguments construits dans `args.ts` seulement | ffmpeg décode des fichiers de tiers : plus grande surface d'attaque du projet (attaque connue : liste HLS déguisée) |
 | Configuration d'exécution partagée par requête (plugin `runtime-config.ts`, `beforeEach` de hookable), gelée pour `/m/`, `/api/`, `/_nuxt/`, copiée pour les pages (2026-10-10) | Nitro 2 la reconstruit à chaque `useRuntimeConfig(event)`, appelé par @nuxtjs/i18n sur toutes les requêtes : 80 % du processeur, × 2 à × 19 une fois corrigé ; variables lues au démarrage seulement |
 | Adresse IP du client par mandataires de confiance lus de droite à gauche, posée dans `event.context.clientAddress` ; défaut réseaux privés (2026-10-10) | décision de l'utilisateur (Docker derrière mandataire) ; défaut de Rails ; ni le plus à gauche (h3, Express `true`) usurpable, ni une modification de chaque appel à `getRequestIP` |
+| Un client Prisma par fournisseur dans chaque build, chargé selon `DATABASE_PROVIDER` (`cli/lib/generate.ts`, `CLIENT_MODULES` de `server/utils/prisma.ts`) (2026-10-10) | décision de l'utilisateur : une seule image Docker pour les trois bases ; plus de reconstruction pour changer de base ; coût : trois générations (≈ 2,5 s en parallèle, sautées si inchangées), types pris du client SQLite (`export type *`) |
+| Image Docker Debian 13 « trixie » + Node 24, variantes complète (ffmpeg 7.1) et `slim`, utilisateur `node`, `tini`, migrations au démarrage par la CLI Prisma complète, secrets générés dans le volume (2026-10-10) | décisions de l'utilisateur (variantes ; GHCR plus tard) ; bookworm n'a que ffmpeg 5.1 ; glibc pour les binaires précompilés (sharp, argon2, better-sqlite3) ; la CLI Prisma charge Studio dès son démarrage : l'élaguer la casse (≈ 250 Mo gardés) |
 | `responseReady` avant tout `sendStream` (2026-10-10) | h3 1.15 n'envoie rien si `res.socket` est nul (réponse en file derrière la précédente en keep-alive) |
 | Alerte SQLite mesurée (extension Prisma `$allOperations`, constat partagé dans `Setting`, 24 h) plutôt qu'un simple avertissement permanent (2026-10-10) | SQLite synchrone : le temps passé dans la base = temps bloqué ; signaler les symptômes réels (verrous, lenteurs, charge) et le trafic élevé ; coût mesuré 0 sur `/m/`, 3–4 % sur l'API |
 | DD36 : interface du § 37, livrée en modules A à F (étape 22) | revues indépendantes par module avant la suite |
@@ -1517,7 +1522,7 @@ Contrats de données :
   accord ; il s'est arrêté seul pendant l'étape 4) ; `prisma dev` (Postgres local) ne rend pas la main (utiliser `--detach`).
 - **Build de production obligatoire après tout ajout de dépendance serveur** : le traçage Nitro (nft) + pnpm peut omettre des fichiers
   (exports conditionnels) alors que tout fonctionne en dev.
-- `postinstall` : `nuxt prepare` **avant** `prisma generate` (sinon `tsconfig.server.json` introuvable).
+- `postinstall` : `nuxt prepare` **avant** la génération des clients (sinon `tsconfig.server.json` introuvable).
 - `pnpm install` « à jour » ne relance pas `postinstall` : utiliser `pnpm db:migrate` (régénère le client) après un pull.
 - Props de slot à tiret → camelCase (d'où `v-bind` d'un objet dans `UiFormField`).
 - `aspect-ratio` seul se laisse étirer par une image haute (image en `absolute inset-0` dans les cartes).
@@ -1872,6 +1877,11 @@ administration limitée à ses projets, bibliothèque gérée par l'ADMIN). Éta
 le 2026-10-09** (traitement par ffmpeg hors du chemin des requêtes : file persistante, processus de travail, rendus, retrait des pistes GPS,
 réparation des WebM, affiche du serveur, formats convertis, `sources[]` / `processing`, interface ; § 9.23).
 
+**Licence et distribution (2026-10-10)** : licence **BSL 1.1** (`LICENSE`, seuil 500 000 USD, nom du concédant et contact encore à
+compléter) ; README npm du core en anglais ; **étape 23 : image Docker** unique pour les trois bases (un client Prisma par fournisseur
+dans chaque build), variantes complète et `slim`, Compose SQLite et PostgreSQL + processus de travail (`setup.md` § 12.2), vérifiée sur
+SQLite, PostgreSQL 17 et MariaDB 11. **Suite** : workflow de publication GHCR (multi-architecture), puis D4 à proposer.
+
 **Section vide** : aucune (la section « à venir » des jetons a été remplacée en B2).
 
 ### 9.22 Vidéos : préparation, image d'affiche, sous-titres (phase D2, étape 21)
@@ -2221,14 +2231,15 @@ SQLite pose problème. Référence d'exploitation : `setup.md` § 12.1 (tableaux
   Apache 2.0, production gratuite sauf CA du groupe > 500 000 USD ou service hébergé concurrent (`setup.md`, journal du 2026-10-10).
   **À compléter avant publication** : nom légal du concédant et contact (`grep -n "TO BE COMPLETED" LICENSE`). Non tranchés : CLA
   pour les contributions externes, licence des futurs composants Vue/React/Svelte (MIT conseillée), relecture par un avocat.
-- **Modèle de distribution** non décidé : `@surge-media/core` est `private: true` ; le client Prisma dépend du fournisseur (rebuild
-  nécessaire) ; `npx surge-media init` ne fonctionne tel quel qu'une fois le package installé (ou via `npx @surge-media/core init`) —
+- **Modèle de distribution** : **image Docker faite** (étape 23, 2026-10-10, `setup.md` § 12.2 ; publication GHCR et workflow à faire,
+  arm64 non essayé) ; npm/npx non décidé : `@surge-media/core` est `private: true` ; une build contient les trois clients Prisma
+  (plus de rebuild pour changer de base) ; `postinstall` passe par `tsx` (dépendance de développement : à revoir pour un paquet publié) ; `npx surge-media init` ne fonctionne tel quel qu'une fois le package installé (ou via `npx @surge-media/core init`) —
   paquet non scopé `surge-media` ? image Docker ? build chez le client ? `packages/core/README.md` (anglais, page npm, 2026-10-10)
   décrit pour l'instant l'installation depuis le dépôt. Constaté par `npm pack --dry-run` : sans champ `files`, ni `.output` ni
   `LICENSE` publiés ; installée, la CLI écrirait `.env` et `./data` (base SQLite, médias) dans `node_modules` (effacés à la réinstallation).
 - Portées et format des jetons : **implémentés en B2** selon l'architecture validée ; écarts listés en tête de `architecture-phase-b.md`.
-- **MySQL/MariaDB** : SQL de migration généré mais **jamais exécuté** sur une vraie base (y compris `projects_spaces`, `b2_credentials`, `b3_api_read` et `b4_api_write`) ; PostgreSQL
-  testé seulement via `prisma dev` (PGlite) jusqu'à l'étape 1, et `db reset` jamais exécuté dessus.
+- **MySQL/MariaDB** : les 16 migrations ont été exécutées pour la première fois sur **MariaDB 11** (image Docker, 2026-10-10, parcours API
+  complet ensuite) ; **MySQL 8 jamais**. **PostgreSQL 17** réel aussi (Docker, même parcours) ; `db reset` jamais exécuté sur ces bases.
 - **S3 réel** (AWS, R2, MinIO) jamais testé (seulement `s3rver`) ; `MediaStorage.copy` (CopyObject) et la lecture par plage (`Range`) testés seulement en local.
 - Lecteurs d'écran réels jamais testés.
 - **D3 sous Windows vérifié le 2026-10-10** (§ 9.24) ; reste non rejoué : Ctrl+C sur `pnpm dev` pendant un encodage. Aucune limite

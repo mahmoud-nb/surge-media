@@ -18,7 +18,7 @@ Il est tenu à jour à chaque étape du projet (voir le [Journal des étapes](#j
 ## 2. Démarrage rapide (dépôt déjà cloné)
 
 ```bash
-pnpm install        # dépendances + nuxt prepare + prisma generate
+pnpm install        # dépendances + nuxt prepare + clients Prisma (un par fournisseur)
 pnpm db:init        # fournisseur de base (SQLite par défaut), migrations, secret de session
 ```
 
@@ -91,7 +91,7 @@ surge-media/
       │  │                 indexation de la recherche, purge des compteurs des jetons délégués
       │  ├─ utils/         usePrisma(), requireAuth(), requireSpaceAccess(), requireRecentPassword(),
       │  │                 recordAudit(), utilisateurs, liens de mot de passe… (auto-importés)
-      │  └─ generated/     client Prisma généré (non versionné)
+      │  └─ generated/     clients Prisma générés, un par fournisseur, et leurs schémas (non versionnés)
       ├─ shared/           code partagé app / serveur / CLI : permissions et portées, identifiants, origines,
       │                    dossiers (règles de l'arborescence), transformations (grammaire, forme
       │                    canonique), journal d'audit, schémas zod, BDD
@@ -166,12 +166,12 @@ Depuis la racine :
 | `pnpm i18n:check` | cohérence des traductions et des clés utilisées dans le code |
 | `pnpm a11y:contrast` | contrastes WCAG AA des jetons de couleur (clair et sombre) |
 | `pnpm db:init` | configure la base (fournisseur + URL), applique les migrations, génère le secret de session |
-| `pnpm db:migrate` | régénère le client Prisma et applique les migrations en attente |
+| `pnpm db:migrate` | régénère les clients Prisma s'ils ne sont plus à jour et applique les migrations en attente |
 | `pnpm db:reset` | recrée la base (⚠ supprime les données), éventuellement avec un autre fournisseur |
 | `pnpm db:studio` | Prisma Studio |
 | `pnpm cli <commande>` | lance la CLI `surge-media` depuis les sources |
 
-Dans `packages/core` uniquement : `pnpm db:generate` (client Prisma), `pnpm db:migration <nom>`
+Dans `packages/core` uniquement : `pnpm db:generate` (régénère les trois clients Prisma), `pnpm db:migration <nom>`
 (maintenance, voir § 6.5), `pnpm build:cli` (build de la CLI), `pnpm start` (serveur de production).
 
 **Avant chaque commit** : `pnpm typecheck`, `pnpm test`, `pnpm i18n:check` et, si les couleurs
@@ -200,9 +200,14 @@ changent, `pnpm a11y:contrast`.
 
 ### 6.2 La CLI `surge-media`
 
-Prisma impose un fournisseur écrit en dur dans `schema.prisma` et génère un client propre à ce
-fournisseur. Changer de base ne se résume donc pas à modifier `.env` : la CLI met à jour le `.env`,
-réécrit le `provider` du schéma, régénère le client Prisma puis migre la base.
+Prisma impose un fournisseur écrit en dur dans le schéma et génère un client propre à ce fournisseur.
+surgeMedia génère donc **un client par fournisseur** (`server/generated/prisma/sqlite|postgresql|mysql/`,
+depuis des copies de `prisma/schema.prisma` où seuls le fournisseur et le dossier de sortie changent :
+`server/generated/schemas/`), avant `dev`, `build`, `typecheck` et à l'installation, seulement si le schéma ou
+la version de Prisma a changé (`cli/lib/generate.ts`). Le serveur charge au démarrage le client de
+`DATABASE_PROVIDER` : **une même build sert les trois bases**, l'image Docker comprise (§ 12.2). La CLI met à
+jour le `.env`, réécrit le `provider` de `prisma/schema.prisma` (lu par les commandes Prisma lancées à la main :
+Studio, état des migrations), régénère les clients s'il le faut, puis migre la base.
 
 ```bash
 pnpm db:init                                   # interactif
@@ -229,7 +234,8 @@ pnpm cli --help                                # aide (--lang en pour l'anglais)
 - **URL publique** : `init` demande aussi l'URL publique de l'installation (`NUXT_SITE_URL`, valeur
   actuelle ou `http://localhost:3000` proposée ; `--site-url` en mode non interactif).
 - **Changement de fournisseur** : seul le schéma est recréé, les données ne sont pas transférées.
-- **Après un changement de fournisseur**, reconstruisez l'application (`pnpm build`) avant de la redéployer.
+- **Après un changement de fournisseur**, redémarrez le serveur et les processus de travail : aucune
+  reconstruction n'est nécessaire (la build contient les trois clients).
 - **Processus de travail** (`worker`, phase D3) : lance le serveur **construit** (`.output/server/index.mjs` :
   `pnpm build` d'abord, sinon la commande s'arrête) depuis `packages/core`, avec son `.env`
   (`--env-file-if-exists`, les variables du shell restant prioritaires) et `NUXT_SERVER_ROLE=worker`. Il
@@ -817,7 +823,7 @@ Plusieurs processus de travail peuvent partager la file.
 
 Dans un **autre conteneur ou sur une autre machine** :
 
-- **même image** (même build, client Prisma du même fournisseur), commande `node .output/server/index.mjs` avec
+- **même image** (même build), commande `node .output/server/index.mjs` (image Docker : commande `worker`, § 12.2) avec
   `NUXT_SERVER_ROLE=worker` ;
 - **base partagée** : PostgreSQL ou MySQL/MariaDB (SQLite : même machine seulement) ;
 - **stockage partagé** : S3 (même bucket, même `NUXT_MEDIA_STORAGE_PREFIX`) ou disque monté **au même endroit**
@@ -1824,7 +1830,7 @@ Mise en forme du journal partagée avec `/admin/audit` : `useAuditFormat()`.
 ## 12. Production
 
 ```bash
-pnpm build                          # prisma generate + nuxt build + build de la CLI
+pnpm build                          # clients Prisma + nuxt build + build de la CLI
 cd packages/core && pnpm db:migrate # appliquer les migrations sur la base de production
 pnpm start                          # node --env-file-if-exists=.env .output/server/index.mjs
 ```
@@ -1846,7 +1852,8 @@ pnpm start                          # node --env-file-if-exists=.env .output/ser
   CIDR acceptées). Ne publiez pas le port du conteneur de l'application : seul le mandataire doit l'atteindre (le
   proxy de Docker peut présenter un client extérieur avec l'adresse privée de la passerelle) ; sans mandataire,
   `NUXT_TRUST_PROXY=false`.
-- Le client Prisma est lié au fournisseur choisi : tout changement de fournisseur impose un rebuild.
+- La build contient les clients Prisma des trois fournisseurs : changer de base demande de migrer la nouvelle
+  base (`init`) et de redémarrer, pas de reconstruire. **Docker** : § 12.2.
 - `GET /api/health` : 200 si base, stockage et sharp répondent, 503 sinon (sonde Docker / orchestrateur). Le
   bloc `videoProcessing: { mode, workers, queued }` est une information hors `checks`, qui ne change jamais le
   statut : `workers` = processus en état de traiter la file (processus de travail signalés depuis moins de 5 min,
@@ -1977,6 +1984,84 @@ observation ; le journal du serveur l'annonce aussi (au plus toutes les 15 minut
   (un CDN devant `/m/` concentre ses requêtes sur ses propres adresses : déclarer ses plages comme mandataires).
 - **Mesurer sur la machine cible** : le même portable a donné des débits 7 fois plus faibles sur batterie.
 
+### 12.2 Docker
+
+`Dockerfile` (racine du dépôt) : **une seule image pour SQLite, PostgreSQL et MySQL/MariaDB** (les trois clients
+Prisma sont dans la build, § 6.2), Debian 13 « trixie » et Node 24, utilisateur non root `node` (uid 1000), `tini`
+en PID 1 (relais des signaux).
+
+| Variante | Construction | Contenu |
+| --- | --- | --- |
+| complète (défaut) | `docker build -t surge-media .` | ffmpeg 7.1 de Debian (libx264, AAC, SVT-AV1, Opus) et `prlimit` : traitement des vidéos possible (§ 7.7) |
+| `slim` | `docker build --target slim -t surge-media:slim .` | sans ffmpeg : `NUXT_VIDEO_PROCESSING` doit rester `off` |
+
+Build en plusieurs étapes : dépendances (`pnpm fetch` d'après le seul `pnpm-lock.yaml`, cache pnpm partagé
+entre les builds), clients Prisma et build Nuxt ; CLI Prisma seule (même version que le core) pour les
+migrations ; image finale sans sources ni dépendances de développement. `--build-arg VERSION=… REVISION=…`
+renseigne les étiquettes OCI (avec la source et la licence `BUSL-1.1`, qui relieront le paquet GHCR au dépôt) ;
+`NODE_VERSION` et `DEBIAN_RELEASE` sont aussi réglables (pas Debian 12 « bookworm » : ffmpeg 5.1).
+**Publication sur GitHub Container Registry** (`ghcr.io/mahmoud-nb/surge-media`) : prévue, pas encore faite.
+
+```bash
+docker run -d --name surge-media -p 127.0.0.1:3000:3000 -v surge-media-data:/app/data \
+  -e NUXT_SITE_URL=https://media.example.com \
+  -e NUXT_BOOTSTRAP_ADMIN_EMAIL=vous@exemple.fr -e NUXT_BOOTSTRAP_ADMIN_PASSWORD='un-mot-de-passe-long' \
+  surge-media
+```
+
+**Commande de l'image** (`docker run … surge-media <commande>`, point d'entrée `docker/entrypoint.sh`) :
+
+| Commande | Effet |
+| --- | --- |
+| `server` (défaut) | applique les migrations en attente, puis lance le serveur web (port 3000) |
+| `worker` | processus de travail du traitement des vidéos (`NUXT_SERVER_ROLE=worker`) : même port, `/api/health` seulement ; ne migre jamais |
+| `migrate` | applique les migrations en attente, puis s'arrête |
+| autre | exécutée telle quelle (`sh`, `node -v`…) |
+
+**Volume `/app/data`** : base SQLite (`surge-media.db` et ses fichiers `-wal`, `-shm`), médias en stockage local
+(`media/`), secrets générés (`secrets/`). À sauvegarder ensemble. Il doit appartenir à l'uid 1000 : automatique
+pour un volume nommé, `chown 1000:1000` pour un dossier de l'hôte. `.env` n'est pas lu (aucun fichier dans
+l'image) : variables par `-e`, `--env-file` ou Compose ; toutes celles du § 6.3 s'appliquent.
+
+| Variable propre à l'image | Défaut | Rôle |
+| --- | --- | --- |
+| `DATABASE_URL` | `file:./data/surge-media.db` | `postgresql://…`, `mysql://…` ou `file:…` : `DATABASE_PROVIDER` en est déduit s'il manque |
+| `SURGE_MEDIA_MIGRATE` | `true` | `false` : `server` démarre sans migrer (instances supplémentaires ; migrations lancées par `migrate`) |
+| `SURGE_MEDIA_SECRETS_DIR` | `/app/data/secrets` | dossier des secrets générés |
+| `SURGE_MEDIA_LANG` | `fr` | langue des messages du point d'entrée (`en`) |
+| `<VARIABLE>_FILE` | — | valeur lue dans un fichier (secrets Docker, `/run/secrets/…`) pour `DATABASE_URL`, `NUXT_SESSION_PASSWORD`, `NUXT_MEDIA_SIGNING_SECRET`, `NUXT_MEDIA_PREVIOUS_SIGNING_SECRET`, `NUXT_MEDIA_STORAGE_S3_ACCESS_KEY_ID`, `NUXT_MEDIA_STORAGE_S3_SECRET_ACCESS_KEY`, `NUXT_SMTP_PASSWORD`, `NUXT_BOOTSTRAP_ADMIN_PASSWORD` |
+| `PORT` | `3000` | port d'écoute dans le conteneur |
+
+- **Secrets** : `NUXT_SESSION_PASSWORD` et `NUXT_MEDIA_SIGNING_SECRET` absents de l'environnement sont générés au
+  premier démarrage (32 octets aléatoires, comme `surge-media init`), conservés dans le volume (fichiers `0600`) et
+  jamais remplacés ; création atomique : deux conteneurs qui partagent le volume et démarrent ensemble gardent la
+  même valeur. Conteneurs sur des volumes ou des machines distincts : fournir les mêmes valeurs à tous.
+- **Migrations** : `prisma migrate deploy` avec le schéma du fournisseur (`/app/prisma/schemas/`) et la CLI
+  Prisma embarquée ; base injoignable (`P1001`, conteneur de la base encore en démarrage) : 20 essais à 3 s
+  d'intervalle ; échec : le conteneur s'arrête (code 1) avec la sortie de Prisma.
+- **Santé** : `HEALTHCHECK` intégré sur `/api/health` (toutes les 30 s, 60 s accordées au démarrage) : `healthy`
+  dans `docker ps`, utilisable par `depends_on: condition: service_healthy`.
+- **Arrêt** : `docker stop` envoie SIGTERM, relayé par `tini` ; accorder 30 s (`stop_grace_period`,
+  `--stop-timeout 30`) pour qu'une tâche vidéo en cours soit rendue proprement (§ 7.7).
+- **Derrière un mandataire inverse** (§ 12) : les exemples ne publient le port que sur `127.0.0.1` ;
+  `NUXT_TRUST_PROXY` (défaut) fait confiance aux réseaux privés, dont ceux de Docker ; HTTPS obligatoire pour le
+  cookie de session, sauf sur `localhost`.
+- **Mise à jour** : nouvelle image, puis recréer les conteneurs (`docker compose up -d`) : les migrations sont
+  appliquées au démarrage de `server`.
+- **`migrate` et SQLite** : la base est verrouillée tant que le serveur tourne (« database is locked », § 18) ;
+  lancer `migrate` serveur arrêté. Rarement utile : `server` migre à son démarrage.
+- **Taille** (décompressée, mesurée le 2026-10-10) : 1,38 Go pour l'image complète, 751 Mo pour `slim`. Postes
+  principaux : ffmpeg et ses bibliothèques (≈ 460 Mo), CLI Prisma des migrations (≈ 250 Mo : elle charge Prisma
+  Studio dès son démarrage, l'élaguer la casse), Node (≈ 120 Mo), serveur construit (≈ 57 Mo, trois clients compris).
+- **Durées** (16 cœurs) : première build ≈ 4 min, dont ≈ 80 s de build Nuxt (≈ 7 min sous Windows) ; ensuite,
+  seule une modification de `packages/` ou du fichier de verrouillage relance la build ; démarrage avec les
+  16 migrations ≈ 11 s (SQLite) ; arrêt propre ≈ 2,5 s.
+
+**Compose** (`docker/`) : `compose.sqlite.yaml` (un conteneur) et `compose.postgres.yaml` (serveur web, processus
+de travail des vidéos et PostgreSQL 17 ; `POSTGRES_PASSWORD` requis, dans l'environnement ou `docker/.env`).
+MySQL/MariaDB : remplacer le service `postgres` (par exemple `mariadb:11`) et `DATABASE_URL` par `mysql://…`.
+Image construite localement : `SURGE_MEDIA_IMAGE=surge-media docker compose -f docker/compose.sqlite.yaml up -d`.
+
 ## 13. Choix techniques et versions épinglées
 
 | Choix | Pourquoi |
@@ -2035,7 +2120,7 @@ observation ; le journal du serveur l'annonce aussi (au plus toutes les 15 minut
 | `/admin/api` en dev : *Cannot define property modal, object is not extensible* | deux copies de Vue chargées après la découverte tardive de Scalar par Vite : `vite.optimizeDeps.include` le pré-optimise (`nuxt.config.ts`) ; recharger la page si l'erreur apparaît encore après une mise à jour |
 | Avertissement de build *[vite:css][postcss] Lexical error … (50 - l) * infinity* | syntaxe CSS récente dans la feuille de style de Scalar, non comprise par PostCSS : sans effet (émise telle quelle) |
 | `[surge-media] OpenAPI — …` dans la console (dev) | documentation d'une route incomplète : voir § 9.12 (`defineRouteMeta`, traduction `x-i18n`, codes d'erreur) |
-| `File '../.nuxt/tsconfig.server.json' not found` pendant `prisma generate` | lancer `nuxt prepare` avant `prisma generate` (ordre du `postinstall`) |
+| `File '../.nuxt/tsconfig.server.json' not found` pendant la génération des clients Prisma | lancer `nuxt prepare` avant `scripts/prisma-generate.ts` (ordre du `postinstall`) |
 | `File URL path must be absolute` au démarrage (Windows) | ne jamais importer statiquement `server/generated/prisma` dans le code serveur : passer par `await usePrisma()` |
 | `P3019` / fournisseur différent de `migration_lock.toml` | `.env` et schéma désynchronisés : relancer `pnpm db:init` |
 | `prisma migrate reset` refusé (« invoked by … AI agent ») | garde-fou de Prisma quand la commande est lancée par un agent IA : lancez `pnpm db:reset` vous-même |
@@ -2132,6 +2217,9 @@ observation ; le journal du serveur l'annonce aussi (au plus toutes les 15 minut
 | 408 `REQUEST_TIMEOUT` | corps JSON non reçu en 30 s : client ou réseau très lent |
 | 503 `SERVER_BUSY` à l'envoi ou sur un aperçu | file des traitements pleine : réessayer après `Retry-After` ; en production, ajuster `NUXT_MEDIA_PROCESSING_*` (§ 8) |
 | Image privée cassée dans une page externe après un changement de secret | lien signé avec l'ancien secret : déclarer celui-ci dans `NUXT_MEDIA_PREVIOUS_SIGNING_SECRET` pendant 7 jours |
+| Docker : « Impossible d'écrire /app/data/secrets » au démarrage | volume monté depuis un dossier de l'hôte qui n'appartient pas à l'uid 1000 : `chown -R 1000:1000 <dossier>`, ou fournir `NUXT_SESSION_PASSWORD` et `NUXT_MEDIA_SIGNING_SECRET` (`-e` ou `_FILE`) |
+| Docker : « database is locked » avec la commande `migrate` (SQLite) | le serveur tient la base : l'arrêter avant (`server` applique de toute façon les migrations à son démarrage) |
+| Docker : le conteneur s'arrête après « Base injoignable … (20/20) » | base hors d'atteinte pendant 60 s : vérifier `DATABASE_URL` (nom du service Compose, port, mot de passe encodé dans l'URL) et le réseau du conteneur |
 
 ---
 
@@ -3474,3 +3562,51 @@ publiés, mais ni la build du serveur `.output`, ni `LICENSE`). Une fois install
 `node_modules/@surge-media/core` (`.env`, schéma, base SQLite et médias sous `./data`, effacés par une réinstallation),
 et tout changement de fournisseur demande un `nuxt build`. Modèle de distribution à décider : image Docker, ou paquet
 qui crée un dossier d'installation hors de `node_modules`.
+
+### Étape 23 — 2026-10-10 — Image Docker, un client Prisma par fournisseur
+
+**Cadre** : décisions de l'utilisateur — exécuter surgeMedia aussi par Docker (en plus de l'installation par npx),
+image publiée plus tard sur GitHub Container Registry ; **une seule image pour les trois bases** ; deux variantes,
+avec ffmpeg (par défaut) et `slim` sans ; workflow de publication GHCR reporté.
+
+**Un client Prisma par fournisseur** (prérequis de l'image unique, § 6.2)
+- `cli/lib/generate.ts` et `scripts/prisma-generate.ts` : un client par fournisseur dans
+  `server/generated/prisma/<fournisseur>/`, depuis `server/generated/schemas/<fournisseur>.prisma` (copie du schéma,
+  fournisseur et sortie réécrits) ; générés en parallèle (≈ 2,5 s), rien de refait si les schémas et la version de
+  Prisma sont inchangés (`.stamp.json`). `server/generated/prisma/client.ts` ne réexporte que les **types** (ceux du
+  client SQLite : les trois exposent la même interface, schéma portable).
+- `server/utils/prisma.ts` : `CLIENT_MODULES` charge par import différé le client de `DATABASE_PROVIDER` (Nitro en
+  fait trois morceaux, un seul est chargé).
+- Scripts `dev`, `build`, `typecheck`, `postinstall` : `tsx scripts/prisma-generate.ts` au lieu de `prisma generate` ;
+  `db:generate` force la régénération. CLI : `init`, `db migrate` et `db reset` génèrent les clients s'il le faut ;
+  après un changement de fournisseur, « redémarrez » remplace « reconstruisez » (fr, en). **Changer de base ne
+  demande plus de reconstruire l'application.**
+
+**Docker** (§ 12.2)
+- `Dockerfile` (racine) en plusieurs étapes, `.dockerignore`, `docker/entrypoint.sh` (commandes `server`, `worker`,
+  `migrate` ; secrets générés et conservés dans le volume ; variables `_FILE` ; fournisseur déduit de l'URL ;
+  attente de la base ; messages en français ou en anglais), `docker/compose.sqlite.yaml`,
+  `docker/compose.postgres.yaml` (serveur web, processus de travail des vidéos, PostgreSQL 17).
+- README (racine et core) : démarrage par Docker ; § 6.2, § 12 et § 14 mis à jour.
+
+**Vérifié** : typecheck ; Vitest **553 tests** ; i18n ; build de production locale (trois clients embarqués, serveur
+démarré sur SQLite) ; `pnpm db:migrate`. Avec Docker Desktop 29.1 (Windows, moteur Linux), parcours complet sur
+chaque base — connexion (argon2), projet, jeton personnel, image envoyée puis transformée en AVIF (sharp), vidéo MKV
+(MPEG-4 Part 2) convertie en H.264/AAC avec affiche :
+- **SQLite**, image complète, mode `embedded` : santé en 11 s, secrets en `0600`, 16 migrations, WAL ; conteneur
+  `healthy` ; arrêt propre en 2,6 s (code 0) ; redémarrage sans nouveau secret ni migration ;
+- **PostgreSQL 17** (`compose.postgres.yaml`) : serveur et processus de travail `healthy`, vidéo traitée par le
+  processus de travail ;
+- **MariaDB 11** : **première exécution réelle des migrations MySQL** (16, sans erreur), URL lue par
+  `DATABASE_URL_FILE`, attente de la base (2 essais), messages en anglais ;
+- **`slim`** durcie (`--read-only --tmpfs /tmp --cap-drop ALL --security-opt no-new-privileges`) : fonctionne ;
+  traitement des vidéos désactivé avec un message clair ; commande `migrate` (serveur arrêté) et commande libre.
+
+Non vérifié : arm64 (build multi-plateforme), mandataire inverse devant le conteneur, stockage S3, MySQL 8,
+publication sur GHCR.
+
+**Après `git pull`**
+```bash
+pnpm install          # régénère les trois clients Prisma (aucune migration)
+```
+L'ancien client unique de `server/generated/prisma` est remplacé automatiquement.
