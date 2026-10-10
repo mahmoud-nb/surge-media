@@ -2,6 +2,7 @@ import type { H3Event } from 'h3'
 import { DASHBOARD_ACTIVITY, DASHBOARD_PROJECTS, EXPIRING_SOON_DAYS, hourlyCounts, startOfUtcHour, UPLOAD_WINDOW_HOURS, type DashboardAttention } from '#shared/utils/dashboard'
 import type { MediaKind, Prisma, User } from '../../generated/prisma/client'
 import { listAuditEvents } from '../audit/service'
+import { readDatabasePressure } from '../database/pressure'
 import { mailEnabled } from '../mail/transport'
 
 /**
@@ -139,7 +140,12 @@ export async function dashboardData(event: H3Event, user: User) {
 
   // ─── Points d'attention ──────────────────────────────────────────────────
   const attention: DashboardAttention[] = []
-  if (hasPermission(user.role, 'settings:manage') && !useRuntimeConfig(event).siteUrl && !import.meta.dev) attention.push({ kind: 'siteUrl' })
+  if (hasPermission(user.role, 'settings:manage')) {
+    // Base SQLite sous pression (constat des dernières 24 h, tous processus) : en tête, c'est le plus urgent.
+    const pressure = await readDatabasePressure(prisma)
+    if (pressure) attention.push({ kind: 'database', ...pressure })
+    if (!useRuntimeConfig(event).siteUrl && !import.meta.dev) attention.push({ kind: 'siteUrl' })
+  }
   if (expiringTokens.length) {
     attention.push({ kind: 'expiringTokens', items: expiringTokens.map(token => ({ id: token.id, name: token.name, expiresAt: token.expiresAt! })) })
   }

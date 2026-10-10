@@ -31,6 +31,8 @@ const FFPROBE = process.env.NUXT_FFPROBE_PATH || 'ffprobe'
 const hasFfmpeg = spawnSync(FFMPEG, ['-hide_banner', '-version'], { stdio: 'ignore' }).status === 0
   && spawnSync(FFPROBE, ['-hide_banner', '-version'], { stdio: 'ignore' }).status === 0
 const posix = process.platform !== 'win32'
+/** Code de sortie d'un processus arrêté par runTool : null sous POSIX (signal SIGKILL), 1 sous Windows (`taskkill /F`, vérifié le 2026-10-10). */
+const KILLED_CODE = posix ? null : 1
 const hasSvtAv1 = hasFfmpeg && /\slibsvtav1\s/.test(spawnSync(FFMPEG, ['-hide_banner', '-encoders'], { encoding: 'utf8' }).stdout ?? '')
 const hasPrlimit = process.platform === 'linux' && spawnSync('prlimit', ['--version'], { stdio: 'ignore' }).status === 0
 
@@ -549,20 +551,20 @@ describe.skipIf(!hasFfmpeg)('ffmpeg réel (vidéos fabriquées par lavfi)', { ti
     const endless = ['-nostdin', '-hide_banner', '-loglevel', 'error', '-f', 'lavfi', '-i', 'testsrc2=size=320x180:rate=30', '-c:v', 'libx264', '-preset', 'ultrafast', '-threads', '1', '-progress', 'pipe:1', '-f', 'null', '-']
     let started = Date.now()
     const timedOut = await runTool(FFMPEG, { args: endless, timeoutMs: 500, onProgress: () => {} })
-    expect(timedOut).toMatchObject({ timedOut: true, code: null })
+    expect(timedOut).toMatchObject({ timedOut: true, code: KILLED_CODE })
     expect(Date.now() - started).toBeLessThan(5_000)
 
     const controller = new AbortController()
     setTimeout(() => controller.abort(), 300)
     started = Date.now()
     const aborted = await runTool(FFMPEG, { args: endless, timeoutMs: 60_000, signal: controller.signal, onProgress: () => {} })
-    expect(aborted).toMatchObject({ aborted: true, timedOut: false, code: null })
+    expect(aborted).toMatchObject({ aborted: true, timedOut: false, code: KILLED_CODE })
     expect(Date.now() - started).toBeLessThan(5_000)
 
     // Durée de sortie bornée (fichier sans durée, ou qui ment) : arrêt au-delà de la limite, échec TOO_LONG.
     const seconds: number[] = []
     const tooLong = await runTool(FFMPEG, { args: endless, timeoutMs: 60_000, onProgress: value => seconds.push(value), maxOutputSeconds: 1 })
-    expect(tooLong).toMatchObject({ tooLong: true, timedOut: false, aborted: false, code: null })
+    expect(tooLong).toMatchObject({ tooLong: true, timedOut: false, aborted: false, code: KILLED_CODE })
     expect(Math.max(...seconds)).toBeLessThanOrEqual(11)
     expect(toolFailure(tooLong, 'CONVERSION_FAILED').code).toBe('TOO_LONG')
   })

@@ -66,5 +66,8 @@ describe('points d\'attention', () => {
     expect(attentionSeverity({ kind: 'invitations', pending: 2, expired: 1 })).toBe('warning')
     expect(attentionSeverity({ kind: 'trash', total: 3, spaces: [] })).toBe('info')
     expect(attentionSeverity({ kind: 'mail' })).toBe('info')
+    const pressure = { at: now.toISOString(), busy: 0, slow: 0, loadedMinutes: 0, peakRequests: 400, peakWrites: 0, peakShare: 0.1 }
+    expect(attentionSeverity({ kind: 'database', level: 'info', ...pressure })).toBe('info')
+    expect(attentionSeverity({ kind: 'database', level: 'warning', ...pressure, busy: 2 })).toBe('warning')
   })
 })

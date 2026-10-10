@@ -5,6 +5,11 @@
 > français, avec le « Journal des étapes »). En cas de divergence, **le code fait foi**, puis
 > `setup.md`, puis ce fichier.
 >
+> **Maintenance du 2026-10-10** (après `89938e2`, non commitée au moment de la rédaction ; § 9.24, `setup.md` § 12.1 et journal) :
+> test global sous Windows et montée en charge — deux correctifs de débit et de fiabilité (configuration d'exécution calculée une
+> fois, réponses de `/m/` jamais envoyées en keep-alive), **alerte « base SQLite sous pression »** au tableau de bord, vérifications
+> D3 sous Windows faites (Ctrl+C, priorité, `taskkill`).
+>
 > **État décrit** : commit `dbf3aa7` (**étape 22, D3 — traitement des vidéos par ffmpeg**, 2026-10-09 ; § 9.23 ; documentation de
 > D3 écrite ensuite — brouillon commité en `fbfcfaa`, version finale non commitée au moment de la rédaction : vérifier `git log`), après `919a113` (**étape 18, envoi des liens par
 > e-mail**, 2026-10-04 ; § 8), `608b8f6` (**étape 17, appareils de confiance** ; § 7.2) et `7a42f45` (**étape 16, rôle Gestionnaire** ;
@@ -186,7 +191,8 @@ Traitement des vidéos (D3) : `service.ts` crée les `MediaJob` → boucle `plug
 - `plugins/` : `auth-session.ts` (hooks nuxt-auth-utils), `bootstrap-admin.ts` (avertissements au démarrage), `database.ts` (déconnexion Prisma à l'arrêt),
   `site-url.ts` (avertit en production si `NUXT_SITE_URL` est vide), `search-backfill.ts` (indexe la recherche des médias existants),
   `delegated-usage.ts` (purge horaire des compteurs de jetons délégués expirés), `http-timeouts.ts` (D1), `variant-keys.ts` (C1),
-  **`0.video-processing.ts`** (D3 : boucle des tâches vidéo, avant `database.ts`). En rôle `worker`, `bootstrap-admin`, `site-url`,
+  **`0.video-processing.ts`** (D3 : boucle des tâches vidéo, avant `database.ts`), **`runtime-config.ts`** (2026-10-10 : configuration
+  d'exécution calculée une fois, § 9.24), **`database-pressure.ts`** (2026-10-10 : alerte SQLite, § 9.24). En rôle `worker`, `bootstrap-admin`, `site-url`,
   `search-backfill`, `variant-keys` et `delegated-usage` ne font rien (`isWorkerRole`).
 - `utils/` (auto-importés par Nitro) : `prisma.ts` (`usePrisma`, `textContains`, `textSearch`, `isUniqueViolation`, `disconnectPrisma`), `auth.ts`, `password.ts`, `rate-limit.ts`, `users.ts` (`toUserSummary` + `invitedBy`, `USER_SUMMARY_INCLUDE`,
   `visibleUsersWhere`, `userListWhere(query, actor)`, `findVisibleUserOr404` — étape 16), `password-tokens.ts`,
@@ -205,7 +211,8 @@ Traitement des vidéos (D3) : `service.ts` crée les `MediaJob` → boucle `plug
   `server/plugins/variant-keys.ts` (§ 9.16) ; C2 : **`transforms/service.ts`** (politique, préréglages, § 9.17), `server/utils/transforms.ts` ;
   C3 : **`api/{signature-plan,signed-urls}.ts`** (liens signés de l'API, § 9.18 ; réutilisés par l'administration en C4) ;
   2026-10-05 : **`http/{body,stream}.ts`** (purs, testés : `readLimitedBody`, `BodyReadError`, `BODY_MAX_SIZE`, `BODY_READ_TIMEOUT_MS` ;
-  `closeWithResponse`) ; D1 : **`media/limits.ts`** (limites par genre, `UploadRules`, `uploadRules`, `useUploadSizes`), **`media/video/`**
+  `closeWithResponse` ; 2026-10-10 : `responseReady`), **`http/runtime-config.ts`** (2026-10-10 : `sharesRuntimeConfig`, `hookEvent`),
+  **`database/pressure.ts`** (2026-10-10 : compteurs, constat `Setting`, § 9.24) ; D1 : **`media/limits.ts`** (limites par genre, `UploadRules`, `uploadRules`, `useUploadSizes`), **`media/video/`**
   (`source`, `isobmff`, `ebml`, `codecs`, `probe` : lecteur d'en-têtes pur, testé), `handlers/video.ts`, plugin `server/plugins/http-timeouts.ts`
   (§ 9.21) ; D2 : **`media/video/prepare.ts`** (préparation des MP4/MOV, pur, testé), **`media/text-track.ts`** (analyse et réécriture
   WebVTT/SRT, pur, testé), **`media/tracks.ts`** (service des pistes), `media/keys.ts` (`posterKey`, `trackKey`), `api/tracks.ts`,
@@ -234,6 +241,8 @@ Traitement des vidéos (D3) : `service.ts` crée les `MediaJob` → boucle `plug
   `utils/auth.ts` (`REAUTH_WINDOW_SECONDS` = 600, `AUTH_ERROR_CODES`, `isRecentlyVerified` ; étape 17 : `TRUSTED_DEVICE_DEFAULT_DAYS`,
   `TRUSTED_DEVICE_MAX_DAYS`, `trustedDeviceDays`, `TRUSTED_DEVICE_SCOPES`), `utils/audit.ts` (`AUDIT_ACTIONS`, `AUDIT_CATEGORIES`, `auditCategory`) — auto-importés.
 - `utils/users.ts` (USER_STATUSES, userStatus, USER_ERROR_CODES) — auto-importé.
+- **`utils/database-pressure.ts`** (2026-10-10 : seuils, `evaluateDatabasePressure`, `readPressureReport`, `isDatabaseBusyError`,
+  `isWriteOperation` — pur, testé ; importer explicitement dans les composants), `utils/dashboard.ts` + point d'attention `database`.
 - `utils/media.ts` (MEDIA_KINDS, MEDIA_VISIBILITIES, ACCEPTED_MEDIA_TYPES (+ VIDEO depuis D1), ACCEPTED_MIME_TYPES, MEDIA_SIZE_CEILING, DEFAULT_UPLOAD_SIZES,
   UploadSizes, ENABLED_MEDIA_KINDS, mediaKindForMime, extensionForMime, SIGNED_URL_DURATIONS, SIGNED_URL_MAX_TTL, MEDIA_ERROR_CODES) — auto-importé ;
   `utils/video.ts` (D1 : `VideoMetadata`, `videoPlayback`, `codecLabel`, `videoMetadata`, `videoSourceType`, `VIDEO_MAX_DIMENSION` — importer
@@ -1446,6 +1455,9 @@ Contrats de données :
 | DD33 : table `MediaRendition`, `/m/<id>/v<n>/renditions/<nom>.<ext>`, droit signé `file` couvrant les rendus ; clés sans version (écart) | un rendu n'est pas une transformation d'image (ni quota, ni génération à la demande) ; une signature pour toutes les `<source>` |
 | DD34 : API v1 `processing` et `sources[]` **ajoutés** ; administration : relancer, traiter l'existant, état ; pas de webhooks | contrat compatible ; attente par `ETag` / `If-None-Match` |
 | DD35 : défenses du § 36 (format imposé, protocole `file`, délais, priorité, fils, mémoire, réanalyse des sorties), arguments construits dans `args.ts` seulement | ffmpeg décode des fichiers de tiers : plus grande surface d'attaque du projet (attaque connue : liste HLS déguisée) |
+| Configuration d'exécution partagée par requête (plugin `runtime-config.ts`, `beforeEach` de hookable), gelée pour `/m/`, `/api/`, `/_nuxt/`, copiée pour les pages (2026-10-10) | Nitro 2 la reconstruit à chaque `useRuntimeConfig(event)`, appelé par @nuxtjs/i18n sur toutes les requêtes : 80 % du processeur, × 2 à × 19 une fois corrigé ; variables lues au démarrage seulement |
+| `responseReady` avant tout `sendStream` (2026-10-10) | h3 1.15 n'envoie rien si `res.socket` est nul (réponse en file derrière la précédente en keep-alive) |
+| Alerte SQLite mesurée (extension Prisma `$allOperations`, constat partagé dans `Setting`, 24 h) plutôt qu'un simple avertissement permanent (2026-10-10) | SQLite synchrone : le temps passé dans la base = temps bloqué ; signaler les symptômes réels (verrous, lenteurs, charge) et le trafic élevé ; coût mesuré 0 sur `/m/`, 3–4 % sur l'API |
 | DD36 : interface du § 37, livrée en modules A à F (étape 22) | revues indépendantes par module avant la suite |
 
 ## 17. Règles métier et contraintes
@@ -1655,6 +1667,28 @@ Contrats de données :
   `runTool : processus enfant borné` (priorité, arbre de processus, arrêt) l'est toujours (`describe.skipIf(!posix)`), même avec ffmpeg :
   la priorité se vérifie à la main ; les tests d'arrêt qui restent attendent `code: null` (sémantique POSIX ; `taskkill /F` donne
   probablement le code 1, à vérifier — la règle « ffmpeg tué par un signal → passager » repose aussi sur `code === null`).
+- **Nitro 2 et `useRuntimeConfig(event)`** (2026-10-10) : configuration reconstruite à chaque requête (copie + `applyEnv`), coût
+  proportionnel à sa taille (OAuth de nuxt-auth-utils compris) et aux lectures de `process.env` (lentes sous Windows) ; corrigé par
+  `server/plugins/runtime-config.ts`. Les variables d'environnement ne sont plus lues qu'au démarrage.
+- **hookable 5 `beforeEach`** : `hook.args` commence par le **nom** du crochet (`['request', event]`), contrairement aux types ;
+  une exception dans `beforeEach` fait échouer **toutes** les requêtes — toujours protéger (try/catch) et tester sur la build.
+- **h3 1.15 `sendStream`** : n'écrit rien si `res.socket` est nul (réponse en file en keep-alive) → toujours `responseReady` avant.
+- **SQLite synchrone** : une écriture ou une attente de verrou (autre processus, jusqu'à 10 s) fige tout le processus, fichiers
+  compris ; P1008 « Operation has timed out » quand l'attente dépasse le délai (§ 9.24).
+- **Mesures de charge sur un portable** : débits × 7 entre batterie et secteur ; comparer avant/après dans la même minute (A/B
+  par interrupteur temporaire dans la build de la copie), jamais d'une heure à l'autre.
+- **Copie isolée** : ne jamais y lancer `pnpm <script>` — pnpm 12 vérifie les dépendances et lance un `pnpm install` qui écrit
+  dans `node_modules`, c.-à-d. dans la **jonction** vers le vrai `packages/core/node_modules` (arrivé le 2026-10-10 : arrêté à temps,
+  liens intacts, mais un dossier `.pnpm` de 1 177 entrées y est resté — suppression refusée par le mode automatique, signalée à
+  l'utilisateur). Lancer les binaires directement : `node node_modules/nuxt/bin/nuxt.mjs build|typecheck`,
+  `node node_modules/tsdown/dist/run.mjs` ; `prisma generate` y échoue sans `.nuxt` (client déjà copié). Arrêter le serveur de la
+  copie avant de reconstruire (`EPERM unlink` sur argon2).
+- **Windows, automatisation** : un processus lancé depuis les outils de l'agent hérite de l'attribut « ignorer Ctrl+C »
+  (`SetConsoleCtrlHandler(NULL, TRUE)`) : réactiver avant de lancer (`launch-console.ps1 -EnableCtrlC`) pour un essai fidèle ;
+  `spawn({ detached: true })` de Node crée un processus **sans console** (`DETACHED_PROCESS`, AttachConsole échoue) ;
+  `Start-Process -RedirectStandardOutput` fait hériter les descripteurs (la commande appelante attend la fin du serveur) → passer
+  par `cmd /c "… > fichier"` lancé par `Start-Process -WindowStyle Hidden`.
+- **Scénarios enchaînés** : C2 à C4 juste après C1 dépassent 60 transformations libres par minute et par IP (429) — espacer.
 - Pas d'outil de copie entre stockages, pas de nettoyage des fichiers orphelins ni des liens de mot de passe utilisés.
 - Originaux diffusés avec leurs EXIF (GPS possible).
 - Tests automatisés limités aux modules purs (Vitest, depuis B1) : API et interface vérifiées par scripts ad hoc et audits
@@ -1737,6 +1771,17 @@ Contrats de données :
   saisie conservée, focus, annonces, nouvel essai après ffmpeg tué, corbeille et restauration, extrait, dialogue de « Réglages » au clavier.
   Chaque module revu par des relecteurs indépendants avec vérification contradictoire : 13 défauts corrigés en phase B (modules A à C), 11 en
   phase C (module D), 7 dans le module E, 27 + 7 dans le module F. Détail : architecture, section « D3 — état de l'implémentation ».
+- **Maintenance du 2026-10-10** (Windows 11, Node 24.20, ffmpeg 9.0.2) : `pnpm test` **539 tests en 28 fichiers** (9 ignorés : blocs
+  POSIX), typecheck dans la copie isolée (erreur volontaire bien détectée), i18n 1536 clés. Méthode et scripts (bloc-notes de la
+  session `37b39128`, non versionnés) : copie isolée lancée par une configuration temporaire `core-copy-3200` de `launch.json`
+  (`start-copy.mjs` : `.env` de la copie, surcharges `server-env.json`, port de diagnostic 3299, profilage CPU à la demande par
+  `profile.trigger`) ; `load.mjs` (générateur de charge multi-processus, connexions persistantes, journal des requêtes sans réponse),
+  `load-setup.mjs` / `load-plan.mjs` (projet, clés, 40 photos, scénarios), `run-load.sh` + `sample.ps1` (processeur et mémoire du
+  serveur), `profile-top.mjs` / `profile-callers.mjs` (lecture des profils), `lock-test.mjs` (verrou tenu 13 s), `d3-windows.mjs`
+  (worker réel, Ctrl+C par `ctrlc.ps1`, consoles par `launch-console.ps1 -EnableCtrlC`), `ssr-crawl.mjs` (21 pages en SSR),
+  `dash-check.mjs` ; scénarios d'avant copiés dans `scen/` avec chemins redirigés vers la copie (`d1-b3`, `d1-b5`, `d1-c3` : propriétaire
+  MANAGER, téléversement en bibliothèque par l'ADMIN, marqués `[D1]`). Les scénarios C2 à C4 lancés juste après C1 dépassent la
+  limite de 60 transformations libres par minute et par IP : les espacer d'une minute.
 - D1 (vidéos) : `tests/video.test.ts` (30, fichiers fabriqués boîte par boîte + 3 enregistrements réels) ; `video-test.mjs [base]` (60
   scénarios, compte/projet/clé/jeton délégué jetables, nettoyage par identifiants) ; `keepalive-repro.mjs`, `v1-reset-repro.mjs`,
   `v1-socket-repro.mjs`, `h3-early-refusal-bench.mjs <h3 dist>`, `early-response-bench.mjs`, `request-timeout-bench.mjs` (diagnostics) ;
@@ -2050,6 +2095,59 @@ par défaut = comportement de D2). Faite le 2026-10-09.
   `processing.status` admin = statut de la tâche ; MOV annoncé `video/mp4` ; `halted` / `disabled` ; `/api/health` compte le serveur
   `embedded` comme un processus de travail.
 
+### 9.24 Montée en charge et alerte SQLite (maintenance du 2026-10-10)
+
+Demande de l'utilisateur : test global sous Windows, projet prêt pour un grand nombre de requêtes, message d'alerte si
+SQLite pose problème. Référence d'exploitation : `setup.md` § 12.1 (tableaux de mesures) et journal « Maintenance —
+2026-10-10 ». Tout a tourné sur une copie isolée (base `VACUUM INTO`, médias copiés, build de production sur 3200).
+
+- **Configuration d'exécution** : Nitro 2 (`useRuntimeConfig(event)`) copie `_inlineRuntimeConfig` (≈ 520 entrées, dont
+  l'OAuth de nuxt-auth-utils) et applique `applyEnv` (conversion de chaque nom + 2 lectures de `process.env`, ≈ 0,7 µs chacune
+  sous Windows) **à chaque requête** ; @nuxtjs/i18n l'appelle dans son crochet `request` (`initializeI18nContext`) pour toutes
+  les requêtes. Profil : 80 % du processeur, ~110 req/s sur des 304 de `/m/` (portable sur batterie). Correctif :
+  `server/plugins/runtime-config.ts` — `nitroApp.hooks.beforeEach` (avant tout crochet, quel que soit l'ordre des plugins)
+  pose `event.context.nitro.runtimeConfig` = `useRuntimeConfig()` (calculée au démarrage, gelée) pour `/m/`, `/api/`,
+  `/_nuxt/` (`sharesRuntimeConfig`), `structuredClone` pour les pages ; jamais d'exception (try/catch). **hookable 5** place
+  le nom du crochet en tête de `hook.args` (contrairement à ses types) : `hookEvent(args)` cherche l'objet qui a `context`
+  (une première version prenait `args[0]` : toutes les requêtes en 500 dans la build). 21 pages d'administration rendues en
+  SSR avec la configuration gelée : aucune erreur. Mesures avant/après (mêmes conditions, 32 connexions) : 304 792 → 15 100,
+  aperçus 729 → 6 200, health 652 → 3 000, API média 525 → 1 490, liste 390 → 750, `/login` 219 → 460 req/s.
+- **`sendStream` sans connexion** : en keep-alive, Node met en file la réponse d'une requête arrivée avant la fin de la
+  précédente (`res.socket` nul jusqu'à l'événement `socket`) ; h3 1.15 `sendStream` y voit un environnement « worker » et
+  rend la main sans rien écrire → réponse jamais envoyée (≈ 1 sur 5 000–10 000, originaux et dérivés). Diagnostic : route
+  instrumentée dans la copie (`__stage`, `socketAtSend: false` sur chaque requête bloquée). Correctif : `responseReady(req,
+  res)` (`server/lib/http/stream.ts`, attend `socket` ou la fermeture de la connexion TCP) dans `sendStoredFile` de
+  `routes/m/[...path].ts`, **avant** d'ouvrir le fichier ; test déterministe par pipelining (deux requêtes d'un coup sur une
+  socket, première réponse retardée). 0 blocage sur ≈ 250 000 requêtes ensuite.
+- **SQLite mesuré** : un seul processus tient ≈ 1 650 req/s mixtes, 590 écritures/s, 135 envois/s sans erreur ; mais tout
+  accès est synchrone (le processus est figé pendant la requête et pendant l'attente du verrou d'un autre processus, 10 s
+  au plus) : aperçus 4 100 → 253 req/s avec 416 écritures/s dans le même processus, 129 req/s si un second processus écrit
+  aussi ; verrou tenu 13 s → un aperçu attend 12 s, l'écriture échoue en **P1008** « Operation has timed out »
+  (`DriverAdapterError: SocketTimeout`). L'adaptateur better-sqlite3 de Prisma 7 sérialise les transactions par un mutex
+  et **prépare chaque requête à chaque appel** (pas de cache de requêtes préparées : ≈ 11 % du temps d'une liste).
+- **Alerte** : `shared/utils/database-pressure.ts` (pur) — minutes de 60 s, fenêtre de 15 ; `warning` si une attente
+  dépassée, 5 opérations ≥ 500 ms, ou 3 minutes à ≥ 50 % du temps dans la base ; `info` si une minute à ≥ 300 req/s,
+  ≥ 30 écritures/s ou ≥ 25 % ; constat affiché 24 h. `server/lib/database/pressure.ts` : `createPressureMonitor` (compteurs),
+  `useDatabasePressureMonitor()` (null hors SQLite), `reportDatabasePressure(store)` (chaque minute ; `Setting`
+  `databasePressure`, au plus toutes les 5 min sauf aggravation, jamais un `info` sur un `warning` récent d'un autre processus ;
+  `console.warn` au plus toutes les 15 min), `readDatabasePressure(store)` (constat enregistré ou évaluation en cours, le plus
+  grave). Le client Prisma reçu en paramètre (`PressureStore`) : pas de cycle avec `usePrisma`. `server/utils/prisma.ts` :
+  `withPressureMonitor` = `client.$extends({ query: { $allOperations } })` converti en `PrismaClient` (SQLite seulement).
+  Plugin `database-pressure.ts` : requêtes comptées par `beforeEach` (un crochet `request` coûtait −16 % sur les 304 :
+  hookable enchaîne chaque crochet par une promesse et `task.run`), constat chaque minute (web et worker), message
+  `console.info` au démarrage en production. Tableau de bord : `{ kind: 'database', level, at, busy, slow, loadedMinutes,
+  peakRequests, peakWrites, peakShare }` en tête des points d'attention (`settings:manage`), `attentionSeverity` = `level`.
+  Vérifié de bout en bout (vrai verrou), axe 0 fr/en × clair/sombre, 375 px sans défilement ; coût A/B : 0 sur `/m/`,
+  3–4 % sur l'API.
+- **D3 sous Windows** (points en attente depuis l'étape 22) : ffmpeg 9.0.2 (winget, Gyan) accepté par Smart App Control sur
+  ce poste ; priorité `Idle` constatée ; `taskkill /F` → code 1 (test `video-ffmpeg` : `KILLED_CODE`) ; vrai Ctrl+C de console
+  pendant un encodage, `surge-media worker` puis `pnpm start` en `embedded` : arrêt < 1 s, ffmpeg arrêté (lancé avec
+  `windowsHide` → `CREATE_NO_WINDOW`, hors de la console : il ne reçoit pas le Ctrl+C), tâche `QUEUED` sans essai compté,
+  reprise et terminée. Non rejoué : Ctrl+C sur `pnpm dev`.
+- Scénarios rejoués sur la build finale : 787 contrôles (rôles, appareils, B2 à B5, C1 à C4, corps, envois bloqués, tableau
+  de bord) ; 539 tests Vitest.
+
+
 **Architecture de la phase B validée** (toutes les décisions D1–D15 confirmées le 2026-09-29) : `.claude/architecture-phase-b.md`
 — contrats détaillés des sous-étapes suivantes (types de jetons et formats, API v1, CORS, cache, transformations).
 
@@ -2065,8 +2163,8 @@ par défaut = comportement de D2). Faite le 2026-10-09.
   `setup.md` étape 22) : fondations, modules A (ffmpeg), B (diffusion), C (détection), D (file, pipeline, service, processus de travail),
   E (contrats API v1 et administration), F (interface) faits, revus et vérifiés (526 tests) — état final, écarts, vérifications et limites :
   `.claude/architecture-phase-d.md`, section « D3 — état de l'implémentation » ; contrats des modules : `.claude/d3-implementation-notes.md`.
-  **Reste avant D4** : vérifications sur le poste Windows de l'utilisateur (ffmpeg non bloqué par Smart App Control, `taskkill`, Ctrl+C de
-  `surge-media worker`, tests ffmpeg) ; scénario HTTP `d3-test.mjs` facultatif (dans le dépôt seulement avec son accord) ; décisions de
+  **Vérifications Windows faites le 2026-10-10** (§ 9.24 : ffmpeg accepté, priorité `Idle`, `taskkill`, Ctrl+C du worker et de
+  `pnpm start` pendant un encodage → tâche rendue sans essai, tests ffmpeg) ; reste facultatif : scénario HTTP `d3-test.mjs` facultatif (dans le dépôt seulement avec son accord) ; décisions de
   l'utilisateur en attente (§ 22). **Ensuite D4** (streaming adaptatif HLS, planches de survol, manifestes signés) **à proposer et faire
   valider** ; transverses : envois reprenables / directs vers S3, `BigInt` au-delà de 2 Gio, délestage de la diffusion, webhooks de fin de
   traitement, accélération matérielle, filtre « État » de la médiathèque, `<SmVideo>`. Audio et documents : phases ultérieures (DD13).
@@ -2115,16 +2213,13 @@ par défaut = comportement de D2). Faite le 2026-10-09.
   testé seulement via `prisma dev` (PGlite) jusqu'à l'étape 1, et `db reset` jamais exécuté dessus.
 - **S3 réel** (AWS, R2, MinIO) jamais testé (seulement `s3rver`) ; `MediaStorage.copy` (CopyObject) et la lecture par plage (`Range`) testés seulement en local.
 - Lecteurs d'écran réels jamais testés.
-- **D3 sous Windows** (poste de l'utilisateur) **non vérifié** : ffmpeg (`winget install Gyan.FFmpeg`) éventuellement bloqué par Smart App
-  Control, arrêt de l'arbre par `taskkill /T /F`, priorité `IDLE_PRIORITY_CLASS`, Ctrl+C de `surge-media worker` (rien n'est transmis par la
-  CLI : le Ctrl+C de la console doit atteindre le processus de travail et l'arrêter proprement), Ctrl+C de `nuxt dev` pendant un encodage,
-  tests ffmpeg — tâche en attente pour l'utilisateur. Aucune limite mémoire ni processeur par ffmpeg hors Linux (`prlimit`). Sous Windows,
-  ffmpeg n'a pas de groupe de processus propre (`run.ts`) : s'il reçoit lui aussi le Ctrl+C de la console (non établi : lancé avec
-  `windowsHide`) et sort (code 255) avant que le crochet `close` ait arrêté la tâche, l'échec est classé définitif (`runFailure`) au lieu
-  d'une tâche rendue sans essai — à vérifier (Ctrl+C de `surge-media worker` et de `pnpm start` pendant un encodage, puis état de la
-  tâche). Tests : le bloc `runTool : processus enfant borné` (priorité, arbre de processus, arrêt) est toujours ignoré sous Windows
-  (`describe.skipIf(!posix)`), la priorité `IDLE_PRIORITY_CLASS` se vérifie à la main ; les tests d'arrêt qui restent attendent `code: null`
-  (sémantique POSIX), alors que `taskkill /F` donne probablement le code 1 sous Windows.
+- **D3 sous Windows vérifié le 2026-10-10** (§ 9.24) ; reste non rejoué : Ctrl+C sur `pnpm dev` pendant un encodage. Aucune limite
+  mémoire ni processeur par ffmpeg hors Linux (`prlimit`). Le Contrôle intelligent des applications peut bloquer ffmpeg sur un autre
+  poste (non signé). Sous Windows, un ffmpeg tué de l'extérieur sort avec le code 1 : la règle « tué par un signal → passager »
+  (`runFailure`, `code === null`) ne s'y applique pas (échec définitif) — sans effet sur les arrêts faits par `runTool`.
+- **Montée en charge** (§ 9.24) : seuils de l'alerte SQLite choisis d'après un portable récent (à confirmer sur un serveur réel) ;
+  pas de `X-Forwarded-For` (limites par IP partagées derrière un mandataire) ; limites et caches par processus ; délai de verrou
+  SQLite de 10 s (processus figé) gardé tel quel — à rediscuter avec l'utilisateur.
 - D3 vérifié avec SQLite et le stockage local : aucun essai consigné avec S3 (original copié dans le dossier de la tâche), PostgreSQL ou
   MySQL (l'ordre `nulls: 'first'` de la « dernière tâche » n'a été essayé que sous SQLite). Lecture réelle des rendus H.264 dans un navigateur
   non vérifiée (Chromium du nuage sans H.264), ni le report du changement de sources pendant une lecture.

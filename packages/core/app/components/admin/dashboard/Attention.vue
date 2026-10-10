@@ -1,10 +1,11 @@
 <script setup lang="ts">
 /**
- * Points d'attention (assemblés par le serveur selon les droits) : jetons et clés qui expirent,
- * invitations en attente ou expirées, corbeille, configuration incomplète. Chaque point mène à
+ * Points d'attention (assemblés par le serveur selon les droits) : base SQLite sous pression, jetons et
+ * clés qui expirent, invitations en attente ou expirées, corbeille, configuration incomplète. Chaque point mène à
  * l'écran où agir ; une icône et un libellé distinguent ce qui demande d'agir de ce qui renseigne.
  */
 import { CircleCheck, Info, TriangleAlert } from '@lucide/vue'
+import { PRESSURE_LOADED_SHARE, PRESSURE_SLOW_OPERATION_MS } from '#shared/utils/database-pressure'
 
 defineProps<{ items: DashboardAttention[] }>()
 
@@ -12,6 +13,7 @@ const { t, locale } = useI18n()
 const { environmentLabel } = useCredentialLabels()
 const dateFormat = computed(() => new Intl.DateTimeFormat(locale.value, { dateStyle: 'medium', timeStyle: 'short' }))
 const when = (date: string | Date) => dateFormat.value.format(new Date(date))
+const number = (value: number) => new Intl.NumberFormat(locale.value).format(value)
 </script>
 
 <template>
@@ -37,7 +39,31 @@ const when = (date: string | Date) => dateFormat.value.format(new Date(date))
         <div class="min-w-0 grid gap-1 text-foreground">
           <span class="sr-only">{{ attentionSeverity(item) === 'warning' ? t('admin.dashboard.attention.warning') : t('admin.dashboard.attention.info') }}</span>
 
-          <template v-if="item.kind === 'expiringTokens'">
+          <template v-if="item.kind === 'database'">
+            <p class="font-medium">
+              {{ item.level === 'warning' ? t('admin.dashboard.attention.database.warning') : t('admin.dashboard.attention.database.info') }}
+            </p>
+            <ul class="grid gap-0.5 text-muted-foreground">
+              <li v-if="item.busy">
+                {{ t('admin.dashboard.attention.database.busy', { count: item.busy }, item.busy) }}
+              </li>
+              <li v-if="item.slow">
+                {{ t('admin.dashboard.attention.database.slow', { count: item.slow, ms: number(PRESSURE_SLOW_OPERATION_MS) }, item.slow) }}
+              </li>
+              <li v-if="item.loadedMinutes">
+                {{ t('admin.dashboard.attention.database.loaded', { count: item.loadedMinutes, percent: formatPercent(PRESSURE_LOADED_SHARE * 100, locale) }, item.loadedMinutes) }}
+              </li>
+              <li>
+                {{ t('admin.dashboard.attention.database.peaks', { requests: number(item.peakRequests), writes: number(item.peakWrites), share: formatPercent(item.peakShare * 100, locale) }) }}
+              </li>
+            </ul>
+            <p>{{ t('admin.dashboard.attention.database.advice') }}</p>
+            <p class="text-muted-foreground">
+              {{ t('admin.dashboard.attention.database.seenAt', { date: when(item.at) }) }}
+            </p>
+          </template>
+
+          <template v-else-if="item.kind === 'expiringTokens'">
             <p class="font-medium">
               {{ t('admin.dashboard.attention.expiringTokens', { count: item.items.length, days: EXPIRING_SOON_DAYS }, item.items.length) }}
             </p>

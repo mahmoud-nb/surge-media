@@ -1333,22 +1333,17 @@ l'existant interrompu en route, `processing` de l'ancien fichier affiché après
   revue : 0 violation sur « Réglages » et six états de la fiche (56 chargements), états simulés en modifiant les
   réponses de l'API.
 - **Non vérifié** : lecture réelle du rendu H.264 (ce Chromium ne lit pas le H.264 ; fichier contrôlé par ffprobe), report
-  du changement de sources pendant une lecture, focus sur la bannière de la corbeille après un refus ; tout le
-  comportement sous Windows (ci-dessous) ; S3, PostgreSQL et MySQL avec D3.
+  du changement de sources pendant une lecture, focus sur la bannière de la corbeille après un refus ; le comportement sous
+  Windows a été vérifié le 2026-10-10 (ci-dessous) ; S3, PostgreSQL et MySQL avec D3.
 
 ## Reste à faire
 
-1. **Sous Windows (poste de l'utilisateur)** — comportements écrits pour Windows mais jamais exécutés : ffmpeg installé
-   (`winget install Gyan.FFmpeg`) et non bloqué par Smart App Control ; arrêt de l'arbre de processus par `taskkill
-   /pid <pid> /T /F` (délai, annulation, arrêt du serveur) ; priorité `IDLE_PRIORITY_CLASS` ; Ctrl+C de
-   `surge-media worker` (la CLI ne transmet rien : le processus de travail doit s'arrêter proprement et rendre sa tâche
-   sans essai compté) et de `pnpm start` en `embedded` pendant un encodage, puis état de la tâche (ffmpeg, sans groupe de
-   processus propre, peut recevoir le Ctrl+C lui aussi et sortir avant que la tâche soit rendue : échec définitif au lieu
-   d'une tâche rendue, voir « Écarts ») ; Ctrl+C de `nuxt dev` pendant un encodage ; `pnpm test` avec ffmpeg (tests
-   `video-ffmpeg` exécutés si ffmpeg **et** ffprobe répondent ; le bloc `runTool : processus enfant borné` — priorité,
-   arbre de processus, arrêt — y est toujours ignoré, `describe.skipIf(!posix)`, la priorité se vérifie donc à la main ;
-   les tests d'arrêt attendent `code: null`, sémantique POSIX, alors que `taskkill /F` donne probablement le code 1) ;
-   lecture du rendu H.264 dans un vrai navigateur.
+1. **Sous Windows — fait le 2026-10-10** (project-context § 9.24, setup.md journal « Maintenance — 2026-10-10 ») : ffmpeg 9.0.2
+   (`winget install Gyan.FFmpeg`) accepté par Smart App Control sur ce poste ; priorité `Idle` constatée ; arrêt par `taskkill /T /F`
+   (code de sortie 1 : test `video-ffmpeg` adapté, `KILLED_CODE`) ; vrai Ctrl+C de console pendant un encodage avec
+   `surge-media worker` puis `pnpm start` en `embedded` : arrêt < 1 s, ffmpeg arrêté (lancé hors de la console, `CREATE_NO_WINDOW`,
+   il ne reçoit pas le Ctrl+C), tâche rendue **sans essai compté**, reprise et terminée ; `pnpm test` : 16 tests ffmpeg passés.
+   Reste : Ctrl+C de `nuxt dev` pendant un encodage, lecture du rendu H.264 dans un vrai navigateur.
 2. **Scénario HTTP `d3-test.mjs`** (§ 40) : facultatif, et dans le dépôt seulement avec l'accord de l'utilisateur.
 3. **Décisions de l'utilisateur en attente** : sa vidéo de téléphone publique (Samsung, projet « My Phone », envoyée avant
    D2) contient encore son lieu de tournage — « Optimiser » (nouvelle version sans le lieu), la rendre privée ou la laisser ;

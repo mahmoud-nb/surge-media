@@ -162,7 +162,7 @@ Depuis la racine :
 | `pnpm dev` | serveur de développement du core |
 | `pnpm build` | build de tous les packages |
 | `pnpm typecheck` | vérification TypeScript (vue-tsc) |
-| `pnpm test` | tests unitaires Vitest (`packages/core/tests/` : rôles et portées, liens signés, projets, identifiants et origines, API v1, jetons délégués, file des traitements, dossiers, transformations, vidéos et leur traitement — `video-ffmpeg.test.ts` lance le vrai ffmpeg, signalé « ignoré » s'il est absent) ; **Node 24** exigé (sous Node 22, les tests des sous-titres Windows-1252 échouent) |
+| `pnpm test` | tests unitaires Vitest (`packages/core/tests/` : rôles et portées, liens signés, projets, identifiants et origines, API v1, jetons délégués, file des traitements, dossiers, transformations, vidéos et leur traitement — `video-ffmpeg.test.ts` lance le vrai ffmpeg, signalé « ignoré » s'il est absent —, HTTP (flux, connexions persistantes) et alerte de pression SQLite) ; **Node 24** exigé (sous Node 22, les tests des sous-titres Windows-1252 échouent) |
 | `pnpm i18n:check` | cohérence des traductions et des clés utilisées dans le code |
 | `pnpm a11y:contrast` | contrastes WCAG AA des jetons de couleur (clair et sombre) |
 | `pnpm db:init` | configure la base (fournisseur + URL), applique les migrations, génère le secret de session |
@@ -191,6 +191,9 @@ changent, `pnpm a11y:contrast`.
   (c'est le cas des scripts `pnpm dev` / `pnpm start`).
 - Les caractères spéciaux d'un mot de passe doivent être encodés dans l'URL (`@` → `%40`, `$` → `%24`…).
 - Une variable `DATABASE_*` définie dans le shell est prioritaire sur le fichier `.env` (la CLI le signale).
+- **SQLite** convient à **un seul serveur** et à un **trafic modéré** : chaque accès à la base bloque le processus, et
+  les écritures de plusieurs processus s'attendent. Pour un trafic soutenu, plusieurs processus ou plusieurs
+  serveurs : PostgreSQL ou MySQL (mesures et seuils : § 12.1 ; le tableau de bord signale une base sous pression).
 
 ### 6.2 La CLI `surge-media`
 
@@ -228,7 +231,7 @@ pnpm cli --help                                # aide (--lang en pour l'anglais)
   `pnpm build` d'abord, sinon la commande s'arrête) depuis `packages/core`, avec son `.env`
   (`--env-file-if-exists`, les variables du shell restant prioritaires) et `NUXT_SERVER_ROLE=worker`. Il
   exécute les tâches vidéo du mode `external` et ne sert que `/api/health` sur son port (3001 par défaut,
-  distinct de celui du serveur web). Ctrl+C ou SIGTERM : arrêt propre (§ 7.7 ; Windows : à vérifier).
+  distinct de celui du serveur web). Ctrl+C ou SIGTERM : arrêt propre (§ 7.7 ; vérifié aussi sous Windows le 2026-10-10).
 - **Distribution** : le package `@surge-media/core` expose le binaire `surge-media`
   (`dist/cli/index.mjs`, construit par `pnpm build:cli`). Une fois publié : `npx @surge-media/core init`,
   ou `npx surge-media init` depuis un projet où le package est installé.
@@ -782,10 +785,11 @@ Préférer le paquet du système, qui reçoit les correctifs de sécurité :
   `NUXT_FFMPEG_PATH='C:\…\ffmpeg.exe'` et `NUXT_FFPROBE_PATH='C:\…\ffprobe.exe'` (entre apostrophes dans `.env` :
   entre guillemets, un `\n` du chemin deviendrait un retour à la ligne). Le code y applique la classe de priorité
   la plus basse (`os.setPriority` 19), arrête l'arbre de processus par `taskkill /T /F` et n'a ni `prlimit` ni
-  limite de mémoire. **Rien de ceci n'a encore tourné sous Windows : à vérifier sur un poste Windows**, en
-  particulier le « Contrôle intelligent des applications » (Smart App Control), qui peut bloquer `ffmpeg.exe`
-  (binaire non signé) comme il a bloqué `argon2` et `oxc-transform` (§ 14) : le traitement serait alors
-  désactivé au démarrage (probablement « ffmpeg introuvable ou inutilisable »).
+  limite de mémoire. **Vérifié sous Windows 11 le 2026-10-10** (ffmpeg 9.0.2 de Gyan, accepté par le « Contrôle
+  intelligent des applications » sur ce poste) : priorité « Inactive » (`Idle`) constatée pendant un encodage,
+  arbre arrêté par `taskkill` (code de sortie 1 au lieu d'un signal), tests ffmpeg passés. Sur un autre poste, ce
+  contrôle peut encore bloquer `ffmpeg.exe` (binaire non signé) comme il a bloqué `argon2` et `oxc-transform`
+  (§ 14) : le traitement est alors désactivé au démarrage (« ffmpeg introuvable ou inutilisable »).
 
 **Processus de travail** (mode `external`) : **la même build** que le serveur web, lancée avec
 `NUXT_SERVER_ROLE=worker` ; il exécute les tâches et ne sert que `/api/health` (toute autre route : 404 en texte
@@ -835,12 +839,12 @@ besoin d'aucun réseau) ; limites de processeur et de mémoire du conteneur en p
 cesse de le compter dans les 30 s). Arrêt brutal : ffmpeg peut finir seul en priorité la plus basse (borné sous
 Linux par la limite de temps processeur), la tâche est reprise à l'expiration du bail (2 min, un essai compté).
 Windows : `surge-media worker` ne retransmet pas les signaux (le Ctrl+C de la console atteint directement le
-processus de travail, qui s'arrête proprement) — à vérifier sur un poste Windows, comme l'arrêt par `taskkill`.
-ffmpeg n'y a pas de groupe de processus propre : s'il reçoit lui aussi le Ctrl+C et s'arrête avant que la tâche
-soit rendue, elle peut finir en échec définitif au lieu d'être rendue sans essai (état de la tâche à vérifier après
-un Ctrl+C pendant un encodage, avec `surge-media worker` comme avec `pnpm start`).
+processus de travail, qui s'arrête proprement). **Vérifié sous Windows le 2026-10-10**, par un vrai Ctrl+C de
+console pendant un encodage, avec `surge-media worker` comme avec `pnpm start` en `embedded` : arrêt en moins d'une
+seconde, ffmpeg arrêté (lancé sans fenêtre, il ne reçoit pas le Ctrl+C de la console), tâche rendue sans essai
+compté puis reprise jusqu'au bout par le processus suivant.
 En développement (`pnpm dev`, mode `embedded`), ffmpeg reste dans le groupe du terminal : Ctrl+C l'arrête aussi
-(vérifié sous Linux ; à vérifier sur un poste Windows), et le bail de sa tâche est rendu échu au démarrage suivant
+(vérifié sous Linux ; non rejoué sous Windows), et le bail de sa tâche est rendu échu au démarrage suivant
 (reprise, un essai compté).
 
 **Caches entre processus** (mode `external`) : le serveur web garde ses métadonnées de diffusion 60 s. Une version
@@ -1785,7 +1789,7 @@ agrégats en base).
 | Statistiques | médias (nombre, poids, images, privés), projets actifs (archivés), dérivés en cache (nombre, poids), comptes (invitations en attente, désactivés) ou comptes invités, identifiants d'API actifs (jetons personnels, clés de projet) | tous ; comptes : `users:manage` / `users:invite` ; identifiants : `tokens:personal` ou `project:credentials` |
 | Raccourcis | envoyer dans la bibliothèque ou la parcourir, créer un projet ou voir ses projets, inviter, créer un jeton, tester l'API, journal, réglages | selon les permissions |
 | Envois des 30 derniers jours | barres par jour dans le fuseau du navigateur, résumé (total, journée la plus chargée), tableau « Voir les données » | tous |
-| Points d'attention | jetons personnels et clés secrètes qui expirent d'ici 7 jours (hors clés déjà remplacées), invitations en attente ou expirées, corbeille par espace, adresse du site absente (production) et envoi d'e-mails non configuré | selon les droits |
+| Points d'attention | base SQLite sous pression (ADMIN, § 12.1), jetons personnels et clés secrètes qui expirent d'ici 7 jours (hors clés déjà remplacées), invitations en attente ou expirées, corbeille par espace, adresse du site absente (production) et envoi d'e-mails non configuré | selon les droits |
 | Projets / Mes projets | 6 projets actifs (ordre alphabétique), rôle exercé, nombre de médias | tous |
 | Activité récente | 8 dernières entrées du journal | `audit:read` |
 | Votre compte | identité, rôle et sa description, connexion, détail des permissions (replié), appareil de confiance | tous |
@@ -1840,6 +1844,9 @@ pnpm start                          # node --env-file-if-exists=.env .output/ser
   entrées anciennes selon votre politique de conservation.
 - **SQLite** passe en mode **WAL** au démarrage (lectures non bloquées pendant une écriture) : sauvegarder
   `surge-media.db` avec ses fichiers `-wal` et `-shm`, ou utiliser `sqlite3 surge-media.db ".backup copie.db"`.
+  Un serveur unique et un trafic modéré seulement (§ 12.1) ; un message le rappelle au démarrage en production.
+- **Variables d'environnement** : lues au démarrage seulement (configuration calculée une fois par processus,
+  § 12.1) ; redémarrer après tout changement de `.env`.
 - API v1 : définir `NUXT_SITE_URL` (adresses absolues de l'API et de la spécification) ; limitation de
   débit et caches en mémoire du processus (plusieurs instances : prévoir Redis, pas encore branché) ;
   derrière un proxy, l'IP vue par les limiteurs est celle du proxy (voir plus haut).
@@ -1868,6 +1875,95 @@ pnpm start                          # node --env-file-if-exists=.env .output/ser
   diffusion n'utilise pas de cookie. Limite : passer un média public en privé ou le mettre à la
   corbeille n'efface pas les copies déjà en cache (navigateurs, CDN).
 
+### 12.1 Montée en charge (test du 2026-10-10)
+
+**Banc** : build de production sur une **copie** de la base et des médias, un seul processus Node, SQLite, stockage
+local, Windows 11, Node 24.20, portable Intel i7-11850H (8 cœurs / 16 fils), 32 Go, sur secteur ; générateur de
+charge sans dépendance (plusieurs processus, connexions persistantes), 32 connexions, 10 s par scénario.
+
+| Scénario | Débit | Latence p50 / p99 |
+| --- | --- | --- |
+| `/m/` revalidé (`If-None-Match` → 304) | 15 100 req/s | 2 / 4 ms |
+| Aperçu WebP (`preview`) | 6 200 req/s (1,1 Gbit/s) | 4 / 15 ms |
+| Transformation déjà générée (`w_400`, WebP / `w_800`, AVIF) | 6 400 / 5 800 req/s | 4 / 14 ms |
+| Original d'environ 1 Mo (public ou lien signé) | 1 060 req/s (8 Gbit/s) | 29 / 55 ms |
+| API v1 : un média / liste de 24 / liste revalidée (304) / recherche | 1 490 / 750 / 11 100 / 760 req/s | 23 / 35 ms ; 42 / 77 ms |
+| API v1 : modification (écriture) / envoi d'une image de 69 Ko | 590 / 135 req/s | 55 / 79 ms ; 241 / 290 ms |
+| Page rendue côté serveur (`/login`) | 460 req/s | 70 / 98 ms |
+| `/api/health` | 3 000 req/s | 10 / 21 ms |
+
+**Trafic mixte** (aperçus 30 %, transformations 30 %, originaux 10 %, API 25 %, écritures 5 %) : ≈ **1 650
+requêtes/s et 1,5 Gbit/s par processus**, de 16 à 512 connexions simultanées ; seule la latence augmente (p99 de
+52 ms à 1,5 s), **aucune erreur**, mémoire stable (≈ 570 Mo). Un processus Node n'utilise qu'un cœur pour le code
+de l'application (sharp et la lecture des fichiers ont leurs propres fils) : c'est la limite d'un processus.
+
+**Deux correctifs faits pendant ce test** (avant / après, mêmes conditions) :
+
+| Mesure | Avant | Après |
+| --- | --- | --- |
+| `/m/` 304 · aperçus · `/api/health` | 790 · 730 · 650 req/s | 15 100 · 6 200 · 3 000 req/s |
+| API v1 un média · liste · page `/login` | 525 · 390 · 220 req/s | 1 490 · 750 · 460 req/s |
+| Requêtes de `/m/` restées sans réponse (connexions persistantes) | ≈ 1 sur 5 000 à 10 000 | 0 sur ≈ 250 000 |
+
+- **Configuration d'exécution recalculée à chaque requête** : Nitro 2 reconstruit toute la configuration
+  (≈ 520 entrées, dont celles des fournisseurs OAuth de nuxt-auth-utils) dès qu'un code appelle
+  `useRuntimeConfig(event)` — ce que fait @nuxtjs/i18n sur **toutes** les requêtes, `/m/` et API comprises :
+  copie profonde, conversion de chaque nom et deux lectures de `process.env` par entrée (lentes sous Windows),
+  80 % du processeur. `server/plugins/runtime-config.ts` donne à chaque requête la configuration calculée au
+  démarrage (partagée et gelée pour `/m/`, `/api/` et `/_nuxt/`, copiée pour les pages). Conséquence : une
+  variable d'environnement n'est lue qu'au démarrage.
+- **Réponses jamais envoyées** : sur une connexion persistante, une requête peut arriver avant que Node ait fini la
+  réponse précédente ; la nouvelle réponse attend alors sa connexion (`res.socket` nul) et `sendStream` de h3 1.15
+  rend la main **sans rien envoyer** : le client attend jusqu'à son propre délai (un mandataire nginx avec
+  `keepalive` vers le serveur y est exposé en permanence). La diffusion attend désormais la connexion avant
+  d'ouvrir le fichier (`responseReady`, `server/lib/http/stream.ts`, test qui reproduit le cas à coup sûr).
+
+**Limites de SQLite, mesurées** : better-sqlite3 est **synchrone** — pendant une requête SQL, et pendant l'attente du
+verrou d'écriture tenu par **un autre processus** (jusqu'à 10 s, `SQLITE_BUSY_TIMEOUT_MS` de
+`server/utils/prisma.ts`), le processus ne fait rien d'autre, pas même servir un fichier.
+
+| Situation (aperçus sur le processus A, sans accès à la base) | Aperçus | p99 |
+| --- | --- | --- |
+| A seul | 4 100 req/s | 9 ms |
+| A + 416 écritures/s sur A | 253 req/s | 112 ms |
+| A + écritures sur A **et** sur un second processus B, même fichier SQLite | 129 req/s | 310 ms |
+| Verrou d'écriture tenu 13 s par un autre processus | un aperçu attend 12 s ; l'écriture échoue (500) après 10 s | — |
+
+Deux processus qui écrivent dans la même base : aucune erreur tant que les écritures restent courtes, mais
+−21 % d'écritures au total et des latences doublées. **Rester sur SQLite** : un seul serveur web (le processus
+de travail vidéo `external` sur la même machine est possible, ses écritures sont rares), trafic modéré. **Passer à
+PostgreSQL ou MySQL** dès qu'il faut plusieurs processus ou serveurs web, des écritures soutenues, ou que l'alerte
+ci-dessous apparaît (accès asynchrones, plusieurs connexions : le processus n'est plus bloqué). Il n'existe pas
+encore d'outil de copie des données de SQLite vers un autre fournisseur.
+
+**Alerte « base SQLite sous pression »** (tableau de bord, ADMIN, § 10.4) : avec SQLite seulement, chaque processus
+(serveur web et `surge-media worker`) chronomètre les opérations de Prisma (extension de `usePrisma()` ; durée =
+temps bloqué) et compte par minute requêtes, écritures, opérations lentes (≥ 500 ms) et attentes dépassées
+(Prisma `P1008`, `P2024`, `P2028`, `P2034`, `SQLITE_BUSY`). Sur les 15 dernières minutes
+(`shared/utils/database-pressure.ts`, testé) :
+
+| Niveau | Déclencheur |
+| --- | --- |
+| « La base SQLite est sous pression » (à traiter) | une attente de verrou dépassée (requête en échec), ou 5 opérations lentes, ou 3 minutes passées à plus de 50 % dans la base |
+| « Trafic élevé pour une base SQLite » (information) | une minute à ≥ 300 requêtes/s, ≥ 30 écritures/s ou ≥ 25 % du temps dans la base |
+
+Le constat est enregistré chaque minute dans `Setting` (`databasePressure` ; au plus toutes les 5 minutes, aussitôt
+s'il s'aggrave), partagé par tous les processus, affiché **24 h** avec les pointes et la date de dernière
+observation ; le journal du serveur l'annonce aussi (au plus toutes les 15 minutes). Coût mesuré : nul sur `/m/`,
+3 à 4 % sur l'API. Au démarrage en production, un message rappelle les limites de SQLite.
+
+**Recommandations pour un fort trafic**
+- Un **CDN ou un cache** devant `/m/` (§ 12) : les adresses publiques sont immuables et la revalidation (304) coûte
+  peu ; c'est l'essentiel du trafic d'un service de médias.
+- Au-delà d'un processus : **PostgreSQL ou MySQL**, puis plusieurs instances derrière un répartiteur. Les limites
+  de débit et les caches restent **par processus** (Redis pas encore branché) : chaque limite est alors multipliée
+  par le nombre d'instances.
+- **Limites de débit par défaut** de l'API v1 (§ 6.3) : une clé publique a 300 requêtes/min **par adresse IP** ;
+  derrière un mandataire, sans prise en charge de `X-Forwarded-For` (pas encore faite), tous les visiteurs ont
+  l'adresse du mandataire et partagent ces 300 requêtes/min (idem pour les 60 transformations libres par minute
+  de `/m/`) : relever `NUXT_API_RATE_LIMIT_*` et `NUXT_MEDIA_TRANSFORM_RATE_LIMIT` selon le trafic attendu.
+- **Mesurer sur la machine cible** : le même portable a donné des débits 7 fois plus faibles sur batterie.
+
 ## 13. Choix techniques et versions épinglées
 
 | Choix | Pourquoi |
@@ -1878,6 +1974,8 @@ pnpm start                          # node --env-file-if-exists=.env .output/ser
 | TypeScript **~6.0** | TypeScript 7 (compilateur natif) n'est pas encore utilisable par `vue-tsc` |
 | `prisma` en dépendance (pas devDependency) | la CLI `surge-media` en a besoin chez l'utilisateur final pour générer et migrer |
 | Client Prisma importé dynamiquement (`usePrisma()` asynchrone) | voir Dépannage : « File URL path must be absolute » |
+| Configuration d'exécution calculée une fois par processus (`server/plugins/runtime-config.ts`) | Nitro 2 la reconstruit à chaque requête dès qu'un module appelle `useRuntimeConfig(event)` (@nuxtjs/i18n le fait sur toutes) : ≈ 9 ms par requête sous Windows, × 2 à × 19 de débit une fois corrigé (§ 12.1) |
+| Alerte « base SQLite sous pression » mesurée dans chaque processus | SQLite est synchrone : seule une mesure du temps passé dans la base et des attentes de verrou dit quand il devient le goulot (§ 12.1) |
 | CLI : citty + @clack/prompts, build tsdown | écosystème UnJS (comme Nuxt), binaire ESM autonome |
 | nuxt-auth-utils + table `Session` | cookie scellé standard de l'écosystème Nuxt, complété par une session en base pour la révocation |
 | argon2id via `@node-rs/argon2` | recommandation OWASP ; binaires précompilés (aucune compilation, embarqués par Nitro) |
@@ -1968,8 +2066,12 @@ pnpm start                          # node --env-file-if-exists=.env .output/ser
 | « Couleurs HDR non converties » | filtres `zscale` et `tonemap` absents de ce ffmpeg : rendu fait sans correction des couleurs ; une build qui les contient (« Réglages » › conversion HDR), puis « Relancer le traitement » |
 | MKV, AVI… : l'original se télécharge au lieu d'être lu | normal : ces formats ne sont pas lus par les navigateurs ; la lecture passe par la version H.264 (`sources`), produite par le traitement |
 | Une adresse de vidéo copiée juste après l'envoi redirige (302) | normal : le retrait d'une piste de données ou la réparation d'un WebM crée une nouvelle version ; l'ancienne URL redirige vers la nouvelle |
-| Windows : `ffmpeg -version` fonctionne mais le serveur dit « ffmpeg introuvable ou inutilisable » | à vérifier sur un poste Windows : `PATH` du serveur antérieur à l'installation (ouvrir une nouvelle console, ou chemin complet dans `NUXT_FFMPEG_PATH`, § 7.7), ou binaire bloqué par le « Contrôle intelligent des applications » (comme argon2 et oxc-transform) |
-| En développement : Ctrl+C sur `pnpm dev` pendant un encodage | ffmpeg s'arrête avec le serveur ; au redémarrage, la tâche est reprise (bail rendu échu aussitôt, un essai compté) — vérifié sous Linux ; Windows : à vérifier sur un poste Windows |
+| Windows : `ffmpeg -version` fonctionne mais le serveur dit « ffmpeg introuvable ou inutilisable » | `PATH` du serveur antérieur à l'installation (ouvrir une nouvelle console, ou chemin complet dans `NUXT_FFMPEG_PATH`, § 7.7), ou binaire bloqué par le « Contrôle intelligent des applications » (comme argon2 et oxc-transform) |
+| En développement : Ctrl+C sur `pnpm dev` pendant un encodage | ffmpeg s'arrête avec le serveur ; au redémarrage, la tâche est reprise (bail rendu échu aussitôt, un essai compté) — vérifié sous Linux ; Windows : non rejoué (le Ctrl+C de `surge-media worker` et de `pnpm start` l'a été, § 7.7) |
+| Tableau de bord : « La base SQLite est sous pression » ou « Trafic élevé pour une base SQLite » | constat mesuré par le serveur (§ 12.1) : attentes de verrou dépassées (requêtes en échec), opérations lentes, base occupant le processus ; passer à PostgreSQL ou MySQL si le trafic est durable, ne pas faire écrire plusieurs processus dans la même base. Le constat reste affiché 24 h |
+| Requêtes de `/m/` sans réponse jusqu'au délai du client (connexions persistantes, mandataire nginx `keepalive`) | corrigé le 2026-10-10 (`responseReady`, § 12.1) : la réponse attend sa connexion avant d'envoyer le fichier |
+| Débit faible (≈ 100 à 800 requêtes/s), processeur saturé, même sur des réponses 304 | corrigé le 2026-10-10 : configuration d'exécution calculée une fois (§ 12.1). Une variable d'environnement changée sans redémarrage n'est plus vue : redémarrer |
+| Windows, essai automatisé : Ctrl+C sans effet sur un serveur lancé par un script | l'attribut « ignorer Ctrl+C » est hérité des processus parents (outils d'automatisation, services) : tester l'arrêt depuis une console ordinaire, ou réactiver Ctrl+C (`SetConsoleCtrlHandler(NULL, FALSE)`) avant de lancer le serveur |
 | Média introuvable (404) juste après sa mise à la corbeille | normal : un média en corbeille n'est plus diffusé (sauf aperçu dans l'administration) |
 | `An Application Control policy has blocked this file` (`…binding-win32-x64-msvc…node`) au lancement de Nuxt | Windows (« Contrôle intelligent des applications ») refuse un module natif non signé : voir l'override `oxc-transform` (§ 13) ; pour un autre paquet, tester une version voisine ou débloquer le fichier côté Windows |
 | Projet introuvable (404) alors qu'il existe | l'utilisateur n'en est pas membre (seuls les ADMIN voient tous les projets) |
@@ -3230,3 +3332,61 @@ pnpm db:migrate       # migration d3_video_processing : MediaJob, MediaRendition
 Rien ne change sans autre réglage (mode `off`). Facultatif : installer ffmpeg ≥ 6 (§ 7.7), ajouter
 `NUXT_VIDEO_PROCESSING="embedded"` à `packages/core/.env` et redémarrer ; puis « Réglages › Traitement des vidéos »
 (ffmpeg détecté, état « Actif ») et « Traiter les vidéos existantes ».
+
+### Maintenance — 2026-10-10 — Test global sous Windows, montée en charge, alerte SQLite
+
+**Cadre** : demande de l'utilisateur — vérifier sous Windows que tout fonctionne et que le projet est prêt pour un
+grand nombre de requêtes ; si SQLite pose problème avec un fort trafic, prévoir un message d'alerte. Tous les essais
+ont tourné sur une **copie isolée** (`packages/core` copié, base copiée par `VACUUM INTO`, médias copiés, build de
+production lancée sur un autre port) : ni la base ni le serveur de développement de l'utilisateur n'ont servi.
+
+**Corrigé**
+- **Débit** : la configuration d'exécution était reconstruite à chaque requête (Nitro 2 + @nuxtjs/i18n, ≈ 9 ms et
+  80 % du processeur) → `server/plugins/runtime-config.ts` (+ `server/lib/http/runtime-config.ts`) : × 2 à × 19
+  selon les routes (§ 12.1). Les variables d'environnement ne sont plus lues qu'au démarrage.
+- **Réponses de `/m/` jamais envoyées** sur une connexion persistante (h3 1.15 `sendStream` sans connexion
+  attribuée) → `responseReady` (`server/lib/http/stream.ts`) avant l'ouverture du fichier : 0 blocage sur ≈ 250 000
+  requêtes (avant : ≈ 1 sur 5 000 à 10 000).
+- Test `video-ffmpeg` : sous Windows, un processus arrêté par `taskkill /F` sort avec le code 1 (`null` sous
+  POSIX) — attente adaptée ; la logique d'exécution, fondée sur `timedOut`/`aborted`/`tooLong`, n'en dépendait pas.
+
+**Ajouté**
+- **Alerte « base SQLite sous pression »** (§ 12.1, § 10.4) : `shared/utils/database-pressure.ts` (règles pures),
+  `server/lib/database/pressure.ts` (compteurs par processus, constat dans `Setting`), extension de `usePrisma()`
+  (SQLite seulement), plugin `server/plugins/database-pressure.ts` (comptage des requêtes, constat chaque minute,
+  message au démarrage en production), point d'attention `database` du tableau de bord (ADMIN), textes fr/en.
+  Aucune migration (`Setting` existe déjà).
+
+**Vérifié (Windows 11, Node 24.20, ffmpeg 9.0.2)**
+- `pnpm test` : **539 tests** passés, 9 ignorés (blocs POSIX), 28 fichiers ; `typecheck` (copie isolée, erreur
+  volontaire bien détectée), `i18n:check` (1536 clés), `db:migration --check`, build de production.
+- Scénarios HTTP rejoués sur la build de production : rôles (79), appareils de confiance (37), B2 (91), B3 (97),
+  B4 (94), B5 (71), C1 (66), C2 (58), C3 (81), C4 (45), corps des requêtes (8), envois bloqués (23), tableau de bord
+  (37/38 : l'alerte `NUXT_SITE_URL` est attendue en production). Les scénarios C2 à C4 enchaînés juste après C1
+  dépassent la limite de 60 nouvelles transformations libres par minute et par IP (429, comportement voulu) :
+  espacés d'une minute, tout passe. Le scénario vidéo de D1 précède D2/D3 : ses 22 écarts sont les changements
+  voulus (MKV accepté avec le traitement actif, MP4 préparé à l'envoi, affiche).
+- **D3 sous Windows** (points en attente depuis l'étape 22) : ffmpeg accepté par le Contrôle intelligent des
+  applications sur ce poste, priorité « Inactive » constatée, vrai Ctrl+C de console pendant un encodage avec
+  `surge-media worker` puis `pnpm start` en `embedded` : arrêt en moins d'une seconde, ffmpeg arrêté, tâche rendue
+  **sans essai compté**, reprise et terminée (rendu H.264 1080p) ; aucun processus restant.
+- Charge (§ 12.1) : tableaux avant/après, trafic mixte jusqu'à 512 connexions sans erreur, écritures et envois,
+  deux processus sur la même base SQLite, verrou tenu 13 s ; alerte déclenchée de bout en bout (vrai verrou),
+  axe **0 violation** fr/en × clair/sombre, pas de défilement horizontal à 375 px ; coût de la mesure : nul sur
+  `/m/`, 3 à 4 % sur l'API.
+
+**Limites connues**
+- Pas encore de prise en charge de `X-Forwarded-For` : derrière un mandataire, les limites par IP (clé publique,
+  transformations libres, échecs d'authentification) s'appliquent à tous les visiteurs ensemble (§ 12.1).
+- Limites et caches en mémoire de chaque processus (Redis pas branché) ; pas d'outil de copie SQLite → PostgreSQL.
+- Attente du verrou SQLite : 10 s (processus figé pendant ce temps) ; seuils de l'alerte en constantes.
+- Ctrl+C sur `pnpm dev` pendant un encodage : non rejoué sous Windows.
+- Un dossier `node_modules/.pnpm` a été créé par erreur dans `packages/core/node_modules` (installation lancée par
+  `pnpm` dans la copie isolée, arrêtée aussitôt ; les liens existants sont intacts) : il peut être supprimé.
+
+**Après `git pull`**
+```bash
+pnpm install          # aucune nouvelle dépendance, aucune migration
+```
+Redémarrer le serveur (nouveaux plugins). Avec SQLite en production, un message rappelle ses limites au démarrage ;
+le tableau de bord (ADMIN) signale une base sous pression.

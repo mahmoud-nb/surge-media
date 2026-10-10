@@ -1,8 +1,9 @@
+import type { H3Event } from 'h3'
 import { freeTransformAllowed } from '#shared/utils/transforms'
 import { PROCESSING_RETRY_AFTER } from '#shared/utils/video-processing'
 import type { Media } from '../../generated/prisma/client'
 import { createTokenBucketLimiter } from '../../lib/api/rate-limit'
-import { closeWithResponse } from '../../lib/http/stream'
+import { closeWithResponse, responseReady } from '../../lib/http/stream'
 import { findDeliveryMedia, reloadDeliveryMedia, type DeliveryMedia } from '../../lib/media/cache'
 import {
   authorizeDelivery,
@@ -26,6 +27,7 @@ import { useTransformSettings } from '../../lib/media/transform-settings'
 import { resolveTrackDeliverable } from '../../lib/media/tracks'
 import { resolveDeliverable, type DeliverableObject, type DerivedRequest } from '../../lib/media/variants'
 import { useMediaStorage } from '../../lib/storage'
+import type { ByteRange } from '../../lib/storage/types'
 import { resolvePreset, spaceTransformPolicy } from '../../lib/transforms/service'
 import { useVideoProcessingSettings } from '../../lib/video-processing/settings'
 
@@ -48,8 +50,9 @@ const generations = createTokenBucketLimiter()
  * (?exp=&kid=&sig=) ou identifiant d'API (`Authorization: Bearer`), jamais par cookie. Le chemin
  * physique n'est jamais exposé ; le type MIME vient de la base (nosniff). Requêtes partielles
  * (`Range`, une plage) : 206 / 416. Métadonnées lues via le cache de diffusion (60 s), relues pour une
- * version plus récente, un rendu ou une affiche de vidéo inconnus du cache. Flux du stockage fermé si le
- * client interrompt la réponse (`closeWithResponse`).
+ * version plus récente, un rendu ou une affiche de vidéo inconnus du cache. Fichier ouvert seulement une
+ * fois la connexion de la réponse attribuée (connexions persistantes, `responseReady`), fermé si le client
+ * interrompt la réponse (`closeWithResponse`).
  *
  * Ancienne version : 302 vers l'URL courante (un rendu : vers le rendu de la version courante s'il
  * existe, sinon vers l'original). Rendu absent : 404. Original et rendus d'une vidéo dont la piste de
@@ -173,14 +176,13 @@ export default defineEventHandler(async (event) => {
     return
   }
 
-  const storage = await useMediaStorage()
   if (range.type === 'partial') {
     setResponseStatus(event, 206)
     setResponseHeaders(event, {
       'Content-Range': `bytes ${range.start}-${range.end}/${object.size}`,
       'Content-Length': range.end - range.start + 1,
     })
-    return sendStream(event, closeWithResponse(event.node.res, await storage.getStream(object.key, { start: range.start, end: range.end })))
+    return sendStoredFile(event, object.key, { start: range.start, end: range.end })
   }
 
   setResponseHeader(event, 'Content-Length', object.size)
@@ -189,8 +191,21 @@ export default defineEventHandler(async (event) => {
     event.node.res.end()
     return
   }
-  return sendStream(event, closeWithResponse(event.node.res, await storage.getStream(object.key)))
+  return sendStoredFile(event, object.key)
 })
+
+/**
+ * Envoie un fichier du stockage (ou une plage) : connexion de la réponse attendue d'abord (`responseReady` :
+ * sans elle, `sendStream` n'enverrait rien sur une connexion persistante encore occupée), fichier ouvert
+ * ensuite, puis fermé si le client interrompt la réponse (`closeWithResponse`). Client parti pendant
+ * l'attente : rien n'est ouvert.
+ */
+async function sendStoredFile(event: H3Event, key: string, range?: ByteRange) {
+  const { req, res } = event.node
+  if (!await responseReady(req, res)) return
+  const storage = await useMediaStorage()
+  return sendStream(event, closeWithResponse(res, await storage.getStream(key, range)))
+}
 
 /**
  * Fichier servi : l'original, une piste de texte, un rendu ou un dérivé (`derivedRequest`).
