@@ -181,6 +181,19 @@ const FILTERS = `Filters:
  .SC zscale            V->V       Apply resizing, colorspace and bit depth conversion.
  ... testsrc2          |->V       Generate another test pattern.
 `
+/** Même liste depuis ffmpeg 8 (colonne « commandes » retirée), fins de ligne de Windows. */
+const FILTERS_V8 = [
+  'Filters:',
+  '  T.. = Timeline support',
+  '  .S. = Slice threading',
+  '  | = Source or sink filter',
+  '  ------',
+  ' .. abench            A->A       Benchmark part of a filtergraph.',
+  ' TS scale             V->V       Scale the input video size and/or convert the image format.',
+  ' .S tonemap           V->V       Conversion to/from different dynamic ranges.',
+  ' .S zscale            V->V       Apply resizing, colorspace and bit depth conversion.',
+  ' .. testsrc2          |->V       Generate another test pattern.',
+].join('\r\n')
 
 describe('détection de ffmpeg', () => {
   it('parseFfmpegVersion : numéro publié, version de développement (libavformat), sortie étrangère', () => {
@@ -197,6 +210,8 @@ describe('détection de ffmpeg', () => {
   it('parseEncoders et parseFilters : noms seulement, légendes ignorées', () => {
     expect([...parseEncoders(ENCODERS)]).toEqual(['libx264', 'libsvtav1', 'mjpeg', 'aac', 'libopus', 'mov_text'])
     expect([...parseFilters(FILTERS)]).toEqual(['abench', 'scale', 'tonemap', 'zscale', 'testsrc2'])
+    expect([...parseFilters(FILTERS_V8)]).toEqual(['abench', 'scale', 'tonemap', 'zscale', 'testsrc2'])
+    expect(evaluateCapabilities({ version: VERSION_UBUNTU, encoders: ENCODERS, filters: FILTERS_V8, ffprobe: 'ffprobe version 9.0' }).hdrFilters).toBe(true)
     expect(parseEncoders('').size).toBe(0)
   })
 
