@@ -4,7 +4,7 @@
   "private": true,
   "type": "module",
   "description": "Cœur de surgeMedia : interface d'administration, API médias et traitement d'images (Nuxt 3 + Nitro + Prisma).",
-  "license": "MIT",
+  "license": "BUSL-1.1",
   "engines": {
     "node": ">=24.0.0"
   },
