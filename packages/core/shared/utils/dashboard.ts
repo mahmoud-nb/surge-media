@@ -1,3 +1,5 @@
+import type { DatabasePressureReport } from './database-pressure'
+
 /**
  * Tableau de bord : constantes et calculs purs (testés) partagés entre le serveur et l'interface.
  *
@@ -77,6 +79,7 @@ export function dailyUploads(
 /** Points d'attention du tableau de bord (assemblés par le serveur, selon les droits). */
 export type DashboardAttention =
   | { kind: 'siteUrl' }
+  | ({ kind: 'database' } & DatabasePressureReport)
   | { kind: 'mail' }
   | { kind: 'expiringTokens', items: { id: string, name: string, expiresAt: Date | string }[] }
   | { kind: 'expiringKeys', items: { id: string, name: string, type: string, environment: string | null, project: { id: string, name: string }, expiresAt: Date | string }[] }
@@ -85,6 +88,7 @@ export type DashboardAttention =
 
 /** Gravité d'un point d'attention : `warning` demande d'agir, `info` renseigne. */
 export function attentionSeverity(item: DashboardAttention): 'warning' | 'info' {
+  if (item.kind === 'database') return item.level
   if (item.kind === 'invitations') return item.expired > 0 ? 'warning' : 'info'
   return item.kind === 'trash' || item.kind === 'mail' ? 'info' : 'warning'
 }

@@ -212,6 +212,16 @@
         "none": "Rien à signaler.",
         "warning": "À traiter :",
         "info": "Pour information :",
+        "database": {
+          "warning": "La base SQLite est sous pression",
+          "info": "Trafic élevé pour une base SQLite",
+          "busy": "{count} requête a échoué faute d'accès à la base à temps (verrou d'écriture tenu par un autre processus) | {count} requêtes ont échoué faute d'accès à la base à temps (verrou d'écriture tenu par un autre processus)",
+          "slow": "{count} opération sur la base a duré plus de {ms} ms, serveur bloqué pendant ce temps | {count} opérations sur la base ont duré plus de {ms} ms, serveur bloqué pendant ce temps",
+          "loaded": "{count} minute passée à plus de {percent} dans la base | {count} minutes passées à plus de {percent} dans la base",
+          "peaks": "Pointes : requêtes {requests}/s, écritures {writes}/s, temps dans la base {share}.",
+          "advice": "Avec SQLite, chaque accès à la base bloque le serveur et les écritures de plusieurs processus s'attendent. Pour un trafic soutenu, plusieurs processus ou plusieurs serveurs, passez à PostgreSQL ou MySQL (setup.md, § 12.1 « Montée en charge »).",
+          "seenAt": "Dernière observation : {date}"
+        },
         "expiringTokens": "{count} jeton personnel expire d'ici {days} jours | {count} jetons personnels expirent d'ici {days} jours",
         "expiresOn": "{name} : {date}",
         "manageTokens": "Gérer mes jetons personnels",

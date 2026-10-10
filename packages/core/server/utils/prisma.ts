@@ -4,6 +4,7 @@ import { PrismaMariaDb } from '@prisma/adapter-mariadb'
 import { PrismaPg } from '@prisma/adapter-pg'
 import { readDatabaseEnv, sqliteFilePath, type DatabaseProvider } from '#shared/database'
 import type { PrismaClient } from '../generated/prisma/client'
+import { useDatabasePressureMonitor } from '../lib/database/pressure'
 
 /**
  * SQLite : attente maximale d'un verrou d'écriture tenu par un autre processus (ms). Explicite depuis la
@@ -38,8 +39,38 @@ async function createClient(): Promise<PrismaClient> {
   // factice (« File URL path must be absolute » sous Windows).
   const { PrismaClient } = await import('../generated/prisma/client')
   const client = new PrismaClient({ adapter: createAdapter(provider, url) })
-  if (provider === 'sqlite') await enableWal(client)
-  return client
+  if (provider !== 'sqlite') return client
+  await enableWal(client)
+  return withPressureMonitor(client)
+}
+
+/**
+ * SQLite : chaque opération est chronométrée pour l'alerte « base sous pression » du tableau de bord
+ * (server/lib/database/pressure.ts). better-sqlite3 étant synchrone, la durée d'une opération est le temps
+ * pendant lequel le processus est bloqué (requête, attente du verrou d'un autre processus). Coût : une
+ * fonction asynchrone de plus par opération. Le client étendu garde le comportement et l'interface du
+ * client (transactions comprises, où l'extension s'applique aussi) ; seul son type diffère, d'où la
+ * conversion.
+ */
+function withPressureMonitor(client: PrismaClient): PrismaClient {
+  const monitor = useDatabasePressureMonitor()
+  if (!monitor) return client
+  return client.$extends({
+    query: {
+      async $allOperations({ operation, args, query }) {
+        const started = performance.now()
+        try {
+          const result = await query(args)
+          monitor.operation(operation, performance.now() - started)
+          return result
+        }
+        catch (error) {
+          monitor.operation(operation, performance.now() - started, error)
+          throw error
+        }
+      },
+    },
+  }) as unknown as PrismaClient
 }
 
 /**
