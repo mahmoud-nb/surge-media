@@ -3437,3 +3437,40 @@ pnpm install          # aucune nouvelle dépendance, aucune migration
 ```
 Redémarrer le serveur. En Docker derrière un mandataire : rien à régler si le mandataire est sur un réseau privé et
 ajoute `X-Forwarded-For` (sinon § 12) ; ne pas publier le port du conteneur de l'application.
+
+### Maintenance — 2026-10-10 — Licence BSL 1.1, README npm du core
+
+**Cadre** : décision de l'utilisateur en vue du déploiement — surgeMedia passe de MIT (valeur par défaut jamais confirmée,
+dépôt resté privé : aucune version publiée sous MIT) à la **Business Source License 1.1**, code public sur GitHub.
+
+**Ajouté / modifié**
+- `LICENSE` (racine) : modèle officiel BSL 1.1 de MariaDB, partie « Terms » et « Covenants of Licensor » **identique
+  au texte de référence SPDX** (`BUSL-1.1`), seuls les paramètres sont propres à surgeMedia :
+  - **Change Date** : trois ans après la première publication de chaque version ; **Change License** : Apache 2.0 ;
+  - **Additional Use Grant** : production gratuite pour tous, sauf (a) entité (ou son groupe) au chiffre d'affaires brut supérieur
+    à 500 000 USD au dernier exercice clos (conversion au taux publié par la Réserve fédérale américaine), y compris quand le logiciel est exploité
+    pour son compte (agence, prestataire) ; (b) offre à des tiers d'un **service hébergé concurrent** (stockage de médias
+    « as a service », CMS de médias headless, transformation ou diffusion de médias), gratuit ou payant. Exclus de (b) :
+    les sites et applications de l'utilisateur lui-même, et l'instance dédiée qu'un prestataire héberge pour un client en
+    accessoire de ses services (le client reste soumis au seuil) ;
+  - fichiers placés sous une autre licence (futurs composants Vue/React/Svelte, par exemple) exclus du « Licensed Work ».
+- `package.json` (racine et `packages/core`) : `"license": "BUSL-1.1"` ; README : section « Licence ». Montants
+  commerciaux exprimés en **dollars américains** (décision de l'utilisateur).
+- `packages/core/README.md` : présentation **en anglais** destinée à la page npm (fonctionnalités, prérequis,
+  démarrage, CLI, variables essentielles, adresses de transformation, API, vidéos, production, résumé de la licence),
+  liens absolus vers GitHub. Le démarrage décrit l'installation **depuis le dépôt** : le paquet npm n'est pas encore
+  utilisable seul (voir ci-dessous).
+
+**Reste à faire** : remplacer les trois `[TO BE COMPLETED: …]` du fichier `LICENSE` (nom légal du concédant, deux
+fois, et adresse de contact pour la licence commerciale) **avant de rendre le dépôt public** :
+```bash
+grep -n "TO BE COMPLETED" LICENSE
+```
+Joindre `LICENSE` à toute copie distribuée (image Docker, paquet npm) : la BSL exige qu'elle accompagne chaque copie.
+
+**Avant une publication npm** (constaté le 2026-10-10 avec `npm pack --dry-run --ignore-scripts` dans `packages/core`) :
+le paquet est `private` et n'a pas de champ `files` (npm se rabat sur `.gitignore` : sources, tests et CLI construite
+publiés, mais ni la build du serveur `.output`, ni `LICENSE`). Une fois installé, la CLI travaillerait dans
+`node_modules/@surge-media/core` (`.env`, schéma, base SQLite et médias sous `./data`, effacés par une réinstallation),
+et tout changement de fournisseur demande un `nuxt build`. Modèle de distribution à décider : image Docker, ou paquet
+qui crée un dossier d'installation hors de `node_modules`.

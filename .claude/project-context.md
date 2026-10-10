@@ -45,7 +45,7 @@
 
 ## 1. Produit et périmètre
 
-- **surgeMedia** : plateforme open source, **auto-hébergée**, modulaire, de gestion et de traitement
+- **surgeMedia** : plateforme **auto-hébergée** à code source public (**BSL 1.1**, pas « open source » au sens de l'OSI), modulaire, de gestion et de traitement
   des médias (« mini-Cloudinary »). Déployée sur l'infrastructure du client.
 - Deux faces du core : **interface d'administration** (médias, utilisateurs, jetons) et **couche
   d'API** pour les applications tierces du client (authentification, autorisations, CORS).
@@ -2217,10 +2217,15 @@ SQLite pose problème. Référence d'exploitation : `setup.md` § 12.1 (tableaux
 
 ## 22. Points incertains ou à confirmer
 
-- **Licence MIT** inscrite dans les `package.json` et le README par défaut, **jamais confirmée** par l'utilisateur.
+- **Licence BSL 1.1** (`LICENSE`, `BUSL-1.1`) **décidée par l'utilisateur le 2026-10-10** (avant : MIT par défaut, jamais publiée) ; Change Date 3 ans,
+  Apache 2.0, production gratuite sauf CA du groupe > 500 000 USD ou service hébergé concurrent (`setup.md`, journal du 2026-10-10).
+  **À compléter avant publication** : nom légal du concédant et contact (`grep -n "TO BE COMPLETED" LICENSE`). Non tranchés : CLA
+  pour les contributions externes, licence des futurs composants Vue/React/Svelte (MIT conseillée), relecture par un avocat.
 - **Modèle de distribution** non décidé : `@surge-media/core` est `private: true` ; le client Prisma dépend du fournisseur (rebuild
   nécessaire) ; `npx surge-media init` ne fonctionne tel quel qu'une fois le package installé (ou via `npx @surge-media/core init`) —
-  paquet non scopé `surge-media` ? image Docker ? build chez le client ?
+  paquet non scopé `surge-media` ? image Docker ? build chez le client ? `packages/core/README.md` (anglais, page npm, 2026-10-10)
+  décrit pour l'instant l'installation depuis le dépôt. Constaté par `npm pack --dry-run` : sans champ `files`, ni `.output` ni
+  `LICENSE` publiés ; installée, la CLI écrirait `.env` et `./data` (base SQLite, médias) dans `node_modules` (effacés à la réinstallation).
 - Portées et format des jetons : **implémentés en B2** selon l'architecture validée ; écarts listés en tête de `architecture-phase-b.md`.
 - **MySQL/MariaDB** : SQL de migration généré mais **jamais exécuté** sur une vraie base (y compris `projects_spaces`, `b2_credentials`, `b3_api_read` et `b4_api_write`) ; PostgreSQL
   testé seulement via `prisma dev` (PGlite) jusqu'à l'étape 1, et `db reset` jamais exécuté dessus.

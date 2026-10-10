@@ -23,4 +23,15 @@ Guide complet de développement : [setup.md](setup.md).
 
 ## Licence
 
-MIT
+surgeMedia est distribué sous **Business Source License 1.1** (identifiant SPDX `BUSL-1.1`) : voir [LICENSE](LICENSE).
+Le code source est public, mais il ne s'agit pas d'une licence open source au sens de l'OSI. En résumé :
+
+- développement, tests et évaluation : **libres et gratuits pour tous** ;
+- utilisation en production : **gratuite**, sauf dans deux cas qui demandent une licence commerciale :
+  - l'entité qui l'utilise (ou pour le compte de laquelle il est utilisé), avec les sociétés de son groupe, a réalisé
+    un chiffre d'affaires brut supérieur à **500 000 USD** lors de son dernier exercice clos ;
+  - surgeMedia est proposé à des tiers comme **service hébergé concurrent** (stockage de médias « as a service »,
+    CMS de médias headless…) ;
+- chaque version passe sous **licence Apache 2.0** trois ans après sa première publication.
+
+Ce résumé n'a pas de valeur juridique : seul le texte anglais du fichier [LICENSE](LICENSE) fait foi.
