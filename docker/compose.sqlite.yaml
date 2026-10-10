@@ -1,0 +1,28 @@
+# surgeMedia avec SQLite : un seul conteneur ; base, médias et secrets générés dans le volume « data ».
+# Un serveur, trafic modéré (setup.md, § 12.1). Guide : setup.md, § 12.2.
+#
+#   docker compose -f docker/compose.sqlite.yaml up -d
+#
+# Image construite localement (docker build -t surge-media .) : SURGE_MEDIA_IMAGE=surge-media docker compose …
+
+services:
+  surge-media:
+    image: ${SURGE_MEDIA_IMAGE:-ghcr.io/mahmoud-nb/surge-media:latest}
+    restart: unless-stopped
+    # Joignable depuis cette machine seulement : un mandataire inverse (nginx, Caddy, Traefik) en HTTPS devant.
+    ports:
+      - "127.0.0.1:3000:3000"
+    environment:
+      NUXT_SITE_URL: ${NUXT_SITE_URL:-http://localhost:3000}
+      # Compte d'amorçage (12 caractères au moins) : à retirer après la première connexion.
+      NUXT_BOOTSTRAP_ADMIN_EMAIL: ${NUXT_BOOTSTRAP_ADMIN_EMAIL:-}
+      NUXT_BOOTSTRAP_ADMIN_PASSWORD: ${NUXT_BOOTSTRAP_ADMIN_PASSWORD:-}
+      # Traitement des vidéos par ffmpeg (image complète, pas « -slim ») : off | embedded
+      NUXT_VIDEO_PROCESSING: ${NUXT_VIDEO_PROCESSING:-off}
+    volumes:
+      - data:/app/data
+    # Laisse le temps de rendre une tâche vidéo en cours avant l'arrêt forcé.
+    stop_grace_period: 30s
+
+volumes:
+  data:

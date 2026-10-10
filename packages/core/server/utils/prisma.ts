@@ -22,10 +22,22 @@ import { useDatabasePressureMonitor } from '../lib/database/pressure'
  */
 const SQLITE_BUSY_TIMEOUT_MS = 10_000
 
+type PrismaClientClass = new (...args: ConstructorParameters<typeof PrismaClient>) => PrismaClient
+
 /**
- * Prisma 7 se connecte via un « driver adapter » propre à chaque fournisseur.
- * Le fournisseur doit correspondre à celui du client généré (voir `surge-media init`).
+ * Un client généré par fournisseur (cli/lib/generate.ts) : la même build sert les trois bases, le client
+ * chargé est celui de DATABASE_PROVIDER. Imports différés, aux chemins littéraux : Nitro en fait trois morceaux
+ * distincts, dont un seul est chargé. Le client généré évalue `import.meta.url` au chargement : embarqué dans le
+ * chunk principal, il serait évalué avant l'entrée Nitro et recevrait une URL factice (« File URL path must be
+ * absolute » sous Windows).
  */
+const CLIENT_MODULES = {
+  sqlite: () => import('../generated/prisma/sqlite/client'),
+  postgresql: () => import('../generated/prisma/postgresql/client'),
+  mysql: () => import('../generated/prisma/mysql/client'),
+} satisfies Record<DatabaseProvider, () => Promise<unknown>>
+
+/** Prisma 7 se connecte via un « driver adapter » propre à chaque fournisseur, celui du client chargé. */
 function createAdapter(provider: DatabaseProvider, url: string) {
   switch (provider) {
     case 'sqlite':
@@ -40,11 +52,8 @@ function createAdapter(provider: DatabaseProvider, url: string) {
 
 async function createClient(): Promise<PrismaClient> {
   const { provider, url } = readDatabaseEnv()
-  // Import différé : le client généré évalue `import.meta.url` au chargement. Embarqué
-  // dans le chunk principal, il serait évalué avant l'entrée Nitro et recevrait une URL
-  // factice (« File URL path must be absolute » sous Windows).
-  const { PrismaClient } = await import('../generated/prisma/client')
-  const client = new PrismaClient({ adapter: createAdapter(provider, url) })
+  const { PrismaClient: Client } = await CLIENT_MODULES[provider]() as { PrismaClient: PrismaClientClass }
+  const client = new Client({ adapter: createAdapter(provider, url) })
   if (provider !== 'sqlite') return client
   await enableWal(client)
   return withPressureMonitor(client)

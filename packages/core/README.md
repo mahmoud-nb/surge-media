@@ -52,6 +52,38 @@ pnpm dev          # http://localhost:3000 — sign in at /login
 Remove the two bootstrap variables once your account exists. `GET /api/health` reports the state of the
 database, the storage and the image engine.
 
+## Running with Docker
+
+The repository's `Dockerfile` builds one image for SQLite, PostgreSQL and MySQL/MariaDB (Debian 13, Node.js 24,
+non-root user). The default image includes ffmpeg for video processing; the `slim` target leaves it out.
+
+```bash
+docker build -t surge-media .                      # with ffmpeg
+docker build --target slim -t surge-media:slim .   # without ffmpeg
+```
+
+Prebuilt images will be published on GitHub Container Registry (`ghcr.io/mahmoud-nb/surge-media`).
+
+```bash
+docker run -d --name surge-media -p 127.0.0.1:3000:3000 -v surge-media-data:/app/data \
+  -e NUXT_SITE_URL=https://media.example.com \
+  -e NUXT_BOOTSTRAP_ADMIN_EMAIL=you@example.com -e NUXT_BOOTSTRAP_ADMIN_PASSWORD=a-long-unique-password \
+  surge-media
+```
+
+- `/app/data` holds the SQLite database, locally stored media and the generated secrets: keep it on a volume
+  and back it up.
+- Pending migrations are applied at startup, and the session and signing secrets are generated on first start
+  when you do not provide them.
+- Another database is a matter of `DATABASE_URL` (`postgresql://…` or `mysql://…`): the provider is inferred from it.
+- The image command is `server` (default), `worker` (video processing worker) or `migrate`.
+- Sensitive variables can be read from files (Docker secrets) with the `_FILE` suffix, such as
+  `NUXT_SMTP_PASSWORD_FILE=/run/secrets/smtp_password`.
+
+Compose examples: [`docker/compose.sqlite.yaml`](https://github.com/mahmoud-nb/surge-media/blob/main/docker/compose.sqlite.yaml)
+(single container) and [`docker/compose.postgres.yaml`](https://github.com/mahmoud-nb/surge-media/blob/main/docker/compose.postgres.yaml)
+(PostgreSQL and a video processing worker).
+
 ## Command-line interface
 
 The package ships a `surge-media` command (run it with `pnpm cli <command>` from the repository):
@@ -65,8 +97,9 @@ The package ships a `surge-media` command (run it with `pnpm cli <command>` from
 
 The CLI speaks French and English: `--lang en`, or `SURGE_MEDIA_LANG=en`.
 
-Prisma generates a client for one database provider: always switch providers with `init` or `db reset` (never by
-editing `.env` alone), then rebuild the application. Data is not transferred between providers.
+Every build contains a Prisma client for each database provider, so switching providers needs no rebuild:
+configure and migrate the new database with `init` (or `db reset`), then restart. Data is not transferred between
+providers.
 
 ## Configuration
 

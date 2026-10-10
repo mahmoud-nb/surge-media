@@ -19,6 +19,16 @@ pnpm db:init   # SQLite par défaut, ou PostgreSQL / MySQL / MariaDB
 pnpm dev
 ```
 
+Ou avec Docker (une seule image pour SQLite, PostgreSQL et MySQL/MariaDB ; variante `slim` sans ffmpeg) :
+
+```bash
+docker build -t surge-media .
+docker run -d -p 127.0.0.1:3000:3000 -v surge-media-data:/app/data -e NUXT_SITE_URL=http://localhost:3000 \
+  -e NUXT_BOOTSTRAP_ADMIN_EMAIL=vous@exemple.fr -e NUXT_BOOTSTRAP_ADMIN_PASSWORD=un-mot-de-passe-long surge-media
+```
+
+Exemples Compose dans [`docker/`](docker), détails dans [setup.md § 12.2](setup.md#122-docker).
+
 Guide complet de développement : [setup.md](setup.md).
 
 ## Licence
