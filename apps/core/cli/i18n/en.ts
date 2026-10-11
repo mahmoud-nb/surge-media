@@ -4,7 +4,7 @@ import type { MessageKey } from './fr'
 export const en: Record<MessageKey, string> = {
   'cli.description': 'surgeMedia installation and administration tool',
   'args.lang': 'CLI language',
-  'args.cwd': 'Installation directory (.env and data); defaults to the current directory (packages/core in the source repository)',
+  'args.cwd': 'Installation directory (.env and data); defaults to the current directory (apps/core in the source repository)',
   'args.provider': 'Database provider',
   'args.url': 'Database connection URL',
   'args.yes': 'Non-interactive mode: accept defaults without confirmation',

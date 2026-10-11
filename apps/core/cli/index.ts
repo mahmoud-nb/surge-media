@@ -9,7 +9,7 @@
  *   surge-media db reset    recréer la base (éventuellement avec un autre fournisseur)
  *
  * Le .env et les données vivent dans le dossier de l'installation : le dossier courant pour le paquet publié,
- * packages/core dans le dépôt des sources (`--cwd` pour un autre dossier ; cli/lib/project.ts).
+ * apps/core dans le dépôt des sources (`--cwd` pour un autre dossier ; cli/lib/project.ts).
  */
 import { defineCommand, runMain } from 'citty'
 import { DATABASE_PROVIDERS } from '../shared/database'

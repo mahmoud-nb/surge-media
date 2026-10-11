@@ -62,7 +62,7 @@ jobs:
         run: pnpm --filter @surge-media/core build
 
       - name: Archive du paquet
-        run: cd packages/core && pnpm pack --out "$GITHUB_WORKSPACE/artifacts/surge-media-core.tgz"
+        run: cd apps/core && pnpm pack --out "$GITHUB_WORKSPACE/artifacts/surge-media-core.tgz"
 
       - name: Essai du paquet (installation, init, start)
         run: pnpm --filter @surge-media/core smoke:package "$GITHUB_WORKSPACE/artifacts/surge-media-core.tgz"

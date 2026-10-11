@@ -7,7 +7,7 @@ avec des composants prêts à l'emploi pour Vue, React et Svelte.
 
 | Package | Rôle | État |
 | --- | --- | --- |
-| [`@surge-media/core`](packages/core) | admin + API + traitement des images et des vidéos (Nuxt 3, Nitro, Prisma, Flydrive, sharp ; ffmpeg ≥ 6 du système, facultatif) | en cours |
+| [`@surge-media/core`](apps/core) | admin + API + traitement des images et des vidéos (Nuxt 3, Nitro, Prisma, Flydrive, sharp ; ffmpeg ≥ 6 du système, facultatif) | en cours |
 | `@surge-media/vue` · `react` · `svelte` | composants frontend (images optimisées, galeries, upload…) | à venir |
 | `docs` | documentation (GitHub Pages) | à venir |
 
@@ -43,7 +43,7 @@ publiées à chaque version : `ghcr.io/mahmoud-nb/surge-media` (amd64, arm64).
 
 Guide complet de développement : [setup.md](setup.md) ; versions, releases et publication :
 [§ 15](setup.md#15-qualité-du-code-versions-et-publication) ; historique :
-[CHANGELOG](packages/core/CHANGELOG.md).
+[CHANGELOG](apps/core/CHANGELOG.md).
 
 ## Licence
 

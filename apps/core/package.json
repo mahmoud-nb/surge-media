@@ -12,14 +12,14 @@
     "headless",
     "nuxt"
   ],
-  "homepage": "https://github.com/mahmoud-nb/surge-media/tree/main/packages/core#readme",
+  "homepage": "https://github.com/mahmoud-nb/surge-media/tree/main/apps/core#readme",
   "bugs": {
     "url": "https://github.com/mahmoud-nb/surge-media/issues"
   },
   "repository": {
     "type": "git",
     "url": "git+https://github.com/mahmoud-nb/surge-media.git",
-    "directory": "packages/core"
+    "directory": "apps/core"
   },
   "license": "BUSL-1.1",
   "engines": {

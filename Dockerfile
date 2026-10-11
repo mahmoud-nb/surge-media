@@ -35,15 +35,16 @@ COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
 RUN --mount=type=cache,id=surge-media-pnpm,target=/pnpm-store \
     pnpm fetch --store-dir /pnpm-store
 
-# Sources des paquets seulement : modifier docker/ ou la documentation ne relance pas la build.
-COPY packages ./packages
+# Sources des applications seulement : modifier docker/ ou la documentation ne relance pas la build. Quand le core
+# dépendra d'une bibliothèque de packages/ (vue, react, svelte…), ajouter : COPY packages ./packages
+COPY apps ./apps
 # L'installation lance `nuxt prepare` et la génération des trois clients Prisma (script `prepare`).
 RUN --mount=type=cache,id=surge-media-pnpm,target=/pnpm-store \
     pnpm install --frozen-lockfile --prefer-offline --store-dir /pnpm-store
 RUN pnpm --filter @surge-media/core build
 # `pack` lance scripts/prepack.ts : modules natifs retirés, liens remplacés par des copies, licence ajoutée.
 COPY LICENSE ./
-RUN cd packages/core && pnpm pack --out /surge-media-core.tgz
+RUN cd apps/core && pnpm pack --out /surge-media-core.tgz
 
 # ─── Paquet à installer : celui de la build, ou --build-context package=<dossier> ───────────────────────────
 FROM scratch AS package
