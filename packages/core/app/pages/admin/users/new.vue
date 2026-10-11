@@ -128,7 +128,7 @@ async function onSubmit() {
       </p>
 
       <div class="grid gap-5 sm:grid-cols-2">
-        <UiFormField v-slot="field" :id="FIELD_IDS.email" :label="t('users.fields.email')" :error="message('email')" required>
+        <UiFormField :id="FIELD_IDS.email" v-slot="field" :label="t('users.fields.email')" :error="message('email')" required>
           <UiInput
             v-bind="field"
             v-model="form.email"
@@ -141,7 +141,7 @@ async function onSubmit() {
             @input="clear('email')"
           />
         </UiFormField>
-        <UiFormField v-slot="field" :id="FIELD_IDS.name" :label="t('users.fields.name')" :hint="t('users.fields.nameHint')" :error="message('name')">
+        <UiFormField :id="FIELD_IDS.name" v-slot="field" :label="t('users.fields.name')" :hint="t('users.fields.nameHint')" :error="message('name')">
           <UiInput v-bind="field" v-model="form.name" name="name" autocomplete="off" :maxlength="NAME_MAX_LENGTH" @input="clear('name')" />
         </UiFormField>
       </div>

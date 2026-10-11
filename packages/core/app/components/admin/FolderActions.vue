@@ -260,7 +260,7 @@ async function submitDelete() {
         : undefined"
     >
       <form id="folder-name-form" novalidate class="grid gap-4" @submit.prevent="submitName">
-        <UiFormField v-slot="field" :id="NAME_ID" :label="t('folders.fields.name')" :hint="t('folders.fields.nameHint')" :error="message('name')" required>
+        <UiFormField :id="NAME_ID" v-slot="field" :label="t('folders.fields.name')" :hint="t('folders.fields.nameHint')" :error="message('name')" required>
           <UiInput v-bind="field" v-model="nameForm.name" name="name" autocomplete="off" :maxlength="FOLDER_NAME_MAX_LENGTH" @input="clear('name')" />
         </UiFormField>
         <UiAlert v-if="nameError" variant="error" live="assertive">

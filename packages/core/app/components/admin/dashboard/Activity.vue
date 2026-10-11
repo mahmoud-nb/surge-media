@@ -2,15 +2,17 @@
 /** Dernières entrées du journal d'audit (audit:read), mises en forme comme sur la page du journal. */
 import type { AuditEntryView } from '~/composables/useAuditFormat'
 
-const props = defineProps<{
-  items: (AuditEntryView & { id: string, at: string | Date, label: string | null })[]
+type ActivityItem = AuditEntryView & { id: string, at: string | Date, label: string | null }
+
+defineProps<{
+  items: ActivityItem[]
 }>()
 
 const { t, locale } = useI18n()
 const { actionLabel, actorName, details, projectName } = useAuditFormat()
 
 /** Cible lisible : libellé enregistré, sinon projet concerné. */
-function target(item: (typeof props.items)[number]): string | null {
+function target(item: ActivityItem): string | null {
   return item.label ?? (item.project ? projectName(item.project) : null)
 }
 </script>

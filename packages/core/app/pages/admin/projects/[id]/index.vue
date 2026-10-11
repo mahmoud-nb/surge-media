@@ -233,10 +233,10 @@ async function remove() {
               <UiAlert v-if="saveStatus" :variant="saveStatus.variant" :live="saveStatus.variant === 'error' ? 'assertive' : 'polite'">
                 {{ saveStatus.message }}
               </UiAlert>
-              <UiFormField v-slot="field" :id="FIELD_IDS.name" :label="t('projects.fields.name')" :error="message('name')" required>
+              <UiFormField :id="FIELD_IDS.name" v-slot="field" :label="t('projects.fields.name')" :error="message('name')" required>
                 <UiInput v-bind="field" v-model="form.name" name="name" autocomplete="off" :maxlength="PROJECT_NAME_MAX_LENGTH" @input="clear('name')" />
               </UiFormField>
-              <UiFormField v-slot="field" :id="FIELD_IDS.slug" :label="t('projects.fields.slug')" :hint="t('projects.fields.slugHint')" :error="message('slug')" required>
+              <UiFormField :id="FIELD_IDS.slug" v-slot="field" :label="t('projects.fields.slug')" :hint="t('projects.fields.slugHint')" :error="message('slug')" required>
                 <UiInput
                   v-bind="field"
                   v-model="form.slug"
@@ -249,7 +249,7 @@ async function remove() {
                   @input="clear('slug')"
                 />
               </UiFormField>
-              <UiFormField v-slot="field" :id="FIELD_IDS.description" :label="t('projects.fields.description')" :hint="t('projects.fields.descriptionHint')" :error="message('description')">
+              <UiFormField :id="FIELD_IDS.description" v-slot="field" :label="t('projects.fields.description')" :hint="t('projects.fields.descriptionHint')" :error="message('description')">
                 <UiInput v-bind="field" v-model="form.description" name="description" autocomplete="off" :maxlength="PROJECT_DESCRIPTION_MAX_LENGTH" @input="clear('description')" />
               </UiFormField>
               <UiSwitch v-model="form.publicListing" :label="t('projects.fields.publicListing')" :description="t('projects.fields.publicListingHint')" />
@@ -304,7 +304,7 @@ async function remove() {
           <UiAlert v-else variant="warning">
             {{ t('projects.delete.purgeOnly') }}
           </UiAlert>
-          <UiFormField v-slot="field" :id="confirmationId" :label="t('projects.delete.confirmLabel', { slug: project.slug })" :error="confirmationError" required>
+          <UiFormField :id="confirmationId" v-slot="field" :label="t('projects.delete.confirmLabel', { slug: project.slug })" :error="confirmationError" required>
             <UiInput
               v-bind="field"
               v-model="deleteConfirmation"

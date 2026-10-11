@@ -185,10 +185,10 @@ export interface TransformRequest {
   format: TransformFormat
 }
 
-export type ResolvedTransformRequest =
-  | { kind: 'preset', name: string, transformation: Transformation }
+export type ResolvedTransformRequest
+  = | { kind: 'preset', name: string, transformation: Transformation }
   /** `canonical` vide : image entière réencodée (préréglage intégré `full`). */
-  | { kind: 'transform', canonical: string, transformation: Transformation }
+    | { kind: 'transform', canonical: string, transformation: Transformation }
 
 /**
  * Transformation d'un dérivé demandé dans un espace : format activé, paramètres analysés avec les

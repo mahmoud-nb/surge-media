@@ -140,14 +140,14 @@ async function onSubmit() {
             required
           />
 
-          <UiFormField v-slot="field" :id="FIELD_IDS.name" :label="t('apiKeys.new.name')" :hint="t('apiKeys.new.nameHint')" :error="message('name')" required>
+          <UiFormField :id="FIELD_IDS.name" v-slot="field" :label="t('apiKeys.new.name')" :hint="t('apiKeys.new.nameHint')" :error="message('name')" required>
             <UiInput v-bind="field" v-model="form.name" name="name" autocomplete="off" :maxlength="TOKEN_NAME_MAX_LENGTH" @input="clear('name')" />
           </UiFormField>
 
           <div class="grid gap-4 sm:grid-cols-2">
             <UiFormField
-              v-slot="field"
               :id="FIELD_IDS.environment"
+              v-slot="field"
               :label="t('apiKeys.new.environment')"
               :hint="t('apiKeys.new.environmentHint')"
               :error="form.environmentChoice === OTHER ? undefined : message('environment')"
@@ -157,8 +157,8 @@ async function onSubmit() {
             </UiFormField>
             <UiFormField
               v-if="form.environmentChoice === OTHER"
-              v-slot="field"
               :id="customEnvironmentId"
+              v-slot="field"
               :label="t('apiKeys.new.environmentCustom')"
               :hint="t('apiKeys.new.environmentCustomHint')"
               :error="message('environment')"

@@ -483,9 +483,9 @@ interface CommitOptions {
   carry?: JobLease
 }
 
-type CommitOutcome =
-  | { status: 'ok', renditions: MediaRendition[], queued: boolean }
-  | { status: 'conflict' | 'lost' }
+type CommitOutcome
+  = | { status: 'ok', renditions: MediaRendition[], queued: boolean }
+    | { status: 'conflict' | 'lost' }
 
 /**
  * Nouveau fichier d'un média (déjà écrit dans le stockage), en une transaction qui commence par une

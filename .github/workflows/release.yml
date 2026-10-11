@@ -1,0 +1,236 @@
+# Publication d'une version (setup.md § 15), quand une release GitHub est publiée — créée par `pnpm release`
+# (tag vX.Y.Z) — ou à la main pour un tag existant (Actions › Release › Run workflow), pour relancer une
+# publication interrompue : chaque étape déjà faite est sautée ou écrasée à l'identique.
+#
+#   1. package : la version du tag doit être celle du package.json ; vérifications, build, archive du paquet,
+#      essai d'installation ;
+#   2. npm : publication de cette archive, étiquette `latest` (plus haute version stable), `next` (préversion) ou
+#      `release-X.Y` (correctif d'une ancienne ligne), avec provenance si le dépôt est public ; publication de
+#      confiance (OIDC) ou secret NPM_TOKEN ;
+#   3. docker : images amd64 + arm64 construites depuis la même archive, poussées sur GHCR — X.Y.Z, X.Y,
+#      X (à partir de 1.0.0) et latest pour la plus haute version stable, et leurs variantes -slim ;
+#      préversion : X.Y.Z seulement ;
+#   4. assets : archive du paquet jointe à la release GitHub.
+name: Release
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Tag à publier (ex. v0.1.0)
+        required: true
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-${{ github.event.release.tag_name || inputs.tag }}
+  cancel-in-progress: false
+
+env:
+  TAG: ${{ github.event.release.tag_name || inputs.tag }}
+  IMAGE: ghcr.io/${{ github.repository }}
+
+jobs:
+  package:
+    name: Vérifications et paquet
+    runs-on: ubuntu-24.04
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+      revision: ${{ steps.version.outputs.revision }}
+      latest: ${{ steps.version.outputs.latest }}
+      npm-tag: ${{ steps.version.outputs.npm-tag }}
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: ${{ env.TAG }}
+          # Tous les tags : une version n'est « latest » que si c'est la plus haute version stable.
+          fetch-depth: 0
+
+      - uses: ./.github/actions/setup
+
+      - name: Version du tag = version du paquet
+        id: version
+        run: |
+          version="$(node -p "require('./packages/core/package.json').version")"
+          if [ "v$version" != "$TAG" ]; then
+            echo "::error::Le tag $TAG ne correspond pas à la version de packages/core/package.json ($version)."
+            exit 1
+          fi
+          highest="$(git tag --list 'v[0-9]*' --sort=-version:refname | grep -v -- '-' | head -n 1)"
+          # Préversion → étiquette npm « next » ; correctif d'une ancienne ligne (branche release/X.Y) →
+          # « release-X.Y », sans déplacer « latest » (npm, Docker) ni le tag Docker majeur.
+          case "$version" in
+            *-*) latest=false; npm_tag=next ;;
+            *) if [ "$TAG" = "$highest" ]; then latest=true; npm_tag=latest; else latest=false; npm_tag="release-${version%.*}"; fi ;;
+          esac
+          {
+            echo "version=$version"
+            echo "revision=$(git rev-parse HEAD)"
+            echo "latest=$latest"
+            echo "npm-tag=$npm_tag"
+          } >> "$GITHUB_OUTPUT"
+          echo "Version $version — npm : $npm_tag, Docker latest : $latest"
+
+      - name: Licence complète (aucun champ à compléter)
+        run: pnpm --filter @surge-media/core license:check
+
+      - name: Lint
+        run: pnpm lint
+
+      - name: Typecheck
+        run: pnpm typecheck
+
+      - name: Tests
+        run: pnpm test
+
+      - name: Traductions
+        run: pnpm i18n:check
+
+      - name: Migrations à jour avec le schéma
+        run: pnpm --filter @surge-media/core db:migration --check
+
+      - name: Build
+        run: pnpm --filter @surge-media/core build
+
+      - name: Archive du paquet
+        run: cd packages/core && pnpm pack --out "$GITHUB_WORKSPACE/artifacts/surge-media-core.tgz"
+
+      - name: Essai du paquet (installation, init, start)
+        run: pnpm --filter @surge-media/core smoke:package "$GITHUB_WORKSPACE/artifacts/surge-media-core.tgz"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: package
+          path: artifacts/surge-media-core.tgz
+          if-no-files-found: error
+
+  npm:
+    name: Publication npm
+    needs: package
+    runs-on: ubuntu-24.04
+    environment: npm
+    permissions:
+      contents: read
+      # Publication de confiance (OIDC, sans jeton) et attestation de provenance.
+      id-token: write
+    steps:
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: package
+          path: artifacts
+
+      - name: Publication
+        env:
+          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+          VERSION: ${{ needs.package.outputs.version }}
+          DIST_TAG: ${{ needs.package.outputs.npm-tag }}
+          # La provenance exige un dépôt public.
+          PROVENANCE: ${{ github.event.repository.private && 'false' || 'true' }}
+        run: |
+          if npm view "@surge-media/core@$VERSION" version >/dev/null 2>&1; then
+            echo "@surge-media/core@$VERSION est déjà publiée : rien à faire."
+            exit 0
+          fi
+          # Sans NPM_TOKEN : publication de confiance, à déclarer sur npmjs.com (setup.md § 15).
+          if [ -n "$NPM_TOKEN" ]; then
+            echo "//registry.npmjs.org/:_authToken=${NPM_TOKEN}" > "$HOME/.npmrc"
+          fi
+          npm publish artifacts/surge-media-core.tgz --access public --tag "$DIST_TAG" --provenance="$PROVENANCE"
+
+  docker:
+    name: Image Docker ${{ matrix.target }} (GHCR)
+    needs: package
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+      packages: write
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - target: full
+            suffix: ''
+          - target: slim
+            suffix: -slim
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: ${{ env.TAG }}
+
+      # Paquet publié sur npm : l'image l'installe, sans refaire la build Nuxt pour chaque architecture.
+      - uses: actions/download-artifact@v4
+        with:
+          name: package
+          path: package-context
+
+      - uses: docker/setup-qemu-action@v3
+
+      - uses: docker/setup-buildx-action@v3
+
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Tags et étiquettes
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.IMAGE }}
+          flavor: |
+            latest=${{ needs.package.outputs.latest }}
+            suffix=${{ matrix.suffix }},onlatest=true
+          tags: |
+            type=semver,pattern={{version}},value=${{ env.TAG }}
+            type=semver,pattern={{major}}.{{minor}},value=${{ env.TAG }}
+            type=semver,pattern={{major}},value=${{ env.TAG }},enable=${{ needs.package.outputs.latest == 'true' && !startsWith(env.TAG, 'v0.') }}
+          labels: |
+            org.opencontainers.image.title=surgeMedia
+            org.opencontainers.image.licenses=BUSL-1.1
+            org.opencontainers.image.revision=${{ needs.package.outputs.revision }}
+
+      - name: Build et publication (amd64, arm64)
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          target: ${{ matrix.target }}
+          build-contexts: package=package-context
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          build-args: |
+            VERSION=${{ needs.package.outputs.version }}
+            REVISION=${{ needs.package.outputs.revision }}
+          provenance: mode=max
+          sbom: true
+          cache-from: type=gha,scope=release-${{ matrix.target }}
+          cache-to: type=gha,mode=max,scope=release-${{ matrix.target }}
+
+  assets:
+    name: Archive jointe à la release
+    needs: [package, npm, docker]
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: package
+          path: artifacts
+
+      - name: Ajout à la release GitHub
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ needs.package.outputs.version }}
+        run: |
+          mv artifacts/surge-media-core.tgz "artifacts/surge-media-core-${VERSION}.tgz"
+          gh release upload "$TAG" "artifacts/surge-media-core-${VERSION}.tgz" --clobber --repo "$GITHUB_REPOSITORY"

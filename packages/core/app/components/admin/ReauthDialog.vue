@@ -64,7 +64,7 @@ async function onSubmit() {
       <UiAlert v-if="serverError" variant="error" live="assertive">
         {{ serverError }}
       </UiAlert>
-      <UiFormField v-slot="field" :id="FIELD_IDS.password" :label="t('reauth.password')" :error="message('password')" required>
+      <UiFormField :id="FIELD_IDS.password" v-slot="field" :label="t('reauth.password')" :error="message('password')" required>
         <UiPasswordInput
           v-bind="field"
           v-model="form.password"

@@ -37,19 +37,19 @@ interface TargetBase {
   filename: string
 }
 
-export type DeliveryTarget =
-  | TargetBase & { kind: 'original' }
-  | TargetBase & { kind: 'track', trackId: string }
-  | TargetBase & { kind: 'rendition', name: RenditionName, container: 'mp4' | 'webm' }
-  | TargetBase & { kind: 'preset', preset: string, format: TransformFormat }
-  | TargetBase & { kind: 'transform', transformation: Transformation, canonical: string, format: TransformFormat }
+export type DeliveryTarget
+  = | TargetBase & { kind: 'original' }
+    | TargetBase & { kind: 'track', trackId: string }
+    | TargetBase & { kind: 'rendition', name: RenditionName, container: 'mp4' | 'webm' }
+    | TargetBase & { kind: 'preset', preset: string, format: TransformFormat }
+    | TargetBase & { kind: 'transform', transformation: Transformation, canonical: string, format: TransformFormat }
 
-export type DeliveryPathResult =
-  | { type: 'target', target: DeliveryTarget }
+export type DeliveryPathResult
+  = | { type: 'target', target: DeliveryTarget }
   /** Chemin canonique (sans « /m/ » ni chaîne de requête). */
-  | { type: 'redirect', path: string }
-  | { type: 'invalid', message: string }
-  | null
+    | { type: 'redirect', path: string }
+    | { type: 'invalid', message: string }
+    | null
 
 export interface DeliveryPathOptions extends TransformLimits {
   /** Formats de sortie activés (NUXT_MEDIA_TRANSFORM_FORMATS). */

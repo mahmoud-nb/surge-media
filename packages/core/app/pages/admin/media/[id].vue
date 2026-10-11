@@ -1157,12 +1157,12 @@ const pageFlash = flash.consume()
               <UiAlert v-if="saveStatus" :variant="saveStatus.variant" :live="saveStatus.variant === 'error' ? 'assertive' : 'polite'">
                 {{ saveStatus.message }}
               </UiAlert>
-              <UiFormField v-slot="field" :id="FIELD_IDS.title" :label="t('media.fields.title')" :hint="t('media.fields.titleHint')" :error="message('title')">
+              <UiFormField :id="FIELD_IDS.title" v-slot="field" :label="t('media.fields.title')" :hint="t('media.fields.titleHint')" :error="message('title')">
                 <UiInput v-bind="field" v-model="form.title" name="title" autocomplete="off" :maxlength="MEDIA_TEXT_MAX_LENGTH" @input="clear('title')" />
               </UiFormField>
               <UiFormField
-                v-slot="field"
                 :id="FIELD_IDS.altText"
+                v-slot="field"
                 :label="isVideo ? t('media.fields.videoDescription') : t('media.fields.altText')"
                 :hint="isVideo ? t('media.fields.videoDescriptionHint') : t('media.fields.altTextHint')"
                 :error="message('altText')"

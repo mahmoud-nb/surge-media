@@ -115,7 +115,7 @@ async function onSubmit() {
         {{ serverError }}
       </UiAlert>
 
-      <UiFormField v-slot="field" :id="FIELD_IDS.name" :label="t('tokens.new.name')" :hint="t('tokens.new.nameHint')" :error="message('name')" required>
+      <UiFormField :id="FIELD_IDS.name" v-slot="field" :label="t('tokens.new.name')" :hint="t('tokens.new.nameHint')" :error="message('name')" required>
         <UiInput v-bind="field" v-model="form.name" name="name" autocomplete="off" :maxlength="TOKEN_NAME_MAX_LENGTH" @input="clear('name')" />
       </UiFormField>
 

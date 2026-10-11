@@ -23,22 +23,28 @@ Ready-made components for Vue, React and Svelte (`@surge-media/vue`, `@surge-med
 | Tool | Version | Notes |
 | --- | --- | --- |
 | Node.js | 24 or later | |
-| pnpm | 12.x | `corepack enable` installs the version pinned by the repository |
 | Database | SQLite (default), PostgreSQL, MySQL or MariaDB | SQLite suits a single server with moderate traffic |
 | ffmpeg and ffprobe | 6 or later (optional) | only for video processing, with the `libx264` and `aac` encoders |
 
 ## Getting started
 
-surgeMedia currently runs from its source repository:
+Install the package in the directory that will hold your configuration (`.env`) and data (`data/`):
 
 ```bash
-git clone https://github.com/mahmoud-nb/surge-media.git
-cd surge-media
-pnpm install
-pnpm db:init      # choose the database, apply migrations, generate the secrets
+mkdir surge-media && cd surge-media
+npm install @surge-media/core
+npx surge-media init      # choose the database and public URL, apply migrations, generate the secrets
 ```
 
-`db:init` creates `packages/core/.env`. Add the bootstrap administrator account to it before the first sign-in:
+With npm 12 or later, dependency install scripts only run once approved. SQLite needs the one of
+`better-sqlite3` (its native module):
+
+```bash
+npm install-scripts approve better-sqlite3 @prisma/engines prisma
+npm rebuild better-sqlite3 @prisma/engines
+```
+
+Add the bootstrap administrator account to `.env` before the first sign-in, then start the server:
 
 ```dotenv
 NUXT_BOOTSTRAP_ADMIN_EMAIL="you@example.com"
@@ -46,11 +52,15 @@ NUXT_BOOTSTRAP_ADMIN_PASSWORD="a-long-unique-password"   # 12 characters minimum
 ```
 
 ```bash
-pnpm dev          # http://localhost:3000 — sign in at /login
+npx surge-media start     # http://localhost:3000 — sign in at /login
 ```
 
 Remove the two bootstrap variables once your account exists. `GET /api/health` reports the state of the
-database, the storage and the image engine.
+database, the storage and the image engine. To update: `npm install @surge-media/core@latest`,
+`npx surge-media db migrate`, then restart.
+
+To work on surgeMedia itself, clone the repository and follow the
+[development guide](https://github.com/mahmoud-nb/surge-media/blob/main/setup.md) (pnpm 12, `pnpm dev`).
 
 ## Running with Docker
 
@@ -62,7 +72,8 @@ docker build -t surge-media .                      # with ffmpeg
 docker build --target slim -t surge-media:slim .   # without ffmpeg
 ```
 
-Prebuilt images will be published on GitHub Container Registry (`ghcr.io/mahmoud-nb/surge-media`).
+Prebuilt images for amd64 and arm64 are published on GitHub Container Registry with each release:
+`ghcr.io/mahmoud-nb/surge-media:<version>` and `:latest`, or `…-slim` without ffmpeg.
 
 ```bash
 docker run -d --name surge-media -p 127.0.0.1:3000:3000 -v surge-media-data:/app/data \
@@ -86,14 +97,16 @@ Compose examples: [`docker/compose.sqlite.yaml`](https://github.com/mahmoud-nb/s
 
 ## Command-line interface
 
-The package ships a `surge-media` command (run it with `pnpm cli <command>` from the repository):
+The package ships a `surge-media` command (`npx surge-media <command>`, or `pnpm cli <command>` from the
+repository). It works in the current directory, or the one given by `--cwd`:
 
 | Command | Purpose |
 | --- | --- |
 | `init` | choose the database (`--provider sqlite\|postgresql\|mysql`, `--url`), set the public URL (`--site-url`), apply migrations and generate the missing secrets; `--yes` for non-interactive use |
+| `start` | start the server (`--port`, default `PORT` or 3000) |
+| `worker` | start a video processing worker (`--port`, 3001 by default) |
 | `db migrate` | apply pending migrations after an update |
 | `db reset` | recreate the database (confirmation required) |
-| `worker` | start a video processing worker (`--port`, 3001 by default) |
 
 The CLI speaks French and English: `--lang en`, or `SURGE_MEDIA_LANG=en`.
 
@@ -175,9 +188,8 @@ formats (MKV, AVI, 3GP, MPEG-TS, OGV, WMV). Jobs are queued in the database and 
 ## Production
 
 ```bash
-pnpm build                              # Prisma client, Nuxt server and CLI
-cd packages/core && pnpm db:migrate     # apply migrations to the production database
-pnpm start                              # node --env-file-if-exists=.env .output/server/index.mjs
+npx surge-media db migrate    # after each update
+npx surge-media start         # run it under a process manager (systemd, pm2…), or use the Docker image
 ```
 
 - Serve the application over **HTTPS**, behind a reverse proxy that forwards the original `Host` header and
@@ -191,6 +203,12 @@ pnpm start                              # node --env-file-if-exists=.env .output
 
 The complete guide — installation, configuration, API, security and troubleshooting — is
 [`setup.md`](https://github.com/mahmoud-nb/surge-media/blob/main/setup.md) (in French).
+
+## Releases
+
+Versions follow [Semantic Versioning](https://semver.org). See the
+[changelog](https://github.com/mahmoud-nb/surge-media/blob/main/packages/core/CHANGELOG.md) and the
+[GitHub releases](https://github.com/mahmoud-nb/surge-media/releases).
 
 ## License
 

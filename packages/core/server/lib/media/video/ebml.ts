@@ -180,7 +180,7 @@ const CLUSTER = {
 } as const
 const CLUSTER_CHILDREN = new Set<number>(Object.values(CLUSTER))
 /** Éléments de premier niveau qui peuvent suivre un `Cluster` de taille inconnue. */
-const SEGMENT_CHILDREN = new Set([ID.Cluster, 0x1C53BB6B /* Cues */, 0x1254C367 /* Tags */, 0x1043A770 /* Chapters */, 0x1941A469 /* Attachments */])
+const SEGMENT_CHILDREN = new Set([ID.Cluster, 0x1C53BB6B /* Cues */, 0x1254C367 /* Tags */, 0x1043A770 /* Chapters */, 0x1941A469])
 
 /** Décalage (signé, unités du `Cluster`) d'un bloc `SimpleBlock` ou `Block`. */
 function blockOffset(buffer: Buffer, body: number, end: number): number {

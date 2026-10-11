@@ -175,6 +175,6 @@ const cards = computed<Card[]>(() => {
       <AdminDashboardAccount v-if="data.activity" />
     </div>
 
-    <AdminDashboardAccount v-else-if="error" />
+    <AdminDashboardAccount v-if="error" />
   </div>
 </template>

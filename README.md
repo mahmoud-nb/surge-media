@@ -13,10 +13,21 @@ avec des composants prêts à l'emploi pour Vue, React et Svelte.
 
 ## Démarrer
 
+Depuis les sources (développement) :
+
 ```bash
 pnpm install
 pnpm db:init   # SQLite par défaut, ou PostgreSQL / MySQL / MariaDB
 pnpm dev
+```
+
+Avec le paquet npm, dans le dossier qui contiendra la configuration et les données (npm 12 et plus : approuver
+d'abord les scripts d'installation, [setup.md § 15.5](setup.md#155-le-paquet-npm)) :
+
+```bash
+npm install @surge-media/core
+npx surge-media init
+npx surge-media start
 ```
 
 Ou avec Docker (une seule image pour SQLite, PostgreSQL et MySQL/MariaDB ; variante `slim` sans ffmpeg) :
@@ -27,9 +38,12 @@ docker run -d -p 127.0.0.1:3000:3000 -v surge-media-data:/app/data -e NUXT_SITE_
   -e NUXT_BOOTSTRAP_ADMIN_EMAIL=vous@exemple.fr -e NUXT_BOOTSTRAP_ADMIN_PASSWORD=un-mot-de-passe-long surge-media
 ```
 
-Exemples Compose dans [`docker/`](docker), détails dans [setup.md § 12.2](setup.md#122-docker).
+Exemples Compose dans [`docker/`](docker), détails dans [setup.md § 12.2](setup.md#122-docker). Images
+publiées à chaque version : `ghcr.io/mahmoud-nb/surge-media` (amd64, arm64).
 
-Guide complet de développement : [setup.md](setup.md).
+Guide complet de développement : [setup.md](setup.md) ; versions, releases et publication :
+[§ 15](setup.md#15-qualité-du-code-versions-et-publication) ; historique :
+[CHANGELOG](packages/core/CHANGELOG.md).
 
 ## Licence
 

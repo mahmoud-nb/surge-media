@@ -400,7 +400,7 @@ function posterBody(): Json {
 
 /** Corps multipart d'une piste de texte : le fichier WebVTT ou SRT et ses champs. */
 function trackBody(): Json {
-  const fields = (inputSchema(apiTextTrackFieldsSchema) as { properties?: Json, required?: string[] })
+  const fields = inputSchema(apiTextTrackFieldsSchema) as { properties?: Json, required?: string[] }
   return {
     required: true,
     ...t('Fichier de sous-titres et champs de la piste.', 'Subtitle file and track fields.'),

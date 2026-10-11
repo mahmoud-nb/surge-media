@@ -132,9 +132,9 @@ export function effectiveProjectRole(platformRole: Role, memberRole: ProjectRole
 }
 
 /** Espace vu par le moteur de portées (les données nécessaires, sans accès à la base). */
-export type SpaceContext =
-  | { type: 'library' }
-  | { type: 'project', memberRole: ProjectRole | null | undefined, archived: boolean }
+export type SpaceContext
+  = | { type: 'library' }
+    | { type: 'project', memberRole: ProjectRole | null | undefined, archived: boolean }
 
 /** Portées d'un utilisateur dans un espace ; liste vide = espace invisible pour lui. */
 export function spaceScopes(platformRole: Role, space: SpaceContext): Scope[] {
@@ -182,11 +182,11 @@ export function tokenScopes(optional: readonly string[]): TokenScope[] {
  *   - jeton délégué : l'espace est-il son projet, et quelles portées son émetteur (clé secrète ou
  *     jeton personnel) y a-t-il aujourd'hui.
  */
-export type CredentialContext =
-  | { type: 'PERSONAL', scopes: readonly string[], inSelection: boolean, ownerScopes: readonly Scope[] }
-  | { type: 'SECRET', scopes: readonly string[], ownProject: boolean }
-  | { type: 'PUBLISHABLE', ownProject: boolean }
-  | { type: 'DELEGATED', scopes: readonly string[], ownProject: boolean, issuerScopes: readonly TokenScope[] }
+export type CredentialContext
+  = | { type: 'PERSONAL', scopes: readonly string[], inSelection: boolean, ownerScopes: readonly Scope[] }
+    | { type: 'SECRET', scopes: readonly string[], ownProject: boolean }
+    | { type: 'PUBLISHABLE', ownProject: boolean }
+    | { type: 'DELEGATED', scopes: readonly string[], ownProject: boolean, issuerScopes: readonly TokenScope[] }
 
 /**
  * Portées effectives d'un identifiant dans un espace ; liste vide = espace invisible (404).

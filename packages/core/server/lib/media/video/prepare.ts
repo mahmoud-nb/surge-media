@@ -40,12 +40,12 @@ export interface PreparationPlan {
   chunks: { from: number, to: number }[]
 }
 
-export type PreparationOutcome =
-  | { status: 'prepared', plan: PreparationPlan, probe: VideoProbe }
+export type PreparationOutcome
+  = | { status: 'prepared', plan: PreparationPlan, probe: VideoProbe }
   /** Rien à faire : index déjà en tête (ou non demandé), aucune métadonnée à retirer. */
-  | { status: 'unchanged' }
+    | { status: 'unchanged' }
   /** Fichier non géré ou vérification en échec : gardé tel quel. */
-  | { status: 'skipped', reason: string }
+    | { status: 'skipped', reason: string }
 
 /** Index lu en mémoire au plus (en pratique quelques Mio, même pour 2 Gio de vidéo). */
 export const MAX_MOOV_SIZE = 64 * 1024 * 1024

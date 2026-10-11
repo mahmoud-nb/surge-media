@@ -243,7 +243,7 @@ async function deleteUser() {
               </dd>
             </dl>
 
-            <UiFormField v-slot="field" :id="FIELD_IDS.name" :label="t('users.fields.name')" :hint="t('users.fields.nameHint')" :error="message('name')" class="max-w-md">
+            <UiFormField :id="FIELD_IDS.name" v-slot="field" :label="t('users.fields.name')" :hint="t('users.fields.nameHint')" :error="message('name')" class="max-w-md">
               <UiInput v-bind="field" v-model="form.name" name="name" autocomplete="off" :maxlength="NAME_MAX_LENGTH" @input="clear('name')" />
             </UiFormField>
 

@@ -20,6 +20,18 @@
     "db:reset": "pnpm --filter @surge-media/core db:reset",
     "db:studio": "pnpm --filter @surge-media/core db:studio",
     "i18n:check": "pnpm --filter @surge-media/core i18n:check",
-    "a11y:contrast": "pnpm --filter @surge-media/core a11y:contrast"
+    "a11y:contrast": "pnpm --filter @surge-media/core a11y:contrast",
+    "lint": "pnpm --filter @surge-media/core lint",
+    "lint:fix": "pnpm --filter @surge-media/core lint:fix",
+    "release": "pnpm --filter @surge-media/core release",
+    "release:dry": "pnpm --filter @surge-media/core release:dry"
+  },
+  "devDependencies": {
+    "@commitlint/cli": "^21.2.3",
+    "@commitlint/config-conventional": "^21.2.3",
+    "simple-git-hooks": "^2.14.0"
+  },
+  "simple-git-hooks": {
+    "commit-msg": "node_modules/.bin/commitlint --edit \"$1\""
   }
 }

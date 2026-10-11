@@ -10,8 +10,10 @@
 # Messages en français, ou en anglais avec SURGE_MEDIA_LANG=en.
 set -eu
 
+# /app : dossier de l'installation (données dans /app/data) ; le paquet npm est installé dans node_modules.
 APP_DIR=/app
-SERVER="$APP_DIR/.output/server/index.mjs"
+PACKAGE_DIR="$APP_DIR/node_modules/@surge-media/core"
+SERVER="$PACKAGE_DIR/.output/server/index.mjs"
 PRISMA="$APP_DIR/node_modules/prisma/build/index.js"
 SECRETS_DIR="${SURGE_MEDIA_SECRETS_DIR:-$APP_DIR/data/secrets}"
 
@@ -90,18 +92,27 @@ ensure_secret() {
 }
 
 migrate() {
+  # Prisma est lancé depuis le paquet (prisma.config.ts, migrations du fournisseur) : un chemin SQLite relatif
+  # l'est au dossier de l'installation, comme pour le serveur, d'où une URL absolue.
+  url="${DATABASE_URL:-}"
   if [ "$DATABASE_PROVIDER" = sqlite ]; then
-    # SQLite crée le fichier, pas ses dossiers parents.
     path="${DATABASE_URL:-file:./data/surge-media.db}"
     path="${path#file:}"
     path="${path#//}"
     path="${path%%\?*}"
+    case "$path" in
+      /*) ;;
+      *) path="$APP_DIR/${path#./}" ;;
+    esac
+    # SQLite crée le fichier, pas ses dossiers parents.
     mkdir -p "$(dirname "$path")"
+    url="file:$path"
   fi
   say "Migrations de la base ($DATABASE_PROVIDER)…" "Database migrations ($DATABASE_PROVIDER)…"
   attempt=1
   while :; do
-    if output=$(node "$PRISMA" migrate deploy --schema "$APP_DIR/prisma/schemas/$DATABASE_PROVIDER.prisma" 2>&1); then
+    if output=$(cd "$PACKAGE_DIR" && DATABASE_URL="$url" node "$PRISMA" migrate deploy \
+      --schema "server/generated/schemas/$DATABASE_PROVIDER.prisma" 2>&1); then
       printf '%s\n' "$output" | grep -E '^(Applying migration|No pending migrations)' >&2 || true
       return 0
     fi

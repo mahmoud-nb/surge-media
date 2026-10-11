@@ -60,12 +60,12 @@ async function onSubmit() {
       </p>
 
       <div class="grid gap-5 sm:grid-cols-2">
-        <UiFormField v-slot="field" :id="FIELD_IDS.name" :label="t('projects.fields.name')" :error="message('name')" required>
+        <UiFormField :id="FIELD_IDS.name" v-slot="field" :label="t('projects.fields.name')" :error="message('name')" required>
           <UiInput v-bind="field" v-model="form.name" name="name" autocomplete="off" :maxlength="PROJECT_NAME_MAX_LENGTH" @input="clear('name')" />
         </UiFormField>
         <UiFormField
-          v-slot="field"
           :id="FIELD_IDS.slug"
+          v-slot="field"
           :label="t('projects.fields.slug')"
           :hint="derivedSlug ? t('projects.fields.slugAuto', { slug: derivedSlug }) : t('projects.fields.slugAutoEmpty')"
           :error="message('slug')"
@@ -84,7 +84,7 @@ async function onSubmit() {
         </UiFormField>
       </div>
 
-      <UiFormField v-slot="field" :id="FIELD_IDS.description" :label="t('projects.fields.description')" :hint="t('projects.fields.descriptionHint')" :error="message('description')">
+      <UiFormField :id="FIELD_IDS.description" v-slot="field" :label="t('projects.fields.description')" :hint="t('projects.fields.descriptionHint')" :error="message('description')">
         <UiInput v-bind="field" v-model="form.description" name="description" autocomplete="off" :maxlength="PROJECT_DESCRIPTION_MAX_LENGTH" @input="clear('description')" />
       </UiFormField>
 

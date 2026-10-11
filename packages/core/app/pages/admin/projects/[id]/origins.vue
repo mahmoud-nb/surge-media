@@ -190,7 +190,7 @@ async function confirmRemove() {
             <UiAlert v-if="addError" variant="error" live="assertive">
               {{ addError }}
             </UiAlert>
-            <UiFormField v-slot="field" :id="FIELD_IDS.origin" :label="t('origins.add.label')" :hint="t('origins.add.hint')" :error="message('origin')" required>
+            <UiFormField :id="FIELD_IDS.origin" v-slot="field" :label="t('origins.add.label')" :hint="t('origins.add.hint')" :error="message('origin')" required>
               <UiInput
                 v-bind="field"
                 v-model="form.origin"
