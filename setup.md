@@ -170,12 +170,17 @@ Depuis la racine :
 | `pnpm db:reset` | recrée la base (⚠ supprime les données), éventuellement avec un autre fournisseur |
 | `pnpm db:studio` | Prisma Studio |
 | `pnpm cli <commande>` | lance la CLI `surge-media` depuis les sources |
+| `pnpm lint` / `pnpm lint:fix` | ESLint (`@nuxt/eslint`) : vérification / correction automatique (§ 15.1) |
+| `pnpm release` / `pnpm release:dry` | release de `@surge-media/core` : version, CHANGELOG, tag, release GitHub (§ 15.3) ; `:dry` n'écrit rien |
 
 Dans `packages/core` uniquement : `pnpm db:generate` (régénère les trois clients Prisma), `pnpm db:migration <nom>`
-(maintenance, voir § 6.5), `pnpm build:cli` (build de la CLI), `pnpm start` (serveur de production).
+(maintenance, voir § 6.5), `pnpm build:cli` (build de la CLI), `pnpm start` (serveur de production),
+`pnpm pack` (archive du paquet npm, § 15.5), `pnpm smoke:package <archive>` (essai de l'archive),
+`pnpm changelog:preview` (notes de la prochaine version).
 
-**Avant chaque commit** : `pnpm typecheck`, `pnpm test`, `pnpm i18n:check` et, si les couleurs
-changent, `pnpm a11y:contrast`.
+**Avant chaque commit** : `pnpm lint`, `pnpm typecheck`, `pnpm test`, `pnpm i18n:check` et, si les
+couleurs changent, `pnpm a11y:contrast` (la CI refait les quatre premiers, § 15.1). Message de commit au format
+Conventional Commits, vérifié par le hook `commit-msg` (§ 15.1).
 
 ## 6. Base de données
 
@@ -222,9 +227,22 @@ pnpm cli --help                                # aide (--lang en pour l'anglais)
 | Commande | Options |
 | --- | --- |
 | `init` | `--provider`, `--url`, `--site-url`, `--yes`/`-y`, `--skip-migrate`, `--cwd`, `--lang` |
+| `start` | `--port` (variable `PORT`, sinon `3000`), `--cwd`, `--lang` |
+| `worker` | `--port` (`3001` par défaut), `--cwd`, `--lang` |
 | `db migrate` | `--cwd`, `--lang` |
 | `db reset` | `--provider`, `--url`, `--yes`/`-y`, `--cwd`, `--lang` |
-| `worker` | `--port` (`3001` par défaut), `--cwd`, `--lang` |
+
+- **Paquet et installation** (`cli/lib/project.ts`) : la CLI distingue le **paquet** (serveur construit,
+  migrations, schémas par fournisseur, `prisma.config.ts`, `.env.example`) et le **dossier de l'installation**
+  (`.env` et données : base SQLite, médias en stockage local). Dans le dépôt des sources, l'installation est
+  `packages/core` (rien ne change pour le développement) ; avec le paquet publié, c'est le **dossier courant**
+  (refusé s'il est dans un `node_modules` : ses données y seraient effacées) ; `--cwd` en désigne un autre.
+  Les commandes Prisma sont lancées depuis le paquet, avec le schéma du fournisseur
+  (`server/generated/schemas/<fournisseur>.prisma`) et une URL SQLite rendue absolue ; dans le dépôt seulement,
+  `init` réécrit aussi le `provider` de `prisma/schema.prisma` et régénère les clients s'il le faut.
+- **`start`** : lance le serveur construit du paquet depuis le dossier de l'installation, avec son `.env` ;
+  avec SQLite, vérifie d'abord que le pilote better-sqlite3 a son module natif (sinon, message expliquant
+  l'approbation des scripts d'installation par npm 12 et plus, § 15.5).
 
 - **Langue** : français par défaut, anglais disponible (`--lang en`, variable `SURGE_MEDIA_LANG`, ou
   locale du système). Les textes sont dans `cli/i18n/fr.ts` (référence) et `cli/i18n/en.ts` : toute
@@ -237,13 +255,13 @@ pnpm cli --help                                # aide (--lang en pour l'anglais)
 - **Après un changement de fournisseur**, redémarrez le serveur et les processus de travail : aucune
   reconstruction n'est nécessaire (la build contient les trois clients).
 - **Processus de travail** (`worker`, phase D3) : lance le serveur **construit** (`.output/server/index.mjs` :
-  `pnpm build` d'abord, sinon la commande s'arrête) depuis `packages/core`, avec son `.env`
+  `pnpm build` d'abord dans le dépôt, sinon la commande s'arrête) depuis le dossier de l'installation, avec son `.env`
   (`--env-file-if-exists`, les variables du shell restant prioritaires) et `NUXT_SERVER_ROLE=worker`. Il
   exécute les tâches vidéo du mode `external` et ne sert que `/api/health` sur son port (3001 par défaut,
   distinct de celui du serveur web). Ctrl+C ou SIGTERM : arrêt propre (§ 7.7 ; vérifié aussi sous Windows le 2026-10-10).
-- **Distribution** : le package `@surge-media/core` expose le binaire `surge-media`
-  (`dist/cli/index.mjs`, construit par `pnpm build:cli`). Une fois publié : `npx @surge-media/core init`,
-  ou `npx surge-media init` depuis un projet où le package est installé.
+- **Distribution** : le paquet npm `@surge-media/core` (§ 15.5) expose le binaire `surge-media`
+  (`dist/cli/index.mjs`, construit par `pnpm build:cli`) : `npm install @surge-media/core` dans le dossier de
+  l'installation, puis `npx surge-media init` et `npx surge-media start`.
 
 ### 6.3 Variables d'environnement
 
@@ -1995,12 +2013,17 @@ en PID 1 (relais des signaux).
 | complète (défaut) | `docker build -t surge-media .` | ffmpeg 7.1 de Debian (libx264, AAC, SVT-AV1, Opus) et `prlimit` : traitement des vidéos possible (§ 7.7) |
 | `slim` | `docker build --target slim -t surge-media:slim .` | sans ffmpeg : `NUXT_VIDEO_PROCESSING` doit rester `off` |
 
-Build en plusieurs étapes : dépendances (`pnpm fetch` d'après le seul `pnpm-lock.yaml`, cache pnpm partagé
-entre les builds), clients Prisma et build Nuxt ; CLI Prisma seule (même version que le core) pour les
-migrations ; image finale sans sources ni dépendances de développement. `--build-arg VERSION=… REVISION=…`
-renseigne les étiquettes OCI (avec la source et la licence `BUSL-1.1`, qui relieront le paquet GHCR au dépôt) ;
-`NODE_VERSION` et `DEBIAN_RELEASE` sont aussi réglables (pas Debian 12 « bookworm » : ffmpeg 5.1).
-**Publication sur GitHub Container Registry** (`ghcr.io/mahmoud-nb/surge-media`) : prévue, pas encore faite.
+**L'image installe le paquet npm** `@surge-media/core` (§ 15.5) : même artefact que sur npm. Étapes : `build`
+(`pnpm fetch` d'après le seul `pnpm-lock.yaml`, cache pnpm partagé entre les builds ; clients Prisma, build
+Nuxt, `pnpm pack`) → `package` (l'archive) → `install` (`npm install` de l'archive : modules natifs de la
+plateforme cible, CLI Prisma des migrations ; scripts d'installation pré-approuvés pour npm 12 ; échec de la build
+si better-sqlite3, sharp ou argon2 ne se chargent pas) → image finale sans sources ni dépendances de
+développement. `--build-context package=<dossier contenant surge-media-core.tgz>` remplace l'étape `build` par
+une archive déjà construite : c'est ce que fait la CI, d'où aucune build Nuxt par architecture (arm64 émulé).
+`--build-arg VERSION=… REVISION=…` renseigne les étiquettes OCI (avec la source et la licence `BUSL-1.1`, qui
+relient le paquet GHCR au dépôt) ; `NODE_VERSION` et `DEBIAN_RELEASE` sont aussi réglables (pas Debian 12
+« bookworm » : ffmpeg 5.1). **Publication sur GitHub Container Registry** (`ghcr.io/mahmoud-nb/surge-media`,
+amd64 et arm64) : par le workflow de release (§ 15.4).
 
 ```bash
 docker run -d --name surge-media -p 127.0.0.1:3000:3000 -v surge-media-data:/app/data \
@@ -2036,8 +2059,8 @@ l'image) : variables par `-e`, `--env-file` ou Compose ; toutes celles du § 6.3
   premier démarrage (32 octets aléatoires, comme `surge-media init`), conservés dans le volume (fichiers `0600`) et
   jamais remplacés ; création atomique : deux conteneurs qui partagent le volume et démarrent ensemble gardent la
   même valeur. Conteneurs sur des volumes ou des machines distincts : fournir les mêmes valeurs à tous.
-- **Migrations** : `prisma migrate deploy` avec le schéma du fournisseur (`/app/prisma/schemas/`) et la CLI
-  Prisma embarquée ; base injoignable (`P1001`, conteneur de la base encore en démarrage) : 20 essais à 3 s
+- **Migrations** : `prisma migrate deploy` lancé depuis le paquet (`/app/node_modules/@surge-media/core`), avec
+  le schéma du fournisseur et une URL SQLite rendue absolue (relative au dossier de l'installation, `/app`) ; base injoignable (`P1001`, conteneur de la base encore en démarrage) : 20 essais à 3 s
   d'intervalle ; échec : le conteneur s'arrête (code 1) avec la sortie de Prisma.
 - **Santé** : `HEALTHCHECK` intégré sur `/api/health` (toutes les 30 s, 60 s accordées au démarrage) : `healthy`
   dans `docker ps`, utilisable par `depends_on: condition: service_healthy`.
@@ -2053,9 +2076,10 @@ l'image) : variables par `-e`, `--env-file` ou Compose ; toutes celles du § 6.3
 - **Taille** (décompressée, mesurée le 2026-10-10) : 1,38 Go pour l'image complète, 751 Mo pour `slim`. Postes
   principaux : ffmpeg et ses bibliothèques (≈ 460 Mo), CLI Prisma des migrations (≈ 250 Mo : elle charge Prisma
   Studio dès son démarrage, l'élaguer la casse), Node (≈ 120 Mo), serveur construit (≈ 57 Mo, trois clients compris).
-- **Durées** (16 cœurs) : première build ≈ 4 min, dont ≈ 80 s de build Nuxt (≈ 7 min sous Windows) ; ensuite,
-  seule une modification de `packages/` ou du fichier de verrouillage relance la build ; démarrage avec les
-  16 migrations ≈ 11 s (SQLite) ; arrêt propre ≈ 2,5 s.
+- **Durées** (16 cœurs) : depuis les sources ≈ 3 min, dont ≈ 80 s de build Nuxt (≈ 7 min sous Windows) ; depuis
+  une archive (`--build-context package=…`) ≈ 90 s ; ensuite, seule une modification de `packages/` ou du
+  fichier de verrouillage relance la build ; démarrage avec les 16 migrations ≈ 5 à 11 s (SQLite) ; arrêt propre
+  ≈ 2,5 s.
 
 **Compose** (`docker/`) : `compose.sqlite.yaml` (un conteneur) et `compose.postgres.yaml` (serveur web, processus
 de travail des vidéos et PostgreSQL 17 ; `POSTGRES_PASSWORD` requis, dans l'environnement ou `docker/.env`).
@@ -2222,6 +2246,151 @@ Image construite localement : `SURGE_MEDIA_IMAGE=surge-media docker compose -f d
 | Docker : le conteneur s'arrête après « Base injoignable … (20/20) » | base hors d'atteinte pendant 60 s : vérifier `DATABASE_URL` (nom du service Compose, port, mot de passe encodé dans l'URL) et le réseau du conteneur |
 
 ---
+
+## 15. Qualité du code, versions et publication
+
+### 15.1 Qualité du code et intégration continue
+
+- **ESLint 10** avec **`@nuxt/eslint`** (`packages/core/eslint.config.mjs`) : règles JavaScript, TypeScript, Vue et
+  Nuxt, générées par `nuxt prepare` dans `.nuxt/eslint.config.mjs` (donc après `pnpm install`), et style
+  @stylistic (`eslint.config.stylistic: true` dans `nuxt.config.ts`) : 2 espaces, guillemets simples, sans
+  point-virgule, virgule finale en multiligne, `else` / `catch` sur leur propre ligne. Ajustements au style établi :
+  plusieurs attributs par ligne dans les gabarits (`vue/max-attributes-per-line` désactivée), deux instructions par
+  ligne au plus (`case X: a = f(); break`, rappels d'une ligne), `catch {}` admis ; tests : `delete` dynamique admis
+  (restauration de `process.env`). Fichiers générés et builds ignorés.
+  `pnpm lint` vérifie, `pnpm lint:fix` corrige ce qui peut l'être. La mise en place (2026-10-10) a corrigé
+  automatiquement une centaine d'écarts de style (49 fichiers) et révélé un vrai défaut (widget « Votre compte »
+  jamais affiché après une erreur du tableau de bord : `v-else-if` mort).
+- **Messages de commit** : [Conventional Commits](https://www.conventionalcommits.org), source du CHANGELOG et du
+  calcul de la version. `commitlint.config.mjs` (racine, `@commitlint/config-conventional`, casse du sujet libre,
+  lignes longues admises dans le corps), vérifié par le hook git **`commit-msg`** que simple-git-hooks installe à
+  `pnpm install` (après une modification de sa configuration dans `package.json` : `pnpm exec simple-git-hooks`).
+  Exceptionnellement sans vérification : `SKIP_SIMPLE_GIT_HOOKS=1 git commit …`.
+
+  | Type | Dans le CHANGELOG | Version (avant 1.0.0) |
+  | --- | --- | --- |
+  | `feat` | Features | mineure (correctif) |
+  | `fix`, `perf` | Bug Fixes, Performance | correctif |
+  | `build` (paquet, image Docker, dépendances) | Build and Distribution | — |
+  | `docs`, `refactor`, `style`, `test`, `ci`, `chore` | non | — |
+  | `!` après le type, ou pied `BREAKING CHANGE: …` | BREAKING CHANGES | majeure (mineure) |
+
+- **CI** (`.github/workflows/ci.yml`, chaque push sur `main` et chaque pull request) : **Vérifications** (messages
+  de commit de la pull request, lint, typecheck, tests, traductions, migrations à jour), **Paquet npm** (build,
+  archive, essai d'installation, § 15.5), **Image Docker** (construite depuis cette archive, amd64, démarrée,
+  `/api/health`). Préparation commune : `.github/actions/setup` (Node de `.nvmrc`, pnpm par corepack, magasin pnpm
+  en cache, installation).
+
+### 15.2 Versions
+
+- **SemVer**, une seule version pour le paquet npm et les images Docker : `version` de
+  `packages/core/package.json`, tag annoté **`vX.Y.Z`**, notes dans `packages/core/CHANGELOG.md` (en anglais, publié
+  avec le paquet) et dans la release GitHub.
+- **Calcul** d'après les commits écrits depuis le dernier tag : rupture → majeure, `feat` → mineure, `fix` / `perf`
+  → correctif ; **avant 1.0.0** (option `preMajor`), un cran de moins : rupture → mineure, `feat` → correctif. La
+  **première release** impose sa version : `pnpm release 0.1.0` ; passage à 1.0.0 : `pnpm release major`.
+- **Préversions** : `pnpm release --preRelease=beta` (`0.2.0-beta.0`, puis `-beta.1`…) → étiquette npm `next`,
+  image `X.Y.Z-beta.N` seulement ; `pnpm release` sans option publie ensuite la version stable.
+- **Correctif d'une ancienne ligne** : branche `release/X.Y` créée depuis le dernier tag de la ligne, correctifs
+  repris (`git cherry-pick`), `pnpm release` sur cette branche → étiquette npm `release-X.Y`, images `X.Y.Z` et
+  `X.Y`, sans toucher à `latest`.
+- **Licence** : `pnpm release` et le workflow de publication refusent un `LICENSE` qui contient encore un champ
+  `[TO BE COMPLETED]` (`pnpm --filter @surge-media/core license:check`). La « Change Date » de la BSL (3 ans)
+  court depuis la publication de chaque version ; tags et releases GitHub en sont la preuve datée : ne jamais
+  supprimer ni réécrire un tag publié.
+
+### 15.3 Faire une release
+
+Depuis `main` (ou `release/*`) à jour avec le dépôt distant, arbre de travail propre :
+
+```bash
+pnpm release:dry       # aperçu : version calculée, CHANGELOG, commandes ; rien n'est écrit
+pnpm release           # version calculée, confirmations interactives
+pnpm release 0.1.0     # version imposée (première release) ; ou minor, major, --preRelease=beta
+pnpm --filter @surge-media/core changelog:preview   # notes de la prochaine version seulement
+```
+
+release-it (`packages/core/.release-it.ts`) : vérifications (`pnpm lint`, `typecheck`, `test`, `i18n:check`,
+`db:migration --check` : quelques minutes), version du `package.json`, `CHANGELOG.md`, commit
+`chore(release): vX.Y.Z`, tag annoté, push, puis **release GitHub** (notes = section du CHANGELOG) : par l'API si
+la variable **`GITHUB_TOKEN`** contient un jeton ayant le droit d'écrire sur le dépôt (`contents: write`), sinon
+page pré-remplie ouverte dans le navigateur, à publier d'un clic. Un `GITHUB_TOKEN` sans droit sur le dépôt fait
+échouer la release (« is not a collaborator ») : le retirer de la session pour passer par le navigateur. La
+publication de la release lance le workflow du § 15.4 ; si elle n'a pas été créée (interruption après le push),
+la créer à la main pour le tag.
+
+### 15.4 Publication : `.github/workflows/release.yml`
+
+Déclenché par la **publication d'une release GitHub** (pas un brouillon), ou à la main (Actions › Release › Run
+workflow, avec le tag) pour relancer une publication interrompue : une version déjà sur npm est sautée, les images
+sont réécrites à l'identique.
+
+1. **package** : tag = version du `package.json` ; vérifications ; build ; archive ; essai d'installation ;
+2. **npm** : publication de **cette archive**, avec provenance si le dépôt est public ;
+3. **docker** : variantes complète et `slim`, **linux/amd64 et linux/arm64** (émulation QEMU), construites depuis
+   la même archive (`--build-context package=…` : pas de build Nuxt par architecture) ; attestations de
+   provenance et SBOM ; cache GitHub Actions ;
+4. **assets** : archive `surge-media-core-X.Y.Z.tgz` jointe à la release.
+
+| Version publiée | Étiquette npm | Tags des images (`ghcr.io/mahmoud-nb/surge-media`, et `…-slim`) |
+| --- | --- | --- |
+| `0.3.0`, plus haute version stable | `latest` | `0.3.0`, `0.3`, `latest` |
+| `1.4.0`, plus haute version stable | `latest` | `1.4.0`, `1.4`, `1`, `latest` |
+| `0.4.0-beta.1` | `next` | `0.4.0-beta.1` |
+| `0.2.5`, ligne `release/0.2` | `release-0.2` | `0.2.5`, `0.2` |
+
+**À faire une fois, avant la première release** :
+
+1. **npm** : créer l'organisation **`surge-media`** sur npmjs.com (gratuite pour des paquets publics).
+2. **Première publication** : la publication de confiance (OIDC, sans secret) ne se déclare que pour un paquet
+   existant. Pour la première version, créer un jeton d'accès granulaire npm (lecture et écriture des paquets de
+   `@surge-media`, utilisable sans 2FA interactive) et l'enregistrer comme secret **`NPM_TOKEN`** du dépôt
+   (Settings › Secrets and variables › Actions), de préférence dans l'environnement **`npm`**.
+3. **Ensuite** : sur npmjs.com, paquet `@surge-media/core` › Settings › Trusted publishing › GitHub Actions :
+   propriétaire `mahmoud-nb`, dépôt `surge-media`, workflow `release.yml`, environnement `npm` ; puis supprimer le
+   secret `NPM_TOKEN` et révoquer le jeton.
+4. **Dépôt public** : la provenance npm l'exige (sinon publication sans provenance).
+5. **GHCR** : aucun secret (jeton du workflow, `packages: write`). Le paquet `surge-media` est créé à la première
+   publication et relié au dépôt par l'étiquette `org.opencontainers.image.source` ; vérifier sa visibilité
+   (Package settings › Change visibility › Public) pour un `docker pull` sans authentification.
+6. **Environnement `npm`** (créé au premier passage) : règles de protection facultatives, par exemple une
+   approbation avant chaque publication.
+
+### 15.5 Le paquet npm
+
+- **Contenu** (`files` du `package.json`, ≈ 9,5 Mo compressés) : serveur construit (`.output`, trois clients Prisma),
+  CLI (`dist/cli`), schéma et migrations (`prisma/`), schémas par fournisseur (`server/generated/schemas/`),
+  `prisma.config.ts` et `shared/database.ts` (migrations), `.env.example`, `README.md`, `CHANGELOG.md`, `LICENSE`.
+- **Dépendances** : seulement celles de l'exécution — better-sqlite3, sharp, @node-rs/argon2 (modules natifs,
+  versions épinglées : celles de la build), prisma (CLI des migrations), citty et @clack/prompts (CLI). Nuxt, Vue,
+  Tailwind, le SDK AWS… sont des dépendances de développement, intégrées au serveur construit par Nitro.
+- **`prepack`** (`scripts/prepack.ts`, lancé par `pnpm pack` et `npm publish`) : vérifie la build ; retire du
+  serveur construit les modules natifs compilés pour la plateforme de la build (sharp et `@img/*`, `@node-rs/*`,
+  better-sqlite3), après avoir vérifié que leurs versions sont celles des dépendances : npm installe ceux de la
+  plateforme de l'utilisateur, que Node trouve en remontant depuis `.output/server` ; remplace par des copies les
+  liens symboliques de Nitro (`node_modules/.nitro/<paquet>@<version>`, absolus sous Windows), que l'archive npm ne
+  conserve pas (« Cannot find package 'postgres-array' » au démarrage) ; copie `LICENSE` (copie ignorée par git).
+  Le serveur construit du dépôt reste utilisable ensuite (modules natifs de `packages/core/node_modules`).
+- **`prepare` au lieu de `postinstall`** (`nuxt prepare` et génération des clients) : npm ne lance pas `prepare`
+  chez l'utilisateur qui installe le paquet.
+- **Essai** : `pnpm --filter @surge-media/core smoke:package <archive>` installe l'archive dans un dossier vide,
+  lance `init` (SQLite) puis `start` et attend `/api/health` (CI, release ; vérifié sous Windows avec npm 12 et
+  sous Linux avec npm 11).
+
+Installation par un utilisateur, dans le dossier qui contiendra `.env` et les données :
+
+```bash
+npm install @surge-media/core
+npm install-scripts approve better-sqlite3 @prisma/engines prisma   # npm 12 et plus seulement
+npm rebuild better-sqlite3 @prisma/engines                          # idem
+npx surge-media init
+npx surge-media start
+```
+
+npm 12 et plus (comme pnpm : `pnpm approve-builds`) n'exécutent les scripts d'installation des dépendances
+qu'approuvés (`allowScripts` du `package.json` de l'utilisateur) : sans celui de better-sqlite3, pas de module
+natif — `start` refuse alors de démarrer avec SQLite et donne ces commandes (PostgreSQL et MySQL n'en ont pas
+besoin). Mise à jour : `npm install @surge-media/core@latest`, `npx surge-media db migrate`, puis redémarrage.
 
 ## Journal des étapes
 
@@ -3610,3 +3779,65 @@ publication sur GHCR.
 pnpm install          # régénère les trois clients Prisma (aucune migration)
 ```
 L'ancien client unique de `server/generated/prisma` est remplacé automatiquement.
+
+### Étape 24 — 2026-10-10 — Versions, releases et publication (npm, GHCR)
+
+**Cadre** : demande de l'utilisateur — stratégie complète de versions et de releases pour `packages/core` :
+CHANGELOG automatique, ESLint, scripts de version, de release et de publication, workflow GitHub publiant le
+paquet npm et l'image Docker sur GHCR quand une release est publiée. Décisions de l'utilisateur : release par un
+**script local** (`pnpm release`), paquet **`@surge-media/core`**, commits vérifiés par **commitlint**, première
+version **0.1.0**.
+
+**Prérequis : un paquet npm réellement utilisable** (§ 15.5). Constaté avant : serveur construit avec les modules
+natifs de la plateforme de la build (sharp, argon2, better-sqlite3 : inutilisables sous un autre système), liens
+symboliques de Nitro perdus par l'archive (« Cannot find package 'postgres-array' »), `.env` et données écrits
+dans `node_modules`, `postinstall` dépendant de tsx.
+- `package.json` du core : publiable (`files`, `bin`, `publishConfig`, dépôt, mots-clés, description anglaise) ;
+  dépendances réduites à l'exécution (better-sqlite3 ajoutée, natives épinglées), le reste en développement ;
+  `prepare` au lieu de `postinstall` ; scripts `lint`, `release`, `release:dry`, `changelog:preview`,
+  `smoke:package`.
+- `scripts/prepack.ts` : modules natifs retirés du serveur construit (versions comparées aux dépendances), liens
+  de Nitro remplacés par des copies, licence copiée (`packages/core/LICENSE`, ignorée par git).
+- CLI : **paquet** (code) et **dossier de l'installation** (`.env`, données) distingués (`cli/lib/project.ts`) —
+  dossier courant pour le paquet publié, `packages/core` dans le dépôt (inchangé), `--cwd` sinon ; refus d'un
+  dossier dans `node_modules` ; nouvelle commande **`start`** (`cli/server.ts`, qui remplace `cli/worker.ts`) ;
+  migrations lancées depuis le paquet avec le schéma du fournisseur et une URL SQLite absolue ; vérification du
+  pilote SQLite (`cli/lib/native.ts`) avec la marche à suivre pour npm 12 (scripts d'installation à approuver) ;
+  fr, en.
+- **Image Docker** construite depuis l'archive npm (étapes `package` et `install`, § 12.2) : même artefact
+  partout ; `--build-context package=…` évite la build Nuxt par architecture ; plus d'étape Prisma séparée.
+
+**Qualité** (§ 15.1) : ESLint 10 + `@nuxt/eslint` 1.17 (`eslint.config.mjs`, style dans `nuxt.config.ts`),
+correction automatique de 49 fichiers ; défaut révélé et corrigé : widget « Votre compte » du tableau de bord
+jamais affiché après une erreur de chargement (`v-else-if` mort, `app/pages/admin/index.vue`). commitlint
+(`commitlint.config.mjs`) et hook `commit-msg` (simple-git-hooks) ; `pnpm-workspace.yaml` : scripts
+d'installation de simple-git-hooks autorisés, de unrs-resolver refusés.
+
+**Versions et publication** (§ 15.2 à § 15.4) : release-it 21 et `@release-it/conventional-changelog`
+(`packages/core/.release-it.ts` : vérifications, version calculée depuis les Conventional Commits avec `preMajor`
+avant 1.0.0, `CHANGELOG.md`, commit, tag `vX.Y.Z`, push, release GitHub par l'API ou le navigateur) ;
+`.github/actions/setup`, `.github/workflows/ci.yml` (vérifications, paquet, image) et
+`.github/workflows/release.yml` (paquet vérifié et essayé, npm avec provenance et publication de confiance, images
+amd64 + arm64 complète et `slim` sur GHCR, archive jointe à la release ; `latest` réservé à la plus haute version
+stable, étiquettes `next` et `release-X.Y`).
+
+**Vérifié** : lint (0 problème), typecheck, Vitest **553 tests**, i18n ; workflows validés par actionlint ; logique
+des étiquettes (`latest`, `next`, `release-X.Y`) sur quatre cas ; release-it : version calculée (0.0.1 en
+automatique, 0.1.0 imposée), aperçu du CHANGELOG (Features, Bug Fixes ; documentation masquée), vérifications
+préalables passées ; commitlint : message non conforme refusé, historique conforme accepté. Paquet : archive de
+9,5 Mo sans module natif ; installé par **npm 12 sous Windows** dans un dossier vide : `init` et `start` depuis ce
+dossier, parcours complet (connexion, projet, jeton, image, transformation AVIF) ; message de `start` vérifié sans
+le module natif de better-sqlite3, puis fonctionnement après approbation et `npm rebuild` ; `smoke:package` sous
+Windows (npm 12) et sous Linux (npm 11, étape `build` du Dockerfile). Docker : image construite **depuis l'archive
+construite sous Windows** (88 s) — SQLite (vidéo MKV convertie, affiche) et PostgreSQL 17 avec processus de travail
+— et depuis les sources (prepack sous Linux).
+
+Non vérifié : exécution réelle des workflows sur GitHub (dépôt privé, aucun tag poussé), publication npm et GHCR,
+arm64.
+
+**Après `git pull`**
+```bash
+pnpm install          # ESLint, commitlint, release-it ; installe le hook commit-msg
+```
+Messages de commit au format Conventional Commits désormais exigés. Première release : configurer npm et GitHub
+(§ 15.4, « À faire une fois ») et compléter `LICENSE` (vérifié par `license:check`), puis `pnpm release 0.1.0`.

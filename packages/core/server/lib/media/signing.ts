@@ -49,10 +49,10 @@ export interface SignatureQuery {
   sig?: unknown
 }
 
-export type SignatureCheck =
+export type SignatureCheck
   /** `expires` null : signature permanente. */
-  | { status: 'valid', expires: number | null, scope: SignatureScope | null }
-  | { status: 'invalid' | 'expired' }
+  = | { status: 'valid', expires: number | null, scope: SignatureScope | null }
+    | { status: 'invalid' | 'expired' }
 
 // ─── Fonctions pures ─────────────────────────────────────────────────────────
 

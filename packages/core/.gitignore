@@ -26,3 +26,6 @@ logs
 # surgeMedia : données locales (base SQLite, médias) et client Prisma généré
 data
 server/generated
+
+# Copiée depuis la racine du dépôt à la préparation du paquet (scripts/prepack.ts)
+/LICENSE

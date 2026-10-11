@@ -24,15 +24,15 @@ import type { X264Preset } from '#shared/utils/video-processing'
 
 /** Format d'entrée imposé à ffmpeg pour chaque conteneur détecté (§ 33). */
 export const INPUT_FORMATS: Readonly<Record<VideoContainer, string>> = {
-  mp4: 'mov',
-  mov: 'mov',
+  'mp4': 'mov',
+  'mov': 'mov',
   '3gp': 'mov',
-  webm: 'matroska',
-  mkv: 'matroska',
-  avi: 'avi',
-  ts: 'mpegts',
-  ogv: 'ogg',
-  wmv: 'asf',
+  'webm': 'matroska',
+  'mkv': 'matroska',
+  'avi': 'avi',
+  'ts': 'mpegts',
+  'ogv': 'ogg',
+  'wmv': 'asf',
 }
 
 /** Pixels d'une image décodée au plus (`-max_pixels`) : 16 384 × 16 384, comme le lecteur de D1. */
@@ -313,7 +313,7 @@ export function posterArgs(options: PosterOptions): string[] {
 }
 
 /** Conteneurs dont les pistes de métadonnées sont retirées (§ 32.4) et format de la copie produite. */
-const SANITIZE_FORMATS = { mp4: 'mp4', mov: 'mov', '3gp': 'mov' } as const
+const SANITIZE_FORMATS = { 'mp4': 'mp4', 'mov': 'mov', '3gp': 'mov' } as const
 export type SanitizableContainer = keyof typeof SANITIZE_FORMATS
 
 export function isSanitizableContainer(container: VideoContainer): container is SanitizableContainer {

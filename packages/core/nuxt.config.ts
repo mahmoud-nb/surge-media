@@ -2,43 +2,16 @@ import tailwindcss from '@tailwindcss/vite'
 
 // https://nuxt.com/docs/api/configuration/nuxt-config
 export default defineNuxtConfig({
-  compatibilityDate: '2026-09-26',
-  // Nuxt 3 avec la structure et les comportements de Nuxt 4 (dossier app/, shared/…) :
-  // la future migration vers Nuxt 4 se limitera à la mise à jour de la dépendance.
-  future: {
-    compatibilityVersion: 4,
-  },
+  modules: ['@nuxtjs/i18n', '@nuxtjs/color-mode', 'nuxt-auth-utils', '@nuxt/eslint'],
   devtools: { enabled: true },
-  typescript: {
-    strict: true,
-  },
-
-  modules: ['@nuxtjs/i18n', '@nuxtjs/color-mode', 'nuxt-auth-utils'],
 
   css: ['~/assets/css/main.css'],
 
-  optimization: {
-    // Clé de cache automatique pour le wrapper de useFetch (app/composables/useApiFetch.ts).
-    keyedComposables: [{ name: 'useApiFetch', argumentLength: 3 }],
-  },
-  vite: {
-    plugins: [tailwindcss()],
-    // Documentation de l'API (Scalar, chargé à la demande) : pré-optimisé au démarrage du serveur de
-    // développement, sinon sa découverte tardive charge une seconde copie de Vue (erreur au montage).
-    optimizeDeps: { include: ['@scalar/api-reference'] },
-  },
-
-  nitro: {
-    // Documentation de l'API v1 générée depuis le code : chaque route décrit son opération avec
-    // `defineRouteMeta({ openAPI })`, que Nitro extrait à la compilation ; la spécification est
-    // assemblée par GET /api/v1/openapi.json (server/lib/api/openapi.ts) et affichée dans
-    // l'administration (/admin/api). Les interfaces intégrées de Nitro (/_scalar, /_swagger, chargées
-    // depuis un CDN) restent désactivées ; /_openapi.json (toutes les routes) n'existe qu'en développement.
-    experimental: { openAPI: true },
-    openAPI: {
-      meta: { title: 'surgeMedia', version: '1.0.0' },
-      ui: { scalar: false, swagger: false },
-    },
+  // Thème clair / sombre / système ; cookie pour un rendu serveur sans flash.
+  colorMode: {
+    classSuffix: '',
+    storage: 'cookie',
+    storageKey: 'surge-media-color-mode',
   },
 
   runtimeConfig: {
@@ -167,11 +140,46 @@ export default defineNuxtConfig({
     '/password/**': { headers: { 'Cache-Control': 'no-store', 'X-Robots-Tag': 'noindex, nofollow' } },
   },
 
-  // Thème clair / sombre / système ; cookie pour un rendu serveur sans flash.
-  colorMode: {
-    classSuffix: '',
-    storage: 'cookie',
-    storageKey: 'surge-media-color-mode',
+  optimization: {
+    // Clé de cache automatique pour le wrapper de useFetch (app/composables/useApiFetch.ts).
+    keyedComposables: [{ name: 'useApiFetch', argumentLength: 3 }],
+  },
+  // Nuxt 3 avec la structure et les comportements de Nuxt 4 (dossier app/, shared/…) :
+  // la future migration vers Nuxt 4 se limitera à la mise à jour de la dépendance.
+  future: {
+    compatibilityVersion: 4,
+  },
+  compatibilityDate: '2026-09-26',
+
+  nitro: {
+    // Documentation de l'API v1 générée depuis le code : chaque route décrit son opération avec
+    // `defineRouteMeta({ openAPI })`, que Nitro extrait à la compilation ; la spécification est
+    // assemblée par GET /api/v1/openapi.json (server/lib/api/openapi.ts) et affichée dans
+    // l'administration (/admin/api). Les interfaces intégrées de Nitro (/_scalar, /_swagger, chargées
+    // depuis un CDN) restent désactivées ; /_openapi.json (toutes les routes) n'existe qu'en développement.
+    experimental: { openAPI: true },
+    openAPI: {
+      meta: { title: 'surgeMedia', version: '1.0.0' },
+      ui: { scalar: false, swagger: false },
+    },
+  },
+  vite: {
+    plugins: [tailwindcss()],
+    // Documentation de l'API (Scalar, chargé à la demande) : pré-optimisé au démarrage du serveur de
+    // développement, sinon sa découverte tardive charge une seconde copie de Vue (erreur au montage).
+    optimizeDeps: { include: ['@scalar/api-reference'] },
+  },
+  typescript: {
+    strict: true,
+  },
+
+  // ESLint (eslint.config.mjs, `pnpm lint`) : configuration générée par @nuxt/eslint (règles JavaScript,
+  // TypeScript, Vue et Nuxt) et règles de style @stylistic, celles du code existant : indentation de 2 espaces,
+  // guillemets simples, sans point-virgule, virgule finale en multiligne, `else` / `catch` sur leur propre ligne.
+  eslint: {
+    config: {
+      stylistic: true,
+    },
   },
 
   // Ajouter une langue : créer i18n/locales/<code>.json (copie de fr.json), l'ajouter

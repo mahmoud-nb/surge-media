@@ -69,10 +69,10 @@ const swatch = computed(() => {
         {{ t('transforms.fieldGroups.sizeHelp') }}
       </p>
       <div class="grid gap-4 sm:grid-cols-2">
-        <UiFormField v-slot="field" :id="ids.width" :label="t('transforms.presets.fields.width')" :hint="t('transforms.presets.fields.widthHint', { max: maxDimension })" :error="error?.('width')">
+        <UiFormField :id="ids.width" v-slot="field" :label="t('transforms.presets.fields.width')" :hint="t('transforms.presets.fields.widthHint', { max: maxDimension })" :error="error?.('width')">
           <UiInput v-bind="field" v-model="model.width" name="width" inputmode="numeric" autocomplete="off" @input="emit('edit', 'width')" />
         </UiFormField>
-        <UiFormField v-slot="field" :id="ids.height" :label="t('transforms.presets.fields.height')" :hint="t('transforms.presets.fields.heightHint', { max: maxDimension })" :error="error?.('height')">
+        <UiFormField :id="ids.height" v-slot="field" :label="t('transforms.presets.fields.height')" :hint="t('transforms.presets.fields.heightHint', { max: maxDimension })" :error="error?.('height')">
           <UiInput v-bind="field" v-model="model.height" name="height" inputmode="numeric" autocomplete="off" @input="emit('edit', 'height')" />
         </UiFormField>
         <slot name="size" />
@@ -84,10 +84,10 @@ const swatch = computed(() => {
         {{ t('transforms.fieldGroups.framing') }}
       </legend>
       <div v-if="box" class="grid gap-4 sm:grid-cols-2">
-        <UiFormField v-slot="field" :id="ids.fit" :label="t('transforms.presets.fields.fit')" :hint="t(`transforms.fitHelp.${model.fit}`)" :error="error?.('fit')">
+        <UiFormField :id="ids.fit" v-slot="field" :label="t('transforms.presets.fields.fit')" :hint="t(`transforms.fitHelp.${model.fit}`)" :error="error?.('fit')">
           <UiSelect v-bind="field" v-model="model.fit" :options="fitOptions" name="fit" @change="emit('edit', 'fit')" />
         </UiFormField>
-        <UiFormField v-if="model.fit === 'cover'" v-slot="field" :id="ids.gravity" :label="t('transforms.presets.fields.gravity')" :hint="gravityHint" :error="error?.('gravity')">
+        <UiFormField v-if="model.fit === 'cover'" :id="ids.gravity" v-slot="field" :label="t('transforms.presets.fields.gravity')" :hint="gravityHint" :error="error?.('gravity')">
           <UiSelect v-bind="field" v-model="model.gravity" :options="gravityOptions" name="gravity" @change="emit('edit', 'gravity')" />
         </UiFormField>
       </div>
@@ -102,10 +102,10 @@ const swatch = computed(() => {
         {{ t('transforms.fieldGroups.rendering') }}
       </legend>
       <div class="grid gap-4 sm:grid-cols-2">
-        <UiFormField v-slot="field" :id="ids.quality" :label="t('transforms.presets.fields.quality')" :hint="qualityHint" :error="error?.('quality')">
+        <UiFormField :id="ids.quality" v-slot="field" :label="t('transforms.presets.fields.quality')" :hint="qualityHint" :error="error?.('quality')">
           <UiInput v-bind="field" v-model="model.quality" name="quality" inputmode="numeric" autocomplete="off" @input="emit('edit', 'quality')" />
         </UiFormField>
-        <UiFormField v-slot="field" :id="ids.background" :label="t('transforms.presets.fields.background')" :hint="t('transforms.presets.fields.backgroundHint')" :error="error?.('background')">
+        <UiFormField :id="ids.background" v-slot="field" :label="t('transforms.presets.fields.background')" :hint="t('transforms.presets.fields.backgroundHint')" :error="error?.('background')">
           <div class="flex items-center gap-2">
             <UiInput v-bind="field" v-model="model.background" name="background" autocomplete="off" spellcheck="false" maxlength="7" :placeholder="t('transforms.presets.fields.backgroundPlaceholder')" @input="emit('edit', 'background')" />
             <span
@@ -123,10 +123,10 @@ const swatch = computed(() => {
         {{ t('transforms.fieldGroups.orientation') }}
       </legend>
       <div class="grid gap-4 sm:grid-cols-2">
-        <UiFormField v-slot="field" :id="ids.rotate" :label="t('transforms.presets.fields.rotate')" :error="error?.('rotate')">
+        <UiFormField :id="ids.rotate" v-slot="field" :label="t('transforms.presets.fields.rotate')" :error="error?.('rotate')">
           <UiSelect v-bind="field" v-model="model.rotate" :options="rotateOptions" name="rotate" @change="emit('edit', 'rotate')" />
         </UiFormField>
-        <UiFormField v-slot="field" :id="ids.flip" :label="t('transforms.presets.fields.flip')" :hint="t('transforms.presets.fields.flipHint')" :error="error?.('flip')">
+        <UiFormField :id="ids.flip" v-slot="field" :label="t('transforms.presets.fields.flip')" :hint="t('transforms.presets.fields.flipHint')" :error="error?.('flip')">
           <UiSelect v-bind="field" v-model="model.flip" :options="flipOptions" name="flip" @change="emit('edit', 'flip')" />
         </UiFormField>
       </div>

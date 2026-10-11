@@ -401,7 +401,9 @@ Core : `test` = `vitest run`.
 Core : `dev` / `build` / `typecheck` lancent d'abord `tsx scripts/prisma-generate.ts` (**un client Prisma par fournisseur**,
 `cli/lib/generate.ts`, rien de refait si schéma et version de Prisma inchangés) ; `build` = génération + `nuxt build` + `tsdown` ;
 `start` = serveur de prod ; `postinstall` = `nuxt prepare && tsx scripts/prisma-generate.ts` (**cet ordre est obligatoire**) ;
-`db:generate` = régénération forcée ;
+`db:generate` = régénération forcée ; `prepack` = `scripts/prepack.ts` (modules natifs retirés du serveur construit, liens de Nitro copiés,
+licence) ; `lint` / `lint:fix` (ESLint) ; `release` / `release:dry` / `changelog:preview` (release-it) ; `smoke:package <archive>` (essai du
+paquet : installation dans un dossier vide, init, start, /api/health) ;
 `cli`, `db:init|migrate|reset` (via tsx), `db:studio`, `db:migration`, `i18n:check`, `a11y:contrast`.
 
 ## 7. Authentification, sessions, rôles
@@ -1384,7 +1386,13 @@ Contrats de données :
 - `db migrate` : vérifie la cohérence `.env` / schéma, génère les clients s'il le faut puis `migrate deploy`.
 - `db reset [--provider --url --yes]` : `migrate reset --force` (destructif, confirmation). **Prisma 7 refuse `migrate reset` lancé par un
   agent IA** : l'utilisateur doit le lancer lui-même.
-- **`worker [--port 3001]`** (D3, `cli/worker.ts`) : processus de travail du traitement des vidéos (`NUXT_VIDEO_PROCESSING=external`).
+- **Paquet et installation** (2026-10-10, `cli/lib/project.ts`) : `packageDir` (code : serveur construit, migrations, schémas par
+  fournisseur, prisma.config.ts, .env.example) et `instanceDir` (.env, données) ; dépôt (`nuxt.config.ts` présent) : instanceDir =
+  packages/core ; paquet publié : dossier courant (refusé dans un node_modules) ; `--cwd`. Prisma lancé depuis le paquet avec
+  `--schema server/generated/schemas/<p>.prisma` et une URL SQLite absolue ; schéma de dev réécrit et clients générés dans le dépôt seulement.
+- **`start [--port]`** et **`worker [--port 3001]`** (`cli/server.ts`, qui remplace `cli/worker.ts`) : serveur construit du paquet lancé
+  depuis l'installation (`--env-file-if-exists=<installation>/.env`) ; avec SQLite, vérification préalable du module natif de better-sqlite3
+  (`cli/lib/native.ts` ; npm 12 bloque les scripts d'installation des dépendances tant qu'ils ne sont pas approuvés).
   Exige la build (`.output/server/index.mjs`, sinon `error.buildMissing`) ; lance `node --env-file-if-exists=.env <entrée>` depuis le dossier
   du core avec `NUXT_SERVER_ROLE=worker`, `PORT` et `NITRO_PORT` (port 1 à 65 535, défaut 3001 pour ne pas gêner le serveur web) ; variables
   du shell prioritaires sur `.env`. POSIX : SIGINT/SIGTERM transmis (arrêt propre : ffmpeg tué, tâche rendue à la file), code de sortie
@@ -1464,7 +1472,10 @@ Contrats de données :
 | Configuration d'exécution partagée par requête (plugin `runtime-config.ts`, `beforeEach` de hookable), gelée pour `/m/`, `/api/`, `/_nuxt/`, copiée pour les pages (2026-10-10) | Nitro 2 la reconstruit à chaque `useRuntimeConfig(event)`, appelé par @nuxtjs/i18n sur toutes les requêtes : 80 % du processeur, × 2 à × 19 une fois corrigé ; variables lues au démarrage seulement |
 | Adresse IP du client par mandataires de confiance lus de droite à gauche, posée dans `event.context.clientAddress` ; défaut réseaux privés (2026-10-10) | décision de l'utilisateur (Docker derrière mandataire) ; défaut de Rails ; ni le plus à gauche (h3, Express `true`) usurpable, ni une modification de chaque appel à `getRequestIP` |
 | Un client Prisma par fournisseur dans chaque build, chargé selon `DATABASE_PROVIDER` (`cli/lib/generate.ts`, `CLIENT_MODULES` de `server/utils/prisma.ts`) (2026-10-10) | décision de l'utilisateur : une seule image Docker pour les trois bases ; plus de reconstruction pour changer de base ; coût : trois générations (≈ 2,5 s en parallèle, sautées si inchangées), types pris du client SQLite (`export type *`) |
-| Image Docker Debian 13 « trixie » + Node 24, variantes complète (ffmpeg 7.1) et `slim`, utilisateur `node`, `tini`, migrations au démarrage par la CLI Prisma complète, secrets générés dans le volume (2026-10-10) | décisions de l'utilisateur (variantes ; GHCR plus tard) ; bookworm n'a que ffmpeg 5.1 ; glibc pour les binaires précompilés (sharp, argon2, better-sqlite3) ; la CLI Prisma charge Studio dès son démarrage : l'élaguer la casse (≈ 250 Mo gardés) |
+| Image Docker Debian 13 « trixie » + Node 24, variantes complète (ffmpeg 7.1) et `slim`, utilisateur `node`, `tini`, migrations au démarrage, secrets générés dans le volume ; **installe le paquet npm** (étapes `build` → `package` → `install`, `--build-context package=…` en CI) (2026-10-10) | décisions de l'utilisateur (variantes) ; bookworm n'a que ffmpeg 5.1 ; glibc pour les binaires précompilés ; un seul artefact (npm = Docker) et aucune build Nuxt par architecture ; la CLI Prisma charge Studio dès son démarrage : l'élaguer la casse (≈ 250 Mo gardés) |
+| Paquet npm `@surge-media/core` = serveur construit **sans modules natifs** (sharp, argon2, better-sqlite3 : dépendances épinglées, installées pour la plateforme de l'utilisateur), liens de Nitro remplacés par des copies (`scripts/prepack.ts`) ; dépendances d'exécution seulement ; `prepare` au lieu de `postinstall` (2026-10-10) | serveur construit sous Linux en CI, utilisé sous Windows/macOS/Linux ; l'archive npm ne garde pas les liens symboliques (absolus sous Windows) ; npm ne lance pas `prepare` chez l'utilisateur |
+| Releases par script local `pnpm release` (release-it 21 + `@release-it/conventional-changelog`, preset conventionalcommits, `preMajor` avant 1.0.0), tags `vX.Y.Z`, publication par `.github/workflows/release.yml` sur `release: published` (2026-10-10) | décisions de l'utilisateur (script local, `@surge-media/core`, commitlint, première version 0.1.0) ; publication jamais depuis un poste ; `latest` (npm, Docker) réservé à la plus haute version stable, `next` (préversion), `release-X.Y` (ancienne ligne) |
+| ESLint 10 + `@nuxt/eslint` (stylistic : 2 espaces, guillemets simples, sans point-virgule, stroustrup) ; `vue/max-attributes-per-line` désactivée, `max-statements-per-line` 2, `catch {}` admis (2026-10-10) | style déjà établi dans tout le code (2 000 avertissements sinon) ; commitlint (config-conventional, casse du sujet libre) et hook `commit-msg` (simple-git-hooks) |
 | `responseReady` avant tout `sendStream` (2026-10-10) | h3 1.15 n'envoie rien si `res.socket` est nul (réponse en file derrière la précédente en keep-alive) |
 | Alerte SQLite mesurée (extension Prisma `$allOperations`, constat partagé dans `Setting`, 24 h) plutôt qu'un simple avertissement permanent (2026-10-10) | SQLite synchrone : le temps passé dans la base = temps bloqué ; signaler les symptômes réels (verrous, lenteurs, charge) et le trafic élevé ; coût mesuré 0 sur `/m/`, 3–4 % sur l'API |
 | DD36 : interface du § 37, livrée en modules A à F (étape 22) | revues indépendantes par module avant la suite |
@@ -1879,8 +1890,10 @@ réparation des WebM, affiche du serveur, formats convertis, `sources[]` / `proc
 
 **Licence et distribution (2026-10-10)** : licence **BSL 1.1** (`LICENSE`, seuil 500 000 USD, nom du concédant et contact encore à
 compléter) ; README npm du core en anglais ; **étape 23 : image Docker** unique pour les trois bases (un client Prisma par fournisseur
-dans chaque build), variantes complète et `slim`, Compose SQLite et PostgreSQL + processus de travail (`setup.md` § 12.2), vérifiée sur
-SQLite, PostgreSQL 17 et MariaDB 11. **Suite** : workflow de publication GHCR (multi-architecture), puis D4 à proposer.
+dans chaque build), variantes complète et `slim`, Compose SQLite et PostgreSQL + processus de travail (`setup.md` § 12.2) ; **étape 24 :
+versions et publication** — paquet npm utilisable (modules natifs installés chez l'utilisateur, CLI `start`, dossier de l'installation),
+image construite depuis ce paquet, ESLint, commitlint, `pnpm release` (release-it), workflows CI et Release (npm + GHCR) (`setup.md` § 15).
+**Suite** : première release (configuration npm/GitHub du § 15.4, puis `pnpm release 0.1.0`), puis D4 à proposer.
 
 **Section vide** : aucune (la section « à venir » des jetons a été remplacée en B2).
 
@@ -2231,12 +2244,12 @@ SQLite pose problème. Référence d'exploitation : `setup.md` § 12.1 (tableaux
   Apache 2.0, production gratuite sauf CA du groupe > 500 000 USD ou service hébergé concurrent (`setup.md`, journal du 2026-10-10).
   **À compléter avant publication** : nom légal du concédant et contact (`grep -n "TO BE COMPLETED" LICENSE`). Non tranchés : CLA
   pour les contributions externes, licence des futurs composants Vue/React/Svelte (MIT conseillée), relecture par un avocat.
-- **Modèle de distribution** : **image Docker faite** (étape 23, 2026-10-10, `setup.md` § 12.2 ; publication GHCR et workflow à faire,
-  arm64 non essayé) ; npm/npx non décidé : `@surge-media/core` est `private: true` ; une build contient les trois clients Prisma
-  (plus de rebuild pour changer de base) ; `postinstall` passe par `tsx` (dépendance de développement : à revoir pour un paquet publié) ; `npx surge-media init` ne fonctionne tel quel qu'une fois le package installé (ou via `npx @surge-media/core init`) —
-  paquet non scopé `surge-media` ? image Docker ? build chez le client ? `packages/core/README.md` (anglais, page npm, 2026-10-10)
-  décrit pour l'instant l'installation depuis le dépôt. Constaté par `npm pack --dry-run` : sans champ `files`, ni `.output` ni
-  `LICENSE` publiés ; installée, la CLI écrirait `.env` et `./data` (base SQLite, médias) dans `node_modules` (effacés à la réinstallation).
+- **Distribution** (étapes 23 et 24, 2026-10-10) : image Docker et paquet npm `@surge-media/core` faits et vérifiés localement (npm 12 sous
+  Windows, npm 11 sous Linux, image depuis l'archive). **Jamais exécutés sur GitHub** : workflows `ci.yml` et `release.yml` (validés par
+  actionlint seulement), publication npm (organisation `surge-media`, jeton `NPM_TOKEN` puis publication de confiance, provenance =
+  dépôt public) et GHCR (visibilité du paquet), arm64 (QEMU). `CHANGELOG.md` créé par la première release (`pnpm release 0.1.0`).
+  Un `GITHUB_TOKEN` présent dans l'environnement de l'utilisateur n'a pas accès au dépôt : release-it échoue (« not a collaborator »)
+  tant qu'il est défini (le retirer pour passer par le navigateur, ou fournir un jeton valide).
 - Portées et format des jetons : **implémentés en B2** selon l'architecture validée ; écarts listés en tête de `architecture-phase-b.md`.
 - **MySQL/MariaDB** : les 16 migrations ont été exécutées pour la première fois sur **MariaDB 11** (image Docker, 2026-10-10, parcours API
   complet ensuite) ; **MySQL 8 jamais**. **PostgreSQL 17** réel aussi (Docker, même parcours) ; `db reset` jamais exécuté sur ces bases.

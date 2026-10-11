@@ -416,7 +416,7 @@ const snippets = computed(() => {
       <UiRadioCards v-model="mode" :legend="t('media.generator.mode')" :options="modeOptions" :columns="2" />
 
       <div v-if="mode === 'preset'" class="grid gap-1.5">
-        <UiFormField v-slot="field" :id="`${uid}-preset`" :label="t('media.generator.preset')" :hint="t('media.generator.presetHint')">
+        <UiFormField :id="`${uid}-preset`" v-slot="field" :label="t('media.generator.preset')" :hint="t('media.generator.presetHint')">
           <UiSelect v-bind="field" v-model="presetName" :options="presetOptions" name="preset" />
         </UiFormField>
         <p v-if="selectedPreset" class="text-sm text-muted-foreground">
@@ -434,7 +434,7 @@ const snippets = computed(() => {
       </div>
       <AdminTransformFields v-else v-model="fields" :ids="FIELD_IDS" :max-dimension="options.maxDimension" :error="fieldError" :format="format">
         <template #size>
-          <UiFormField v-slot="field" :id="densityId" :label="t('media.generator.density')" :hint="sized ? t('media.generator.densityHint') : t('media.generator.densityUnused')">
+          <UiFormField :id="densityId" v-slot="field" :label="t('media.generator.density')" :hint="sized ? t('media.generator.densityHint') : t('media.generator.densityUnused')">
             <UiSelect v-bind="field" v-model="density" :options="densityOptions" name="density" />
           </UiFormField>
         </template>
@@ -458,10 +458,10 @@ const snippets = computed(() => {
           {{ t('media.generator.output') }}
         </legend>
         <div class="grid gap-4 sm:grid-cols-2">
-          <UiFormField v-slot="field" :id="formatId" :label="t('media.generator.format')" :hint="t(`media.generator.formats.${format}.hint`)">
+          <UiFormField :id="formatId" v-slot="field" :label="t('media.generator.format')" :hint="t(`media.generator.formats.${format}.hint`)">
             <UiSelect v-bind="field" v-model="format" :options="formatOptions" name="format" />
           </UiFormField>
-          <UiFormField v-if="visibility === 'PRIVATE'" v-slot="field" :id="durationId" :label="t('media.generator.duration')" :hint="t('media.generator.durationHint')">
+          <UiFormField v-if="visibility === 'PRIVATE'" :id="durationId" v-slot="field" :label="t('media.generator.duration')" :hint="t('media.generator.durationHint')">
             <UiSelect v-bind="field" v-model="duration" :options="durationOptions" name="duration" />
           </UiFormField>
         </div>

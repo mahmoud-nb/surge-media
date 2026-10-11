@@ -1,0 +1,30 @@
+name: Préparer l'environnement
+description: >-
+  Node (version de .nvmrc), pnpm (version du champ packageManager, par corepack) et dépendances installées
+  depuis le fichier de verrouillage, avec le magasin pnpm en cache. À utiliser après actions/checkout.
+
+runs:
+  using: composite
+  steps:
+    - uses: actions/setup-node@v5
+      with:
+        node-version-file: .nvmrc
+
+    - name: pnpm (corepack)
+      shell: bash
+      env:
+        COREPACK_ENABLE_DOWNLOAD_PROMPT: '0'
+      run: |
+        corepack enable
+        echo "PNPM_STORE_PATH=$(pnpm store path)" >> "$GITHUB_ENV"
+
+    - uses: actions/cache@v4
+      with:
+        path: ${{ env.PNPM_STORE_PATH }}
+        key: pnpm-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml') }}
+        restore-keys: pnpm-${{ runner.os }}-
+
+    # Lance aussi `nuxt prepare` et la génération des trois clients Prisma (script `prepare` du core).
+    - name: Dépendances
+      shell: bash
+      run: pnpm install --frozen-lockfile

@@ -34,12 +34,13 @@ function readMeta(file: string): RouteMetaEntry['meta'] {
   const start = source.indexOf('defineRouteMeta(')
   if (start === -1) return null
   const end = source.indexOf('\n})\n', start)
-  // eslint-disable-next-line no-new-func -- littéral d'objet extrait du fichier (voir l'en-tête)
+  // Littéral d'objet extrait du fichier (voir l'en-tête).
   return new Function(`return ${source.slice(start + 'defineRouteMeta('.length, end + 2)}`)() as RouteMetaEntry['meta']
 }
 
 const routes: RouteMetaEntry[] = routeFiles(API_DIR).map(file => ({ ...routeOf(file), meta: readMeta(file) }))
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any -- document OpenAPI parcouru librement par les assertions
 type Doc = Record<string, any>
 const fr = buildOpenApiDocument(routes, { serverUrl: SERVER, lang: 'fr' }) as Doc
 const en = buildOpenApiDocument(routes, { serverUrl: SERVER, lang: 'en' }) as Doc

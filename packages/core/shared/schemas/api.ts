@@ -40,7 +40,7 @@ import { focalPointSchema } from './media'
  * document servi ; server/lib/api/openapi.ts).
  */
 function doc(fr: string, en: string) {
-  return { description: fr, 'x-i18n': { en: { description: en } } }
+  return { 'description': fr, 'x-i18n': { en: { description: en } } }
 }
 
 const ID_PATTERN = /^[a-z0-9]{8,64}$/i

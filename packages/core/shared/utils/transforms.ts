@@ -110,9 +110,9 @@ export interface TransformLimits {
   maxDimension: number
 }
 
-export type TransformParseResult =
-  | { ok: true, transformation: Transformation, canonical: string }
-  | { ok: false, param: string | null, message: string }
+export type TransformParseResult
+  = | { ok: true, transformation: Transformation, canonical: string }
+    | { ok: false, param: string | null, message: string }
 
 export const IDENTITY_TRANSFORMATION: Readonly<Transformation> = Object.freeze({
   crop: null,

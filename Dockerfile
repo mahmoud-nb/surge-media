@@ -5,6 +5,9 @@
 #   docker build -t surge-media .                     image complète, avec ffmpeg (cible « full », par défaut)
 #   docker build --target slim -t surge-media:slim .  sans ffmpeg (traitement des vidéos impossible)
 #
+# L'image installe le paquet npm @surge-media/core : celui que l'étape « build » construit depuis les sources, ou
+# un paquet déjà construit avec --build-context package=<dossier contenant surge-media-core.tgz> (la CI y passe
+# celui qu'elle publie sur npm : même artefact partout, et aucune build Nuxt par architecture).
 # Une seule image pour SQLite, PostgreSQL et MySQL/MariaDB : les trois clients Prisma sont embarqués et le
 # serveur charge celui de DATABASE_PROVIDER (déduit de DATABASE_URL s'il manque). Guide : setup.md, § 12.2.
 
@@ -12,7 +15,7 @@ ARG NODE_VERSION=24
 # Debian 13 « trixie » : ffmpeg 7.1 (Debian 12 « bookworm » n'a que ffmpeg 5.1, refusé par surgeMedia).
 ARG DEBIAN_RELEASE=trixie
 
-# ─── Build : dépendances, clients Prisma, serveur Nuxt ──────────────────────────────────────────────────────
+# ─── Build : dépendances, clients Prisma, serveur Nuxt, paquet npm ──────────────────────────────────────────
 FROM node:${NODE_VERSION}-${DEBIAN_RELEASE}-slim AS build
 
 # Compilation des modules natifs sans binaire précompilé (better-sqlite3) ; openssl : moteur de Prisma.
@@ -32,26 +35,36 @@ COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
 RUN --mount=type=cache,id=surge-media-pnpm,target=/pnpm-store \
     pnpm fetch --store-dir /pnpm-store
 
-# Sources des paquets seulement : modifier docker/, la documentation ou la licence ne relance pas la build.
+# Sources des paquets seulement : modifier docker/ ou la documentation ne relance pas la build.
 COPY packages ./packages
-# L'installation lance `nuxt prepare` et la génération des trois clients Prisma (postinstall).
+# L'installation lance `nuxt prepare` et la génération des trois clients Prisma (script `prepare`).
 RUN --mount=type=cache,id=surge-media-pnpm,target=/pnpm-store \
     pnpm install --frozen-lockfile --prefer-offline --store-dir /pnpm-store
 RUN pnpm --filter @surge-media/core build
+# `pack` lance scripts/prepack.ts : modules natifs retirés, liens remplacés par des copies, licence ajoutée.
+COPY LICENSE ./
+RUN cd packages/core && pnpm pack --out /surge-media-core.tgz
 
-# ─── CLI Prisma seule, pour appliquer les migrations au démarrage ───────────────────────────────────────────
-FROM node:${NODE_VERSION}-${DEBIAN_RELEASE}-slim AS prisma
+# ─── Paquet à installer : celui de la build, ou --build-context package=<dossier> ───────────────────────────
+FROM scratch AS package
+COPY --from=build /surge-media-core.tgz /
 
-# openssl présent à l'installation : Prisma télécharge le moteur de migration compilé pour cette version.
+# ─── Installation du paquet : modules natifs de la plateforme cible, CLI Prisma des migrations ──────────────
+FROM node:${NODE_VERSION}-${DEBIAN_RELEASE}-slim AS install
+
+# Compilation de secours des modules natifs ; openssl présent : Prisma télécharge le moteur qui lui correspond.
 RUN apt-get update \
- && apt-get install -y --no-install-recommends ca-certificates openssl \
+ && apt-get install -y --no-install-recommends ca-certificates g++ make openssl python3 \
  && rm -rf /var/lib/apt/lists/*
 
-WORKDIR /opt/prisma
-COPY packages/core/package.json /tmp/core-package.json
-# Même version que le core (épinglée dans son package.json).
-RUN version="$(node -p "require('/tmp/core-package.json').dependencies.prisma")" \
- && npm install --omit=dev --no-audit --no-fund --no-package-lock "prisma@${version}"
+WORKDIR /app
+# npm 12 et plus n'exécutent les scripts d'installation des dépendances qu'une fois approuvés : ceux qu'il faut
+# le sont d'avance (champ ignoré par npm 11).
+RUN printf '%s\n' '{"private":true,"allowScripts":{"better-sqlite3":true,"@prisma/engines":true,"prisma":true}}' > package.json
+RUN --mount=type=bind,from=package,target=/package \
+    npm install --omit=dev --no-audit --no-fund --no-package-lock /package/surge-media-core.tgz
+# Échec de la build plutôt qu'un conteneur qui démarre sans pilote SQLite, sharp ou argon2.
+RUN node -e "const D = require('better-sqlite3'); new D(':memory:').close(); require('sharp'); require('@node-rs/argon2')"
 
 # ─── Image sans ffmpeg ──────────────────────────────────────────────────────────────────────────────────────
 FROM node:${NODE_VERSION}-${DEBIAN_RELEASE}-slim AS slim
@@ -80,13 +93,8 @@ WORKDIR /app
 
 # Fichiers en lecture seule pour l'utilisateur `node` ; seul /app/data (base SQLite, médias, secrets) lui
 # appartient.
-COPY --from=prisma /opt/prisma/node_modules ./node_modules
-COPY --from=build /src/packages/core/.output ./.output
-COPY --from=build /src/packages/core/prisma/migrations ./prisma/migrations
-COPY --from=build /src/packages/core/server/generated/schemas ./prisma/schemas
-COPY --from=build /src/packages/core/prisma.config.ts ./
-COPY --from=build /src/packages/core/shared/database.ts ./shared/database.ts
-COPY LICENSE ./
+COPY --from=install /app/node_modules ./node_modules
+COPY --from=install /app/node_modules/@surge-media/core/LICENSE ./LICENSE
 COPY --chmod=755 docker/entrypoint.sh /usr/local/bin/surge-media-entrypoint
 RUN mkdir -p /app/data && chown node:node /app/data
 

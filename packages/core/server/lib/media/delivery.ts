@@ -25,12 +25,12 @@ import { derivedPath, mediaPath, renditionPath, trackPath, type UrlSource } from
 export { parseDeliveryPath, type DeliveryTarget } from './delivery-path'
 
 /** Mode d'accès accordé, qui détermine la mise en cache de la réponse. */
-export type DeliveryAccess =
+export type DeliveryAccess
   /** `signed` : signature permanente d'un dérivé précis (média public). */
-  | { mode: 'public', signed: boolean }
+  = | { mode: 'public', signed: boolean }
   /** `scope` null : cible exacte. */
-  | { mode: 'signed', expires: number, scope: SignatureScope | null }
-  | { mode: 'credential' }
+    | { mode: 'signed', expires: number, scope: SignatureScope | null }
+    | { mode: 'credential' }
 
 /**
  * Diffusion sans cookie (aucune session lue) :

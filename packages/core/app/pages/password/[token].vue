@@ -83,8 +83,8 @@ async function onSubmit() {
           </UiFormField>
 
           <UiFormField
-            v-slot="field"
             :id="FIELD_IDS.password"
+            v-slot="field"
             :label="t('password.fields.password')"
             :hint="t('password.fields.passwordHint', { min: PASSWORD_MIN_LENGTH })"
             :error="message('password')"
@@ -93,7 +93,7 @@ async function onSubmit() {
             <UiPasswordInput v-bind="field" v-model="form.password" name="password" autocomplete="new-password" @input="clear('password')" />
           </UiFormField>
 
-          <UiFormField v-slot="field" :id="FIELD_IDS.confirmation" :label="t('password.fields.confirmation')" :error="message('confirmation')" required>
+          <UiFormField :id="FIELD_IDS.confirmation" v-slot="field" :label="t('password.fields.confirmation')" :error="message('confirmation')" required>
             <UiPasswordInput v-bind="field" v-model="form.confirmation" name="confirmation" autocomplete="new-password" @input="clear('confirmation')" />
           </UiFormField>
 

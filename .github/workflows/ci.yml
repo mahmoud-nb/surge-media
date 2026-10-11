@@ -1,0 +1,110 @@
+# Intégration continue : à chaque push sur main et sur chaque pull request (setup.md § 15).
+#   - vérifications : messages de commit (pull request), lint, typecheck, tests, traductions, migrations ;
+#   - paquet npm : build, archive, essai d'installation (init, start, /api/health) ;
+#   - image Docker : construite depuis cette archive (amd64), démarrée, sonde /api/health.
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  checks:
+    name: Vérifications
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          # Historique complet : commitlint lit les commits de la pull request.
+          fetch-depth: 0
+
+      - uses: ./.github/actions/setup
+
+      - name: Messages de commit (Conventional Commits)
+        if: github.event_name == 'pull_request'
+        run: >-
+          pnpm exec commitlint --verbose
+          --from "${{ github.event.pull_request.base.sha }}"
+          --to "${{ github.event.pull_request.head.sha }}"
+
+      - name: Lint
+        run: pnpm lint
+
+      - name: Typecheck
+        run: pnpm typecheck
+
+      - name: Tests
+        run: pnpm test
+
+      - name: Traductions
+        run: pnpm i18n:check
+
+      - name: Migrations à jour avec le schéma
+        run: pnpm --filter @surge-media/core db:migration --check
+
+  package:
+    name: Paquet npm
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: ./.github/actions/setup
+
+      - name: Build
+        run: pnpm --filter @surge-media/core build
+
+      - name: Archive du paquet
+        run: cd packages/core && pnpm pack --out "$GITHUB_WORKSPACE/artifacts/surge-media-core.tgz"
+
+      - name: Essai du paquet (installation, init, start)
+        run: pnpm --filter @surge-media/core smoke:package "$GITHUB_WORKSPACE/artifacts/surge-media-core.tgz"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: package
+          path: artifacts/surge-media-core.tgz
+          if-no-files-found: error
+          retention-days: 7
+
+  docker:
+    name: Image Docker
+    needs: package
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: package
+          path: package-context
+
+      - uses: docker/setup-buildx-action@v3
+
+      - name: Build (depuis l'archive du paquet)
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          target: full
+          build-contexts: package=package-context
+          load: true
+          tags: surge-media:ci
+          cache-from: type=gha,scope=ci
+          cache-to: type=gha,mode=max,scope=ci
+
+      - name: Démarrage et sonde /api/health
+        run: |
+          docker run -d --name surge-media -p 3000:3000 -e NUXT_SITE_URL=http://localhost:3000 surge-media:ci
+          for _ in $(seq 1 45); do
+            if curl -fsS http://127.0.0.1:3000/api/health; then echo; exit 0; fi
+            sleep 2
+          done
+          docker logs surge-media
+          exit 1

@@ -80,7 +80,7 @@ async function onSubmit() {
             {{ t('form.requiredNote') }}
           </p>
 
-          <UiFormField v-slot="field" :id="FIELD_IDS.email" :label="t('login.email.label')" :error="message('email')" required>
+          <UiFormField :id="FIELD_IDS.email" v-slot="field" :label="t('login.email.label')" :error="message('email')" required>
             <UiInput
               v-bind="field"
               v-model="form.email"
@@ -94,7 +94,7 @@ async function onSubmit() {
             />
           </UiFormField>
 
-          <UiFormField v-slot="field" :id="FIELD_IDS.password" :label="t('login.password.label')" :error="message('password')" required>
+          <UiFormField :id="FIELD_IDS.password" v-slot="field" :label="t('login.password.label')" :error="message('password')" required>
             <UiPasswordInput
               v-bind="field"
               v-model="form.password"

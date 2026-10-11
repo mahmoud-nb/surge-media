@@ -385,8 +385,8 @@ function duration(seconds: number): string {
           {{ editError }}
         </UiAlert>
         <UiFormField
-          v-slot="field"
           :id="FIELD_IDS.name"
+          v-slot="field"
           :label="t('transforms.presets.fields.name')"
           :hint="editing ? t('transforms.presets.fields.renameHint') : t('transforms.presets.fields.nameHint')"
           :error="message('name')"
@@ -394,7 +394,7 @@ function duration(seconds: number): string {
         >
           <UiInput v-bind="field" v-model="form.name" name="name" autocomplete="off" spellcheck="false" maxlength="32" @input="clear('name')" />
         </UiFormField>
-        <UiFormField v-slot="field" :id="FIELD_IDS.description" :label="t('transforms.presets.fields.description')" :error="message('description')">
+        <UiFormField :id="FIELD_IDS.description" v-slot="field" :label="t('transforms.presets.fields.description')" :error="message('description')">
           <UiInput v-bind="field" v-model="form.description" name="description" autocomplete="off" :maxlength="PRESET_DESCRIPTION_MAX_LENGTH" @input="clear('description')" />
         </UiFormField>
         <AdminTransformFields v-model="form" :ids="FIELD_IDS" :max-dimension="data.limits.maxDimension" :error="message" @edit="clear" />

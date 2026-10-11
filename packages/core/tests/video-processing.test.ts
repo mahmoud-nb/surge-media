@@ -375,7 +375,7 @@ function optionValue(args: string[], option: string, before = args.length): stri
 
 describe('arguments de ffmpeg et ffprobe', () => {
   it('format d\'entrée imposé pour chaque conteneur, jamais un démultiplexeur qui ouvre d\'autres fichiers', () => {
-    expect(INPUT_FORMATS).toEqual({ mp4: 'mov', mov: 'mov', '3gp': 'mov', webm: 'matroska', mkv: 'matroska', avi: 'avi', ts: 'mpegts', ogv: 'ogg', wmv: 'asf' })
+    expect(INPUT_FORMATS).toEqual({ 'mp4': 'mov', 'mov': 'mov', '3gp': 'mov', 'webm': 'matroska', 'mkv': 'matroska', 'avi': 'avi', 'ts': 'mpegts', 'ogv': 'ogg', 'wmv': 'asf' })
     expect(Object.keys(INPUT_FORMATS).sort()).toEqual([...VIDEO_CONTAINERS].sort())
     for (const format of Object.values(INPUT_FORMATS)) expect(['hls', 'applehttp', 'concat', 'dash', 'image2', 'tee', 'lavfi']).not.toContain(format)
   })

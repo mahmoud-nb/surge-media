@@ -4,10 +4,10 @@
  * autorise). Fonction pure, testée.
  */
 
-export type RangeResolution =
-  | { type: 'full' }
-  | { type: 'partial', start: number, end: number }
-  | { type: 'unsatisfiable' }
+export type RangeResolution
+  = | { type: 'full' }
+    | { type: 'partial', start: number, end: number }
+    | { type: 'unsatisfiable' }
 
 /**
  * `Range: bytes=<début>-<fin>`, `bytes=<début>-` ou `bytes=-<suffixe>` rapporté à la taille du

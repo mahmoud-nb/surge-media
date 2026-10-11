@@ -1,5 +1,5 @@
 import { randomBytes } from 'node:crypto'
-import { mkdirSync, readFileSync } from 'node:fs'
+import { mkdirSync } from 'node:fs'
 import { dirname, join, resolve } from 'node:path'
 import { cancel, confirm, intro, isCancel, log, note, outro, select, spinner, text } from '@clack/prompts'
 import {
@@ -15,15 +15,15 @@ import {
 } from '../shared/database'
 import type { Translate } from './i18n'
 import { readEnvFile, updateEnvFile } from './lib/env-file'
-import { generateClients } from './lib/generate'
+import { generateClients, providerSchemaFile } from './lib/generate'
+import { sqliteDriverError } from './lib/native'
 import { runPrisma } from './lib/prisma'
-import { ENV_EXAMPLE_FILE, ENV_FILE, SCHEMA_FILE } from './lib/project'
-import { readSchemaProvider, writeSchemaProvider } from './lib/schema'
+import { ENV_EXAMPLE_FILE, ENV_FILE, SCHEMA_FILE, type CoreLocation } from './lib/project'
+import { writeSchemaProvider } from './lib/schema'
 
-export interface CliContext {
+/** Paquet (code), installation (.env, données) et mode sources ou paquet publié : cli/lib/project.ts. */
+export interface CliContext extends CoreLocation {
   t: Translate
-  /** Dossier du core (contient prisma/schema.prisma, .env, prisma.config.ts). */
-  root: string
 }
 
 export interface TargetArgs {
@@ -67,7 +67,7 @@ export async function runInit(ctx: CliContext, args: TargetArgs & { skipMigrate?
 
   await applyTarget(ctx, target, args.skipMigrate ? 'skip' : 'deploy', { NUXT_SITE_URL: siteUrl })
   if (current.provider && current.provider !== target.provider) note(t('note.providerChanged'))
-  outro(t('outro.init'))
+  outro(t(ctx.isSource ? 'outro.init' : 'outro.initPackage'))
 }
 
 /**
@@ -82,12 +82,7 @@ export async function runMigrate(ctx: CliContext): Promise<void> {
   if (!current.provider || !current.url) fail(t('error.notConfigured'))
   const target = current as DatabaseTarget
 
-  const schemaProvider = readSchemaProvider(readFileSync(join(ctx.root, SCHEMA_FILE), 'utf8'))
-  if (schemaProvider !== target.provider) {
-    fail(t('error.providerMismatch', { schema: schemaProvider ?? '?', env: target.provider }))
-  }
-
-  await generateStep(ctx, target)
+  if (ctx.isSource) await generateStep(ctx, target)
   await prismaStep(ctx, ['migrate', 'deploy'], t('step.migrate'), t('step.migrateDone'), target)
   outro(t('outro.migrate'))
 }
@@ -115,9 +110,9 @@ export async function runReset(ctx: CliContext, args: TargetArgs): Promise<void>
 
 // ─── Étapes ──────────────────────────────────────────────────────────────────
 
-/** Configuration courante lue dans le .env du core. */
+/** Configuration courante lue dans le .env de l'installation. */
 function readCurrentTarget(ctx: CliContext): Partial<DatabaseTarget> {
-  const env = readEnvFile(join(ctx.root, ENV_FILE))
+  const env = readEnvFile(join(ctx.instanceDir, ENV_FILE))
   const provider = isDatabaseProvider(env.DATABASE_PROVIDER) ? env.DATABASE_PROVIDER : undefined
   const url = env.DATABASE_URL || (provider === 'sqlite' ? DEFAULT_SQLITE_URL : undefined)
   if (provider && url) {
@@ -200,7 +195,7 @@ const DEFAULT_SITE_URL = 'http://localhost:3000'
  * (valeur actuelle du .env proposée), sinon valeur actuelle ou http://localhost:3000 (--yes).
  */
 async function resolveSiteUrl(ctx: CliContext, args: { siteUrl?: string, yes?: boolean }): Promise<string> {
-  const current = readEnvFile(join(ctx.root, ENV_FILE)).NUXT_SITE_URL || DEFAULT_SITE_URL
+  const current = readEnvFile(join(ctx.instanceDir, ENV_FILE)).NUXT_SITE_URL || DEFAULT_SITE_URL
   let value: string
   if (args.siteUrl) value = args.siteUrl.trim()
   else if (args.yes) value = current
@@ -244,17 +239,21 @@ function showSummary(ctx: CliContext, target: DatabaseTarget, siteUrl?: string):
       `${t('summary.provider')} : ${t(`provider.${target.provider}.label`)}`,
       `${t('summary.url')} : ${maskUrl(target.url)}`,
       ...(siteUrl ? [`${t('summary.siteUrl')} : ${siteUrl}`] : []),
-      `${t('summary.root')} : ${ctx.root}`,
+      `${t('summary.root')} : ${ctx.instanceDir}`,
     ].join('\n'),
     t('summary.title'),
   )
 }
 
-/** Écrit la configuration (.env + schéma), génère les clients Prisma s'il le faut puis migre la base. */
+/**
+ * Écrit le .env de l'installation puis migre la base. Dépôt des sources seulement : schéma de développement
+ * réécrit (Prisma Studio, commandes Prisma lancées à la main) et clients Prisma régénérés s'il le faut ; le
+ * paquet publié embarque les trois clients dans son serveur construit.
+ */
 async function applyTarget(ctx: CliContext, target: DatabaseTarget, mode: MigrationMode, extra: Record<string, string> = {}): Promise<void> {
-  const { t, root } = ctx
+  const { t, packageDir, instanceDir } = ctx
 
-  const envPath = join(root, ENV_FILE)
+  const envPath = join(instanceDir, ENV_FILE)
   const values: Record<string, string> = { ...extra, DATABASE_PROVIDER: target.provider, DATABASE_URL: target.url }
   // Secrets générés une seule fois (jamais remplacés : cela déconnecterait tout le monde ou
   // invaliderait les liens signés déjà partagés).
@@ -262,22 +261,24 @@ async function applyTarget(ctx: CliContext, target: DatabaseTarget, mode: Migrat
   const newSecrets = GENERATED_SECRETS.filter(name => !existing[name])
   for (const name of newSecrets) values[name] = randomBytes(32).toString('base64url')
 
-  updateEnvFile(envPath, values, join(root, ENV_EXAMPLE_FILE))
+  updateEnvFile(envPath, values, join(packageDir, ENV_EXAMPLE_FILE))
   log.success(t('step.env'))
   for (const name of newSecrets) log.success(t('step.secretGenerated', { name }))
   for (const name of DATABASE_ENV_KEYS) {
     if (process.env[name] !== undefined) log.warn(t('config.shellOverride', { name }))
   }
 
-  writeSchemaProvider(join(root, SCHEMA_FILE), target.provider)
-  log.success(t('step.schema', { provider: target.provider }))
+  if (ctx.isSource) {
+    writeSchemaProvider(join(packageDir, SCHEMA_FILE), target.provider)
+    log.success(t('step.schema', { provider: target.provider }))
+  }
 
   if (target.provider === 'sqlite') {
     // SQLite crée le fichier mais pas les dossiers parents.
-    mkdirSync(dirname(resolve(root, sqliteFilePath(target.url))), { recursive: true })
+    mkdirSync(dirname(resolve(instanceDir, sqliteFilePath(target.url))), { recursive: true })
   }
 
-  await generateStep(ctx, target)
+  if (ctx.isSource) await generateStep(ctx, target)
 
   if (mode === 'deploy') {
     await prismaStep(ctx, ['migrate', 'deploy'], t('step.migrate'), t('step.migrateDone'), target)
@@ -288,6 +289,10 @@ async function applyTarget(ctx: CliContext, target: DatabaseTarget, mode: Migrat
   else {
     log.info(t('step.migrateSkipped'))
   }
+
+  // Les migrations n'en ont pas besoin, mais le serveur, si : prévenir dès l'installation.
+  const driverError = target.provider === 'sqlite' ? sqliteDriverError(packageDir) : undefined
+  if (driverError) log.warn(t('error.sqliteDriver', { message: driverError }))
 }
 
 /** Clients Prisma des trois fournisseurs (cli/lib/generate.ts) : rien n'est refait s'ils sont à jour. */
@@ -295,7 +300,7 @@ async function generateStep(ctx: CliContext, target: DatabaseTarget): Promise<vo
   const progress = spinner()
   progress.start(ctx.t('step.generate'))
   try {
-    const { generated } = await generateClients(ctx.root, {
+    const { generated } = await generateClients(ctx.packageDir, {
       env: { DATABASE_PROVIDER: target.provider, DATABASE_URL: target.url },
     })
     progress.stop(ctx.t(generated ? 'step.generateDone' : 'step.generateUpToDate'))
@@ -316,10 +321,11 @@ async function prismaStep(
 ): Promise<void> {
   const progress = spinner()
   progress.start(pending)
-  // La cible est passée explicitement : elle prime sur le .env et sur l'environnement du shell.
-  const { code, output } = await runPrisma(args, {
-    cwd: ctx.root,
-    env: { DATABASE_PROVIDER: target.provider, DATABASE_URL: target.url },
+  // Lancée depuis le paquet (prisma.config.ts, migrations du fournisseur), avec le schéma du fournisseur. La cible
+  // est passée explicitement : elle prime sur le .env et sur l'environnement du shell.
+  const { code, output } = await runPrisma([...args, '--schema', providerSchemaFile(target.provider)], {
+    cwd: ctx.packageDir,
+    env: { DATABASE_PROVIDER: target.provider, DATABASE_URL: prismaUrl(ctx, target) },
   })
   if (code !== 0) {
     progress.error(ctx.t('error.command', { command: `prisma ${args.join(' ')}` }))
@@ -330,6 +336,16 @@ async function prismaStep(
 }
 
 // ─── Utilitaires ─────────────────────────────────────────────────────────────
+
+/**
+ * URL passée à Prisma, lancé depuis le dossier du paquet : un chemin SQLite relatif l'est au dossier de
+ * l'installation (comme pour le serveur, lancé depuis celle-ci), d'où un chemin absolu (barres obliques).
+ */
+function prismaUrl(ctx: CliContext, target: DatabaseTarget): string {
+  if (target.provider !== 'sqlite') return target.url
+  const query = target.url.includes('?') ? target.url.slice(target.url.indexOf('?')) : ''
+  return `file:${resolve(ctx.instanceDir, sqliteFilePath(target.url)).replaceAll('\\', '/')}${query}`
+}
 
 /** Masque le mot de passe d'une URL de connexion avant affichage. */
 export function maskUrl(url: string): string {

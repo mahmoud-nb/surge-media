@@ -255,12 +255,12 @@ describe.skipIf(!hasFfmpeg)('ffmpeg réel (vidéos fabriquées par lavfi)', { ti
     expect(iphone.duration).toBeCloseTo(1, 1)
 
     const expected: Record<string, [string, string]> = {
-      fast: ['avc1', 'mp4a'],
-      camcorder: ['mp4v', 'mp3'],
-      broadcast: ['mpeg2video', 'mp2'],
-      theora: ['theora', 'vorbis'],
-      windows: ['wmv2', 'wmav2'],
-      phone: ['avc1', 'mp4a'],
+      'fast': ['avc1', 'mp4a'],
+      'camcorder': ['mp4v', 'mp3'],
+      'broadcast': ['mpeg2video', 'mp2'],
+      'theora': ['theora', 'vorbis'],
+      'windows': ['wmv2', 'wmav2'],
+      'phone': ['avc1', 'mp4a'],
       'recorder-vp8': ['vp8', ''],
       'recorder-vp9-opus': ['vp9', 'opus'],
     }

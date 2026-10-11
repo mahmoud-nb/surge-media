@@ -1,12 +1,46 @@
 {
   "name": "@surge-media/core",
   "version": "0.0.0",
-  "private": true,
   "type": "module",
-  "description": "Cœur de surgeMedia : interface d'administration, API médias et traitement d'images (Nuxt 3 + Nitro + Prisma).",
+  "description": "Self-hosted platform to manage, transform and deliver media: administration interface, REST API, on-the-fly image transformations and video processing.",
+  "keywords": [
+    "media",
+    "dam",
+    "image-transformation",
+    "video",
+    "self-hosted",
+    "headless",
+    "nuxt"
+  ],
+  "homepage": "https://github.com/mahmoud-nb/surge-media/tree/main/packages/core#readme",
+  "bugs": {
+    "url": "https://github.com/mahmoud-nb/surge-media/issues"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/mahmoud-nb/surge-media.git",
+    "directory": "packages/core"
+  },
   "license": "BUSL-1.1",
   "engines": {
     "node": ">=24.0.0"
+  },
+  "bin": {
+    "surge-media": "./dist/cli/index.mjs"
+  },
+  "files": [
+    ".output",
+    "dist",
+    "prisma",
+    "server/generated/schemas",
+    "shared/database.ts",
+    "prisma.config.ts",
+    ".env.example",
+    "CHANGELOG.md",
+    "LICENSE"
+  ],
+  "publishConfig": {
+    "access": "public"
   },
   "scripts": {
     "dev": "tsx scripts/prisma-generate.ts && nuxt dev",
@@ -16,7 +50,8 @@
     "start": "node --env-file-if-exists=.env .output/server/index.mjs",
     "typecheck": "tsx scripts/prisma-generate.ts && nuxt typecheck",
     "test": "vitest run",
-    "postinstall": "nuxt prepare && tsx scripts/prisma-generate.ts",
+    "prepare": "nuxt prepare && tsx scripts/prisma-generate.ts",
+    "prepack": "tsx scripts/prepack.ts",
     "cli": "tsx cli/index.ts",
     "db:init": "tsx cli/index.ts init",
     "db:migrate": "tsx cli/index.ts db migrate",
@@ -25,49 +60,58 @@
     "db:studio": "prisma studio",
     "db:migration": "tsx scripts/db-migration.ts",
     "i18n:check": "tsx scripts/i18n-check.ts",
-    "a11y:contrast": "tsx scripts/check-contrast.ts"
+    "a11y:contrast": "tsx scripts/check-contrast.ts",
+    "lint": "eslint .",
+    "lint:fix": "eslint . --fix",
+    "release": "release-it",
+    "release:dry": "release-it --dry-run",
+    "changelog:preview": "release-it --changelog",
+    "smoke:package": "tsx scripts/smoke-package.ts",
+    "license:check": "tsx scripts/check-license.ts"
   },
   "dependencies": {
+    "@clack/prompts": "^1.8.1",
+    "@node-rs/argon2": "2.2.1",
+    "better-sqlite3": "12.11.1",
+    "citty": "^0.2.2",
+    "prisma": "7.10.0",
+    "sharp": "0.35.4"
+  },
+  "devDependencies": {
     "@aws-sdk/client-s3": "^3.1141.0",
     "@aws-sdk/s3-request-presigner": "^3.1141.0",
-    "@clack/prompts": "^1.8.1",
     "@fontsource-variable/inter": "^5.3.0",
     "@lucide/vue": "^1.48.0",
-    "@node-rs/argon2": "^2.2.1",
+    "@nuxt/eslint": "^1.17.0",
     "@nuxtjs/color-mode": "^4.0.1",
     "@nuxtjs/i18n": "^10.6.0",
     "@prisma/adapter-better-sqlite3": "7.10.0",
     "@prisma/adapter-mariadb": "7.10.0",
     "@prisma/adapter-pg": "7.10.0",
     "@prisma/client": "7.10.0",
+    "@release-it/conventional-changelog": "^12.0.2",
     "@scalar/api-reference": "1.72.3",
     "@tailwindcss/vite": "^4.3.3",
+    "@types/busboy": "^1.5.4",
+    "@types/node": "^24.13.6",
+    "@types/nodemailer": "^8.0.2",
     "busboy": "^1.6.0",
-    "citty": "^0.2.2",
     "clsx": "^2.1.1",
+    "eslint": "^10.12.0",
     "flydrive": "^2.1.0",
     "nodemailer": "^10.0.14",
     "nuxt": "^3.21.11",
     "nuxt-auth-utils": "^0.5.30",
-    "prisma": "7.10.0",
-    "sharp": "^0.35.4",
+    "release-it": "^21.1.1",
     "tailwind-merge": "^3.7.0",
     "tailwindcss": "^4.3.3",
-    "vue": "^3.5.43",
-    "vue-router": "^5.3.1",
-    "zod": "^4.6.5"
-  },
-  "devDependencies": {
-    "@types/busboy": "^1.5.4",
-    "@types/node": "^24.13.6",
-    "@types/nodemailer": "^8.0.2",
     "tsdown": "^0.23.0",
     "tsx": "^4.23.15",
     "typescript": "~6.0.3",
     "vitest": "^5.0.2",
-    "vue-tsc": "^3.3.11"
-  },
-  "bin": {
-    "surge-media": "./dist/cli/index.mjs"
+    "vue": "^3.5.43",
+    "vue-router": "^5.3.1",
+    "vue-tsc": "^3.3.11",
+    "zod": "^4.6.5"
   }
 }
