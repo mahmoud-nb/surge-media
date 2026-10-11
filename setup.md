@@ -22,7 +22,7 @@ pnpm install        # dépendances + nuxt prepare + clients Prisma (un par fourn
 pnpm db:init        # fournisseur de base (SQLite par défaut), migrations, secret de session
 ```
 
-Avant la première connexion, renseignez le compte d'amorçage dans `packages/core/.env`
+Avant la première connexion, renseignez le compte d'amorçage dans `apps/core/.env`
 (voir § 9.3), par exemple :
 
 ```dotenv
@@ -45,7 +45,10 @@ surge-media/
 ├─ package.json            scripts racine (délèguent au core)
 ├─ pnpm-workspace.yaml     workspaces + builds natifs autorisés (allowBuilds)
 ├─ setup.md                ce guide
-└─ packages/
+├─ Dockerfile, docker/     image Docker et exemples Compose (§ 12.2)
+├─ .github/                intégration continue et publication (§ 15)
+├─ packages/               bibliothèques publiées sur npm (à venir : @surge-media/vue, react, svelte)
+└─ apps/                   applications (à venir : docs)
    └─ core/                @surge-media/core : admin + API + traitement d'images et de vidéos
       ├─ app/              interface Vue (structure Nuxt 4)
       │  ├─ assets/css/    Tailwind v4 + jetons de design (clair / sombre)
@@ -115,11 +118,11 @@ Commandes utilisées pour créer le monorepo, à connaître pour reproduire ou c
 mkdir surge-media && cd surge-media
 git init -b main
 # créer package.json (racine, "private": true, "packageManager": "pnpm@12.4.2")
-# et pnpm-workspace.yaml (packages: - packages/*)
+# et pnpm-workspace.yaml (packages: - apps/* et - packages/*)
 
 # Nuxt 3 avec la structure Nuxt 4 (template officiel « v4-compat »)
-pnpm dlx nuxi@3.37.0 init packages/core --template v4-compat --packageManager pnpm --gitInit false --no-install
-# renommer le package en "@surge-media/core" dans packages/core/package.json
+pnpm dlx nuxi@3.37.0 init apps/core --template v4-compat --packageManager pnpm --gitInit false --no-install
+# renommer le package en "@surge-media/core" dans apps/core/package.json
 
 # étape 1 — base de données, images, stockage, CLI
 pnpm --filter @surge-media/core add prisma@7.10.0 @prisma/client@7.10.0 \
@@ -162,7 +165,7 @@ Depuis la racine :
 | `pnpm dev` | serveur de développement du core |
 | `pnpm build` | build de tous les packages |
 | `pnpm typecheck` | vérification TypeScript (vue-tsc) |
-| `pnpm test` | tests unitaires Vitest (`packages/core/tests/` : rôles et portées, liens signés, projets, identifiants et origines, API v1, jetons délégués, file des traitements, dossiers, transformations, vidéos et leur traitement — `video-ffmpeg.test.ts` lance le vrai ffmpeg, signalé « ignoré » s'il est absent —, HTTP (flux, connexions persistantes) et alerte de pression SQLite) ; **Node 24** exigé (sous Node 22, les tests des sous-titres Windows-1252 échouent) |
+| `pnpm test` | tests unitaires Vitest (`apps/core/tests/` : rôles et portées, liens signés, projets, identifiants et origines, API v1, jetons délégués, file des traitements, dossiers, transformations, vidéos et leur traitement — `video-ffmpeg.test.ts` lance le vrai ffmpeg, signalé « ignoré » s'il est absent —, HTTP (flux, connexions persistantes) et alerte de pression SQLite) ; **Node 24** exigé (sous Node 22, les tests des sous-titres Windows-1252 échouent) |
 | `pnpm i18n:check` | cohérence des traductions et des clés utilisées dans le code |
 | `pnpm a11y:contrast` | contrastes WCAG AA des jetons de couleur (clair et sombre) |
 | `pnpm db:init` | configure la base (fournisseur + URL), applique les migrations, génère le secret de session |
@@ -173,7 +176,7 @@ Depuis la racine :
 | `pnpm lint` / `pnpm lint:fix` | ESLint (`@nuxt/eslint`) : vérification / correction automatique (§ 15.1) |
 | `pnpm release` / `pnpm release:dry` | release de `@surge-media/core` : version, CHANGELOG, tag, release GitHub (§ 15.3) ; `:dry` n'écrit rien |
 
-Dans `packages/core` uniquement : `pnpm db:generate` (régénère les trois clients Prisma), `pnpm db:migration <nom>`
+Dans `apps/core` uniquement : `pnpm db:generate` (régénère les trois clients Prisma), `pnpm db:migration <nom>`
 (maintenance, voir § 6.5), `pnpm build:cli` (build de la CLI), `pnpm start` (serveur de production),
 `pnpm pack` (archive du paquet npm, § 15.5), `pnpm smoke:package <archive>` (essai de l'archive),
 `pnpm changelog:preview` (notes de la prochaine version).
@@ -192,7 +195,7 @@ Conventional Commits, vérifié par le hook `commit-msg` (§ 15.1).
 | PostgreSQL | `postgresql` | `postgresql://user:pass@localhost:5432/surge_media` | `@prisma/adapter-pg` |
 | MySQL / MariaDB | `mysql` | `mysql://user:pass@localhost:3306/surge_media` | `@prisma/adapter-mariadb` |
 
-- Le chemin SQLite relatif est résolu depuis `packages/core` : lancez toujours le serveur depuis ce dossier
+- Le chemin SQLite relatif est résolu depuis `apps/core` : lancez toujours le serveur depuis ce dossier
   (c'est le cas des scripts `pnpm dev` / `pnpm start`).
 - Les caractères spéciaux d'un mot de passe doivent être encodés dans l'URL (`@` → `%40`, `$` → `%24`…).
 - Une variable `DATABASE_*` définie dans le shell est prioritaire sur le fichier `.env` (la CLI le signale).
@@ -235,7 +238,7 @@ pnpm cli --help                                # aide (--lang en pour l'anglais)
 - **Paquet et installation** (`cli/lib/project.ts`) : la CLI distingue le **paquet** (serveur construit,
   migrations, schémas par fournisseur, `prisma.config.ts`, `.env.example`) et le **dossier de l'installation**
   (`.env` et données : base SQLite, médias en stockage local). Dans le dépôt des sources, l'installation est
-  `packages/core` (rien ne change pour le développement) ; avec le paquet publié, c'est le **dossier courant**
+  `apps/core` (rien ne change pour le développement) ; avec le paquet publié, c'est le **dossier courant**
   (refusé s'il est dans un `node_modules` : ses données y seraient effacées) ; `--cwd` en désigne un autre.
   Les commandes Prisma sont lancées depuis le paquet, avec le schéma du fournisseur
   (`server/generated/schemas/<fournisseur>.prisma`) et une URL SQLite rendue absolue ; dans le dépôt seulement,
@@ -265,7 +268,7 @@ pnpm cli --help                                # aide (--lang en pour l'anglais)
 
 ### 6.3 Variables d'environnement
 
-Le fichier `packages/core/.env` est créé par `pnpm db:init` à partir de `.env.example`.
+Le fichier `apps/core/.env` est créé par `pnpm db:init` à partir de `.env.example`.
 
 | Variable | Défaut | Rôle |
 | --- | --- | --- |
@@ -291,7 +294,7 @@ Le fichier `packages/core/.env` est créé par `pnpm db:init` à partir de `.env
 | `NUXT_MEDIA_SIGNING_SECRET` | généré par `db:init` | secret des liens signés des médias privés (le changer invalide les liens partagés) |
 | `NUXT_MEDIA_PREVIOUS_SIGNING_SECRET` | — | ancien secret, encore accepté pendant une rotation (7 jours suffisent) |
 | `NUXT_MEDIA_STORAGE_DRIVER` | `local` | stockage des fichiers : `local` ou `s3` (§ 7) |
-| `NUXT_MEDIA_STORAGE_ROOT` | `./data/media` | dossier du pilote `local` (relatif à `packages/core` ou absolu) |
+| `NUXT_MEDIA_STORAGE_ROOT` | `./data/media` | dossier du pilote `local` (relatif à `apps/core` ou absolu) |
 | `NUXT_MEDIA_STORAGE_PREFIX` | — | préfixe de toutes les clés (partage d'un bucket) |
 | `NUXT_MEDIA_STORAGE_S3_*` | — | `BUCKET`, `REGION`, `ENDPOINT` (services compatibles), `ACCESS_KEY_ID`, `SECRET_ACCESS_KEY`, `FORCE_PATH_STYLE` |
 | `NUXT_API_RATE_LIMIT_*` | 300 / 1200 / 1200 / 300 / 60 / 30 | par minute, API v1 : requêtes `PUBLISHABLE` (par clé et IP), `SECRET`, `PERSONAL`, `DELEGATED` (par émetteur et IP) ; `UPLOADS` (fichiers envoyés par identifiant) ; `AUTH_FAILURES` (identifiants refusés par IP) |
@@ -411,7 +414,7 @@ Ne modifiez jamais une migration déjà publiée.
 ### 7.2 Configurer le stockage
 
 ```dotenv
-# Disque du serveur (défaut) : autre dossier possible, relatif à packages/core ou absolu
+# Disque du serveur (défaut) : autre dossier possible, relatif à apps/core ou absolu
 NUXT_MEDIA_STORAGE_DRIVER="local"
 NUXT_MEDIA_STORAGE_ROOT="/var/lib/surge-media/media"
 
@@ -829,13 +832,13 @@ Sur la **même machine** (SQLite possible : même fichier, écritures courtes, a
 
 ```bash
 pnpm build                     # depuis la racine : une seule build pour les deux rôles
-cd packages/core               # .env : NUXT_VIDEO_PROCESSING="external"
+cd apps/core               # .env : NUXT_VIDEO_PROCESSING="external"
 pnpm start                     # serveur web (port 3000)
 pnpm cli worker                # autre terminal : processus de travail (port 3001, /api/health seulement)
 ```
 
 Hors du dépôt, `surge-media worker [--port 3001]` (binaire du package, `dist/cli/index.mjs`) fait la même chose ;
-sans la CLI : `NUXT_SERVER_ROLE=worker PORT=3001 node .output/server/index.mjs` depuis `packages/core` (variables
+sans la CLI : `NUXT_SERVER_ROLE=worker PORT=3001 node .output/server/index.mjs` depuis `apps/core` (variables
 fournies par l'environnement : en production, `.env` n'est lu que par `pnpm start` et `surge-media worker`).
 Plusieurs processus de travail peuvent partager la file.
 
@@ -1849,7 +1852,7 @@ Mise en forme du journal partagée avec `/admin/audit` : `useAuditFormat()`.
 
 ```bash
 pnpm build                          # clients Prisma + nuxt build + build de la CLI
-cd packages/core && pnpm db:migrate # appliquer les migrations sur la base de production
+cd apps/core && pnpm db:migrate # appliquer les migrations sur la base de production
 pnpm start                          # node --env-file-if-exists=.env .output/server/index.mjs
 ```
 
@@ -2077,7 +2080,7 @@ l'image) : variables par `-e`, `--env-file` ou Compose ; toutes celles du § 6.3
   principaux : ffmpeg et ses bibliothèques (≈ 460 Mo), CLI Prisma des migrations (≈ 250 Mo : elle charge Prisma
   Studio dès son démarrage, l'élaguer la casse), Node (≈ 120 Mo), serveur construit (≈ 57 Mo, trois clients compris).
 - **Durées** (16 cœurs) : depuis les sources ≈ 3 min, dont ≈ 80 s de build Nuxt (≈ 7 min sous Windows) ; depuis
-  une archive (`--build-context package=…`) ≈ 90 s ; ensuite, seule une modification de `packages/` ou du
+  une archive (`--build-context package=…`) ≈ 90 s ; ensuite, seule une modification de `apps/` ou du
   fichier de verrouillage relance la build ; démarrage avec les 16 migrations ≈ 5 à 11 s (SQLite) ; arrêt propre
   ≈ 2,5 s.
 
@@ -2148,7 +2151,7 @@ Image construite localement : `SURGE_MEDIA_IMAGE=surge-media docker compose -f d
 | `File URL path must be absolute` au démarrage (Windows) | ne jamais importer statiquement `server/generated/prisma` dans le code serveur : passer par `await usePrisma()` |
 | `P3019` / fournisseur différent de `migration_lock.toml` | `.env` et schéma désynchronisés : relancer `pnpm db:init` |
 | `prisma migrate reset` refusé (« invoked by … AI agent ») | garde-fou de Prisma quand la commande est lancée par un agent IA : lancez `pnpm db:reset` vous-même |
-| Base SQLite créée au mauvais endroit | lancer les commandes depuis `packages/core` (chemin relatif) ou utiliser un chemin absolu |
+| Base SQLite créée au mauvais endroit | lancer les commandes depuis `apps/core` (chemin relatif) ou utiliser un chemin absolu |
 | Connexion acceptée mais retour immédiat sur `/login` | cookie `Secure` refusé en HTTP (hors localhost) : servir en HTTPS, ou `NUXT_SESSION_COOKIE_SECURE=false` pour un test |
 | `[nuxt-auth-utils] NUXT_SESSION_PASSWORD … was not set` | lancer `pnpm db:init` (génère le secret) ou le définir (32 caractères minimum) |
 | Première connexion refusée | aucun utilisateur ET variables d'amorçage définies ? mot de passe ≥ 12 caractères ? (message au démarrage du serveur) |
@@ -2251,7 +2254,7 @@ Image construite localement : `SURGE_MEDIA_IMAGE=surge-media docker compose -f d
 
 ### 15.1 Qualité du code et intégration continue
 
-- **ESLint 10** avec **`@nuxt/eslint`** (`packages/core/eslint.config.mjs`) : règles JavaScript, TypeScript, Vue et
+- **ESLint 10** avec **`@nuxt/eslint`** (`apps/core/eslint.config.mjs`) : règles JavaScript, TypeScript, Vue et
   Nuxt, générées par `nuxt prepare` dans `.nuxt/eslint.config.mjs` (donc après `pnpm install`), et style
   @stylistic (`eslint.config.stylistic: true` dans `nuxt.config.ts`) : 2 espaces, guillemets simples, sans
   point-virgule, virgule finale en multiligne, `else` / `catch` sur leur propre ligne. Ajustements au style établi :
@@ -2284,7 +2287,7 @@ Image construite localement : `SURGE_MEDIA_IMAGE=surge-media docker compose -f d
 ### 15.2 Versions
 
 - **SemVer**, une seule version pour le paquet npm et les images Docker : `version` de
-  `packages/core/package.json`, tag annoté **`vX.Y.Z`**, notes dans `packages/core/CHANGELOG.md` (en anglais, publié
+  `apps/core/package.json`, tag annoté **`vX.Y.Z`**, notes dans `apps/core/CHANGELOG.md` (en anglais, publié
   avec le paquet) et dans la release GitHub.
 - **Calcul** d'après les commits écrits depuis le dernier tag : rupture → majeure, `feat` → mineure, `fix` / `perf`
   → correctif ; **avant 1.0.0** (option `preMajor`), un cran de moins : rupture → mineure, `feat` → correctif. La
@@ -2310,7 +2313,7 @@ pnpm release 0.1.0     # version imposée (première release) ; ou minor, major,
 pnpm --filter @surge-media/core changelog:preview   # notes de la prochaine version seulement
 ```
 
-release-it (`packages/core/.release-it.ts`) : vérifications (`pnpm lint`, `typecheck`, `test`, `i18n:check`,
+release-it (`apps/core/.release-it.ts`) : vérifications (`pnpm lint`, `typecheck`, `test`, `i18n:check`,
 `db:migration --check` : quelques minutes), version du `package.json`, `CHANGELOG.md`, commit
 `chore(release): vX.Y.Z`, tag annoté, push, puis **release GitHub** (notes = section du CHANGELOG) : par l'API si
 la variable **`GITHUB_TOKEN`** contient un jeton ayant le droit d'écrire sur le dépôt (`contents: write`), sinon
@@ -2370,7 +2373,7 @@ sont réécrites à l'identique.
   plateforme de l'utilisateur, que Node trouve en remontant depuis `.output/server` ; remplace par des copies les
   liens symboliques de Nitro (`node_modules/.nitro/<paquet>@<version>`, absolus sous Windows), que l'archive npm ne
   conserve pas (« Cannot find package 'postgres-array' » au démarrage) ; copie `LICENSE` (copie ignorée par git).
-  Le serveur construit du dépôt reste utilisable ensuite (modules natifs de `packages/core/node_modules`).
+  Le serveur construit du dépôt reste utilisable ensuite (modules natifs de `apps/core/node_modules`).
 - **`prepare` au lieu de `postinstall`** (`nuxt prepare` et génération des clients) : npm ne lance pas `prepare`
   chez l'utilisateur qui installe le paquet.
 - **Essai** : `pnpm --filter @surge-media/core smoke:package <archive>` installe l'archive dans un dossier vide,
@@ -3841,3 +3844,27 @@ pnpm install          # ESLint, commitlint, release-it ; installe le hook commit
 ```
 Messages de commit au format Conventional Commits désormais exigés. Première release : configurer npm et GitHub
 (§ 15.4, « À faire une fois ») et compléter `LICENSE` (vérifié par `license:check`), puis `pnpm release 0.1.0`.
+
+### Maintenance — 2026-10-11 — Le core passe dans `apps/`
+
+**Cadre** : décision de l'utilisateur — `apps/` pour les applications (core, puis docs), `packages/` pour les
+bibliothèques publiées sur npm (vue, react, svelte, à venir). `packages/core` devient **`apps/core`** ; le paquet
+npm (`@surge-media/core`), la commande `surge-media` et l'image Docker ne changent pas.
+
+**Modifié** : `pnpm-workspace.yaml` (`apps/*` et `packages/*`), `Dockerfile` (`COPY apps ./apps` ; ajouter
+`COPY packages ./packages` le jour où le core dépendra d'une bibliothèque), workflows CI et Release,
+`repository.directory` et `homepage` du `package.json`, `.claude/launch.json`, commentaires et textes de la CLI
+(fr, en), README, sections à jour de ce guide (les entrées précédentes du journal gardent l'ancien chemin).
+Déplacement fait pendant que WebStorm tenait des dossiers ouverts : contenu copié puis originaux vidés ; l'ancien
+`packages/core/node_modules` (non suivi par git) reste jusqu'à la fermeture de l'IDE.
+
+**Vérifié** : lint, typecheck, Vitest **553 tests**, i18n, migrations à jour, `pnpm db:migrate` (base de
+développement, `.env` et médias déplacés avec le dossier), git : 461 fichiers reconnus comme renommés
+(historique conservé), image Docker construite depuis les sources et démarrée, workflows validés par actionlint.
+
+**Après `git pull`**
+```bash
+pnpm install          # crée apps/core/node_modules ; supprimer ensuite l'ancien packages/core s'il reste
+```
+Déplacer à la main `packages/core/.env` et `packages/core/data/` (non suivis par git) vers `apps/core/` sur les
+autres postes.

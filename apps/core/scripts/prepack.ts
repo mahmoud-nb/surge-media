@@ -11,7 +11,7 @@
  *      liens (absolus sous Windows), que l'archive npm ne conserve pas (« Cannot find package » au démarrage) ;
  *   4. copie la licence de la racine du dépôt, que le paquet doit contenir (BSL : « conspicuously display »).
  *
- * Le serveur construit reste utilisable dans le dépôt : packages/core/node_modules fournit ces modules.
+ * Le serveur construit reste utilisable dans le dépôt : apps/core/node_modules fournit ces modules.
  */
 import { copyFileSync, cpSync, existsSync, lstatSync, readdirSync, readFileSync, realpathSync, rmSync, writeFileSync } from 'node:fs'
 import { join, resolve } from 'node:path'

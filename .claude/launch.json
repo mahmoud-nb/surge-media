@@ -29,7 +29,7 @@
         "-e",
         "process.env.PORT = '3100'; import('./.output/server/index.mjs')"
       ],
-      "cwd": "packages/core",
+      "cwd": "apps/core",
       "port": 3100
     }
   ]

@@ -17,7 +17,7 @@ async function createStorage(config: MediaStorageConfig): Promise<MediaStorage> 
   switch (config.driver) {
     case 'local': {
       const { FSDriver } = await import('flydrive/drivers/fs')
-      // Chemin relatif résolu depuis le dossier de lancement (packages/core), comme la base SQLite.
+      // Chemin relatif résolu depuis le dossier de lancement (apps/core), comme la base SQLite.
       const location = resolve(config.root)
       await mkdir(location, { recursive: true })
       return createFlydriveStorage('local', new Disk(new FSDriver({ location, visibility: 'private' })), config.prefix,

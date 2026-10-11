@@ -54,9 +54,9 @@ jobs:
       - name: Version du tag = version du paquet
         id: version
         run: |
-          version="$(node -p "require('./packages/core/package.json').version")"
+          version="$(node -p "require('./apps/core/package.json').version")"
           if [ "v$version" != "$TAG" ]; then
-            echo "::error::Le tag $TAG ne correspond pas à la version de packages/core/package.json ($version)."
+            echo "::error::Le tag $TAG ne correspond pas à la version de apps/core/package.json ($version)."
             exit 1
           fi
           highest="$(git tag --list 'v[0-9]*' --sort=-version:refname | grep -v -- '-' | head -n 1)"
@@ -96,7 +96,7 @@ jobs:
         run: pnpm --filter @surge-media/core build
 
       - name: Archive du paquet
-        run: cd packages/core && pnpm pack --out "$GITHUB_WORKSPACE/artifacts/surge-media-core.tgz"
+        run: cd apps/core && pnpm pack --out "$GITHUB_WORKSPACE/artifacts/surge-media-core.tgz"
 
       - name: Essai du paquet (installation, init, start)
         run: pnpm --filter @surge-media/core smoke:package "$GITHUB_WORKSPACE/artifacts/surge-media-core.tgz"

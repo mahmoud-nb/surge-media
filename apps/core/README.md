@@ -130,7 +130,7 @@ Configuration is read from environment variables at startup (restart after any c
 | `NUXT_VIDEO_PROCESSING` | `off` | `off`, `embedded` (the web server runs ffmpeg jobs) or `external` (separate workers) |
 | `NUXT_SMTP_HOST` / `NUXT_SMTP_FROM` | — | SMTP server and sender, to email invitations and password reset links |
 
-Every variable is documented in [`.env.example`](https://github.com/mahmoud-nb/surge-media/blob/main/packages/core/.env.example)
+Every variable is documented in [`.env.example`](https://github.com/mahmoud-nb/surge-media/blob/main/apps/core/.env.example)
 (comments in French).
 
 ## Delivering and transforming images
@@ -207,7 +207,7 @@ The complete guide — installation, configuration, API, security and troublesho
 ## Releases
 
 Versions follow [Semantic Versioning](https://semver.org). See the
-[changelog](https://github.com/mahmoud-nb/surge-media/blob/main/packages/core/CHANGELOG.md) and the
+[changelog](https://github.com/mahmoud-nb/surge-media/blob/main/apps/core/CHANGELOG.md) and the
 [GitHub releases](https://github.com/mahmoud-nb/surge-media/releases).
 
 ## License

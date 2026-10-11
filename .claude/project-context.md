@@ -53,7 +53,7 @@
   directe, préparation, affiche, sous-titres ; D3 : conversion facultative par ffmpeg hors du chemin des requêtes, § 9.23).
 - Monorepo cible : `@surge-media/core` (admin + API), `@surge-media/vue` / `react` / `svelte`
   (composants : images optimisées, galeries, sélecteurs, upload), `docs` (GitHub Pages).
-  **Seul `packages/core` existe aujourd'hui.**
+  **Seul `apps/core` existe aujourd'hui.**
 - Base de données par défaut SQLite, configurable (PostgreSQL, MySQL/MariaDB) via la CLI
   `surge-media init` ou un script de réinitialisation.
 - Exigences transverses de l'utilisateur (permanentes) :
@@ -85,7 +85,7 @@
 | @node-rs/argon2 | 2.2 | argon2id, binaires napi |
 | zod | 4.6 | schémas partagés app/serveur |
 | citty 0.2, @clack/prompts 1.8, tsdown 0.23, tsx 4 | | CLI |
-| Vitest | 5.0 | tests des modules purs (`packages/core/tests/`, `vitest.config.ts`, alias `#shared`) |
+| Vitest | 5.0 | tests des modules purs (`apps/core/tests/`, `vitest.config.ts`, alias `#shared`) |
 | @scalar/api-reference | **1.72.3 exact** | documentation interactive (étape 10) ; `vue-demi` (dépendance) : `allowBuilds: false` ; `vite.optimizeDeps.include` |
 | node:sqlite (intégré) | Node 24 | uniquement dans les scripts de test ad hoc (vieillir `Session.passwordVerifiedAt`, nettoyer l'audit) ; avertissement « experimental » |
 | ffmpeg + ffprobe (D3) | **≥ 6**, du **système** (pas un paquet npm) | facultatif (`NUXT_VIDEO_PROCESSING=off` par défaut) ; `libx264` + `aac` exigés, `zscale`/`tonemap` (HDR) et `libsvtav1`/`libopus` (AV1) facultatifs ; vérifié avec 6.1.1 (Linux du nuage) ; Windows : `winget install Gyan.FFmpeg`, non vérifié (§ 22) |
@@ -96,14 +96,15 @@ Plateforme de dev de l'utilisateur : **Windows 11** (PowerShell + Git Bash). Che
 ## 3. Architecture globale
 
 ```text
-surge-media/                         monorepo pnpm (workspaces packages/*), dépôt git (main)
+surge-media/                         monorepo pnpm (workspaces apps/* et packages/*), dépôt git (main)
 ├─ package.json                      scripts racine (délèguent au core), engines, packageManager
 ├─ pnpm-workspace.yaml               packages + allowBuilds
 ├─ setup.md                          guide FR + Journal des étapes (à maintenir)
 ├─ README.md                         présentation courte
-├─ .claude/launch.json               serveurs pour l'aperçu Claude : core (dev), core-start (prod), core-start-3100 (prod sur 3100, cwd packages/core)
+├─ .claude/launch.json               serveurs pour l'aperçu Claude : core (dev), core-start (prod), core-start-3100 (prod sur 3100, cwd apps/core)
 ├─ .claude/project-context.md        CE FICHIER
-└─ packages/core                     @surge-media/core (private: true, bin surge-media)
+├─ packages/                        bibliothèques npm à venir (@surge-media/vue, react, svelte) ; vide
+└─ apps/core                         @surge-media/core (paquet npm publié, bin surge-media) ; apps/ = applications (docs à venir)
    ├─ app/                           interface Vue/Nuxt (SSR)
    ├─ server/                        Nitro : api/, routes/, middleware/, plugins/, utils/ (auto-importés), lib/ (imports explicites), generated/ (Prisma, non versionné)
    ├─ shared/                        code partagé app/serveur/CLI (auto-import de shared/utils et shared/types)
@@ -135,7 +136,7 @@ Couches serveur :
 Traitement des vidéos (D3) : `service.ts` crée les `MediaJob` → boucle `plugins/0.video-processing.ts` (serveur `embedded` ou processus
 `NUXT_SERVER_ROLE=worker`) → `lib/video-processing/` (file, pipeline) → ffmpeg/ffprobe en processus enfants.
 
-## 4. Inventaire des fichiers importants (packages/core)
+## 4. Inventaire des fichiers importants (apps/core)
 
 **app/**
 - `app.vue` (useAppHead + `<NuxtRouteAnnouncer>`), `error.vue` (401/403/404/500 traduits, `useAppHead`).
@@ -334,7 +335,7 @@ Ne jamais modifier une migration publiée.
 
 ## 6. Configuration
 
-### 6.1 Variables d'environnement (`packages/core/.env`, modèle `.env.example`)
+### 6.1 Variables d'environnement (`apps/core/.env`, modèle `.env.example`)
 
 | Variable | Défaut | Rôle |
 | --- | --- | --- |
@@ -378,7 +379,7 @@ Ne jamais modifier une migration publiée.
 `NUXT_STORAGE_BASE` (étape 1) **n'existe plus** (remplacée par `NUXT_MEDIA_STORAGE_ROOT`).
 Prisma 7 ne charge pas `.env` : `prisma.config.ts` fait `process.loadEnvFile` (les variables du shell priment).
 En production, `.env` n'est lu que par le script `start` (`node --env-file-if-exists=.env`).
-**Chemins relatifs** (SQLite, stockage local) résolus depuis le **dossier de lancement** : lancer depuis `packages/core`.
+**Chemins relatifs** (SQLite, stockage local) résolus depuis le **dossier de lancement** : lancer depuis `apps/core`.
 
 ### 6.2 nuxt.config.ts (points notables)
 
@@ -1378,7 +1379,7 @@ Contrats de données :
   deux `h1` (page + titre de la spécification dans le `main` de Scalar).
 - **Non testé** : lecteurs d'écran réels (NVDA, VoiceOver).
 
-## 15. CLI `surge-media` (`packages/core/cli/`)
+## 15. CLI `surge-media` (`apps/core/cli/`)
 
 - citty + @clack/prompts ; build tsdown → `dist/cli/index.mjs` (bin `surge-media`) ; en dépôt : `pnpm cli …` / `pnpm db:*` (tsx).
 - `init [--provider --url --yes --skip-migrate --cwd --lang]` : écrit `.env` (depuis `.env.example`, sans écraser les autres variables),
@@ -1388,7 +1389,7 @@ Contrats de données :
   agent IA** : l'utilisateur doit le lancer lui-même.
 - **Paquet et installation** (2026-10-10, `cli/lib/project.ts`) : `packageDir` (code : serveur construit, migrations, schémas par
   fournisseur, prisma.config.ts, .env.example) et `instanceDir` (.env, données) ; dépôt (`nuxt.config.ts` présent) : instanceDir =
-  packages/core ; paquet publié : dossier courant (refusé dans un node_modules) ; `--cwd`. Prisma lancé depuis le paquet avec
+  apps/core ; paquet publié : dossier courant (refusé dans un node_modules) ; `--cwd`. Prisma lancé depuis le paquet avec
   `--schema server/generated/schemas/<p>.prisma` et une URL SQLite absolue ; schéma de dev réécrit et clients générés dans le dépôt seulement.
 - **`start [--port]`** et **`worker [--port 3001]`** (`cli/server.ts`, qui remplace `cli/worker.ts`) : serveur construit du paquet lancé
   depuis l'installation (`--env-file-if-exists=<installation>/.env`) ; avec SQLite, vérification préalable du module natif de better-sqlite3
@@ -1588,7 +1589,7 @@ Contrats de données :
 - Tests de l'API v1 : le limiteur d'échecs d'authentification bloque l'IP locale 60 s après 30 refus → placer ce scénario **en dernier** ;
   le script B3 fabrique des jetons « bien formés inconnus » (base62 + `zlib.crc32`).
 - Tests d'identifiants : vieillir la confirmation du mot de passe avec `node:sqlite` (`UPDATE "Session" SET "passwordVerifiedAt" = <ISO -11 min>
-  WHERE "userId" = ?`) ; le module `better-sqlite3` n'est pas résolvable depuis `packages/core` (dépendance de l'adaptateur).
+  WHERE "userId" = ?`) ; le module `better-sqlite3` n'est pas résolvable depuis `apps/core` (dépendance de l'adaptateur).
 - Tests d'API : script Node en `scratchpad` (`b1-api-test.mjs` : comptes jetables DEVELOPER/EDITOR créés par invitation puis supprimés,
   identifiants admin lus dans `.env` sans les afficher) ; pour l'interface, cookie de session obtenu par un script puis posé dans le
   navigateur, et **déconnexion** à la fin.
@@ -1635,7 +1636,7 @@ Contrats de données :
 - **h3 1.15 `sendStream`** ne détruit pas le flux quand le client part (seulement `abort()` s'il existe) → toujours passer par
   `closeWithResponse` ; **`readRawBody`** n'a ni limite ni délai → borné par `body-limit.ts` (thenable dans `req.rawBody`). Banc d'essai
   isolé réutilisable : serveur h3 + requêtes abandonnées (`tests/http.test.ts` imite `sendStream`, h3 n'étant pas résolvable depuis
-  `packages/core`).
+  `apps/core`).
 - **Windows 11** : supprimer un fichier encore ouvert par Node **réussit** (libuv ouvre avec `FILE_SHARE_DELETE`, sémantique POSIX) ;
   une fuite de descripteur ne se voit donc pas par un échec de purge (mesurer `HandleCount` du processus, ou `stream.closed`).
 - Délai global de Node `requestTimeout` (300 s, requête entière) toujours en place : un envoi de 25 Mio exige ≥ 0,7 Mbit/s ; à relever
@@ -1700,7 +1701,7 @@ Contrats de données :
 - **Mesures de charge sur un portable** : débits × 7 entre batterie et secteur ; comparer avant/après dans la même minute (A/B
   par interrupteur temporaire dans la build de la copie), jamais d'une heure à l'autre.
 - **Copie isolée** : ne jamais y lancer `pnpm <script>` — pnpm 12 vérifie les dépendances et lance un `pnpm install` qui écrit
-  dans `node_modules`, c.-à-d. dans la **jonction** vers le vrai `packages/core/node_modules` (arrivé le 2026-10-10 : arrêté à temps,
+  dans `node_modules`, c.-à-d. dans la **jonction** vers le vrai `apps/core/node_modules` (arrivé le 2026-10-10 : arrêté à temps,
   liens intacts, mais un dossier `.pnpm` de 1 177 entrées y est resté — suppression refusée par le mode automatique, signalée à
   l'utilisateur). Lancer les binaires directement : `node node_modules/nuxt/bin/nuxt.mjs build|typecheck`,
   `node node_modules/tsdown/dist/run.mjs` ; `prisma generate` y échoue sans `.nuxt` (client déjà copié). Arrêter le serveur de la
@@ -1817,7 +1818,7 @@ Contrats de données :
   setup|cleanup [base]` (ADMIN jetable, purge de ses médias) ; scénarios d1-roles, trusted-devices, d1-b2, d1-b4, d1-c2, dashboard
   rejoués sur le dev (copiés depuis le bloc-notes de la session 1f436366) ; build dans une copie isolée.
 - Étape 18 (e-mails) : `mail-test.mjs <base SMTP> <base sans SMTP> <base SQLite>` (28 contrôles) contre une **copie isolée** de
-  `packages/core` (robocopy sans node_modules/.nuxt/.output/data + jonction `node_modules` + base copiée par `VACUUM INTO`), lancée sur
+  `apps/core` (robocopy sans node_modules/.nuxt/.output/data + jonction `node_modules` + base copiée par `VACUUM INTO`), lancée sur
   3200 par une configuration de lancement temporaire (`cwd` doit être dans le projet : `process.chdir` vers la copie dans le script),
   reliée à `smtp-sink.mjs` (faux SMTP 127.0.0.1:2525, messages dans `mails/`, destinataire « refuse » → 550) ; la même copie sert à une
   **build de production** sans toucher au `.nuxt` du serveur de l'utilisateur. Supprimer la jonction avant la copie (sinon
@@ -2103,7 +2104,7 @@ par défaut = comportement de D2). Faite le 2026-10-09.
   (`maxOutputSeconds` + 10 s), 64 Kio de fin des erreurs, 8 Mio de sortie standard ; messages de ffmpeg jamais renvoyés tels quels
   (`toolFailure` retire les chemins). Testé : liste HLS déguisée en AVI visant `file:///etc/passwd` et une URL locale → échec propre, aucune
   lecture ni requête.
-- **Fichiers** (`packages/core`) : `server/lib/video-processing/*` (11 modules), `server/lib/media/{sources,renditions}.ts` (nouveaux),
+- **Fichiers** (`apps/core`) : `server/lib/video-processing/*` (11 modules), `server/lib/media/{sources,renditions}.ts` (nouveaux),
   `service.ts` (file, écritures du worker, contrats), `sniff.ts`, `limits.ts`, `upload.ts`, `delivery.ts`, `delivery-path.ts`, `cache.ts`,
   `urls.ts`, `keys.ts`, `video/probe.ts`, `handlers/video.ts`, `server/lib/storage/*` (`localPath`), `server/lib/api/{serializers,signed-urls,
   openapi,problem}.ts`, `server/utils/prisma.ts` (délai SQLite 10 s), `server/plugins/0.video-processing.ts`, `server/middleware/0.server-role.ts`,
@@ -2272,7 +2273,7 @@ SQLite pose problème. Référence d'exploitation : `setup.md` § 12.1 (tableaux
 - Démarrage de la build de production : bloqué à l'étape 10 (argon2, Smart App Control), mais **fonctionnel le 2026-10-01 en C1**.
 - **Override `oxc-transform` 0.141.0** hors de la plage de Nuxt 3.21 : fonctionne (typecheck, dev, build), mais à surveiller et retirer.
 - Environnement local actuel (non versionné, indicatif) : compte `admin@surge-media.test` (ADMIN, créé par amorçage ; mot de passe dans
-  `packages/core/.env`, variables d'amorçage encore présentes → avertissement au tableau de bord), un compte EDITOR créé par
+  `apps/core/.env`, variables d'amorçage encore présentes → avertissement au tableau de bord), un compte EDITOR créé par
   l'utilisateur le 26/09, une photo dans la bibliothèque, un projet « My Shop » créé par l'utilisateur le 29/09, un jeton personnel « Jeton Test 1 » de l'ADMIN créé par l'utilisateur le 29/09 et son
   entrée d'audit `token.created` (à préserver) ; `.env` sans `NUXT_SITE_URL` (origine de la requête en dev) ;
-  base SQLite `packages/core/data/surge-media.db`.
+  base SQLite `apps/core/data/surge-media.db`.

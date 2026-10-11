@@ -41,7 +41,7 @@ const CLIENT_MODULES = {
 function createAdapter(provider: DatabaseProvider, url: string) {
   switch (provider) {
     case 'sqlite':
-      // Chemin relatif résolu depuis le dossier de lancement (packages/core), comme la CLI Prisma.
+      // Chemin relatif résolu depuis le dossier de lancement (apps/core), comme la CLI Prisma.
       return new PrismaBetterSqlite3({ url: `file:${resolve(sqliteFilePath(url))}`, timeout: SQLITE_BUSY_TIMEOUT_MS })
     case 'postgresql':
       return new PrismaPg({ connectionString: url })

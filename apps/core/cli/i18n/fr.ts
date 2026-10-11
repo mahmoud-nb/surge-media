@@ -5,7 +5,7 @@
 export const fr = {
   'cli.description': 'Outil d\'installation et d\'administration de surgeMedia',
   'args.lang': 'Langue de la CLI',
-  'args.cwd': 'Dossier de l\'installation (.env et données) ; par défaut le dossier courant (packages/core dans le dépôt des sources)',
+  'args.cwd': 'Dossier de l\'installation (.env et données) ; par défaut le dossier courant (apps/core dans le dépôt des sources)',
   'args.provider': 'Fournisseur de base de données',
   'args.url': 'URL de connexion à la base de données',
   'args.yes': 'Mode non interactif : accepte les valeurs par défaut sans confirmation',

@@ -29,13 +29,13 @@ export interface CoreLocation {
   packageDir: string
   /** Installation : fichier .env et données (base SQLite, médias en stockage local). */
   instanceDir: string
-  /** Dépôt des sources (packages/core) : génération des clients Prisma, schéma de développement. */
+  /** Dépôt des sources (apps/core) : génération des clients Prisma, schéma de développement. */
   isSource: boolean
 }
 
 /**
  * Le paquet est celui qui embarque la CLI. L'installation est `--cwd` s'il est fourni ; sinon le dossier du core
- * dans le dépôt des sources (développement : .env et data/ dans packages/core), et le dossier courant pour le
+ * dans le dépôt des sources (développement : .env et data/ dans apps/core), et le dossier courant pour le
  * paquet publié (`npx @surge-media/core init` depuis le dossier de l'installation, hors de node_modules).
  */
 export function resolveLocation(cwd?: string): CoreLocation {
