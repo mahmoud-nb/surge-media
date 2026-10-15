@@ -1,0 +1,21 @@
+---
+/** Landing section: centered heading block, then free content (Markdown, components). */
+interface Props {
+  eyebrow?: string;
+  title: string;
+  lead?: string;
+  id?: string;
+}
+
+const { eyebrow, title, lead, id } = Astro.props;
+const headingId = id ? `${id}-title` : undefined;
+---
+
+<section class="sm-section" id={id} aria-labelledby={headingId}>
+  <div class="sm-section-head not-content">
+    {eyebrow && <p class="sm-eyebrow">{eyebrow}</p>}
+    <h2 id={headingId}>{title}</h2>
+    {lead && <p>{lead}</p>}
+  </div>
+  <slot />
+</section>

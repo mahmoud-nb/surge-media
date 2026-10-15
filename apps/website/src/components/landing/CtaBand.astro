@@ -1,0 +1,65 @@
+---
+/** Closing call to action. Links starting with `/` get the site's base path. */
+import { LinkButton } from '@astrojs/starlight/components';
+import { withBase } from '../../lib/paths';
+
+interface Props {
+  title: string;
+  text: string;
+  primary: { label: string; href: string };
+  secondary?: { label: string; href: string };
+}
+
+const { title, text, primary, secondary } = Astro.props;
+---
+
+<section class="cta not-content" aria-labelledby="cta-title">
+  <h2 id="cta-title" class="title">{title}</h2>
+  <p class="text">{text}</p>
+  <div class="actions">
+    <LinkButton href={withBase(primary.href)} icon="right-arrow">{primary.label}</LinkButton>
+    {secondary && <LinkButton href={withBase(secondary.href)} variant="secondary">{secondary.label}</LinkButton>}
+  </div>
+</section>
+
+<style>
+  .cta {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 1rem;
+    margin-block: clamp(3rem, 8vw, 6rem) 0;
+    padding: clamp(2rem, 6vw, 4rem) 1.5rem;
+    border: 1px solid var(--sm-border);
+    border-radius: calc(var(--sm-radius) * 1.5);
+    background:
+      var(--sm-glow),
+      var(--sm-surface);
+    text-align: center;
+  }
+
+  .title {
+    margin: 0;
+    max-width: 28ch;
+    font-size: clamp(var(--sl-text-2xl), calc(1rem + 2vw), var(--sl-text-4xl));
+    line-height: 1.15;
+    font-weight: 700;
+    letter-spacing: -0.02em;
+    color: var(--sl-color-white);
+  }
+
+  .text {
+    margin: 0;
+    max-width: 52ch;
+    color: var(--sm-muted);
+    font-size: var(--sl-text-lg);
+  }
+
+  .actions {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 0.75rem 1rem;
+    margin-top: 0.5rem;
+  }
+</style>

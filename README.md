@@ -9,7 +9,7 @@ avec des composants prêts à l'emploi pour Vue, React et Svelte.
 | --- | --- | --- |
 | [`@surge-media/core`](apps/core) | admin + API + traitement des images et des vidéos (Nuxt 3, Nitro, Prisma, Flydrive, sharp ; ffmpeg ≥ 6 du système, facultatif) | en cours |
 | `@surge-media/vue` · `react` · `svelte` | composants frontend (images optimisées, galeries, upload…) | à venir |
-| `docs` | documentation (GitHub Pages) | à venir |
+| [`website`](apps/website) | site public et documentation (Astro Starlight, anglais et français, GitHub Pages) | en cours |
 
 ## Démarrer
 

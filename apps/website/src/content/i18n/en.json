@@ -1,0 +1,19 @@
+{
+  "nav.docs": "Docs",
+  "nav.pricing": "Pricing",
+  "nav.primary": "Main",
+  "footer.tagline": "Self-hosted media platform. Your servers, your domain, your data.",
+  "footer.product": "Product",
+  "footer.resources": "Resources",
+  "footer.legal": "Legal",
+  "footer.gettingStarted": "Getting started",
+  "footer.architecture": "Architecture & APIs",
+  "footer.transformations": "Image transformations",
+  "footer.security": "Security",
+  "footer.license": "License (BSL 1.1)",
+  "footer.changelog": "Changelog",
+  "footer.issues": "Report an issue",
+  "footer.contact": "Contact sales",
+  "footer.language": "Language:",
+  "footer.copyright": "© {{year}} Mahmoud NBET. surgeMedia is source-available under the Business Source License 1.1."
+}

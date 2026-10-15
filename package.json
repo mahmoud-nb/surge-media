@@ -11,6 +11,8 @@
   },
   "scripts": {
     "dev": "pnpm --filter @surge-media/core dev",
+    "website:dev": "pnpm --filter @surge-media/website dev",
+    "website:build": "pnpm --filter @surge-media/website build",
     "build": "pnpm -r build",
     "typecheck": "pnpm -r typecheck",
     "test": "pnpm --filter @surge-media/core test",

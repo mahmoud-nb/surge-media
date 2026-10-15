@@ -1,0 +1,110 @@
+---
+/**
+ * Decorative terminal window. Lines: `$ command` (with an optional trailing `# comment`, and
+ * continuation lines after a final `\`), `# comment`, an empty line, anything else is output.
+ */
+interface Props {
+  title: string;
+  lines: string[];
+}
+
+type Line = { kind: 'command' | 'continuation' | 'comment' | 'output' | 'blank'; text: string; note?: string };
+
+const { title, lines } = Astro.props;
+
+const parsed: Line[] = [];
+for (const line of lines) {
+  const previous = parsed.at(-1);
+  const continues = previous && ['command', 'continuation'].includes(previous.kind) && previous.text.endsWith('\\');
+  if (line.trim() === '') parsed.push({ kind: 'blank', text: '' });
+  else if (line.startsWith('$ ') || continues) {
+    const body = line.startsWith('$ ') ? line.slice(2) : line;
+    const [text, note] = body.split(/(?<=\S)(\s+#\s.*)$/);
+    parsed.push({ kind: continues ? 'continuation' : 'command', text: text ?? body, note });
+  } else if (line.startsWith('# ')) parsed.push({ kind: 'comment', text: line });
+  else parsed.push({ kind: 'output', text: line });
+}
+---
+
+<figure class="terminal not-content">
+  <figcaption>
+    <span class="dots" aria-hidden="true"><span></span><span></span><span></span></span>
+    <span class="title">{title}</span>
+  </figcaption>
+  {/* Kept on one line: whitespace inside <pre> would be rendered. */}
+  <pre><code>{parsed.map(({ kind, text, note }) => <span class:list={['line', kind]}>{kind === 'command' && <span class="prompt" aria-hidden="true">$ </span>}{text}{note && <span class="comment">{note}</span>}</span>)}</code></pre>
+</figure>
+
+<style>
+  .terminal {
+    margin: 0;
+    overflow: hidden;
+    border: 1px solid var(--sm-border);
+    border-radius: var(--sm-radius);
+    background: var(--sm-terminal-bg);
+    box-shadow: var(--sm-shadow);
+    text-align: start;
+  }
+
+  figcaption {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 0.75rem 1rem;
+    border-bottom: 1px solid rgb(255 255 255 / 0.08);
+    color: #9aa4b5;
+    font-size: var(--sl-text-xs);
+  }
+
+  .dots {
+    display: inline-flex;
+    gap: 0.375rem;
+  }
+
+  .dots span {
+    width: 0.625rem;
+    height: 0.625rem;
+    border-radius: 50%;
+    background: #3a4457;
+  }
+
+  .title {
+    font-family: var(--__sl-font-mono);
+  }
+
+  pre {
+    margin: 0;
+    padding: 1.25rem 1.25rem 1.5rem;
+    overflow-x: auto;
+    background: transparent;
+    font-size: var(--sl-text-sm);
+    line-height: 1.75;
+  }
+
+  code {
+    font-family: var(--__sl-font-mono);
+    color: var(--sm-terminal-fg);
+  }
+
+  .line {
+    display: block;
+    white-space: pre;
+  }
+
+  .blank {
+    min-height: 1lh;
+  }
+
+  .prompt {
+    color: #8b9cf7;
+    user-select: none;
+  }
+
+  .comment {
+    color: #7d879a;
+  }
+
+  .output {
+    color: #47cd89;
+  }
+</style>

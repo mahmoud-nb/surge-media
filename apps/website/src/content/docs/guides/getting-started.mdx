@@ -1,0 +1,144 @@
+---
+title: Getting started
+description: Install surgeMedia on your own infrastructure with npm or Docker, choose your database, sign in and connect your first application.
+---
+
+import { Tabs, TabItem, Steps, Aside, LinkCard, CardGrid } from '@astrojs/starlight/components';
+
+surgeMedia ships as **one npm package** (`@surge-media/core`) and **one Docker image** (`ghcr.io/mahmoud-nb/surge-media`, amd64 and arm64). Both contain the admin interface, the REST API, media delivery and image processing.
+
+## Requirements
+
+| | Minimum | Notes |
+| --- | --- | --- |
+| Runtime | Node.js **24** or Docker | The Docker image bundles Node.js. |
+| Database | SQLite (built in), PostgreSQL, MySQL or MariaDB | One image for all of them. |
+| Storage | Local disk or an S3-compatible bucket | AWS S3, MinIO, Cloudflare R2, Scaleway, OVHcloud… |
+| Video processing (optional) | FFmpeg **6** or later | Included in the default Docker image; absent from the `slim` variant. |
+
+## Choose your database
+
+<CardGrid>
+  <LinkCard title="SQLite — start in seconds" description="Default choice. One file, zero administration. Perfect for small teams, prototypes and single-server installations." href="#install" />
+  <LinkCard title="PostgreSQL or MySQL / MariaDB — for production at scale" description="Recommended for enterprises: concurrent writes, managed backups, several instances behind a load balancer." href="#install" />
+</CardGrid>
+
+You can start on SQLite and move to PostgreSQL later: the database is selected by configuration (`DATABASE_URL`), not at build time.
+
+## Install
+
+<Tabs syncKey="install">
+<TabItem label="npm / npx" icon="npm">
+
+<Steps>
+
+1. Create the folder that will hold your configuration (`.env`) and your data, then install the package:
+
+   ```bash
+   mkdir media-server && cd media-server
+   npm install @surge-media/core
+   ```
+
+2. With **npm 12 or later**, approve the install scripts of the native modules (npm 11 and earlier run them automatically):
+
+   ```bash
+   npm install-scripts approve better-sqlite3 @prisma/engines prisma
+   npm rebuild better-sqlite3 @prisma/engines
+   ```
+
+3. Run the interactive setup. It asks for the database (SQLite, PostgreSQL or MySQL / MariaDB), applies the migrations and generates the secrets into `.env`:
+
+   ```bash
+   npx surge-media init
+   ```
+
+4. Start the server:
+
+   ```bash
+   npx surge-media start
+   ```
+
+   The admin, the API and media delivery answer on `http://localhost:3000`.
+
+</Steps>
+
+</TabItem>
+<TabItem label="Docker" icon="seti:docker">
+
+<Steps>
+
+1. Start the container with a named volume for the database, media and generated secrets:
+
+   ```bash
+   docker run -d --name surge-media -p 127.0.0.1:3000:3000 \
+     -v surge-media-data:/app/data \
+     -e NUXT_SITE_URL=https://media.example.com \
+     -e NUXT_BOOTSTRAP_ADMIN_EMAIL=you@example.com \
+     -e NUXT_BOOTSTRAP_ADMIN_PASSWORD='a-long-passphrase' \
+     ghcr.io/mahmoud-nb/surge-media
+   ```
+
+   Migrations are applied at startup. Use `DATABASE_URL=postgresql://…` or `mysql://…` to switch databases.
+
+2. For a smaller image without video processing, use the `-slim` tags (for example `ghcr.io/mahmoud-nb/surge-media:latest-slim`).
+
+</Steps>
+
+</TabItem>
+<TabItem label="Compose + PostgreSQL" icon="seti:config">
+
+The repository ships Compose files in `docker/`: a web server, a video worker and PostgreSQL 17.
+
+```bash
+POSTGRES_PASSWORD='change-me' \
+NUXT_SITE_URL=https://media.example.com \
+docker compose -f docker/compose.postgres.yaml up -d
+```
+
+For MySQL or MariaDB, replace the `postgres` service and set `DATABASE_URL` to `mysql://…`.
+
+</TabItem>
+</Tabs>
+
+## First sign-in
+
+<Steps>
+
+1. Open the admin at your site URL and sign in with the bootstrap account (`NUXT_BOOTSTRAP_ADMIN_EMAIL` / `NUXT_BOOTSTRAP_ADMIN_PASSWORD`). It becomes the first **Admin**.
+2. Remove the bootstrap variables once the account exists, and invite your team from **Users**.
+3. Create a **project** for your application, add its **allowed origins** (`https://www.acme.com`) and create its **API keys** — a publishable key for the browser, a secret key for your server.
+4. Upload a few media and copy their URLs, or call the API from your application.
+
+</Steps>
+
+## Connect your application
+
+```ts
+// SURGE_MEDIA_API_URL = https://media.example.com/api/v1
+const { SURGE_MEDIA_API_URL, SURGE_MEDIA_PROJECT_ID, SURGE_MEDIA_SECRET_KEY } = process.env;
+
+const res = await fetch(`${SURGE_MEDIA_API_URL}/projects/${SURGE_MEDIA_PROJECT_ID}/media`, {
+  headers: { Authorization: `Bearer ${SURGE_MEDIA_SECRET_KEY}` },
+});
+const { items, nextCursor } = await res.json();
+```
+
+The admin's **API documentation** page generates this `.env` snippet for your project (API URL, project ID and publishable key; paste the secret key yourself).
+
+## Going to production
+
+- **Your domain and TLS**: put surgeMedia behind your reverse proxy (Nginx, Caddy, Traefik…) on a domain such as `media.your-company.com`, and set `NUXT_SITE_URL` to it. Behind a proxy, set `NUXT_TRUST_PROXY` so rate limits and audit logs see real client IPs.
+- **A CDN in front of `/m/`** (optional): public media are served with immutable cache headers.
+- **Backups**: back up the database and the media storage together (with Docker, the `/app/data` volume holds both for SQLite and local storage).
+- **Updates**: `npm install @surge-media/core@latest` then `npx surge-media db migrate`, or pull the new Docker image — migrations run at startup.
+
+<Aside type="tip" title="Licensing">
+  Development, testing and evaluation are free for everyone. Production use is free for organizations under USD 500,000 in annual revenue — see [pricing](../../pricing/).
+</Aside>
+
+## Next steps
+
+<CardGrid>
+  <LinkCard title="Architecture & APIs" description="How the API and the delivery plane fit together, with real examples." href="../architecture/" />
+  <LinkCard title="Security & access control" description="Which credential for which context, origins, signed URLs." href="../security/" />
+</CardGrid>

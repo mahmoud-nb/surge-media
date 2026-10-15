@@ -1,0 +1,55 @@
+---
+/**
+ * Header links: primary navigation (Docs, Pricing) before Starlight's social icons. Starlight shows
+ * this group in the header on wide screens and in the menu footer on small ones.
+ */
+import Default from '@astrojs/starlight/components/SocialIcons.astro';
+import { localePath } from '../../lib/paths';
+
+const { locale } = Astro.locals.starlightRoute;
+const { pathname } = Astro.url;
+
+const links = [
+  { label: Astro.locals.t('nav.docs'), href: localePath('/guides/getting-started/', locale), section: '/guides/' },
+  { label: Astro.locals.t('nav.pricing'), href: localePath('/pricing/', locale), section: '/pricing/' },
+];
+---
+
+<nav aria-label={Astro.locals.t('nav.primary')} class="primary-nav">
+  {
+    links.map(({ label, href, section }) => (
+      <a href={href} aria-current={pathname.includes(section) ? 'page' : undefined}>
+        {label}
+      </a>
+    ))
+  }
+</nav>
+<Default />
+
+<style>
+  .primary-nav {
+    display: flex;
+    align-items: center;
+    gap: 1.25rem;
+    margin-inline-end: 0.5rem;
+  }
+
+  .primary-nav a {
+    color: var(--sl-color-gray-2);
+    font-size: var(--sl-text-sm);
+    font-weight: 500;
+    text-decoration: none;
+  }
+
+  .primary-nav a:hover,
+  .primary-nav a[aria-current='page'] {
+    color: var(--sl-color-white);
+  }
+
+  .primary-nav a[aria-current='page'] {
+    text-decoration: underline;
+    text-decoration-color: var(--sm-brand);
+    text-decoration-thickness: 2px;
+    text-underline-offset: 0.5rem;
+  }
+</style>

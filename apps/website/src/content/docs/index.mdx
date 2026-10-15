@@ -1,0 +1,300 @@
+---
+title: Self-hosted media platform
+description: surgeMedia stores, transforms and delivers your images and videos from your own servers, under your own domain, through one secure headless API — for every environment from dev to production.
+template: splash
+editUrl: false
+lastUpdated: false
+eyebrow: Self-hosted · Headless · Source-available
+hero:
+  title: Media infrastructure <span class="sm-gradient">you actually own</span>.
+  tagline: Store, transform and deliver every image and video through one secure API — on your servers, under your domain, for every environment from dev to production. No per-transformation bill. No media leaving your infrastructure.
+  actions:
+    - text: Get started in 5 minutes
+      link: /guides/getting-started/
+      icon: right-arrow
+    - text: See pricing
+      link: /pricing/
+      variant: secondary
+    - text: View on GitHub
+      link: https://github.com/mahmoud-nb/surge-media
+      icon: external
+      variant: minimal
+heroTerminal:
+  title: media.example.com — install
+  lines:
+    - '# Node.js 24+'
+    - '$ npm install @surge-media/core'
+    - '$ npx surge-media init     # SQLite, PostgreSQL or MySQL'
+    - '$ npx surge-media start'
+    - ''
+    - '# …or Docker (amd64 · arm64)'
+    - '$ docker run -d -p 3000:3000 \'
+    - '    -v surge-media-data:/app/data \'
+    - '    ghcr.io/mahmoud-nb/surge-media'
+    - ''
+    - '✔ Admin, API and media delivery ready'
+---
+
+import { Tabs, TabItem, LinkCard, CardGrid } from '@astrojs/starlight/components';
+import Section from '../../components/landing/Section.astro';
+import FeatureGrid from '../../components/landing/FeatureGrid.astro';
+import Feature from '../../components/landing/Feature.astro';
+import StackStrip from '../../components/landing/StackStrip.astro';
+import EnvironmentsDiagram from '../../components/landing/EnvironmentsDiagram.astro';
+import CtaBand from '../../components/landing/CtaBand.astro';
+
+<StackStrip
+  label="Runs on the stack you already trust"
+  items={[
+    'Node.js 24',
+    'Docker · amd64 & arm64',
+    'SQLite',
+    'PostgreSQL',
+    'MySQL / MariaDB',
+    'Local disk or S3',
+    'Sharp',
+    'FFmpeg',
+  ]}
+/>
+
+<Section
+  id="features"
+  eyebrow="Why surgeMedia"
+  title="Everything a media platform should do. Nothing that locks you in."
+  lead="The convenience of a media SaaS, the control of your own infrastructure. surgeMedia gives your teams one place to manage media, and your applications one API to consume it."
+>
+  <FeatureGrid>
+    <Feature icon="rocket" title="Live in minutes, not sprints">
+      `npx surge-media init` or a single Docker image. The CLI sets up your database, applies migrations and generates secrets. No build step, no third-party account to create.
+    </Feature>
+    <Feature icon="server" title="Self-hosted, end to end">
+      Your servers, your domain (`media.your-company.com`), your disk or S3-compatible bucket. Media never transits through a third party — ideal for GDPR and data-residency requirements.
+    </Feature>
+    <Feature icon="database" title="The database you already run">
+      SQLite out of the box for small teams and quick starts. PostgreSQL or MySQL / MariaDB for production at enterprise scale — same package, same image, one variable.
+    </Feature>
+    <Feature icon="random" title="One source of truth for every environment">
+      Dev, staging and production read the same media library. Environment-tagged API keys per project: no more re-uploading assets or syncing buckets between stages.
+    </Feature>
+    <Feature icon="setting" title="Processing on demand">
+      Resize, crop, focal point, AVIF and WebP — just by changing a URL, powered by Sharp. Video renditions (H.264, AV1), posters and subtitles with FFmpeg, off the request path.
+    </Feature>
+    <Feature icon="padlock" title="APIs locked down by design">
+      Publishable and secret keys, scopes, expiry and rotation, CORS allow-lists, signed URLs and short-lived upload tokens — all managed by project owners, without a ticket to ops.
+    </Feature>
+    <Feature icon="list-format" title="Roles that match your organization">
+      Admin, Manager, Developer and Editor across the platform; Owner, Developer and Editor per project. Everyone gets exactly the access they need, and sensitive actions are audited.
+    </Feature>
+    <Feature icon="laptop" title="An admin your editors will enjoy">
+      Upload, organize in folders, set focal points, generate URLs and HTML snippets. Light and dark themes, English and French, built to WCAG 2.2 AA.
+    </Feature>
+    <Feature icon="open-book" title="An API documented from the code">
+      OpenAPI 3.1 specification generated from the routes, an interactive reference in the admin, and stable error codes in `application/problem+json`.
+    </Feature>
+  </FeatureGrid>
+</Section>
+
+<Section
+  id="environments"
+  eyebrow="Centralized media"
+  title="One library. Every environment."
+  lead="Stop copying uploads from production to staging and losing them in between. Every environment of every application consumes the same media, each with its own keys."
+>
+  <EnvironmentsDiagram
+    caption="Your applications call one surgeMedia instance, which runs on — and stores into — your own infrastructure."
+    appsLabel="Your applications"
+    apps={[
+      { name: 'Development', detail: 'localhost:5173' },
+      { name: 'Staging', detail: 'staging.acme.app' },
+      { name: 'Production', detail: 'www.acme.com' },
+      { name: 'Mobile & back-office', detail: 'iOS · Android · CMS' },
+    ]}
+    hubLabel="surgeMedia"
+    hubItems={[
+      'REST API v1 — projects, media, folders',
+      'URL transformations — /m/…',
+      'Video processing workers',
+      'Admin UI, roles & audit log',
+    ]}
+    infraLabel="Your infrastructure"
+    infraItems={[
+      'Your domain & TLS certificate',
+      'SQLite · PostgreSQL · MySQL',
+      'Local disk or S3-compatible storage',
+      'Your CDN, your cache rules',
+    ]}
+  />
+</Section>
+
+<Section
+  id="transformations"
+  eyebrow="On-the-fly transformations"
+  title="Every size, every format. One URL away."
+  lead="Upload the original once. surgeMedia generates the variant your page asks for on the first request, keeps it, and serves it with immutable cache headers from then on."
+>
+
+<Tabs syncKey="showcase">
+<TabItem label="Responsive HTML" icon="seti:html">
+
+```html
+<picture>
+  <source type="image/avif" srcset="https://media.example.com/m/k7d2m9qz/v3/w_800,h_450/hero.avif" />
+  <source type="image/webp" srcset="https://media.example.com/m/k7d2m9qz/v3/w_800,h_450/hero.webp" />
+  <img src="https://media.example.com/m/k7d2m9qz/v3/w_800,h_450/hero.jpg"
+       width="800" height="450" alt="Our new collection" />
+</picture>
+```
+
+</TabItem>
+<TabItem label="URL anatomy" icon="seti:default">
+
+```text
+https://media.example.com/m/k7d2m9qz/v3/w_800,h_450,g_focal,q_70/hero.avif
+                            └──┬───┘ └┬┘ └─────────┬──────────┘ └──┬─────┘
+                            media id  version   transformation   name.format
+```
+
+- **`w_` / `h_`** set the size, **`fit_`** the strategy (`cover`, `contain`, `inside`…), **`g_focal`** keeps the subject in frame.
+- **The extension is the format**: `jpg`, `png`, `webp` or `avif`. Images are never upscaled and metadata (EXIF, GPS) is stripped.
+- **Presets** (the built-in `preview`, or your own like `card` or `og-image`) freeze a transformation under a name. A project can also accept only presets, or only signed URLs.
+
+</TabItem>
+<TabItem label="From the API" icon="seti:json">
+
+```json
+// GET /api/v1/projects/{projectId}/media/{mediaId}
+{
+  "id": "k7d2m9qz",
+  "kind": "image",
+  "width": 4032,
+  "height": 3024,
+  "altText": "Our new collection",
+  "focalPoint": { "x": 0.62, "y": 0.4 },
+  "urlTemplate": "https://media.example.com/m/k7d2m9qz/v3/{transform}/hero.{format}"
+}
+```
+
+Fill in `{transform}` and `{format}` client-side to build any `srcset` — no extra request.
+
+</TabItem>
+</Tabs>
+
+</Section>
+
+<Section
+  id="install"
+  eyebrow="Installation"
+  title="Install it your way"
+  lead="One npm package, one Docker image. Pick the database that fits today — switch to PostgreSQL or MySQL when you grow."
+>
+
+<Tabs syncKey="install">
+<TabItem label="npm / npx" icon="npm">
+
+```bash
+# In the folder that will hold your configuration and data (Node.js 24+)
+npm install @surge-media/core
+npx surge-media init    # choose SQLite, PostgreSQL or MySQL / MariaDB
+npx surge-media start   # admin, API and delivery on http://localhost:3000
+```
+
+</TabItem>
+<TabItem label="Docker" icon="seti:docker">
+
+```bash
+docker run -d --name surge-media -p 127.0.0.1:3000:3000 \
+  -v surge-media-data:/app/data \
+  -e NUXT_SITE_URL=https://media.example.com \
+  -e NUXT_BOOTSTRAP_ADMIN_EMAIL=you@example.com \
+  -e NUXT_BOOTSTRAP_ADMIN_PASSWORD='a-long-passphrase' \
+  ghcr.io/mahmoud-nb/surge-media
+```
+
+</TabItem>
+<TabItem label="Compose + PostgreSQL" icon="seti:config">
+
+```bash
+# Web server + video worker + PostgreSQL 17, from the repository's docker/ folder
+POSTGRES_PASSWORD='change-me' docker compose -f docker/compose.postgres.yaml up -d
+```
+
+</TabItem>
+</Tabs>
+
+<LinkCard
+  title="Read the getting started guide"
+  description="Requirements, database choices, first login, reverse proxy and production checklist."
+  href="guides/getting-started/"
+/>
+
+</Section>
+
+<Section
+  id="security"
+  eyebrow="Security & governance"
+  title="Built for teams who get audited"
+  lead="Access control is not an add-on: it is how the API and the admin are designed."
+>
+
+<CardGrid>
+  <LinkCard
+    title="Token-secured APIs"
+    description="Publishable keys for browsers, secret keys for servers, delegated tokens for direct uploads. Scopes, expiry, rotation with overlap, and secrets refused when they leak into a browser."
+    href="guides/security/"
+  />
+  <LinkCard
+    title="Roles and responsibilities"
+    description="Admins run the platform, managers run their projects, developers handle keys and integrations, editors handle content — with a role per project on top of the platform role."
+    href="guides/roles/"
+  />
+  <LinkCard
+    title="Private media and signed URLs"
+    description="Public or private per media. Private files are served only through expiring signed links or authenticated requests."
+    href="guides/security/#private-media-and-signed-urls"
+  />
+  <LinkCard
+    title="Audit log and sudo mode"
+    description="Key creation, member changes, settings: logged with author and context. Sensitive actions ask for the password again."
+    href="guides/security/#audit-log"
+  />
+</CardGrid>
+
+</Section>
+
+<Section
+  id="sdks"
+  eyebrow="SDKs"
+  title="Works with any stack today. Native components tomorrow."
+  lead="The REST API speaks to any language. First-party UI components are on the way to make optimized images, galleries and uploads a one-liner."
+>
+
+<CardGrid>
+  <LinkCard title="@surge-media/vue" description="Coming soon — optimized images, galleries, pickers and uploads for Vue 3 and Nuxt." href="reference/sdks/" />
+  <LinkCard title="@surge-media/react" description="Coming soon — the same components for React and Next.js." href="reference/sdks/" />
+  <LinkCard title="@surge-media/svelte" description="Coming soon — the same components for Svelte and SvelteKit." href="reference/sdks/" />
+  <LinkCard title="REST API v1" description="Available now — OpenAPI 3.1, any language, any framework." href="guides/architecture/" />
+</CardGrid>
+
+</Section>
+
+<Section
+  id="pricing"
+  eyebrow="Fair-source pricing"
+  title="Free for the vast majority. Fair for the rest."
+  lead="The source code is public under the Business Source License 1.1. Production use is free for organizations under USD 500,000 in annual revenue."
+>
+
+<FeatureGrid>
+  <LinkCard title="Community — Free" description="Production use for organizations under USD 500k gross annual revenue. Every feature included." href="pricing/" />
+  <LinkCard title="Pro / Agency — Commercial license" description="Organizations above USD 500k, and agencies operating instances for their clients." href="pricing/" />
+  <LinkCard title="Enterprise — Custom" description="Hosted offerings, OEM, SLAs, dedicated support and specific terms." href="pricing/" />
+</FeatureGrid>
+
+</Section>
+
+<CtaBand
+  title="Own your media pipeline, starting today."
+  text="Install surgeMedia on your infrastructure in minutes. Free for development, testing and evaluation — for everyone."
+  primary={{ label: 'Get started', href: '/guides/getting-started/' }}
+  secondary={{ label: 'Compare plans', href: '/pricing/' }}
+/>

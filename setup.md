@@ -48,7 +48,8 @@ surge-media/
 ├─ Dockerfile, docker/     image Docker et exemples Compose (§ 12.2)
 ├─ .github/                intégration continue et publication (§ 15)
 ├─ packages/               bibliothèques publiées sur npm (à venir : @surge-media/vue, react, svelte)
-└─ apps/                   applications (à venir : docs)
+└─ apps/                   applications
+   ├─ website/             site public et documentation (Astro Starlight, GitHub Pages, § 16)
    └─ core/                @surge-media/core : admin + API + traitement d'images et de vidéos
       ├─ app/              interface Vue (structure Nuxt 4)
       │  ├─ assets/css/    Tailwind v4 + jetons de design (clair / sombre)
@@ -107,8 +108,7 @@ surge-media/
       └─ data/             base SQLite et médias locaux (non versionné)
 ```
 
-À venir : `packages/vue`, `packages/react`, `packages/svelte` (composants frontend)
-et `packages/docs` (documentation publiée sur GitHub Pages).
+À venir : `packages/vue`, `packages/react`, `packages/svelte` (composants frontend).
 
 ## 4. Initialisation depuis zéro (référence)
 
@@ -163,8 +163,9 @@ Depuis la racine :
 | Script | Rôle |
 | --- | --- |
 | `pnpm dev` | serveur de développement du core |
+| `pnpm website:dev` / `pnpm website:build` | site public et documentation : serveur de développement (http://localhost:4321/surge-media/) / build statique (§ 16) |
 | `pnpm build` | build de tous les packages |
-| `pnpm typecheck` | vérification TypeScript (vue-tsc) |
+| `pnpm typecheck` | vérification TypeScript (vue-tsc pour le core, `astro check` pour le site) |
 | `pnpm test` | tests unitaires Vitest (`apps/core/tests/` : rôles et portées, liens signés, projets, identifiants et origines, API v1, jetons délégués, file des traitements, dossiers, transformations, vidéos et leur traitement — `video-ffmpeg.test.ts` lance le vrai ffmpeg, signalé « ignoré » s'il est absent —, HTTP (flux, connexions persistantes) et alerte de pression SQLite) ; **Node 24** exigé (sous Node 22, les tests des sous-titres Windows-1252 échouent) |
 | `pnpm i18n:check` | cohérence des traductions et des clés utilisées dans le code |
 | `pnpm a11y:contrast` | contrastes WCAG AA des jetons de couleur (clair et sombre) |
@@ -2283,6 +2284,9 @@ Image construite localement : `SURGE_MEDIA_IMAGE=surge-media docker compose -f d
   archive, essai d'installation, § 15.5), **Image Docker** (construite depuis cette archive, amd64, démarrée,
   `/api/health`). Préparation commune : `.github/actions/setup` (Node de `.nvmrc`, pnpm par corepack, magasin pnpm
   en cache, installation).
+- **Site** (`.github/workflows/website.yml`, pull requests et push sur `main` qui touchent `apps/website`) : types,
+  build et liens internes, puis publication sur GitHub Pages après un merge (§ 16). Les commits du site sont de type
+  `docs(website): …` : le CHANGELOG du core est calculé sur tous les commits du dépôt, un `feat` y apparaîtrait.
 
 ### 15.2 Versions
 
@@ -2394,6 +2398,50 @@ npm 12 et plus (comme pnpm : `pnpm approve-builds`) n'exécutent les scripts d'i
 qu'approuvés (`allowScripts` du `package.json` de l'utilisateur) : sans celui de better-sqlite3, pas de module
 natif — `start` refuse alors de démarrer avec SQLite et donne ces commandes (PostgreSQL et MySQL n'en ont pas
 besoin). Mise à jour : `npm install @surge-media/core@latest`, `npx surge-media db migrate`, puis redémarrage.
+
+## 16. Site public et documentation (`apps/website`)
+
+Vitrine commerciale et documentation publique de surgeMedia : **Astro 7 + Starlight 0.42**, site statique,
+**anglais par défaut** (`/`) et **français** (`/fr/`), thèmes clair et sombre (couleurs du core), recherche
+Pagefind, plan du site. Paquet privé `@surge-media/website` (jamais publié sur npm).
+
+```text
+apps/website/
+├─ astro.config.mjs            site, chemin de base, langues, barre latérale, composants remplacés
+├─ public/                     favicon.svg, og.png (aperçu des réseaux sociaux)
+├─ scripts/                    check-links.mjs (liens internes du build), og-image.{svg,mjs} (génère og.png)
+└─ src/
+   ├─ content/docs/            pages : index.mdx (accueil), pricing.mdx, license.md, 404.md,
+   │                           guides/ (getting-started, architecture, environments, security, roles),
+   │                           reference/ (image-transformations, sdks) ; fr/ = mêmes chemins en français
+   ├─ content/i18n/            textes des composants du site (en.json, fr.json), en plus de ceux de Starlight
+   ├─ components/overrides/    Hero (accroche, terminal, liens avec le chemin de base), SocialIcons (liens
+   │                           Docs / Tarifs de l'en-tête), Footer (pied de page, langues)
+   ├─ components/landing/      sections de l'accueil et des tarifs (Section, Feature, PricingPlan, schéma…)
+   ├─ lib/                     locales.mjs (langues), paths.ts (chemin de base), site.ts (liens, contact)
+   ├─ pages/robots.txt.ts
+   └─ styles/theme.css         jetons de couleur Starlight + jetons du site (--sm-*)
+```
+
+- **Adresse** : `https://mahmoud-nb.github.io/surge-media/` par défaut. `SITE_URL` et `BASE_PATH` la changent au
+  build (domaine personnalisé : `BASE_PATH=/`) ; en CI, elles viennent de la configuration Pages du dépôt.
+- **Liens** : Starlight préfixe ses propres liens du chemin de base, pas ceux du contenu. Dans le Markdown, liens
+  **relatifs** (`../security/`, `pricing/` depuis l'accueil : même texte en anglais et en français) ; dans le
+  frontmatter et les composants, liens absolus (`/pricing/`, `/fr/pricing/`) passés par `withBase()`.
+  `trailingSlash: 'always'` rend la résolution des liens relatifs identique partout.
+- **Traductions** : chaque page anglaise a son équivalent sous `fr/` (même nom de fichier). Une page absente
+  en français est servie en anglais avec un avertissement (repli de Starlight), sans bloquer la publication.
+  Typographie française : espace insécable avant `: ; ? !` et dans « ».
+- **Exactitude** : le contenu décrit le core tel qu'il est (portées, préfixes des jetons, grammaire des
+  transformations, limites, rôles) ; à relire quand ces points changent.
+- **Vérifications** : `pnpm --filter @surge-media/website typecheck` (`astro check`), `build`, puis
+  `check:links` (chaque lien interne et chaque ancre du build, 0 lien cassé exigé).
+- **Publication** : `.github/workflows/website.yml` — à chaque pull request qui touche le site : types, build,
+  liens ; à chaque push sur `main` (merge) : idem, puis publication sur GitHub Pages. Prérequis, une fois :
+  *Settings › Pages › Source = GitHub Actions*. L'action `.github/actions/setup` accepte un `filter` pnpm
+  (`@surge-media/website...`) : le site s'installe sans le core (ni `nuxt prepare`, ni clients Prisma).
+- **Image de partage** : modifier `scripts/og-image.svg`, puis `pnpm --filter @surge-media/website og-image`
+  (rendu par sharp avec les polices du poste) et versionner `public/og.png`.
 
 ## Journal des étapes
 
@@ -3868,3 +3916,28 @@ pnpm install          # crée apps/core/node_modules ; supprimer ensuite l'ancie
 ```
 Déplacer à la main `packages/core/.env` et `packages/core/data/` (non suivis par git) vers `apps/core/` sur les
 autres postes.
+
+### Étape 25 — 2026-10-15 — Site public et documentation (Astro Starlight)
+
+**Cadre** : demande de l'utilisateur — vitrine commerciale (B2B) et documentation de surgeMedia dans le monorepo,
+multilingue (anglais par défaut, français), clair / sombre, publiée sur GitHub Pages à chaque merge sur `main`.
+
+**Ajouté** : `apps/website` (§ 16) — accueil (accroche, neuf atouts, schéma « une médiathèque, tous les
+environnements », transformations par URL, installation npm / Docker / Compose, sécurité, SDK, tarifs, appel à
+l'action), Tarifs (Community / Pro-Agence / Enterprise d'après la BSL 1.1, tableau comparatif, FAQ), Architecture et
+API (plans de gestion et de diffusion, identifiants, cinq cas d'usage avec code), Démarrage, Environnements,
+Sécurité, Rôles, Transformations d'images, SDK, Licence, 404 ; chaque page en anglais et en français. Workflow
+`website.yml`, entrée `filter` de l'action `setup`, scripts racine `website:dev` / `website:build`, configuration
+`website` de `.claude/launch.json`.
+
+**Versions** : `astro` 7.3.8 (la 7.4.0, publiée le jour même, est bloquée par le délai minimal de publication de
+pnpm : pas d'exception ajoutée), `@astrojs/starlight` 0.42.6, `@astrojs/check` 0.9.10, `typescript` ~6.0.3.
+
+**Vérifié** : `astro check` (0 erreur), build (22 pages, index Pagefind, plan du site), `check:links`
+(1 000 liens internes et ancres, 0 cassé), build avec `BASE_PATH=/` (domaine personnalisé) ; rendu contrôlé
+dans le navigateur en clair et en sombre, en 1280 px et 390 px (aucun débordement horizontal).
+
+**À faire par l'utilisateur** : activer GitHub Pages (Source = GitHub Actions) ; valider les tarifs et le contenu
+des offres Pro / Enterprise (aucun prix affiché) et l'adresse de contact commerciale (`src/lib/site.ts`) ; les
+commandes `npm install @surge-media/core` et `ghcr.io/mahmoud-nb/surge-media` ne fonctionnent qu'après la
+première release du core.

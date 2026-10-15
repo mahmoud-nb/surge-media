@@ -1,0 +1,24 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="630" viewBox="0 0 1200 630">
+  <defs>
+    <radialGradient id="glow" cx="50%" cy="0%" r="80%">
+      <stop offset="0%" stop-color="#6f80f0" stop-opacity="0.45"/>
+      <stop offset="70%" stop-color="#0c111b" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="word" x1="0" x2="1">
+      <stop offset="0.1" stop-color="#8b9cf7"/>
+      <stop offset="0.9" stop-color="#b692f6"/>
+    </linearGradient>
+  </defs>
+  <rect width="1200" height="630" fill="#0c111b"/>
+  <rect width="1200" height="630" fill="url(#glow)"/>
+  <g transform="translate(80 80) scale(2.25)">
+    <rect width="32" height="32" rx="9" fill="#8b9cf7"/>
+    <path d="M7 19.5c2.2-5.3 4.4-5.3 6.6 0s4.4 5.3 6.6 0 3.3-6 4.8-7.5" fill="none" stroke="#0c111b" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/>
+    <circle cx="25" cy="10" r="2.2" fill="#0c111b"/>
+  </g>
+  <text x="172" y="134" font-family="Inter, 'Segoe UI', Arial, sans-serif" font-size="40" font-weight="700" fill="#e6e9ef">surgeMedia</text>
+  <text x="80" y="300" font-family="Inter, 'Segoe UI', Arial, sans-serif" font-size="76" font-weight="800" fill="#ffffff" letter-spacing="-2">Media infrastructure</text>
+  <text x="80" y="390" font-family="Inter, 'Segoe UI', Arial, sans-serif" font-size="76" font-weight="800" fill="url(#word)" letter-spacing="-2">you actually own.</text>
+  <text x="80" y="470" font-family="Inter, 'Segoe UI', Arial, sans-serif" font-size="30" fill="#9aa4b5">Self-hosted · Headless API · Images &amp; video on demand</text>
+  <text x="80" y="560" font-family="'Cascadia Mono', Consolas, monospace" font-size="26" fill="#47cd89">$ npx surge-media init</text>
+</svg>
