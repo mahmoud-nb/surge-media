@@ -1,0 +1,62 @@
+/**
+ * Messages du client en français (langue de référence et par défaut) : un message lisible par code
+ * d'erreur de l'API v1 (catalogue `GET /api/v1/errors`), de la diffusion `/m/` et du client lui-même.
+ * Le champ `detail` d'une erreur reste en anglais : il s'adresse aux développeurs.
+ */
+export const fr = {
+  errors: {
+    INVALID_REQUEST: 'La demande envoyée au serveur de médias est invalide.',
+    INVALID_CURSOR: 'La page demandée n\'est plus valable : relancez la recherche.',
+    INVALID_TRANSFORM: 'Cette transformation d\'image est invalide.',
+    MULTIPART_REQUIRED: 'Le fichier doit être envoyé dans un formulaire multipart.',
+    NO_FILE: 'Aucun fichier n\'a été reçu.',
+    TOKEN_MISSING: 'Identifiant d\'accès manquant.',
+    TOKEN_INVALID: 'Identifiant d\'accès invalide.',
+    TOKEN_EXPIRED: 'Identifiant d\'accès expiré.',
+    TOKEN_REVOKED: 'Identifiant d\'accès révoqué.',
+    INSUFFICIENT_SCOPE: 'Cet accès ne permet pas cette opération.',
+    CREDENTIAL_NOT_ALLOWED: 'Ce type d\'accès ne permet pas cette opération.',
+    SECRET_IN_BROWSER: 'Une clé secrète ne doit jamais être utilisée dans un navigateur.',
+    ORIGIN_NOT_ALLOWED: 'Ce site n\'est pas autorisé à utiliser ce projet.',
+    PROJECT_ARCHIVED: 'Ce projet est archivé.',
+    LISTING_DISABLED: 'La liste publique des médias de ce projet est désactivée.',
+    UPLOAD_LIMIT_REACHED: 'Le nombre maximal de fichiers à envoyer est atteint.',
+    TRANSFORM_NOT_ALLOWED: 'Ce projet n\'autorise pas cette transformation d\'image.',
+    NOT_FOUND: 'Élément introuvable.',
+    PROJECT_NOT_FOUND: 'Projet introuvable.',
+    MEDIA_NOT_FOUND: 'Média introuvable.',
+    FOLDER_NOT_FOUND: 'Dossier introuvable.',
+    PRESET_NOT_FOUND: 'Préréglage introuvable.',
+    TRACK_NOT_FOUND: 'Piste de texte introuvable.',
+    METHOD_NOT_ALLOWED: 'Opération non permise.',
+    REQUEST_TIMEOUT: 'La demande a pris trop de temps.',
+    UPLOAD_TIMEOUT: 'L\'envoi s\'est interrompu : aucune donnée reçue depuis trop longtemps.',
+    VERSION_CONFLICT: 'Le média a été modifié entre-temps : rechargez-le puis réessayez.',
+    FOLDER_NAME_TAKEN: 'Un dossier porte déjà ce nom ici.',
+    FOLDER_NOT_EMPTY: 'Ce dossier n\'est pas vide.',
+    FOLDER_LIMIT_REACHED: 'Le nombre maximal de dossiers est atteint.',
+    TRACK_LIMIT_REACHED: 'Le nombre maximal de pistes de texte est atteint.',
+    FILE_TOO_LARGE: 'Ce fichier est trop volumineux.',
+    BODY_TOO_LARGE: 'La demande est trop volumineuse.',
+    UNSUPPORTED_TYPE: 'Ce type de fichier n\'est pas accepté.',
+    UNREADABLE_FILE: 'Ce fichier est illisible.',
+    DIMENSIONS_TOO_LARGE: 'Les dimensions de cette image sont trop grandes.',
+    KIND_MISMATCH: 'Le nouveau fichier doit être du même genre que l\'original.',
+    INVALID_TEXT_TRACK: 'Ce fichier de sous-titres est invalide.',
+    FOLDER_DEPTH_EXCEEDED: 'Les dossiers ne peuvent pas être imbriqués plus profondément.',
+    FOLDER_CYCLE: 'Un dossier ne peut pas être placé dans l\'un de ses sous-dossiers.',
+    RATE_LIMITED: 'Trop de demandes : réessayez dans un instant.',
+    TRANSFORM_QUOTA: 'Trop de variantes demandées pour ce média : réessayez plus tard.',
+    INTERNAL_ERROR: 'Erreur interne du serveur de médias.',
+    SERVER_BUSY: 'Le serveur de médias est occupé : réessayez dans un instant.',
+    PROCESSING_PENDING: 'Cette vidéo est en cours de préparation : elle sera bientôt disponible.',
+    MEDIA_FORBIDDEN: 'Ce média est privé.',
+    SIGNATURE_EXPIRED: 'Ce lien a expiré.',
+    SIGNATURE_INVALID: 'Ce lien est invalide.',
+    NETWORK_ERROR: 'Le serveur de médias est injoignable.',
+    UNKNOWN: 'Erreur inattendue du serveur de médias.',
+  },
+}
+
+export type ClientMessages = typeof fr
+export type ErrorCode = keyof ClientMessages['errors']

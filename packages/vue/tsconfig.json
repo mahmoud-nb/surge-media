@@ -1,0 +1,23 @@
+{
+  // Vérification des types (`pnpm typecheck`) : le client est lu depuis ses sources (pas besoin de le
+  // construire avant). Le build des déclarations utilise tsconfig.build.json (client construit).
+  "compilerOptions": {
+    "target": "ES2022",
+    "lib": ["ES2022", "DOM", "DOM.Iterable"],
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "jsx": "preserve",
+    "strict": true,
+    "noUncheckedIndexedAccess": true,
+    "noImplicitOverride": true,
+    "verbatimModuleSyntax": true,
+    "isolatedModules": true,
+    "skipLibCheck": true,
+    "noEmit": true,
+    "types": [],
+    "paths": {
+      "@surge-media/client": ["../client/src/index.ts"]
+    }
+  },
+  "include": ["src", "tests"]
+}

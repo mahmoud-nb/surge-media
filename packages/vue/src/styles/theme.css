@@ -1,0 +1,62 @@
+/*
+ * Thème facultatif de @surge-media/vue (`import '@surge-media/vue/style.css'`) : jetons de couleur en
+ * clair et en sombre, contrastes WCAG 2.2 AA vérifiés par `pnpm a11y:contrast` (scripts/check-contrast.ts).
+ * Tout est dans la couche `surge-media` : les styles du site l'emportent toujours. Pour adapter le thème,
+ * redéfinir les variables `--sm-*`. Sombre : préférence du système (sauf `.light` ou `[data-theme="light"]`
+ * sur un ancêtre), ou classe `.dark` / attribut `[data-theme="dark"]`.
+ *
+ * Les blocs « sombre » sont identiques (le script le vérifie) : le CSS ne sait pas les partager.
+ */
+@layer surge-media {
+  :where(:root) {
+    --sm-color-bg: #ffffff;
+    --sm-color-surface: #eef0f4;
+    --sm-color-fg: #111827;
+    --sm-color-muted-fg: #4b5565;
+    --sm-color-border: #d0d5dd;
+    --sm-color-primary: #3b4cc0;
+    --sm-color-primary-fg: #ffffff;
+    --sm-color-success: #067647;
+    --sm-color-warning: #93370d;
+    --sm-color-danger: #b42318;
+    --sm-color-overlay: #111827;
+    --sm-color-overlay-fg: #ffffff;
+    --sm-focus-ring: #3b4cc0;
+    --sm-radius: 0.5rem;
+    --sm-font: inherit;
+  }
+
+  :where(.dark, [data-theme='dark']) {
+    --sm-color-bg: #131a26;
+    --sm-color-surface: #1c2432;
+    --sm-color-fg: #e6e9ef;
+    --sm-color-muted-fg: #9aa4b5;
+    --sm-color-border: #3a4559;
+    --sm-color-primary: #8b9cf7;
+    --sm-color-primary-fg: #0c111b;
+    --sm-color-success: #47cd89;
+    --sm-color-warning: #fdb022;
+    --sm-color-danger: #f97066;
+    --sm-color-overlay: #0c111b;
+    --sm-color-overlay-fg: #e6e9ef;
+    --sm-focus-ring: #8b9cf7;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :where(:root:not(.light):not([data-theme='light'])) {
+      --sm-color-bg: #131a26;
+      --sm-color-surface: #1c2432;
+      --sm-color-fg: #e6e9ef;
+      --sm-color-muted-fg: #9aa4b5;
+      --sm-color-border: #3a4559;
+      --sm-color-primary: #8b9cf7;
+      --sm-color-primary-fg: #0c111b;
+      --sm-color-success: #47cd89;
+      --sm-color-warning: #fdb022;
+      --sm-color-danger: #f97066;
+      --sm-color-overlay: #0c111b;
+      --sm-color-overlay-fg: #e6e9ef;
+      --sm-focus-ring: #8b9cf7;
+    }
+  }
+}

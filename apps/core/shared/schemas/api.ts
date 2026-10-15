@@ -461,6 +461,14 @@ export const apiProjectSchema = z.object({
     'Transformations libres par URL (`/m/<id>/v<n>/w_800,h_450/<nom>.webp`) : `open` acceptées dans les bornes du serveur, `signed` seulement signées, `presets` interdites (préréglages seulement). Les préréglages sont toujours servis.',
     'Free transformations by URL (`/m/<id>/v<n>/w_800,h_450/<name>.webp`): `open` accepted within the server bounds, `signed` signed only, `presets` refused (presets only). Presets are always served.',
   )),
+  transformFormats: z.array(z.enum(TRANSFORM_FORMATS)).meta(doc(
+    'Formats de sortie des dérivés activés sur le serveur (`{format}` de `urlTemplate`). Un autre format répond 400 `INVALID_TRANSFORM` : ne proposer que ceux-ci dans un `<picture>`.',
+    'Output formats of derivatives enabled on the server (`{format}` of `urlTemplate`). Any other format returns 400 `INVALID_TRANSFORM`: only offer these in a `<picture>`.',
+  )),
+  transformMaxDimension: z.number().int().meta(doc(
+    'Largeur et hauteur maximales d\'un dérivé, en pixels (`w`, `h`, et après `dpr`). Une demande plus grande est refusée (400) ; une image n\'est jamais agrandie.',
+    'Maximum width and height of a derivative, in pixels (`w`, `h`, and after `dpr`). A larger request is refused (400); an image is never enlarged.',
+  )),
   scopes: z.array(z.enum(TOKEN_SCOPES)).meta(doc('Portées effectives de l\'identifiant utilisé dans ce projet.', 'Effective scopes of the credential used in this project.')),
   createdAt: isoDate,
   updatedAt: isoDate,
