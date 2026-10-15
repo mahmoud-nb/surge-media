@@ -3,6 +3,14 @@ description: >-
   Node (version de .nvmrc), pnpm (version du champ packageManager, par corepack) et dépendances installées
   depuis le fichier de verrouillage, avec le magasin pnpm en cache. À utiliser après actions/checkout.
 
+inputs:
+  filter:
+    description: >-
+      Sélecteur pnpm des projets à installer (ex. `@surge-media/website...` : le site et ses dépendances).
+      Vide : tout le dépôt.
+    required: false
+    default: ''
+
 runs:
   using: composite
   steps:
@@ -24,7 +32,10 @@ runs:
         key: pnpm-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml') }}
         restore-keys: pnpm-${{ runner.os }}-
 
-    # Lance aussi `nuxt prepare` et la génération des trois clients Prisma (script `prepare` du core).
+    # Tout le dépôt : lance aussi `nuxt prepare` et la génération des trois clients Prisma (script `prepare`
+    # du core).
     - name: Dépendances
       shell: bash
-      run: pnpm install --frozen-lockfile
+      env:
+        FILTER: ${{ inputs.filter }}
+      run: pnpm install --frozen-lockfile ${FILTER:+--filter "$FILTER"}

@@ -1,0 +1,144 @@
+---
+title: Démarrage
+description: Installez surgeMedia sur votre propre infrastructure avec npm ou Docker, choisissez votre base de données, connectez-vous et branchez votre première application.
+---
+
+import { Tabs, TabItem, Steps, Aside, LinkCard, CardGrid } from '@astrojs/starlight/components';
+
+surgeMedia est distribué sous forme d’**un paquet npm** (`@surge-media/core`) et d’**une image Docker** (`ghcr.io/mahmoud-nb/surge-media`, amd64 et arm64). Tous deux contiennent l’interface d’administration, l’API REST, la diffusion des médias et le traitement des images.
+
+## Prérequis
+
+| | Minimum | Remarques |
+| --- | --- | --- |
+| Exécution | Node.js **24** ou Docker | L’image Docker embarque Node.js. |
+| Base de données | SQLite (intégrée), PostgreSQL, MySQL ou MariaDB | Une seule image pour toutes. |
+| Stockage | Disque local ou bucket compatible S3 | AWS S3, MinIO, Cloudflare R2, Scaleway, OVHcloud… |
+| Traitement vidéo (facultatif) | FFmpeg **6** ou plus | Inclus dans l’image Docker par défaut ; absent de la variante `slim`. |
+
+## Choisir sa base de données
+
+<CardGrid>
+  <LinkCard title="SQLite — démarrer en quelques secondes" description="Choix par défaut. Un seul fichier, zéro administration. Idéal pour les petites structures, les prototypes et les installations sur un seul serveur." href="#installer" />
+  <LinkCard title="PostgreSQL ou MySQL / MariaDB — pour la production à grande échelle" description="Recommandé pour les entreprises : écritures concurrentes, sauvegardes gérées, plusieurs instances derrière un répartiteur de charge." href="#installer" />
+</CardGrid>
+
+Vous pouvez commencer avec SQLite et passer à PostgreSQL plus tard : la base de données se choisit par configuration (`DATABASE_URL`), pas à la compilation.
+
+## Installer
+
+<Tabs syncKey="install">
+<TabItem label="npm / npx" icon="npm">
+
+<Steps>
+
+1. Créez le dossier qui contiendra votre configuration (`.env`) et vos données, puis installez le paquet :
+
+   ```bash
+   mkdir media-server && cd media-server
+   npm install @surge-media/core
+   ```
+
+2. Avec **npm 12 ou plus**, approuvez les scripts d’installation des modules natifs (npm 11 et antérieurs les exécutent automatiquement) :
+
+   ```bash
+   npm install-scripts approve better-sqlite3 @prisma/engines prisma
+   npm rebuild better-sqlite3 @prisma/engines
+   ```
+
+3. Lancez la configuration interactive. Elle demande la base de données (SQLite, PostgreSQL ou MySQL / MariaDB), applique les migrations et génère les secrets dans `.env` :
+
+   ```bash
+   npx surge-media init
+   ```
+
+4. Démarrez le serveur :
+
+   ```bash
+   npx surge-media start
+   ```
+
+   L’administration, l’API et la diffusion des médias répondent sur `http://localhost:3000`.
+
+</Steps>
+
+</TabItem>
+<TabItem label="Docker" icon="seti:docker">
+
+<Steps>
+
+1. Démarrez le conteneur avec un volume nommé pour la base de données, les médias et les secrets générés :
+
+   ```bash
+   docker run -d --name surge-media -p 127.0.0.1:3000:3000 \
+     -v surge-media-data:/app/data \
+     -e NUXT_SITE_URL=https://media.example.com \
+     -e NUXT_BOOTSTRAP_ADMIN_EMAIL=vous@example.com \
+     -e NUXT_BOOTSTRAP_ADMIN_PASSWORD='une-longue-phrase-secrete' \
+     ghcr.io/mahmoud-nb/surge-media
+   ```
+
+   Les migrations sont appliquées au démarrage. Utilisez `DATABASE_URL=postgresql://…` ou `mysql://…` pour changer de base de données.
+
+2. Pour une image plus légère sans traitement vidéo, utilisez les étiquettes `-slim` (par exemple `ghcr.io/mahmoud-nb/surge-media:latest-slim`).
+
+</Steps>
+
+</TabItem>
+<TabItem label="Compose + PostgreSQL" icon="seti:config">
+
+Le dépôt fournit des fichiers Compose dans `docker/` : un serveur web, un processus de traitement vidéo et PostgreSQL 17.
+
+```bash
+POSTGRES_PASSWORD='a-changer' \
+NUXT_SITE_URL=https://media.example.com \
+docker compose -f docker/compose.postgres.yaml up -d
+```
+
+Pour MySQL ou MariaDB, remplacez le service `postgres` et donnez à `DATABASE_URL` une adresse `mysql://…`.
+
+</TabItem>
+</Tabs>
+
+## Première connexion
+
+<Steps>
+
+1. Ouvrez l’administration à l’adresse de votre site et connectez-vous avec le compte d’amorçage (`NUXT_BOOTSTRAP_ADMIN_EMAIL` / `NUXT_BOOTSTRAP_ADMIN_PASSWORD`). Il devient le premier **Administrateur**.
+2. Retirez les variables d’amorçage une fois le compte créé, puis invitez votre équipe depuis **Utilisateurs**.
+3. Créez un **projet** pour votre application, ajoutez ses **origines autorisées** (`https://www.acme.fr`) et créez ses **clés d’API** — une clé publique pour le navigateur, une clé secrète pour votre serveur.
+4. Envoyez quelques médias et copiez leurs URL, ou appelez l’API depuis votre application.
+
+</Steps>
+
+## Brancher votre application
+
+```ts
+// SURGE_MEDIA_API_URL = https://media.example.com/api/v1
+const { SURGE_MEDIA_API_URL, SURGE_MEDIA_PROJECT_ID, SURGE_MEDIA_SECRET_KEY } = process.env;
+
+const res = await fetch(`${SURGE_MEDIA_API_URL}/projects/${SURGE_MEDIA_PROJECT_ID}/media`, {
+  headers: { Authorization: `Bearer ${SURGE_MEDIA_SECRET_KEY}` },
+});
+const { items, nextCursor } = await res.json();
+```
+
+La page **Documentation de l’API** de l’administration génère ce fichier `.env` pour votre projet (URL de l’API, identifiant du projet et clé publique ; ajoutez vous-même la clé secrète).
+
+## Passer en production
+
+- **Votre domaine et TLS** : placez surgeMedia derrière votre mandataire inverse (Nginx, Caddy, Traefik…) sur un domaine comme `media.votre-entreprise.fr`, et renseignez-le dans `NUXT_SITE_URL`. Derrière un mandataire, réglez `NUXT_TRUST_PROXY` pour que les limites de débit et le journal d’audit voient les vraies adresses IP des clients.
+- **Un CDN devant `/m/`** (facultatif) : les médias publics sont servis avec des en-têtes de cache immuables.
+- **Sauvegardes** : sauvegardez ensemble la base de données et le stockage des médias (avec Docker, le volume `/app/data` contient les deux pour SQLite et le stockage local).
+- **Mises à jour** : `npm install @surge-media/core@latest` puis `npx surge-media db migrate`, ou récupérez la nouvelle image Docker — les migrations s’exécutent au démarrage.
+
+<Aside type="tip" title="Licence">
+  Le développement, les tests et l’évaluation sont gratuits pour tout le monde. La production est gratuite pour les organisations sous 500 000 USD de chiffre d’affaires annuel — voir les [tarifs](../../pricing/).
+</Aside>
+
+## Et ensuite ?
+
+<CardGrid>
+  <LinkCard title="Architecture et API" description="Comment l’API et la diffusion s’articulent, avec des exemples concrets." href="../architecture/" />
+  <LinkCard title="Sécurité et contrôle d’accès" description="Quel identifiant pour quel contexte, origines, URL signées." href="../security/" />
+</CardGrid>

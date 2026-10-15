@@ -1,0 +1,76 @@
+---
+/** Feature card: icon, title and a short description (slot). */
+import { Icon } from '@astrojs/starlight/components';
+import type { ComponentProps } from 'astro/types';
+
+interface Props {
+  icon: ComponentProps<typeof Icon>['name'];
+  title: string;
+}
+
+const { icon, title } = Astro.props;
+---
+
+<article class="feature sm-card-hover">
+  <span class="icon" aria-hidden="true"><Icon name={icon} size="1.375rem" /></span>
+  <h3>{title}</h3>
+  <div class="body"><slot /></div>
+</article>
+
+<style>
+  .feature {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+    padding: 1.5rem;
+    border: 1px solid var(--sm-border);
+    border-radius: var(--sm-radius);
+    background: var(--sm-surface);
+  }
+
+  .feature:hover {
+    border-color: var(--sm-brand);
+  }
+
+  .icon {
+    display: inline-grid;
+    place-items: center;
+    width: 2.75rem;
+    height: 2.75rem;
+    border-radius: 0.75rem;
+    background: var(--sm-brand-soft);
+    color: var(--sm-brand);
+  }
+
+  h3 {
+    margin: 0.25rem 0 0;
+    font-size: var(--sl-text-lg);
+    font-weight: 650;
+    color: var(--sl-color-white);
+  }
+
+  .body {
+    color: var(--sm-muted);
+    font-size: var(--sl-text-sm);
+    line-height: 1.65;
+  }
+
+  .body :global(p) {
+    margin: 0;
+  }
+
+  .body :global(p + p) {
+    margin-top: 0.5rem;
+  }
+
+  .body :global(code) {
+    padding: 0.1em 0.35em;
+    border-radius: 0.3em;
+    background: var(--sl-color-bg-inline-code);
+    font-size: 0.875em;
+  }
+
+  .body :global(a) {
+    color: var(--sl-color-text-accent);
+  }
+</style>

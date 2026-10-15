@@ -1,0 +1,15 @@
+---
+/** Grid of `<PricingPlan>` cards. */
+---
+
+<div class="plans not-content"><slot /></div>
+
+<style>
+  .plans {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 17rem), 1fr));
+    gap: 1.25rem;
+    align-items: stretch;
+    margin-block-end: 2rem;
+  }
+</style>

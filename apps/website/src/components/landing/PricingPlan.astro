@@ -1,0 +1,154 @@
+---
+/**
+ * Pricing card. The slot holds the plan's features as a Markdown list. Links starting with `/` get
+ * the site's base path.
+ */
+import { LinkButton } from '@astrojs/starlight/components';
+import { withBase } from '../../lib/paths';
+
+interface Props {
+  name: string;
+  price: string;
+  period?: string;
+  audience: string;
+  cta: { label: string; href: string };
+  badge?: string;
+  featured?: boolean;
+}
+
+const { name, price, period, audience, cta, badge, featured = false } = Astro.props;
+---
+
+<article class:list={['plan', { featured }]}>
+  <header>
+    <div class="title-row">
+      <h3>{name}</h3>
+      {badge && <span class="badge">{badge}</span>}
+    </div>
+    <p class="price">
+      <span class="amount">{price}</span>
+      {period && <span class="period">{period}</span>}
+    </p>
+    <p class="audience">{audience}</p>
+  </header>
+  <div class="features"><slot /></div>
+  <LinkButton href={withBase(cta.href)} variant={featured ? 'primary' : 'secondary'} class="cta">
+    {cta.label}
+  </LinkButton>
+</article>
+
+<style>
+  .plan {
+    display: flex;
+    flex-direction: column;
+    gap: 1.5rem;
+    padding: 1.75rem;
+    border: 1px solid var(--sm-border);
+    border-radius: calc(var(--sm-radius) * 1.25);
+    background: var(--sm-surface);
+  }
+
+  .featured {
+    border-color: var(--sm-brand);
+    box-shadow:
+      0 0 0 4px var(--sm-brand-soft),
+      var(--sm-shadow);
+  }
+
+  .title-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.75rem;
+  }
+
+  h3 {
+    margin: 0;
+    font-size: var(--sl-text-xl);
+    font-weight: 700;
+    color: var(--sl-color-white);
+  }
+
+  .badge {
+    padding: 0.2rem 0.625rem;
+    border-radius: 999px;
+    background: var(--sm-brand);
+    color: var(--sl-color-black);
+    font-size: var(--sl-text-xs);
+    font-weight: 700;
+  }
+
+  .price {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: 0.375rem;
+    margin: 1rem 0 0;
+  }
+
+  .amount {
+    font-size: var(--sl-text-3xl);
+    line-height: 1.15;
+    font-weight: 750;
+    letter-spacing: -0.02em;
+    color: var(--sl-color-white);
+  }
+
+  .period {
+    color: var(--sm-muted);
+    font-size: var(--sl-text-sm);
+  }
+
+  .audience {
+    margin: 0.75rem 0 0;
+    color: var(--sm-muted);
+    font-size: var(--sl-text-sm);
+    line-height: 1.6;
+  }
+
+  .features {
+    flex: 1;
+    padding-top: 1.25rem;
+    border-top: 1px solid var(--sm-border);
+  }
+
+  .features :global(ul) {
+    display: grid;
+    gap: 0.625rem;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  .features :global(li) {
+    position: relative;
+    margin: 0;
+    padding-inline-start: 1.625rem;
+    color: var(--sl-color-gray-2);
+    font-size: var(--sl-text-sm);
+    line-height: 1.55;
+  }
+
+  .features :global(li)::before {
+    content: '';
+    position: absolute;
+    inset-inline-start: 0;
+    top: 0.2em;
+    width: 1rem;
+    height: 1rem;
+    border-radius: 50%;
+    background: var(--sm-brand-soft);
+    /* Check mark */
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath d='M4.5 8.5l2.2 2.2 4.8-5' fill='none' stroke='%236f80f0' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+    background-size: 100%;
+  }
+
+  .features :global(strong) {
+    color: var(--sl-color-white);
+  }
+
+  .plan :global(.cta) {
+    justify-content: center;
+    width: 100%;
+  }
+</style>

@@ -1,0 +1,173 @@
+---
+/**
+ * Starlight's footer (edit link, last update, pagination) followed by the site footer: links,
+ * language and license. The language links also serve the splash pages on small screens, which
+ * have no menu.
+ */
+import Default from '@astrojs/starlight/components/Footer.astro';
+import { LOCALES } from '../../lib/locales.mjs';
+import { localePath, switchLocale } from '../../lib/paths';
+import { CHANGELOG_URL, ISSUES_URL, REPOSITORY_URL, SALES_URL } from '../../lib/site';
+
+const { t } = Astro.locals;
+const { locale, entry } = Astro.locals.starlightRoute;
+// Error pages have no translation of their own: their language links go to each home page.
+const isErrorPage = entry.id === '404' || entry.id.endsWith('/404');
+const page = (path: string) => localePath(path, locale);
+
+const columns = [
+  {
+    title: t('footer.product'),
+    links: [
+      { label: t('footer.gettingStarted'), href: page('/guides/getting-started/') },
+      { label: t('footer.architecture'), href: page('/guides/architecture/') },
+      { label: t('nav.pricing'), href: page('/pricing/') },
+    ],
+  },
+  {
+    title: t('footer.resources'),
+    links: [
+      { label: t('footer.transformations'), href: page('/reference/image-transformations/') },
+      { label: t('footer.security'), href: page('/guides/security/') },
+      { label: t('footer.changelog'), href: CHANGELOG_URL },
+      { label: 'GitHub', href: REPOSITORY_URL },
+    ],
+  },
+  {
+    title: t('footer.legal'),
+    links: [
+      { label: t('footer.license'), href: page('/license/') },
+      { label: t('footer.issues'), href: ISSUES_URL },
+      { label: t('footer.contact'), href: SALES_URL },
+    ],
+  },
+];
+
+const languages = Object.entries(LOCALES).map(([code, entry]) => {
+  const target = code === 'root' ? undefined : code;
+  return {
+    label: entry.label,
+    lang: entry.lang,
+    href: isErrorPage ? localePath('/', target) : switchLocale(Astro.url, locale, target),
+    current: target === locale,
+  };
+});
+---
+
+<Default />
+
+<footer class="site-footer not-content">
+  <div class="brand">
+    <p class="name">surgeMedia</p>
+    <p class="tagline">{t('footer.tagline')}</p>
+    {
+      languages.length > 1 && (
+        <p class="languages">
+          <span>{t('footer.language')}</span>
+          {languages.map(({ label, lang, href, current }) => (
+            <a {href} {lang} hreflang={lang} aria-current={current ? 'true' : undefined}>
+              {label}
+            </a>
+          ))}
+        </p>
+      )
+    }
+  </div>
+  {
+    columns.map(({ title, links }) => (
+      <div class="column">
+        <p class="column-title">{title}</p>
+        <ul>
+          {links.map(({ label, href }) => (
+            <li>
+              <a {href}>{label}</a>
+            </li>
+          ))}
+        </ul>
+      </div>
+    ))
+  }
+  <p class="copyright">{t('footer.copyright', { year: new Date().getFullYear() })}</p>
+</footer>
+
+<style>
+  .site-footer {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(10rem, 1fr));
+    gap: 2rem;
+    margin-top: 4rem;
+    padding-top: 2.5rem;
+    border-top: 1px solid var(--sl-color-hairline);
+    font-size: var(--sl-text-sm);
+  }
+
+  .brand {
+    grid-column: 1 / -1;
+  }
+
+  @media (min-width: 50rem) {
+    .site-footer {
+      grid-template-columns: 2fr repeat(3, 1fr);
+    }
+
+    .brand {
+      grid-column: auto;
+    }
+  }
+
+  p {
+    margin: 0;
+  }
+
+  .name {
+    font-weight: 700;
+    color: var(--sl-color-white);
+  }
+
+  .tagline {
+    margin-top: 0.5rem;
+    max-width: 28ch;
+    color: var(--sm-muted);
+  }
+
+  .languages {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem 0.75rem;
+    margin-top: 1rem;
+    color: var(--sm-muted);
+  }
+
+  .column-title {
+    margin-bottom: 0.75rem;
+    font-weight: 600;
+    color: var(--sl-color-white);
+  }
+
+  ul {
+    display: grid;
+    gap: 0.5rem;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  a {
+    color: var(--sl-color-gray-2);
+    text-decoration: none;
+  }
+
+  a:hover,
+  a[aria-current] {
+    color: var(--sl-color-white);
+    text-decoration: underline;
+  }
+
+  .copyright {
+    grid-column: 1 / -1;
+    padding-top: 1.5rem;
+    border-top: 1px solid var(--sl-color-hairline);
+    color: var(--sm-muted);
+    font-size: var(--sl-text-xs);
+  }
+</style>

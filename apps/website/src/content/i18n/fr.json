@@ -1,0 +1,19 @@
+{
+  "nav.docs": "Documentation",
+  "nav.pricing": "Tarifs",
+  "nav.primary": "Principale",
+  "footer.tagline": "Plateforme de médias auto-hébergée. Vos serveurs, votre domaine, vos données.",
+  "footer.product": "Produit",
+  "footer.resources": "Ressources",
+  "footer.legal": "Légal",
+  "footer.gettingStarted": "Démarrage",
+  "footer.architecture": "Architecture et API",
+  "footer.transformations": "Transformations d’images",
+  "footer.security": "Sécurité",
+  "footer.license": "Licence (BSL 1.1)",
+  "footer.changelog": "Historique des versions",
+  "footer.issues": "Signaler un problème",
+  "footer.contact": "Contacter l’équipe commerciale",
+  "footer.language": "Langue :",
+  "footer.copyright": "© {{year}} Mahmoud NBET. Le code source de surgeMedia est public, sous Business Source License 1.1."
+}

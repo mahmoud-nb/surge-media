@@ -1,0 +1,126 @@
+---
+title: Pricing
+description: surgeMedia is source-available under the Business Source License 1.1 — free in production for organizations under USD 500,000 in annual revenue, with commercial licenses for larger organizations and hosted offerings.
+template: splash
+editUrl: false
+lastUpdated: false
+eyebrow: Pricing
+hero:
+  title: Simple, fair pricing for <span class="sm-gradient">self&#8209;hosted media</span>.
+  tagline: Every plan ships the same product — no feature gating, no per-image or bandwidth metering. You pay for a commercial license only when your organization has outgrown the free tier.
+---
+
+import { Aside } from '@astrojs/starlight/components';
+import PricingPlans from '../../components/landing/PricingPlans.astro';
+import PricingPlan from '../../components/landing/PricingPlan.astro';
+import Section from '../../components/landing/Section.astro';
+import CtaBand from '../../components/landing/CtaBand.astro';
+import { SALES_URL } from '../../lib/site';
+
+<PricingPlans>
+  <PricingPlan
+    name="Community"
+    price="Free"
+    period="forever"
+    audience="Startups, small businesses, non-profits, freelancers and side projects — any organization under USD 500k in gross annual revenue."
+    cta={{ label: 'Get started', href: '/guides/getting-started/' }}
+  >
+    - **Every feature** of the core: API, admin, image and video processing
+    - Unlimited projects, users, media and transformations
+    - SQLite, PostgreSQL or MySQL / MariaDB
+    - Community support on GitHub
+    - Free for development, testing and evaluation — whatever your size
+  </PricingPlan>
+  <PricingPlan
+    name="Pro / Agency"
+    price="Commercial license"
+    period="annual"
+    audience="Organizations above USD 500k in gross annual revenue (group included), and agencies running instances for their clients."
+    cta={{ label: 'Contact sales', href: SALES_URL }}
+    badge="For scale-ups"
+    featured
+  >
+    - Everything in Community, licensed for production at any revenue
+    - **Agency use**: operate dedicated instances for your clients
+    - Priority support and guidance on upgrades
+    - Invoice, purchase order and license certificate
+    - Influence on the roadmap (SDKs, integrations)
+  </PricingPlan>
+  <PricingPlan
+    name="Enterprise"
+    price="Custom"
+    audience="Hosted or managed media offerings, OEM and white-label, or specific legal, security and support requirements."
+    cta={{ label: 'Talk to us', href: SALES_URL }}
+  >
+    - Rights for a **competing hosted service** (media storage or headless media CMS “as a service”)
+    - OEM, white-label and redistribution terms
+    - SLA, dedicated support channel, onboarding
+    - Security questionnaires and custom contract terms
+    - Architecture review for high-traffic installations
+  </PricingPlan>
+</PricingPlans>
+
+<Aside type="tip" title="Not sure which plan applies?">
+  Development, testing and evaluation are always free. In production, you need a commercial license only if your organization (with its group companies) made more than **USD 500,000** in gross revenue in its last completed fiscal year, or if you offer surgeMedia to third parties as a hosted media service. Everything else is Community.
+</Aside>
+
+<Section
+  id="open-core"
+  eyebrow="Business Source License 1.1"
+  title="Source-available today. Open source tomorrow."
+  lead="The full source code is public on GitHub. Each release automatically becomes open source under the Apache License 2.0 three years after its first publication."
+>
+
+| | Community | Pro / Agency | Enterprise |
+| --- | :---: | :---: | :---: |
+| Development, testing, evaluation | ✓ | ✓ | ✓ |
+| Production — organization under USD 500k revenue | ✓ | ✓ | ✓ |
+| Production — organization above USD 500k revenue | — | ✓ | ✓ |
+| Dedicated instances for your clients (agency) | If you and your client are both under 500k | ✓ | ✓ |
+| Competing hosted service (media SaaS, headless media CMS) | — | — | ✓ |
+| Support | Community | Priority | Dedicated + SLA |
+| Source code access | ✓ | ✓ | ✓ |
+| Each version under Apache 2.0 after 3 years | ✓ | ✓ | ✓ |
+
+</Section>
+
+<Section id="faq" eyebrow="FAQ" title="Frequently asked questions">
+<div class="sm-prose">
+
+### Is surgeMedia open source?
+
+Not in the OSI sense, today. surgeMedia is **source-available** under the Business Source License 1.1: you can read, modify and self-host the code, and use it in production for free unless one of the two exclusions applies (revenue above USD 500k, or a competing hosted service). Each version converts to the **Apache License 2.0** three years after its release.
+
+### How is the USD 500,000 threshold calculated?
+
+It is the gross revenue of the organization using surgeMedia — or on whose behalf it is used — **aggregated with its affiliates** (entities controlling, controlled by, or under common control with it), for its **last completed fiscal year**, excluding VAT. Other currencies are converted at the Federal Reserve rate of the last business day of that year.
+
+### We are an agency. Can we install surgeMedia for our clients?
+
+Yes. Running a dedicated instance for a client, solely for that client's websites and apps, as part of your design, development or maintenance services, is **not** a competing hosted service. The revenue threshold then applies to both you and your client. The Pro / Agency license covers agencies or clients above it.
+
+### What counts as a “competing hosted service”?
+
+Offering surgeMedia — modified or not — to third parties as a hosted, managed or “as a service” product whose main purpose is to let them store, manage, process or deliver **their own media**: a media storage service, a headless media CMS, etc. Using surgeMedia for your own products, even when your users upload media through them, is not one.
+
+### Do you meter images, bandwidth or transformations?
+
+No. surgeMedia runs on your infrastructure: storage, bandwidth and CPU are yours, and so are the savings. Licenses are not tied to volume.
+
+### Can we try everything before buying?
+
+Yes. Development, testing and evaluation are free for everyone, with every feature — no trial period, no license key.
+
+<Aside type="caution">
+  This page is a summary. Only the English text of the [LICENSE](https://github.com/mahmoud-nb/surge-media/blob/main/LICENSE) file is legally binding.
+</Aside>
+
+</div>
+</Section>
+
+<CtaBand
+  title="Need a commercial license or a quote?"
+  text="Tell us about your organization and your use case — we will answer with a clear proposal."
+  primary={{ label: 'Contact sales', href: SALES_URL }}
+  secondary={{ label: 'Read the license', href: '/license/' }}
+/>

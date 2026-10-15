@@ -1,0 +1,157 @@
+/*
+ * surgeMedia brand on top of Starlight. Colors come from the administration interface of the core
+ * (apps/core/app/assets/css/main.css): indigo accent, cool grays. Starlight's dark theme is `:root`,
+ * its light theme `:root[data-theme='light']`; its own styles live in cascade layers, so these
+ * unlayered rules win.
+ */
+:root {
+  --sl-font: 'Inter Variable', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif;
+
+  --sl-color-accent-low: #1e2748;
+  --sl-color-accent: #6f80f0;
+  --sl-color-accent-high: #c3cbfb;
+
+  --sl-color-white: #ffffff;
+  --sl-color-gray-1: #e6e9ef;
+  --sl-color-gray-2: #c4cad6;
+  --sl-color-gray-3: #9aa4b5;
+  --sl-color-gray-4: #6b7689;
+  --sl-color-gray-5: #253043;
+  --sl-color-gray-6: #131a26;
+  --sl-color-black: #0c111b;
+
+  /* Site tokens (landing pages, pricing). */
+  --sm-surface: #131a26;
+  --sm-surface-raised: #182132;
+  --sm-border: #253043;
+  --sm-muted: #9aa4b5;
+  --sm-brand: #8b9cf7;
+  --sm-brand-strong: #a3b1fa;
+  --sm-brand-soft: rgb(139 156 247 / 0.12);
+  --sm-success: #47cd89;
+  --sm-glow: radial-gradient(60% 60% at 50% 0%, rgb(111 128 240 / 0.28), transparent 70%);
+  --sm-terminal-bg: #0a0e17;
+  --sm-terminal-fg: #e6e9ef;
+  --sm-radius: 1rem;
+  --sm-shadow: 0 1px 2px rgb(0 0 0 / 0.3), 0 12px 32px -12px rgb(0 0 0 / 0.6);
+}
+
+:root[data-theme='light'] {
+  --sl-color-accent-low: #eceffd;
+  --sl-color-accent: #3b4cc0;
+  --sl-color-accent-high: #26318a;
+
+  --sl-color-white: #111827;
+  --sl-color-gray-1: #1f2937;
+  --sl-color-gray-2: #374151;
+  --sl-color-gray-3: #4b5565;
+  --sl-color-gray-4: #838b99;
+  --sl-color-gray-5: #e3e6ec;
+  --sl-color-gray-6: #eef0f4;
+  --sl-color-gray-7: #f6f7f9;
+  --sl-color-black: #ffffff;
+
+  --sm-surface: #ffffff;
+  --sm-surface-raised: #f6f7f9;
+  --sm-border: #e3e6ec;
+  --sm-muted: #4b5565;
+  --sm-brand: #3b4cc0;
+  --sm-brand-strong: #3140a6;
+  --sm-brand-soft: #eceffd;
+  --sm-success: #067647;
+  --sm-glow: radial-gradient(60% 60% at 50% 0%, rgb(59 76 192 / 0.14), transparent 70%);
+  --sm-terminal-bg: #111827;
+  --sm-terminal-fg: #e6e9ef;
+  --sm-shadow: 0 1px 2px rgb(17 24 39 / 0.06), 0 12px 32px -12px rgb(17 24 39 / 0.18);
+}
+
+/* Splash pages (landing, pricing): soft brand glow behind the hero. */
+[data-has-hero] main {
+  background: var(--sm-glow) no-repeat top center / 100% 42rem;
+}
+
+/* Headings a little tighter, as on the administration interface. */
+.sl-markdown-content :is(h1, h2, h3) {
+  letter-spacing: -0.015em;
+}
+
+/* Inline gradient for a word of the hero title: `<span class="sm-gradient">…</span>`. */
+.sm-gradient {
+  background: linear-gradient(100deg, var(--sm-brand) 10%, #b692f6 90%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+/* Landing sections built from components: full control over spacing (no Markdown styles). */
+.sm-section {
+  margin-block: clamp(3rem, 8vw, 6rem);
+}
+
+.sm-section-head {
+  max-width: 44rem;
+  margin-inline: auto;
+  margin-bottom: 2.5rem;
+  text-align: center;
+}
+
+.sm-section-head .sm-eyebrow {
+  margin-bottom: 0.75rem;
+}
+
+.sm-section-head h2 {
+  margin: 0;
+  font-size: clamp(var(--sl-text-2xl), calc(1rem + 2vw), var(--sl-text-4xl));
+  line-height: var(--sl-line-height-headings);
+  font-weight: 650;
+  letter-spacing: -0.02em;
+  color: var(--sl-color-white);
+}
+
+.sm-section-head p {
+  margin: 1rem 0 0;
+  font-size: var(--sl-text-lg);
+  color: var(--sm-muted);
+}
+
+.sm-eyebrow {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.25rem 0.75rem;
+  border: 1px solid var(--sm-border);
+  border-radius: 999px;
+  background: var(--sm-brand-soft);
+  color: var(--sm-brand);
+  font-size: var(--sl-text-xs);
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .sm-card-hover {
+    transition:
+      border-color 150ms ease,
+      transform 150ms ease;
+  }
+
+  .sm-card-hover:hover {
+    transform: translateY(-2px);
+  }
+}
+
+/* Long-form text inside a landing section (FAQ). */
+.sm-prose {
+  max-width: 48rem;
+  margin-inline: auto;
+}
+
+.sm-prose h3 {
+  font-size: var(--sl-text-xl);
+}
+
+/* Language picker: room for "Français" (Starlight sizes it for 7em). */
+starlight-lang-select label {
+  --sl-select-width: 8em !important;
+}

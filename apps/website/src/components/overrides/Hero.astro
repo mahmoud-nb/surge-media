@@ -1,0 +1,143 @@
+---
+/**
+ * Hero of the splash pages (landing, pricing). Same data as Starlight's (`hero` frontmatter), plus
+ * `eyebrow` and `heroTerminal`; links starting with `/` get the site's base path.
+ */
+import { Image } from 'astro:assets';
+import { LinkButton } from '@astrojs/starlight/components';
+import Terminal from '../landing/Terminal.astro';
+import { withBase } from '../../lib/paths';
+
+const { data } = Astro.locals.starlightRoute.entry;
+const { title = data.title, tagline, image, actions = [] } = data.hero || {};
+const { eyebrow, heroTerminal } = data;
+const hasVisual = Boolean(heroTerminal || image);
+
+let darkImage: ImageMetadata | undefined;
+let lightImage: ImageMetadata | undefined;
+if (image && 'file' in image) darkImage = image.file;
+else if (image && 'dark' in image) {
+  darkImage = image.dark;
+  lightImage = image.light;
+}
+---
+
+<div class:list={['hero', { 'has-visual': hasVisual }]}>
+  <div class="copy">
+    {eyebrow && <p class="sm-eyebrow">{eyebrow}</p>}
+    <h1 id="_top" data-page-title set:html={title} />
+    {tagline && <p class="tagline" set:html={tagline} />}
+    {
+      actions.length > 0 && (
+        <div class="actions">
+          {actions.map(({ attrs: { class: className, ...attrs } = {}, icon, link, text, variant }) => (
+            <LinkButton
+              href={withBase(link)}
+              {variant}
+              icon={icon?.name}
+              class:list={[className]}
+              {...attrs}
+            >
+              {text}
+              {icon?.html && <Fragment set:html={icon.html} />}
+            </LinkButton>
+          ))}
+        </div>
+      )
+    }
+  </div>
+  {
+    heroTerminal ? (
+      <div class="visual">
+        <Terminal title={heroTerminal.title} lines={heroTerminal.lines} />
+      </div>
+    ) : (
+      darkImage && (
+        <div class="visual">
+          <Image
+            src={darkImage}
+            alt={image?.alt ?? ''}
+            loading="eager"
+            class:list={{ 'light:sl-hidden': Boolean(lightImage) }}
+          />
+          {lightImage && <Image src={lightImage} alt={image?.alt ?? ''} loading="eager" class="dark:sl-hidden" />}
+        </div>
+      )
+    )
+  }
+</div>
+
+<style>
+  .hero {
+    display: grid;
+    gap: 2.5rem;
+    align-items: center;
+    padding-block: clamp(2rem, 6vw, 5rem) clamp(1rem, 4vw, 3rem);
+  }
+
+  .copy {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 1.25rem;
+    text-align: center;
+  }
+
+  h1 {
+    margin: 0;
+    max-width: 20ch;
+    font-size: clamp(var(--sl-text-4xl), calc(1rem + 4.5vw), 4rem);
+    line-height: 1.08;
+    font-weight: 700;
+    letter-spacing: -0.035em;
+    color: var(--sl-color-white);
+  }
+
+  .tagline {
+    margin: 0;
+    max-width: 60ch;
+    font-size: clamp(var(--sl-text-base), calc(0.5rem + 1.2vw), var(--sl-text-xl));
+    line-height: 1.6;
+    color: var(--sm-muted);
+  }
+
+  .actions {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 0.75rem 1rem;
+    margin-top: 0.5rem;
+  }
+
+  .actions :global(.sl-link-button) {
+    font-size: var(--sl-text-base);
+    padding: 0.625rem 1.25rem;
+  }
+
+  .visual {
+    min-width: 0;
+  }
+
+  .visual img {
+    display: block;
+    width: min(100%, 28rem);
+    height: auto;
+    margin-inline: auto;
+  }
+
+  @media (min-width: 62rem) {
+    .hero.has-visual {
+      grid-template-columns: 1.05fr 1fr;
+      gap: 3.5rem;
+    }
+
+    .has-visual .copy {
+      align-items: flex-start;
+      text-align: start;
+    }
+
+    .has-visual .actions {
+      justify-content: flex-start;
+    }
+  }
+</style>
