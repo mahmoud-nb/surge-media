@@ -3,7 +3,7 @@ import type { ApiFolder, ApiMedia, ApiMediaProcessing, ApiMediaSource, ApiPreset
 import { API_LINK_BUCKET, API_LINK_TTL } from '#shared/utils/api'
 import { extensionForMime } from '#shared/utils/media'
 import type { TokenScope } from '#shared/utils/permissions'
-import type { TransformPolicy } from '#shared/utils/transforms'
+import type { TransformFormat, TransformPolicy } from '#shared/utils/transforms'
 import { apiProcessingStatus, VIDEO_JOB_ERROR_CODES, type VideoJobErrorCode } from '#shared/utils/video-processing'
 import type { Media, MediaJob, MediaTextTrack } from '../../generated/prisma/client'
 import { alignedExpiry, signMediaAccess, type SignedAccess } from '../media/signing'
@@ -140,7 +140,13 @@ export interface ApiProjectSource {
   updatedAt: Date
 }
 
-export function toApiProject(project: ApiProjectSource, scopes: readonly TokenScope[]): ApiProject {
+/** Bornes des transformations de l'installation exposées avec le projet (`useTransformSettings()`). */
+export interface ApiTransformLimits {
+  formats: readonly TransformFormat[]
+  maxDimension: number
+}
+
+export function toApiProject(project: ApiProjectSource, scopes: readonly TokenScope[], transforms: ApiTransformLimits): ApiProject {
   return {
     id: project.id,
     name: project.name,
@@ -148,6 +154,8 @@ export function toApiProject(project: ApiProjectSource, scopes: readonly TokenSc
     description: project.description,
     publicListing: project.publicListing,
     transformPolicy: project.transformPolicy.toLowerCase() as ApiProject['transformPolicy'],
+    transformFormats: [...transforms.formats],
+    transformMaxDimension: transforms.maxDimension,
     scopes: [...scopes],
     createdAt: project.createdAt.toISOString(),
     updatedAt: project.updatedAt.toISOString(),

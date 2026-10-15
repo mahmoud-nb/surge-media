@@ -22,6 +22,16 @@
       "port": 3000
     },
     {
+      "name": "playground",
+      "runtimeExecutable": "pnpm",
+      "runtimeArgs": [
+        "--filter",
+        "@surge-media/playground",
+        "dev"
+      ],
+      "port": 5173
+    },
+    {
       "name": "website",
       "runtimeExecutable": "pnpm",
       "runtimeArgs": [

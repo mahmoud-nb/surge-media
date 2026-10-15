@@ -38,11 +38,12 @@
 > après 60 s sans donnée. Architecture de la phase B :
 > `.claude/architecture-phase-b.md` (en-tête = écarts B1 à B5).
 >
-> **Phase E = bibliothèques front** (étude validée le 2026-10-15, **aucun code encore**) : `.claude/architecture-phase-e.md`
-> (décisions ED1 à ED17) — `packages/client` (`@surge-media/client`, sans framework) + `packages/vue` (`@surge-media/vue`),
-> composants sans dépendance CSS + thème facultatif, les quatre familles (affichage, envoi, parcours/sélection, édition) dans
-> la 0.1 livrées en étapes E1 à E5, `@surge-media/nuxt` séparé plus tard. **Prochaine étape : E1** (fondations + affichage
-> + formats activés dans l'API v1), à détailler et faire valider avant le code.
+> **Phase E = bibliothèques front** (étude validée le 2026-10-15) : `.claude/architecture-phase-e.md` (décisions ED1 à ED28)
+> — `packages/client` (`@surge-media/client`, sans framework) + `packages/vue` (`@surge-media/vue`), composants sans
+> dépendance CSS + thème facultatif, les quatre familles (affichage, envoi, parcours/sélection, édition) dans la 0.1 livrées
+> en étapes E1 à E5, `@surge-media/nuxt` séparé plus tard. **E1 faite le 2026-10-15** (étape 26 : fondations, composants
+> d'affichage, bac à sable `apps/playground`, `Project.transformFormats` / `transformMaxDimension` ; § 9.25). **Prochaine
+> étape : E2 (envoi)**, à détailler et faire valider avant le code.
 >
 > Les éléments marqués **[À CONFIRMER]** sont des hypothèses ou des points non validés par
 > l'utilisateur (récapitulés en § 22).
@@ -60,7 +61,7 @@
 - Monorepo cible : `@surge-media/core` (admin + API, `apps/core`), site et documentation (`apps/website`, étape 25),
   `@surge-media/client` (client sans framework) + `@surge-media/vue` (composants : images optimisées, vidéos, galeries,
   sélecteurs, envoi, édition — phase E, `.claude/architecture-phase-e.md`), puis `@surge-media/nuxt`, `react`, `svelte`.
-  **Aujourd'hui : `apps/core` et `apps/website` ; `packages/` est vide** (phase E étudiée, pas encore codée).
+  **Aujourd'hui : `apps/core`, `apps/website`, `apps/playground` ; `packages/client` et `packages/vue` (privés, E1 faite, § 9.25).**
 - Base de données par défaut SQLite, configurable (PostgreSQL, MySQL/MariaDB) via la CLI
   `surge-media init` ou un script de réinitialisation.
 - Exigences transverses de l'utilisateur (permanentes) :
@@ -110,8 +111,11 @@ surge-media/                         monorepo pnpm (workspaces apps/* et package
 ├─ README.md                         présentation courte
 ├─ .claude/launch.json               serveurs pour l'aperçu Claude : core (dev), core-start (prod), core-start-3100 (prod sur 3100, cwd apps/core)
 ├─ .claude/project-context.md        CE FICHIER
-├─ packages/                        bibliothèques npm à venir (phase E : client, vue ; puis nuxt, react, svelte) ; vide
-└─ apps/core                         @surge-media/core (paquet npm publié, bin surge-media) ; apps/ = applications (docs à venir)
+├─ packages/client                  @surge-media/client (phase E1, privé) : client de l'API v1 et URL d'images / vidéos (§ 9.25)
+├─ packages/vue                     @surge-media/vue (phase E1, privé) : composants Sm*, plugin, thème facultatif (§ 9.25)
+├─ apps/playground                  bac à sable des bibliothèques (Vite, port 5173, .env.local ; jamais publié)
+├─ apps/website                     site public et documentation (Astro Starlight, étape 25)
+└─ apps/core                         @surge-media/core (paquet npm publié, bin surge-media) ; apps/ = applications
    ├─ app/                           interface Vue/Nuxt (SSR)
    ├─ server/                        Nitro : api/, routes/, middleware/, plugins/, utils/ (auto-importés), lib/ (imports explicites), generated/ (Prisma, non versionné)
    ├─ shared/                        code partagé app/serveur/CLI (auto-import de shared/utils et shared/types)
@@ -1249,7 +1253,7 @@ Format d'erreur (h3) : `{ statusCode, statusMessage, message, data? }` ; **codes
 | GET\|HEAD `/m/...` | selon § 9.6 (sans cookie ; Bearer depuis B3) | `Range` | fichier en flux · 206/302/304/401/403/404/405/416 ; 503 `PROCESSING_PENDING` (D3, retenue) ; OPTIONS 204 |
 | GET `/api/v1/me` | tout identifiant valable | — | `Me` (credential, user, project, access) |
 | GET `/api/v1/projects` | `project:read` | `?limit&cursor` | `{ items: Project[], nextCursor }` |
-| GET `/api/v1/projects/:projectId` | `project:read` | — | `Project` (dont `transformPolicy`, C2) · 404 `PROJECT_NOT_FOUND` · 403 `PROJECT_ARCHIVED` |
+| GET `/api/v1/projects/:projectId` | `project:read` | — | `Project` (dont `transformPolicy`, C2 ; `transformFormats`, `transformMaxDimension`, E1) · 404 `PROJECT_NOT_FOUND` · 403 `PROJECT_ARCHIVED` |
 | GET `/api/v1/projects/:projectId/presets` | `media:read`, toute clé | — | `{ items: Preset[] }` (`name, transformation, description, level`) · ETag → 304 |
 | GET `/api/v1/projects/:projectId/media` | `media:read` | `?q&kind&visibility&ids&sort&limit&cursor&withTotal` | `{ items: Media[], nextCursor, total? }` · 304 (page avec une vidéo en attente ou en cours : relue, ETag avec ses tâches, D3) · 400 `INVALID_REQUEST`/`INVALID_CURSOR` · 403 `LISTING_DISABLED` |
 | GET `/api/v1/projects/:projectId/media/:mediaId` | `media:read` | — | `Media` (D3 : + `sources`, `processing` ; ETag avec l'avancement) · 304 · 404 `MEDIA_NOT_FOUND` |
@@ -1903,9 +1907,9 @@ versions et publication** — paquet npm utilisable (modules natifs installés c
 image construite depuis ce paquet, ESLint, commitlint, `pnpm release` (release-it), workflows CI et Release (npm + GHCR) (`setup.md` § 15).
 **Suite** : première release (configuration npm/GitHub du § 15.4, puis `pnpm release 0.1.0`), puis D4 à proposer.
 **Étape 25** (2026-10-15) : site public et documentation `apps/website` (Astro Starlight). **Phase E** (bibliothèques front) :
-étude validée le 2026-10-15 (`.claude/architecture-phase-e.md`, ED1 à ED17, aucun code) ; **prochaine étape : E1** (espaces
+étude validée le 2026-10-15 (`.claude/architecture-phase-e.md`, ED1 à ED28) ; **E1 faite** le 2026-10-15 (étape 26 : espaces
 `packages/client` et `packages/vue`, client HTTP et constructeurs d'URL, `SmImage`, `SmPicture`, `SmVideo`, `SmMedia`, `SmThumbnail`,
-`SmProcessingStatus`, bac à sable, formats activés dans l'API v1), à détailler et faire valider avant le code.
+`SmProcessingStatus`, bac à sable, formats activés dans l'API v1 ; § 9.25). **Ensuite E2 (envoi)**, à détailler et faire valider.
 
 **Section vide** : aucune (la section « à venir » des jetons a été remplacée en B2).
 
@@ -2195,6 +2199,49 @@ SQLite pose problème. Référence d'exploitation : `setup.md` § 12.1 (tableaux
 - Scénarios rejoués sur la build finale : 787 contrôles (rôles, appareils, B2 à B5, C1 à C4, corps, envois bloqués, tableau
   de bord) ; 539 tests Vitest.
 
+### 9.25 Bibliothèques front : fondations et affichage (phase E1, étape 26)
+
+Architecture : `.claude/architecture-phase-e.md` (ED1–ED28 ; § 11 = plan d'E1, fin du document = état et écarts). Référence
+d'exploitation : `setup.md` § 17 et étape 26. Paquets **privés** (`0.0.0`, licence et publication en E5).
+
+- **Core** : `apiProjectSchema` + `transformFormats` (formats de sortie activés) et `transformMaxDimension` ;
+  `toApiProject(project, scopes, { formats, maxDimension })` (routes `projects/index.get` et `[projectId]/index.get` passent
+  `useTransformSettings()`) ; test `contrat Project v1` (`tests/api.test.ts`). `vite` **7.3.6** en devDependency du core :
+  sans elle pnpm résout les « pairs » de Nuxt / `@tailwindcss/vite` / Vitest sur le Vite 8 d'Astro (`nuxt typecheck` casse).
+- **`packages/client`** (`@surge-media/client`, tsdown → `dist/index.mjs` + `.d.mts`, aucune dépendance) : `createSurgeClient`
+  (`baseUrl` du site ou de l'API, `projectId`, `publishableKey` **ou** `getToken`), `credentials.ts` (jeton délégué : charge
+  lue sans vérifier la signature, renouvelé 60 s avant `exp`, renouvellements simultanés partagés, `identity()` stable d'un
+  jeton à l'autre = clé du cache ; `sm_sk_`/`sm_pat_` refusés localement si `document` existe), `http.ts` (GET seulement en E1,
+  cache ETag 200 entrées par accès, un rejeu sur 401 `TOKEN_EXPIRED`, `NETWORK_ERROR` en statut 0, aucun autre nouvel essai),
+  `errors.ts` (`SurgeApiError`, `problem+json` de l'API **et** `data.code` de `/m/`, `parseRetryAfter`), ressources `me`,
+  `project` (cache 5 min), `presets`, `media.get/list/getMany/iterate`, `urls/` (`buildTransform` canonique et borné,
+  `outputSize` = portage de `planTransform`, `widthCandidates`/`densityCandidates`/`presetCandidates`, `pictureFormats`,
+  `imageFormat`, `mediaUrl`, `posterUrl`, `focalObjectPosition`, `BUILTIN_PRESETS`), `policy.ts` (`transformMode` : `presets`
+  → préréglages ; `signed` → libres seulement si le gabarit porte `sig`), `processing.ts` (`watchMedia` : 5 s, onglet visible,
+  arrêt sur 401/403/404, attente doublée jusqu'à 60 s sur erreur passagère), `format.ts`, `i18n/` (fr/en de tous les codes).
+  Tests (67) : `fetch` simulé, **recoupement** avec `parseTransformation` et `planTransform` du core (import via alias
+  `#shared` et chemin relatif, tests seulement), **contrat** (`expectTypeOf` clés + assignabilité contre les schémas zod,
+  vérifié par `tsc`).
+- **`packages/vue`** (`@surge-media/vue`, Vite mode bibliothèque depuis `src/entry.ts` + `vue-tsc -p tsconfig.build.json`,
+  `dist/style.css`) : `createSurgeMedia(options)` → `{ context, install }` (projet lu au démarrage dans le navigateur, sauf
+  `project` fourni ou `loadProject: false`) ; `useSurgeMedia()` (contexte par défaut sans plugin) ; `createTranslate` (repli
+  langue → base → `fallbackLocale` → fr, surcharges `messages`) ; `imageSourceSet` (pur : préréglage, préréglages, densités si
+  taille fixe sans `sizes`, largeurs sinon ; `src` = candidat ≤ 1024 px) ; composants `SmImage`, `SmPicture` (une `<source>`
+  par format × media query, repli JPEG), `SmVideo` (`useLiveMedia`, sources renouvelées hors lecture, `HEAD` sur 503, mode
+  `ambient`), `SmMedia`, `SmThumbnail`, `SmProcessingStatus` ; `useImageFallback` (original puis cadre d'erreur ; au montage,
+  `decode()` décide si une image « complète » de largeur nulle est cassée) ; `DEV` = `process.env.NODE_ENV` (jamais
+  `import.meta.env` : figé au build d'une bibliothèque) ; styles minimaux en ligne (`VISUALLY_HIDDEN`, `max-width`,
+  `aspect-ratio`) pour fonctionner sans le thème. Tests (23) : rendu serveur (`@vitest-environment node`) et happy-dom
+  (qui déclare les images « complètes » : `complete` simulé à faux).
+- **`apps/playground`** : Vite (5173), alias vers les sources des paquets, intergiciel `POST /api/token` (clé secrète de
+  `.env.local` → `delegated-tokens`, `project:read` + `media:read`, 15 min, origine du bac à sable), `define __PLAYGROUND__`
+  (sans la clé secrète). Données de test de l'étape 26 : projet **« Bac à sable (E1) »** (`e1-playground`) + compte ADMIN
+  temporaire `e1-playground-admin@surge-media.test` créés par un script du scratchpad (voir la mémoire) — à supprimer avec
+  l'accord de l'utilisateur.
+- **Pièges vus** : volet du navigateur masqué → `decode()` en attente, images différées jamais chargées (forcer
+  `loading = 'eager'` pour mesurer) ; réponses 404 JSON d'images bloquées par ORB (normal) ; `alt=""` rendu `alt` par le
+  rendu serveur de Vue ; espaces insécables d'`Intl` dans les durées.
+
 
 **Architecture de la phase B validée** (toutes les décisions D1–D15 confirmées le 2026-09-29) : `.claude/architecture-phase-b.md`
 — contrats détaillés des sous-étapes suivantes (types de jetons et formats, API v1, CORS, cache, transformations).
@@ -2217,7 +2264,7 @@ SQLite pose problème. Référence d'exploitation : `setup.md` § 12.1 (tableaux
   valider** ; transverses : envois reprenables / directs vers S3, `BigInt` au-delà de 2 Gio, délestage de la diffusion, webhooks de fin de
   traitement, accélération matérielle, filtre « État » de la médiathèque, `<SmVideo>`. Audio et documents : phases ultérieures (DD13).
   `@surge-media/client` + composants (Vue d'abord) : **phase E**, étude validée le 2026-10-15 (`.claude/architecture-phase-e.md` :
-  catalogue, matrice des identifiants, évolutions du core, découpage E1 à E5) ; `<SmVideo>` en fait partie (E1).
+  catalogue, matrice des identifiants, évolutions du core, découpage E1 à E5) ; **E1 faite** (§ 9.25 : client, `SmImage`, `SmPicture`, `SmVideo`, `SmMedia`, `SmThumbnail`, `SmProcessingStatus`) ; ensuite E2 (envoi).
 - Pistes étape 19 : widgets masquables / réordonnables (préférence par compte), cache des agrégats pour de très grandes
   bibliothèques, médias récents en vignettes, journal par projet pour les propriétaires.
 - Pistes étape 18 : « Envoyer un e-mail de test » (Réglages ou CLI), envoi automatique à la création d'un compte, file d'envoi, alerte à

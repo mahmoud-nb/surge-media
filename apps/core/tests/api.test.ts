@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { decodeCursor, encodeCursor } from '../server/lib/api/cursor'
 import { ApiProblem, apiProblem, invalidRequest, problemBody, toProblem } from '../server/lib/api/problem'
 import { createTokenBucketLimiter, rateLimitHeaders } from '../server/lib/api/rate-limit'
-import { etagMatches, mediaEtag, toApiMedia, weakEtag } from '../server/lib/api/serializers'
+import { etagMatches, mediaEtag, toApiMedia, toApiProject, weakEtag } from '../server/lib/api/serializers'
 import { createLruCache } from '../server/lib/cache/lru'
 import { resolveRange } from '../server/lib/media/range'
 import { checkSignature, keyId } from '../server/lib/media/signing'
@@ -13,6 +13,7 @@ import {
   apiMediaSchema,
   apiMediaUpdateSchema,
   apiMediaUploadFieldsSchema,
+  apiProjectSchema,
   apiSignedUrlBodySchema,
   apiSignedUrlsBodySchema,
 } from '../shared/schemas/api'
@@ -259,6 +260,25 @@ describe('contrat Media v1', () => {
     expect(checkSignature(['secret-de-test'], { mediaId: media.id, version: 3, variant: 'track:cmtrack0001' }, derived, 1_900_000_000).status).toBe('invalid')
     const posterQuery = Object.fromEntries(new URL(hidden.poster!.url).searchParams)
     expect(checkSignature(['secret-de-test'], { mediaId: media.id, version: 3, variant: 'full' }, posterQuery, 1_900_000_000).status).toBe('valid')
+  })
+})
+
+describe('contrat Project v1', () => {
+  const project = {
+    id: 'cmproject01', name: 'Site vitrine', slug: 'site-vitrine', description: null, publicListing: true, transformPolicy: 'PRESETS',
+    createdAt: new Date('2026-09-29T10:00:00Z'), updatedAt: new Date('2026-10-15T08:00:00Z'),
+  } as const
+
+  it('politique en minuscules, formats activés et dimension maximale de l\'installation (phase E1)', () => {
+    const result = toApiProject(project, ['project:read', 'media:read'], { formats: ['webp', 'jpg'], maxDimension: 2048 })
+    expect(apiProjectSchema.parse(result)).toBeTruthy()
+    expect(result).toMatchObject({
+      transformPolicy: 'presets',
+      transformFormats: ['webp', 'jpg'],
+      transformMaxDimension: 2048,
+      scopes: ['project:read', 'media:read'],
+      createdAt: '2026-09-29T10:00:00.000Z',
+    })
   })
 })
 

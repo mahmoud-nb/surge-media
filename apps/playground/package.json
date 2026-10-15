@@ -1,0 +1,28 @@
+{
+  "name": "@surge-media/playground",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Development sandbox for @surge-media/client and @surge-media/vue, connected to a local surgeMedia core.",
+  "license": "BUSL-1.1",
+  "scripts": {
+    "dev": "vite",
+    "typecheck": "vue-tsc --noEmit",
+    "lint": "eslint .",
+    "lint:fix": "eslint . --fix"
+  },
+  "dependencies": {
+    "@surge-media/client": "workspace:*",
+    "@surge-media/vue": "workspace:*",
+    "vue": "3.5.43"
+  },
+  "devDependencies": {
+    "@nuxt/eslint-config": "1.17.0",
+    "@types/node": "^24.13.6",
+    "@vitejs/plugin-vue": "6.0.9",
+    "eslint": "^10.12.0",
+    "typescript": "~6.0.3",
+    "vite": "7.3.6",
+    "vue-tsc": "3.3.11"
+  }
+}

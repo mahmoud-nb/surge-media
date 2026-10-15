@@ -1,0 +1,53 @@
+{
+  "name": "@surge-media/client",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Framework-free TypeScript client for surgeMedia: API v1, publishable keys and delegated tokens, responsive image and video URLs.",
+  "keywords": [
+    "surge-media",
+    "media",
+    "images",
+    "video",
+    "srcset",
+    "api-client"
+  ],
+  "homepage": "https://github.com/mahmoud-nb/surge-media/tree/main/packages/client#readme",
+  "bugs": {
+    "url": "https://github.com/mahmoud-nb/surge-media/issues"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/mahmoud-nb/surge-media.git",
+    "directory": "packages/client"
+  },
+  "license": "BUSL-1.1",
+  "sideEffects": false,
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.mts",
+      "import": "./dist/index.mjs"
+    },
+    "./package.json": "./package.json"
+  },
+  "types": "./dist/index.d.mts",
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsdown && publint",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "lint": "eslint .",
+    "lint:fix": "eslint . --fix"
+  },
+  "devDependencies": {
+    "@nuxt/eslint-config": "1.17.0",
+    "eslint": "^10.12.0",
+    "publint": "^0.3.25",
+    "tsdown": "^0.23.0",
+    "typescript": "~6.0.3",
+    "vitest": "^5.0.2",
+    "zod": "^4.6.5"
+  }
+}

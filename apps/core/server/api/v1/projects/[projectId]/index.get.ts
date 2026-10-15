@@ -1,5 +1,6 @@
 import { defineApiHandler, requireApiProject } from '../../../../lib/api/context'
 import { toApiProject } from '../../../../lib/api/serializers'
+import { useTransformSettings } from '../../../../lib/media/transform-settings'
 
 defineRouteMeta({
   openAPI: {
@@ -26,5 +27,5 @@ defineRouteMeta({
  */
 export default defineApiHandler(async (event, principal) => {
   const { project, scopes } = await requireApiProject(event, principal, 'project:read')
-  return toApiProject(project, scopes)
+  return toApiProject(project, scopes, useTransformSettings())
 })

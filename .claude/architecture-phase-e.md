@@ -5,7 +5,9 @@
 > découpage **client + vue** (ED1), **thème facultatif** (ED10), **les quatre familles dans la 0.1** livrées par étapes
 > E1 à E5 (ED14), **Nuxt dans un paquet séparé plus tard** (ED15). Les autres décisions sont des recommandations
 > acceptées avec le plan ; chaque étape (E1…E5) sera **détaillée puis validée avant d'être codée**, comme les phases B à D.
-> Aucun code écrit à ce stade.
+> **E1 VALIDÉE tel quel puis FAITE le 2026-10-15** (§ 11, décisions ED18 à ED28 ; `setup.md` § 17 et étape 26 ;
+> état, écarts et vérifications : section « E1 — état de l'implémentation » en fin de document). Suite : **E2 (envoi)**,
+> à détailler et faire valider avant le code.
 >
 > Sources : `apps/core/shared/schemas/api.ts` (contrats v1), `apps/core/shared/utils/{api,permissions,transforms,
 > snippets,video,folders}.ts`, `server/api/v1/**`, `server/lib/access/principal.ts`, `.claude/project-context.md`
@@ -237,3 +239,227 @@ documents, envois reprenables (tus ou S3 multipart présigné), espace réservé
   `package.json`.
 - **Outil de publication par paquet** : release-it comme le core, ou changesets pour un monorepo multi-paquets.
 - **Nom de domaine des exemples** et compte npm (`@surge-media`, déjà prévu pour le core).
+
+---
+
+## 11. E1 — Fondations et composants d'affichage : plan détaillé (À VALIDER)
+
+> Proposé le 2026-10-15. Rien n'est codé tant que ce plan n'est pas validé. Décisions propres à E1 : ED18 à ED28 (§ 11.9).
+
+### 11.1 Objectif et périmètre
+
+À la fin d'E1, une application Vue 3.5+ affiche n'importe quel média de surgeMedia — image responsive, `<picture>`
+multi-formats, vidéo avec ses sources, son affiche, ses sous-titres et l'état de son traitement — en respectant la
+politique de transformation du projet, les formats activés et le caractère public ou privé du média, en français ou en
+anglais, en clair ou en sombre, rendue côté serveur. **Hors E1** : envoi (E2), listes, dossiers et sélecteurs (E3),
+édition (E4), documentation publique et publication (E5).
+
+### 11.2 Évolution du core n° 1 : formats activés et dimension maximale dans `Project` (ED18)
+
+- `apps/core/shared/schemas/api.ts` › `apiProjectSchema` : deux champs ajoutés (sans rupture), décrits en fr / en :
+  - `transformFormats: ('jpg' | 'png' | 'webp' | 'avif')[]` — formats de sortie activés (`NUXT_MEDIA_TRANSFORM_FORMATS`) ;
+  - `transformMaxDimension: number` — dimension maximale d'un dérivé (`NUXT_MEDIA_TRANSFORM_MAX_DIMENSION`).
+  À plat, à côté de `transformPolicy` (même famille de réglages).
+- `server/lib/api/serializers.ts` › `toApiProject(project, scopes, transforms)` reçoit `{ formats, maxDimension }` ; les
+  routes `GET /api/v1/projects` et `GET /api/v1/projects/:projectId` passent `useTransformSettings()`.
+- OpenAPI : généré depuis le registre zod (aucune autre écriture) ; vérifier `tests/openapi.test.ts`.
+- Test : `toApiProject` (pur) dans `tests/api.test.ts`.
+- Conséquence pour les composants : `GET /projects/:id` exige `project:read`. La clé publique l'a toujours ; **un jeton
+  délégué destiné aux composants doit inclure `project:read`** (défaut de l'aide serveur d'E2, documenté). Sans cette
+  lecture (objet `Media` seul, jeton sans `project:read`), le plugin accepte `defaults.formats` / `defaults.policy`,
+  sinon les composants supposent les quatre formats et la politique `open`, protégés par le repli du § 11.6.
+- Documentation : `setup.md` (section de l'API) et journal ; pages du site en E5.
+
+### 11.3 Monorepo et outillage
+
+| Élément | Choix |
+| --- | --- |
+| Emplacements | `packages/client`, `packages/vue`, `apps/playground` (déjà couverts par `pnpm-workspace.yaml`) |
+| Paquets | `"private": true`, version `0.0.0`, `"type": "module"`, licence à décider en E5 (ED26) ; hors du workflow Release |
+| Versions (alignées sur le core) | `vue` 3.5.43 (pair `^3.5.0`), `vite` 7.3.6, `@vitejs/plugin-vue` 6.0.9, `vue-tsc` 3.3.11, `typescript` ~6.0.3, `vitest` ^5.0.2, `tsdown` ^0.23.0, `eslint` ^10.12.0 + `@nuxt/eslint-config` 1.17.0 (style `stylistic` du core : 2 espaces, guillemets simples, sans point-virgule) ; nouveaux : `@vue/test-utils`, `happy-dom`, `publint` (versions exactes fixées à l'installation, dans le délai minimal de publication de pnpm) |
+| TypeScript | `strict`, `noUncheckedIndexedAccess`, `verbatimModuleSyntax`, `moduleResolution: bundler`, cible ES2022 (navigateurs à jour) |
+| Construction | client : tsdown → `dist/index.mjs` + `.d.mts`, `sideEffects: false` ; vue : Vite mode bibliothèque (Vue et le client externes) → `dist/index.mjs` + `dist/style.css`, `.d.ts` par `vue-tsc --declaration --emitDeclarationOnly` ; `publint` sur chaque paquet |
+| Scripts racine | `lint` et `test` passent à `pnpm -r` (le core et les paquets ; le site n'en a pas), `typecheck` l'est déjà ; ajout de `packages:build` et `playground:dev` |
+| CI (`ci.yml`) | job « Vérifications » inchangé (il appelle les scripts racine) + étapes « Build des bibliothèques » (`pnpm --filter "./packages/*" build`, publint) et « Contrastes du thème » |
+| Aperçu Claude | configuration `playground` (port 5173) dans `.claude/launch.json` |
+
+### 11.4 `@surge-media/client` en E1
+
+```text
+packages/client/src/
+├─ index.ts              exports publics
+├─ client.ts             createSurgeClient({ baseUrl, projectId, publishableKey | getToken, fetch?, locale? })
+├─ credentials.ts        clé publique ; jeton délégué : cache, lecture de la charge (exp, portées), renouvellement 60 s avant
+│                        l'échéance, appels simultanés partagés, un rejeu sur 401 TOKEN_EXPIRED
+├─ http.ts               fetch, Authorization, cache ETag des lectures (If-None-Match → 304), problem+json → SurgeApiError,
+│                        Retry-After et RateLimit exposés (pas de nouvel essai automatique en E1)
+├─ errors.ts             SurgeApiError { status, code, detail, requestId, retryAfter, errors }, isSurgeApiError, message(locale)
+├─ types.ts              Media, MediaSource, Poster, TextTrack, MediaProcessing, Project, Preset, Me, MediaListQuery, MediaList…
+├─ resources/            me(), project() (mis en cache 5 min), presets(), media.get(id), media.getMany(ids) (lots de 100,
+│                        ordre conservé), media.list(query), media.iterate(query) (curseur) — écritures en E2 à E4
+├─ urls/transform.ts     buildTransform(options) → segment canonique ; outputSize(options, source, max) → largeur/hauteur réelles
+├─ urls/media-url.ts     mediaUrl(media, { preset | transform, format }) depuis urlTemplate ; posterUrl(media, options)
+├─ urls/srcset.ts        widthCandidates (largeurs bornées à la sortie réelle, dédoublonnées, + largeur maximale de la
+│                        source) ; densityCandidates (1x, 1.5x, 2x, 3x selon la marge, règle du générateur C4)
+├─ urls/picture.ts       pictureFormats(enabled) : avif → webp → repli jpg (sinon png, sinon le premier activé)
+├─ urls/focal.ts         focalObjectPosition (repris du core)
+├─ policy.ts             transformMode(policy, credential) : free | signed | presets (§ 3.3)
+├─ processing.ts         watchMedia(client, id, { interval: 5 s, signal, onChange }) : relecture avec ETag tant que
+│                        pending/processing, pause onglet masqué, arrêt sur ready/failed, 403/404
+├─ format.ts             formatBytes, formatClock, formatDuration, formatBitrate (repris de app/utils/format.ts)
+└─ i18n/{fr,en}.ts       messages des 45 codes de API_ERRORS (+ PROCESSING_PENDING, MEDIA_FORBIDDEN de /m/) ; en: Messages
+```
+
+- **Forme canonique** : ordre `r, flip, crop, w, h, fit, g, q, bg`, valeurs par défaut retirées (`fit_cover`, `g_focal`,
+  `fit`/`g` sans les deux dimensions), `dpr` appliqué puis retiré, borne `maxDimension` comme le serveur.
+- **Taille réelle** (`outputSize`) : portage de l'étape « dimensions de sortie » de `server/lib/media/transform-plan.ts`
+  (jamais d'agrandissement : cover/fill `k = min(1, W/w, H/h)`, contain, inside/outside, une seule dimension, borne) ;
+  elle donne les descripteurs `w` exacts du srcset et les attributs `width`/`height`.
+- **Tests** (Vitest, environnement node) : `fetch` simulé (en-têtes, ETag/304, renouvellement du jeton, rejeu unique,
+  problem+json, `Retry-After`) ; **recoupement avec le core** : pour une table d'options, `parseTransformation` du core
+  doit rendre exactement la chaîne de `buildTransform`, et `planTransform` les mêmes dimensions que `outputSize` (import de
+  `apps/core/shared` et `server/lib/media/transform-plan.ts` réservé aux tests, alias `#shared`) ; **contrat** : des
+  exemples de `Media`, `Project`, `Preset` passent `apiMediaSchema.parse` etc., et `expectTypeOf` compare les types du
+  client à `z.input<…>` des schémas (configuration TypeScript de test séparée).
+
+### 11.5 `@surge-media/vue` en E1
+
+```text
+packages/vue/src/
+├─ index.ts                 exports (composants, composables, plugin, types)
+├─ plugin.ts                createSurgeMedia({ client? | baseUrl, projectId, publishableKey | getToken, locale, fallbackLocale,
+│                           messages, defaults: { formats, policy, widths, imageFormat } }) → app.use(...)
+├─ context.ts               injection avec valeurs par défaut : chaque composant fonctionne sans plugin (objet Media seul)
+├─ i18n/{fr,en,index}.ts    t(clé, paramètres) ; locale string ou Ref (synchronisable avec vue-i18n) ; repli locale → langue
+│                           de base → fr (ED23)
+├─ composables/             useSurgeClient, useProject (politique, formats, cache), usePresets, useMedia(id) (chargement,
+│                           rafraîchissement des URL signées 2 min avant urlExpiresAt), useMediaUrl, useProcessing(media)
+├─ components/              SmImage, SmPicture, SmVideo, SmMedia, SmThumbnail, SmProcessingStatus (+ icônes SVG en ligne)
+└─ styles/                  theme.css (jetons --sm-*, clair/sombre) + components.css → dist/style.css, dans @layer surge-media
+```
+
+| Composant | Propriétés principales | Comportement |
+| --- | --- | --- |
+| `SmImage` | `media`, `alt`, `decorative`, `width`, `height`, `aspect` (ex. `16/9`), `fit` (`cover` par défaut avec `aspect`, `contain`, `inside`), `transform` (q, r, flip, crop, bg), `preset`, `presets` (srcset de préréglages), `format` (`webp` par défaut si activé, sinon jpg), `widths`, `sizes`, `loading` (`lazy`), `fetchpriority`, `priority`, `objectFit` (recadrage CSS sur le point d'intérêt) | srcset en largeurs (descripteurs = largeur réelle) ou en densités quand `width` est fixé sans `sizes` ; `width`/`height` toujours posés (aucun décalage) ; recadrage serveur centré sur le point d'intérêt ; politique `presets` → préréglages ; `signed` sans signature → préréglages ; `alt` = prop > `altText` > avertissement en développement ; repli du § 11.6 ; événements `load`, `error` |
+| `SmPicture` | mêmes propriétés + `formats`, `sources` (direction artistique : `{ media, aspect?, widths?, sizes?, transform? }`) | une `<source type>` par format activé et par media query, `<img>` de repli ; vidéo : sur son affiche |
+| `SmVideo` | `media`, `controls` (vrai), `preload` (`metadata`), `lazy` (`preload="none"` jusqu'à la visibilité), `poster` (affiche dimensionnée par `urlTemplate`, `posterWidth`), `tracks` (vrai), `label`, `ambient` (muet, en boucle, lecture auto **avec bouton pause** ; jamais si `prefers-reduced-motion`), `watch` (suivi du traitement) | `<source>` dans l'ordre de `sources` ; `<track>` + `crossorigin="anonymous"` ; aucune lecture auto hors `ambient` ; sans source : cadre au bon rapport + message + « Télécharger l'original » ; traitement en attente/en cours : `SmProcessingStatus` ; erreur de lecture → requête `HEAD` sur la source : 503 `PROCESSING_PENDING` → nouvel essai après `Retry-After` (borné) ; sources renouvelées seulement si leurs URL changent, différé pendant la lecture (reprise au même instant) ; emplacements `fallback`, `processing` |
+| `SmMedia` | `media` + attributs transmis | `IMAGE` → `SmImage`, `VIDEO` → `SmVideo`, autre genre → lien vers l'original (emplacement `fallback`) |
+| `SmThumbnail` | `media`, `size` (160), `alt` | vignette carrée recadrée sur le point d'intérêt (image) ou l'affiche (vidéo), sinon icône du genre ; durée visible `aria-hidden` + durée en toutes lettres `sr-only` ; pastille d'état (en attente, en cours, échec) |
+| `SmProcessingStatus` | `processing`, `live` (annonces) | texte de l'état (porteur du sens) + icône fixe ; `<progress max="1">` nommé quand `progress` est connu ; `role="status"` annoncé aux seules transitions (début, fin, échec) |
+
+### 11.6 Repli d'une image (ED20)
+
+1. srcset choisi (formats activés, politique) ; 2. erreur de chargement → **original** (`media.url`, toujours servi pour
+une image publique ou signée, sans transformation) ; 3. nouvelle erreur → état `error` : cadre réservé, texte alternatif
+visible, événement `error`. Protège des réglages inconnus (formats, politique) et des liens signés expirés.
+
+### 11.7 Thème facultatif
+
+- Jetons : `--sm-color-bg`, `-surface`, `-fg`, `-muted-fg`, `-border`, `-primary`, `-primary-fg`, `-success`, `-warning`,
+  `-danger`, `--sm-focus-ring`, `--sm-radius`, `--sm-font` (`inherit`) ; valeurs initiales reprises de l'administration.
+- Sombre : `@media (prefers-color-scheme: dark)` (sauf `.light` / `[data-theme="light"]`) et `.dark` / `[data-theme="dark"]`.
+- Tout dans `@layer surge-media` ; classes `sm-*` stables ; sans le fichier, les composants restent utilisables (structure,
+  dimensions et `aspect-ratio` posés en attributs ou styles en ligne minimaux).
+- `pnpm --filter @surge-media/vue a11y:contrast` : portage de `apps/core/scripts/check-contrast.ts` (texte 4.5:1, bordures
+  et focus 3:1, clair et sombre).
+
+### 11.8 Bac à sable `apps/playground` (ED25)
+
+- Vite + Vue, port 5173, pages : Images (srcset, `<picture>`, cadrages, point d'intérêt, préréglages), Vidéos (sources,
+  affiche, sous-titres, traitement, `ambient`), Privé (jeton délégué), Politiques (`open` / `signed` / `presets`),
+  Replis ; sélecteurs de langue et de thème.
+- `apps/playground/.env.local` (ignoré par git : `.env.*` à la racine ; modèle `.env.example`) : `SURGE_BASE_URL`
+  (`http://localhost:3000`), `SURGE_PROJECT_ID`, `SURGE_PUBLISHABLE_KEY`, `SURGE_SECRET_KEY`. La clé secrète n'est lue que
+  par un intergiciel du serveur Vite (`/api/token` → `POST /api/v1/projects/:id/delegated-tokens`, portées `project:read`
+  + `media:read`, 15 min) ; jamais de préfixe `VITE_`, jamais dans le bundle.
+- Données : un projet dédié « Bac à sable » dans la base de dev, origine `http://localhost:5173`, clés de test, quelques
+  médias copiés (duplication) — créés par un script de test, supprimables, sans toucher aux données de l'utilisateur ;
+  valeurs des clés jamais affichées.
+
+### 11.9 Décisions d'E1
+
+| N° | Décision | Alternative écartée |
+| --- | --- | --- |
+| ED18 | `Project.transformFormats` + `Project.transformMaxDimension` (à plat) ; jetons délégués des composants avec `project:read` | nouvelle route `/config` ; champs dans `/me` |
+| ED19 | Les composants reçoivent un **objet `Media`** ; le chargement par identifiant passe par `useMedia(id)` (rendu serveur déterministe) | propriété `mediaId` qui charge elle-même |
+| ED20 | Repli d'une image : srcset → original → état d'erreur (§ 11.6) | aucun repli |
+| ED21 | Largeurs par défaut `320, 480, 640, 768, 1024, 1280, 1600, 1920, 2560`, bornées à la sortie réelle ; densités quand `width` est fixé ; `SmImage` en WebP par défaut, `SmPicture` AVIF + WebP + JPEG | AVIF par défaut (premier encodage plus lent) |
+| ED22 | Vidéo : **lecteur natif** seulement en 0.1 (commandes accessibles du navigateur), mode `ambient` avec bouton pause, détection du 503 par `HEAD` | lecteur personnalisé dès la 0.1 |
+| ED23 | Langue : chaîne ou `Ref` ; repli locale → langue de base → fr ; messages surchargeables | dépendance à vue-i18n |
+| ED24 | Icônes en SVG en ligne (tracés repris de Lucide, licence ISC mentionnée) | dépendance `@lucide/vue` |
+| ED25 | Bac à sable `apps/playground` + intergiciel Vite qui émet les jetons délégués depuis `.env.local` | Storybook ; clé secrète côté navigateur |
+| ED26 | Paquets `"private": true`, `0.0.0`, hors publication jusqu'à E5 | publier une 0.0.x de préversion |
+| ED27 | Outillage aligné sur le core (versions du § 11.3), ESLint `@nuxt/eslint-config` en mode `stylistic` | configuration ESLint propre aux paquets |
+| ED28 | Client sans nouvel essai automatique en E1 (`Retry-After` exposé) ; nouveaux essais avec la file d'envoi (E2) | nouvel essai automatique des lectures |
+
+### 11.10 Ordre de réalisation
+
+1. Core n° 1 (schéma, sérialiseur, routes, tests, OpenAPI) — appliqué au serveur de dev par rechargement, sans migration.
+2. Squelettes `packages/client` et `packages/vue` (package.json, tsconfig, build, Vitest, ESLint), scripts racine, CI.
+3. Client : http, identifiants, erreurs, types + tests de contrat.
+4. Constructeurs d'URL + tests de recoupement avec le core.
+5. Vue : plugin, i18n, contexte, thème ; `SmImage`, `SmPicture`, `SmThumbnail`.
+6. `SmVideo`, `SmProcessingStatus`, `SmMedia`, `useMedia`, `useProcessing`.
+7. Bac à sable, données de test, essais réels, axe, contrastes.
+8. Documentation : `setup.md` (nouvelle section « Bibliothèques front » + étape 26 du journal), `project-context.md`
+   (nouvelle section des paquets), état d'E1 en tête de ce document.
+
+### 11.11 Critères d'acceptation
+
+1. `pnpm install`, puis à la racine `pnpm lint`, `pnpm typecheck`, `pnpm test` réussis (core + paquets) ; builds des
+   deux paquets (ESM, types, `style.css`) et `publint` sans erreur.
+2. Recoupement avec le core (forme canonique, tailles réelles) et tests de contrat au vert.
+3. Rendu serveur (`renderToString`) stable pour chaque composant ; import des paquets sans `window` (environnement node).
+4. Bac à sable sur le core local : aucune redirection 301 ni erreur 400/403 sur les dérivés demandés (onglet réseau) ;
+   projet `presets` servi par préréglages ; média privé affiché avec un jeton délégué ; vidéo avec sources, affiche et
+   sous-titres ; vidéo en traitement suivie jusqu'à « prête » ; format désactivé → repli sur l'original.
+5. axe : 0 violation sur les pages du bac à sable en fr / en × clair / sombre ; contrastes AA du thème ; bouton pause du
+   mode `ambient` atteignable au clavier ; aucune lecture automatique ailleurs.
+6. Core : `GET /api/v1/projects/:id` renvoie `transformFormats` et `transformMaxDimension`, OpenAPI fr/en à jour, tests
+   du core verts, données de l'utilisateur intactes.
+
+### 11.12 Risques
+
+- **Vite mode bibliothèque** et `.d.ts` des SFC : si `vue-tsc` pose problème, repli sur `unplugin-vue` + tsdown.
+- **Délai minimal de publication de pnpm** : une version trop récente est refusée (comme astro 7.4.0) ; prendre la
+  précédente, sans exception ajoutée.
+- **Import du core dans les tests** du client (alias `#shared`, zod résolu depuis `apps/core`) : configuration de test
+  dédiée ; si cela devient fragile, copier des tables de cas générées par le core.
+- **`HEAD` sur une source vidéo** : CORS `*` et `Retry-After` exposés par `/m/` (§ 9.23) ; à vérifier derrière un CDN
+  qui ne transmettrait pas `HEAD`.
+
+---
+
+## E1 — état de l'implémentation (2026-10-15)
+
+Fait dans l'ordre du § 11.10 ; référence d'exploitation : `setup.md` § 17 et étape 26 ; contexte : `project-context.md` § 9.25.
+
+### Écarts et précisions
+
+- **Core** : en plus de `Project.transformFormats` / `transformMaxDimension`, `vite` **7.3.6** ajouté aux dépendances de
+  développement du core. L'installation des nouveaux paquets avait fait résoudre par pnpm les dépendances « pair » de
+  Nuxt, `@tailwindcss/vite`, Vitest… sur le **Vite 8.3.4** du site (Astro) ; `nuxt typecheck` échouait
+  (`nuxt.config.ts` : `Plugin<any>[]` non assignable à `PluginOption`). Avec la version épinglée, le verrou du core ne
+  change plus que par des dépendances « pair » facultatives (mêmes versions).
+- **Client** : `buildTransform` **borne** les dimensions à `maxDimension` en gardant le rapport (le serveur, lui,
+  refuserait `w` > borne) ; `parseTransform` (lecture légère d'une transformation de préréglage) et `BUILTIN_PRESETS`
+  (recoupé avec le core) ajoutés ; une valeur impossible lève une `RangeError` (erreur de programmation).
+- **Vue — build** : entrée de build distincte (`src/entry.ts` importe la feuille de style) pour que les déclarations
+  (`dist/index.d.ts`) ne contiennent pas d'import CSS ; `src/index.ts` reste l'entrée typée.
+- **Vue — repli au montage** : la vérification d'une erreur antérieure à l'hydratation passe par `img.decode()` (échec
+  = image réellement illisible). Avec `complete && naturalWidth === 0` seul, une image en cache pas encore décodée (onglet
+  masqué) basculait à tort sur l'original (vu dans le bac à sable).
+- **Vue — textes** : `image.unavailable` retiré (le cadre d'erreur affiche le texte alternatif, rien d'autre à dire).
+- **Licence** : champ `license` à `BUSL-1.1` (celle du dépôt) en attendant la décision d'E5 ; paquets `private`.
+
+### Vérifications
+
+- Tests : client **67** (dont recoupement de 25 transformations × 5 sources × 2 formats avec `parseTransformation` /
+  `planTransform`, contrat de 9 types vérifié par `tsc` — une sonde volontairement fausse échoue bien), vue **23**
+  (rendu serveur dans Node, montage dans happy-dom), core **554** (+1 : contrat `Project`).
+- Bac à sable sur le core de dev (projet de test créé par script dans la base de dev, données de l'utilisateur
+  intactes) : dérivés en 200 sans 301, AVIF par `<picture>`, privé signé, clé publique (403 d'une autre origine),
+  politiques `presets` et `signed`, repli réel 404 → original → cadre d'erreur, 304 de revalidation ; axe 0 violation
+  (20 combinaisons) ; 375 px sans débordement ; bouton pause 44 × 44 au clavier.
+- Non vérifié en réel : la retenue 503 `PROCESSING_PENDING` d'une vidéo (aucune vidéo à piste de données disponible ;
+  couverte par un test de composant) et une vidéo en cours de traitement (états simulés dans la page « Replis »).

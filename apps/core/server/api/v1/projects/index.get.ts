@@ -2,6 +2,7 @@ import { apiProjectListQuerySchema } from '#shared/schemas/api'
 import { defineApiHandler, parseApiQuery } from '../../../lib/api/context'
 import { listApiProjects } from '../../../lib/api/queries'
 import { toApiProject } from '../../../lib/api/serializers'
+import { useTransformSettings } from '../../../lib/media/transform-settings'
 
 defineRouteMeta({
   openAPI: {
@@ -31,5 +32,6 @@ defineRouteMeta({
 export default defineApiHandler(async (event, principal) => {
   const query = parseApiQuery(event, apiProjectListQuerySchema)
   const page = await listApiProjects(principal, query)
-  return { items: page.items.map(({ project, scopes }) => toApiProject(project, scopes)), nextCursor: page.nextCursor }
+  const transforms = useTransformSettings()
+  return { items: page.items.map(({ project, scopes }) => toApiProject(project, scopes, transforms)), nextCursor: page.nextCursor }
 })

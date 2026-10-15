@@ -1,5 +1,6 @@
 # Intégration continue : à chaque push sur main et sur chaque pull request (setup.md § 15).
-#   - vérifications : messages de commit (pull request), lint, typecheck, tests, traductions, migrations ;
+#   - vérifications : messages de commit (pull request), lint, typecheck, tests, traductions, contrastes,
+#     migrations, build des bibliothèques (packages/*) ;
 #   - paquet npm : build, archive, essai d'installation (init, start, /api/health) ;
 #   - image Docker : construite depuis cette archive (amd64), démarrée, sonde /api/health.
 name: CI
@@ -46,6 +47,12 @@ jobs:
 
       - name: Traductions
         run: pnpm i18n:check
+
+      - name: Contrastes des thèmes (administration, composants)
+        run: pnpm a11y:contrast
+
+      - name: Build des bibliothèques (client, vue) et publint
+        run: pnpm packages:build
 
       - name: Migrations à jour avec le schéma
         run: pnpm --filter @surge-media/core db:migration --check

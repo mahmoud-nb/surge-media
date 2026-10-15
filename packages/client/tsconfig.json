@@ -1,0 +1,23 @@
+{
+  // Vérification des types du client et de ses tests (`pnpm typecheck`). Les tests de contrat et de
+  // recoupement importent des modules purs du core (apps/core/shared, transform-plan.ts) : alias `#shared`.
+  "compilerOptions": {
+    "target": "ES2022",
+    "lib": ["ES2022", "DOM", "DOM.Iterable"],
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "strict": true,
+    "noUncheckedIndexedAccess": true,
+    "noImplicitOverride": true,
+    "verbatimModuleSyntax": true,
+    "isolatedModules": true,
+    "allowImportingTsExtensions": true,
+    "skipLibCheck": true,
+    "noEmit": true,
+    "types": [],
+    "paths": {
+      "#shared/*": ["../../apps/core/shared/*"]
+    }
+  },
+  "include": ["src", "tests"]
+}

@@ -1,0 +1,69 @@
+{
+  "name": "@surge-media/vue",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Vue 3 components for surgeMedia: responsive images, <picture>, videos with sources, posters and captions, processing status.",
+  "keywords": [
+    "surge-media",
+    "vue",
+    "components",
+    "images",
+    "video",
+    "srcset",
+    "accessibility"
+  ],
+  "homepage": "https://github.com/mahmoud-nb/surge-media/tree/main/packages/vue#readme",
+  "bugs": {
+    "url": "https://github.com/mahmoud-nb/surge-media/issues"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/mahmoud-nb/surge-media.git",
+    "directory": "packages/vue"
+  },
+  "license": "BUSL-1.1",
+  "sideEffects": [
+    "**/*.css"
+  ],
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.mjs"
+    },
+    "./style.css": "./dist/style.css",
+    "./package.json": "./package.json"
+  },
+  "types": "./dist/index.d.ts",
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "vite build && vue-tsc -p tsconfig.build.json && publint",
+    "typecheck": "vue-tsc --noEmit",
+    "test": "vitest run",
+    "lint": "eslint .",
+    "lint:fix": "eslint . --fix",
+    "a11y:contrast": "tsx scripts/check-contrast.ts"
+  },
+  "peerDependencies": {
+    "vue": "^3.5.0"
+  },
+  "dependencies": {
+    "@surge-media/client": "workspace:*"
+  },
+  "devDependencies": {
+    "@nuxt/eslint-config": "1.17.0",
+    "@vitejs/plugin-vue": "6.0.9",
+    "@vue/test-utils": "^2.5.1",
+    "eslint": "^10.12.0",
+    "happy-dom": "^21.0.1",
+    "publint": "^0.3.25",
+    "tsx": "^4.23.15",
+    "typescript": "~6.0.3",
+    "vite": "7.3.6",
+    "vitest": "^5.0.2",
+    "vue": "3.5.43",
+    "vue-tsc": "3.3.11"
+  }
+}

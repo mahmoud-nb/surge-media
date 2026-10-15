@@ -1,0 +1,15 @@
+{
+  // Déclarations publiées (dist/*.d.ts), générées par vue-tsc après `vite build`. Le client est résolu par
+  // son paquet construit (dépendance de l'espace de travail, construite avant par `pnpm -r build`).
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "noEmit": false,
+    "declaration": true,
+    "emitDeclarationOnly": true,
+    "outDir": "dist",
+    "rootDir": "src",
+    "paths": {}
+  },
+  "include": ["src"],
+  "exclude": ["src/entry.ts"]
+}

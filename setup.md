@@ -1510,7 +1510,7 @@ L'onglet « Clés d'API » d'un projet affiche son adresse et le lien vers la sp
 | --- | --- | --- |
 | `GET /api/v1/me` | — | identifiant utilisé : type, nom, préfixe, environnement, portées, échéance ; propriétaire, projet ou sélection |
 | `GET /api/v1/projects?limit&cursor` | `project:read` | projets actifs accessibles, avec les portées effectives |
-| `GET /api/v1/projects/:projectId` | `project:read` | projet (dont `publicListing` et `transformPolicy` : `open` \| `signed` \| `presets`, § 8.2) |
+| `GET /api/v1/projects/:projectId` | `project:read` | projet (dont `publicListing` et `transformPolicy` : `open` \| `signed` \| `presets`, § 8.2 ; `transformFormats` et `transformMaxDimension` : formats de sortie activés et dimension maximale des dérivés, étape 26) |
 | `GET /api/v1/projects/:projectId/presets` | `media:read` (toute clé, y compris publique) | préréglages utilisables : intégrés, du projet, globaux non masqués (`{ items: [{ name, transformation, description, level }] }`), ETag → 304 |
 | `GET /api/v1/projects/:projectId/media` | `media:read` | `?q&kind&visibility&ids&sort&limit&cursor&withTotal` → `{ items, nextCursor, total? }` |
 | `GET /api/v1/projects/:projectId/media/:mediaId` | `media:read` | un média actif (clé publique : public seulement) |
@@ -2442,6 +2442,80 @@ apps/website/
   (`@surge-media/website...`) : le site s'installe sans le core (ni `nuxt prepare`, ni clients Prisma).
 - **Image de partage** : modifier `scripts/og-image.svg`, puis `pnpm --filter @surge-media/website og-image`
   (rendu par sharp avec les polices du poste) et versionner `public/og.png`.
+
+## 17. Bibliothèques front (`packages/`) et bac à sable
+
+Phase E (architecture : `.claude/architecture-phase-e.md`). Deux paquets **privés** pour l'instant (`"private":
+true`, version `0.0.0`, publication et licence décidées en E5) :
+
+```text
+packages/client/       @surge-media/client — TypeScript sans framework (navigateur, Node, edge), aucune dépendance
+├─ src/client.ts       createSurgeClient({ baseUrl, projectId, publishableKey | getToken }) : me, project (cache 5 min),
+│                      presets, media.get / list / getMany (lots de 100) / iterate (curseur)
+├─ src/credentials.ts  clé publique ; jetons délégués renouvelés 60 s avant l'échéance, un rejeu sur 401 TOKEN_EXPIRED ;
+│                      clé secrète ou jeton personnel refusés d'emblée dans un navigateur (SECRET_IN_BROWSER)
+├─ src/http.ts         cache ETag des lectures (If-None-Match → 304), erreurs SurgeApiError (code, detail, retryAfter)
+├─ src/urls/           transformations en forme canonique (aucune redirection 301), taille réelle des fichiers produits,
+│                      srcset en largeurs / densités / préréglages, formats d'un <picture>, point d'intérêt
+├─ src/processing.ts   suivi du traitement d'une vidéo (relecture par ETag, onglet visible)
+└─ src/i18n/           messages fr / en de tous les codes d'erreur de l'API
+packages/vue/          @surge-media/vue — Vue ≥ 3.5, rendu serveur
+├─ src/plugin.ts       createSurgeMedia({ baseUrl, projectId, publishableKey | getToken, locale, messages, defaults, project })
+├─ src/components/     SmImage, SmPicture, SmVideo, SmMedia, SmThumbnail, SmProcessingStatus
+├─ src/composables/    useMedia(id), useLiveMedia, useTransformMode, useAltText
+└─ src/styles/         thème facultatif → dist/style.css (jetons --sm-*, clair / sombre, @layer surge-media)
+apps/playground/       bac à sable (Vite + Vue, port 5173), jamais publié
+```
+
+**Utilisation** (aperçu ; documentation complète en E5) :
+
+```ts
+import { createSurgeMedia } from '@surge-media/vue'
+import '@surge-media/vue/style.css' // facultatif
+
+app.use(createSurgeMedia({
+  baseUrl: 'https://media.example.com',
+  projectId: 'cm…',
+  publishableKey: 'sm_pk_…', // ou getToken: () => fetch('/api/surge-token', { method: 'POST' }).then(r => r.json())
+  locale: 'fr', // chaîne ou Ref (synchronisable avec vue-i18n)
+}))
+```
+
+```vue
+<SmImage :media="media" sizes="(min-width: 960px) 50vw, 100vw" />
+<SmImage :media="media" :width="320" aspect="1" />          <!-- taille fixe : 1x, 2x, 3x -->
+<SmPicture :media="media" :sources="[{ media: '(max-width: 640px)', aspect: 1 }]" />
+<SmVideo :media="video" />                                   <!-- sources, affiche, sous-titres -->
+```
+
+- **Politique du projet** : lue au démarrage (`GET /projects/:id` : il faut `project:read`, toujours présent pour
+  la clé publique, à demander pour un jeton délégué) ; `presets` → préréglages seulement, `signed` → paramètres
+  libres pour un média privé (gabarit signé), préréglages sinon. Rendu serveur : passer `project` (ou `defaults`)
+  au plugin, et **créer le plugin pour chaque requête** (un jeton délégué est propre à un utilisateur).
+- **Repli d'une image** : dérivé → fichier original → cadre avec le texte alternatif.
+- **Scripts** : `pnpm test`, `pnpm lint`, `pnpm typecheck` (racine : tous les paquets) ; `pnpm packages:build`
+  (client puis vue, `publint`) ; `pnpm a11y:contrast` (thèmes de l'administration et des composants).
+- **Tests** : client (Vitest, `fetch` simulé ; **recoupement avec le core** : forme canonique par
+  `parseTransformation` et tailles par `planTransform` ; **contrat** : types du client = schémas zod de l'API,
+  vérifiés par `tsc`) ; vue (rendu serveur dans Node, montage dans happy-dom).
+
+### 17.1 Bac à sable
+
+1. Lancer le core (`pnpm dev`).
+2. Dans l'administration, créer un projet de test : réglages › **liste publique** activée ; **clés** : une clé
+   publique et une clé secrète ; **origines** : `http://localhost:5173`. Y envoyer quelques images et une vidéo.
+3. Copier `apps/playground/.env.example` en `apps/playground/.env.local` (ignoré par git) et le compléter :
+   `SURGE_BASE_URL`, `SURGE_PROJECT_ID`, `SURGE_PUBLISHABLE_KEY`, `SURGE_SECRET_KEY`.
+4. `pnpm playground:dev`, puis http://localhost:5173 : pages Images, Vidéos, Média privé, Clé publique, Replis ;
+   langue et thème dans l'en-tête.
+
+La clé secrète n'est lue que par le serveur Vite (`POST /api/token` émet des jetons délégués `project:read` +
+`media:read` de 15 min, liés à l'origine du bac à sable) : elle n'atteint jamais le navigateur.
+
+**Piège pnpm** : le core déclare `vite` 7.3.6 en dépendance de développement. Sans elle, l'ajout d'un paquet a suffi
+pour que pnpm résolve les dépendances « pair » de Nuxt, de `@tailwindcss/vite` et de Vitest sur le Vite 8 du site
+(Astro) : `nuxt typecheck` échouait sur le plugin Tailwind de `nuxt.config.ts`. Garder la même version que
+`@nuxt/vite-builder`.
 
 ## Journal des étapes
 
@@ -3958,3 +4032,29 @@ facultatif ; les quatre familles dans la 0.1 ; `@surge-media/nuxt` dans un paque
 
 **Aucun code.** Prochaine étape : **E1** (fondations + composants d'affichage + formats activés dans l'API v1),
 détaillée et validée avant le développement. Licence des paquets front à décider avant leur publication (E5).
+
+### Étape 26 — 2026-10-15 — Phase E1 : fondations des bibliothèques front et composants d'affichage
+
+**Cadre** : plan d'E1 validé tel quel par l'utilisateur (`.claude/architecture-phase-e.md` § 11, décisions ED18 à
+ED28).
+
+**Core** : `Project` (API v1) expose `transformFormats` et `transformMaxDimension` (`toApiProject` reçoit les
+réglages de `useTransformSettings()`, OpenAPI fr / en généré, test du contrat). Aucune migration. `vite` 7.3.6 en
+dépendance de développement du core (piège pnpm, § 17.1).
+
+**Ajouté** (§ 17) : `packages/client` (`@surge-media/client` : client HTTP, identifiants, cache ETag, erreurs
+traduites, constructeurs d'URL, suivi du traitement), `packages/vue` (`@surge-media/vue` : plugin, i18n fr / en,
+thème facultatif, `SmImage`, `SmPicture`, `SmVideo`, `SmMedia`, `SmThumbnail`, `SmProcessingStatus`, `useMedia`),
+`apps/playground` (bac à sable). Scripts racine : `lint`, `test`, `a11y:contrast` sur tous les paquets,
+`packages:build`, `playground:dev`. CI : contrastes des deux thèmes et build des bibliothèques. Configuration
+`playground` de `.claude/launch.json`.
+
+**Vérifié** : lint, typecheck (core, client, vue, bac à sable, site), tests (client 67, vue 23, core 554 + 9
+ignorés), contrastes AA des deux thèmes, i18n du core, builds + `publint`. Sur le core local, avec un projet de
+test : aucune redirection 301 ni erreur sur les dérivés demandés, AVIF choisi par `<picture>`, médias privés par
+URL signées (jeton délégué), lecture par clé publique (origine étrangère refusée : 403), politiques `presets` et
+`signed` respectées, repli 404 → original → cadre d'erreur, revalidation par ETag (304) ; axe : 0 violation sur
+5 pages × fr / en × clair / sombre ; aucun débordement à 375 px ; bouton pause du mode ambiant atteignable au
+clavier (44 × 44 px), aucune lecture automatique ailleurs.
+
+**Écarts** : `.claude/architecture-phase-e.md`, section « E1 — état de l'implémentation ».
