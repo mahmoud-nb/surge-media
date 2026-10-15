@@ -3941,3 +3941,20 @@ dans le navigateur en clair et en sombre, en 1280 px et 390 px (aucun débordeme
 des offres Pro / Enterprise (aucun prix affiché) et l'adresse de contact commerciale (`src/lib/site.ts`) ; les
 commandes `npm install @surge-media/core` et `ghcr.io/mahmoud-nb/surge-media` ne fonctionnent qu'après la
 première release du core.
+
+### Étude — 2026-10-15 — Phase E : bibliothèques front (`@surge-media/client`, `@surge-media/vue`)
+
+**Cadre** : demande de l'utilisateur — attaquer les bibliothèques en commençant par `@surge-media/vue` dans
+`packages/vue`, après une étude des composants et des fonctionnalités médias réalisables côté front.
+
+**Résultat** : `.claude/architecture-phase-e.md` (décisions ED1 à ED17) — ce que chaque identifiant permet dans le
+navigateur (objet `Media` fourni par le back, clé publique, jeton délégué), couche `@surge-media/client` (client HTTP,
+jetons délégués renouvelés, cache ETag, constructeurs d'URL canoniques, logique sans interface, entrée serveur pour
+émettre les jetons), catalogue des composants `Sm*` en quatre familles (affichage, envoi, parcours et sélection,
+édition), exigences (fr/en, WCAG 2.2 AA, SSR, thème facultatif), évolutions du core utiles, découpage E1 à E5.
+
+**Choix de l'utilisateur** : `packages/client` + `packages/vue` ; composants sans dépendance CSS avec un thème
+facultatif ; les quatre familles dans la 0.1 ; `@surge-media/nuxt` dans un paquet séparé plus tard.
+
+**Aucun code.** Prochaine étape : **E1** (fondations + composants d'affichage + formats activés dans l'API v1),
+détaillée et validée avant le développement. Licence des paquets front à décider avant leur publication (E5).

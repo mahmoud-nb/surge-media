@@ -38,6 +38,12 @@
 > après 60 s sans donnée. Architecture de la phase B :
 > `.claude/architecture-phase-b.md` (en-tête = écarts B1 à B5).
 >
+> **Phase E = bibliothèques front** (étude validée le 2026-10-15, **aucun code encore**) : `.claude/architecture-phase-e.md`
+> (décisions ED1 à ED17) — `packages/client` (`@surge-media/client`, sans framework) + `packages/vue` (`@surge-media/vue`),
+> composants sans dépendance CSS + thème facultatif, les quatre familles (affichage, envoi, parcours/sélection, édition) dans
+> la 0.1 livrées en étapes E1 à E5, `@surge-media/nuxt` séparé plus tard. **Prochaine étape : E1** (fondations + affichage
+> + formats activés dans l'API v1), à détailler et faire valider avant le code.
+>
 > Les éléments marqués **[À CONFIRMER]** sont des hypothèses ou des points non validés par
 > l'utilisateur (récapitulés en § 22).
 
@@ -51,9 +57,10 @@
   d'API** pour les applications tierces du client (authentification, autorisations, CORS).
 - Traitements d'images à la demande par URL (crop, resize, optimisation : phase C, terminée) ; vidéos (phase D : envoi et diffusion
   directe, préparation, affiche, sous-titres ; D3 : conversion facultative par ffmpeg hors du chemin des requêtes, § 9.23).
-- Monorepo cible : `@surge-media/core` (admin + API), `@surge-media/vue` / `react` / `svelte`
-  (composants : images optimisées, galeries, sélecteurs, upload), `docs` (GitHub Pages).
-  **Seul `apps/core` existe aujourd'hui.**
+- Monorepo cible : `@surge-media/core` (admin + API, `apps/core`), site et documentation (`apps/website`, étape 25),
+  `@surge-media/client` (client sans framework) + `@surge-media/vue` (composants : images optimisées, vidéos, galeries,
+  sélecteurs, envoi, édition — phase E, `.claude/architecture-phase-e.md`), puis `@surge-media/nuxt`, `react`, `svelte`.
+  **Aujourd'hui : `apps/core` et `apps/website` ; `packages/` est vide** (phase E étudiée, pas encore codée).
 - Base de données par défaut SQLite, configurable (PostgreSQL, MySQL/MariaDB) via la CLI
   `surge-media init` ou un script de réinitialisation.
 - Exigences transverses de l'utilisateur (permanentes) :
@@ -103,7 +110,7 @@ surge-media/                         monorepo pnpm (workspaces apps/* et package
 ├─ README.md                         présentation courte
 ├─ .claude/launch.json               serveurs pour l'aperçu Claude : core (dev), core-start (prod), core-start-3100 (prod sur 3100, cwd apps/core)
 ├─ .claude/project-context.md        CE FICHIER
-├─ packages/                        bibliothèques npm à venir (@surge-media/vue, react, svelte) ; vide
+├─ packages/                        bibliothèques npm à venir (phase E : client, vue ; puis nuxt, react, svelte) ; vide
 └─ apps/core                         @surge-media/core (paquet npm publié, bin surge-media) ; apps/ = applications (docs à venir)
    ├─ app/                           interface Vue/Nuxt (SSR)
    ├─ server/                        Nitro : api/, routes/, middleware/, plugins/, utils/ (auto-importés), lib/ (imports explicites), generated/ (Prisma, non versionné)
@@ -1895,6 +1902,10 @@ dans chaque build), variantes complète et `slim`, Compose SQLite et PostgreSQL 
 versions et publication** — paquet npm utilisable (modules natifs installés chez l'utilisateur, CLI `start`, dossier de l'installation),
 image construite depuis ce paquet, ESLint, commitlint, `pnpm release` (release-it), workflows CI et Release (npm + GHCR) (`setup.md` § 15).
 **Suite** : première release (configuration npm/GitHub du § 15.4, puis `pnpm release 0.1.0`), puis D4 à proposer.
+**Étape 25** (2026-10-15) : site public et documentation `apps/website` (Astro Starlight). **Phase E** (bibliothèques front) :
+étude validée le 2026-10-15 (`.claude/architecture-phase-e.md`, ED1 à ED17, aucun code) ; **prochaine étape : E1** (espaces
+`packages/client` et `packages/vue`, client HTTP et constructeurs d'URL, `SmImage`, `SmPicture`, `SmVideo`, `SmMedia`, `SmThumbnail`,
+`SmProcessingStatus`, bac à sable, formats activés dans l'API v1), à détailler et faire valider avant le code.
 
 **Section vide** : aucune (la section « à venir » des jetons a été remplacée en B2).
 
@@ -2205,7 +2216,8 @@ SQLite pose problème. Référence d'exploitation : `setup.md` § 12.1 (tableaux
   l'utilisateur en attente (§ 22). **Ensuite D4** (streaming adaptatif HLS, planches de survol, manifestes signés) **à proposer et faire
   valider** ; transverses : envois reprenables / directs vers S3, `BigInt` au-delà de 2 Gio, délestage de la diffusion, webhooks de fin de
   traitement, accélération matérielle, filtre « État » de la médiathèque, `<SmVideo>`. Audio et documents : phases ultérieures (DD13).
-  `@surge-media/client` + composants (Vue d'abord) : en attente.
+  `@surge-media/client` + composants (Vue d'abord) : **phase E**, étude validée le 2026-10-15 (`.claude/architecture-phase-e.md` :
+  catalogue, matrice des identifiants, évolutions du core, découpage E1 à E5) ; `<SmVideo>` en fait partie (E1).
 - Pistes étape 19 : widgets masquables / réordonnables (préférence par compte), cache des agrégats pour de très grandes
   bibliothèques, médias récents en vignettes, journal par projet pour les propriétaires.
 - Pistes étape 18 : « Envoyer un e-mail de test » (Réglages ou CLI), envoi automatique à la création d'un compte, file d'envoi, alerte à
@@ -2244,7 +2256,8 @@ SQLite pose problème. Référence d'exploitation : `setup.md` § 12.1 (tableaux
 - **Licence BSL 1.1** (`LICENSE`, `BUSL-1.1`) **décidée par l'utilisateur le 2026-10-10** (avant : MIT par défaut, jamais publiée) ; Change Date 3 ans,
   Apache 2.0, production gratuite sauf CA du groupe > 500 000 USD ou service hébergé concurrent (`setup.md`, journal du 2026-10-10).
   **À compléter avant publication** : nom légal du concédant et contact (`grep -n "TO BE COMPLETED" LICENSE`). Non tranchés : CLA
-  pour les contributions externes, licence des futurs composants Vue/React/Svelte (MIT conseillée), relecture par un avocat.
+  pour les contributions externes, licence des futurs composants Vue/React/Svelte (MIT conseillée ; phase E : `"private": true` dans
+  `packages/client` et `packages/vue` jusqu'à la décision, à prendre avant E5), relecture par un avocat.
 - **Distribution** (étapes 23 et 24, 2026-10-10) : image Docker et paquet npm `@surge-media/core` faits et vérifiés localement (npm 12 sous
   Windows, npm 11 sous Linux, image depuis l'archive). **Jamais exécutés sur GitHub** : workflows `ci.yml` et `release.yml` (validés par
   actionlint seulement), publication npm (organisation `surge-media`, jeton `NPM_TOKEN` puis publication de confiance, provenance =
