@@ -59,3 +59,7 @@ Le code source est public, mais il ne s'agit pas d'une licence open source au se
 - chaque version passe sous **licence Apache 2.0** trois ans après sa première publication.
 
 Ce résumé n'a pas de valeur juridique : seul le texte anglais du fichier [LICENSE](LICENSE) fait foi.
+
+Les librairies front **`@surge-media/client`** et **`@surge-media/vue`** (`packages/client`, `packages/vue`) sont
+distribuées sous **licence MIT** (fichier `LICENSE` de chaque paquet) : elles ne font pas partie de l'œuvre couverte
+par la BSL, comme le prévoit le fichier [LICENSE](LICENSE) pour les fichiers sous une autre licence.

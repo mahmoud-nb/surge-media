@@ -1,7 +1,6 @@
 {
   "name": "@surge-media/client",
   "version": "0.0.0",
-  "private": true,
   "type": "module",
   "description": "Framework-free TypeScript client for surgeMedia: API v1, publishable keys and delegated tokens, responsive image and video URLs.",
   "keywords": [
@@ -21,7 +20,7 @@
     "url": "git+https://github.com/mahmoud-nb/surge-media.git",
     "directory": "packages/client"
   },
-  "license": "BUSL-1.1",
+  "license": "MIT",
   "sideEffects": false,
   "exports": {
     ".": {
@@ -34,6 +33,9 @@
   "files": [
     "dist"
   ],
+  "publishConfig": {
+    "access": "public"
+  },
   "scripts": {
     "build": "tsdown && publint",
     "typecheck": "tsc --noEmit",

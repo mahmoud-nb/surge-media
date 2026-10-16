@@ -16,3 +16,6 @@ dist
 .env
 .env.*
 !.env.example
+
+# Archives npm des librairies (packages/scripts/pack-smoke.mjs)
+packages/.artifacts/

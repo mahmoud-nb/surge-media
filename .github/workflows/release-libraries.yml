@@ -1,0 +1,149 @@
+# Publication des librairies front (setup.md § 17.2), quand une release GitHub de tag libs-vX.Y.Z est publiée —
+# créée par `pnpm release:libs` — ou à la main pour un tag existant (Actions › Release (libraries) › Run
+# workflow), pour relancer une publication interrompue : un paquet déjà publié en cette version est sauté.
+# Les releases du core (tags vX.Y.Z) sont publiées par release.yml.
+#
+#   1. packages : la version du tag doit être celle des deux paquets ; vérifications, build, archives et essai
+#      d'installation (packages/scripts/pack-smoke.mjs) ;
+#   2. npm : publication de ces archives (@surge-media/client puis @surge-media/vue, qui en dépend), étiquette
+#      `latest` (plus haute version stable), `next` (préversion) ou `release-X.Y` (correctif d'une ancienne
+#      ligne), avec provenance si le dépôt est public ; publication de confiance (OIDC) ou secret NPM_TOKEN ;
+#   3. assets : archives jointes à la release GitHub.
+name: Release (libraries)
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Tag à publier (ex. libs-v0.1.0)
+        required: true
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-libraries-${{ github.event.release.tag_name || inputs.tag }}
+  cancel-in-progress: false
+
+env:
+  TAG: ${{ github.event.release.tag_name || inputs.tag }}
+
+jobs:
+  packages:
+    name: Vérifications et archives
+    # Releases des librairies seulement (celles du core ont des tags vX.Y.Z).
+    if: startsWith(github.event.release.tag_name || inputs.tag, 'libs-v')
+    runs-on: ubuntu-24.04
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+      npm-tag: ${{ steps.version.outputs.npm-tag }}
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: ${{ env.TAG }}
+          # Tous les tags : une version n'est « latest » que si c'est la plus haute version stable.
+          fetch-depth: 0
+
+      # Tout le dépôt : les tests du client recoupent sa logique avec les modules du core.
+      - uses: ./.github/actions/setup
+
+      - name: Version du tag = version des paquets
+        id: version
+        run: |
+          node packages/scripts/check-release.mjs --tag "$TAG"
+          version="${TAG#libs-v}"
+          highest="$(git tag --list 'libs-v[0-9]*' | sed 's/^libs-v//' | grep -v -- '-' | sort -V | tail -n 1)"
+          # Préversion → « next » ; correctif d'une ancienne ligne (branche release/X.Y) → « release-X.Y », sans
+          # déplacer « latest ».
+          case "$version" in
+            *-*) npm_tag=next ;;
+            *) if [ "$version" = "$highest" ]; then npm_tag=latest; else npm_tag="release-${version%.*}"; fi ;;
+          esac
+          {
+            echo "version=$version"
+            echo "npm-tag=$npm_tag"
+          } >> "$GITHUB_OUTPUT"
+          echo "Version $version — npm : $npm_tag"
+
+      - name: Lint
+        run: pnpm --filter "./packages/*" lint
+
+      - name: Typecheck
+        run: pnpm --filter "./packages/*" typecheck
+
+      - name: Tests
+        run: pnpm --filter "./packages/*" test
+
+      - name: Contrastes du thème
+        run: pnpm --filter @surge-media/vue a11y:contrast
+
+      - name: Build et publint
+        run: pnpm packages:build
+
+      - name: Archives et essai d'installation
+        run: node packages/scripts/pack-smoke.mjs --out "$GITHUB_WORKSPACE/artifacts"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: libraries
+          path: artifacts/*.tgz
+          if-no-files-found: error
+
+  npm:
+    name: Publication npm
+    needs: packages
+    runs-on: ubuntu-24.04
+    environment: npm
+    permissions:
+      contents: read
+      # Publication de confiance (OIDC, sans jeton) et attestation de provenance.
+      id-token: write
+    steps:
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: libraries
+          path: artifacts
+
+      - name: Publication
+        env:
+          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+          VERSION: ${{ needs.packages.outputs.version }}
+          DIST_TAG: ${{ needs.packages.outputs.npm-tag }}
+          # La provenance exige un dépôt public.
+          PROVENANCE: ${{ github.event.repository.private && 'false' || 'true' }}
+        run: |
+          # Sans NPM_TOKEN : publication de confiance, à déclarer sur npmjs.com pour chaque paquet (setup.md § 17.2).
+          if [ -n "$NPM_TOKEN" ]; then
+            echo "//registry.npmjs.org/:_authToken=${NPM_TOKEN}" > "$HOME/.npmrc"
+          fi
+          # Le client d'abord : @surge-media/vue en dépend.
+          for name in client vue; do
+            if npm view "@surge-media/$name@$VERSION" version >/dev/null 2>&1; then
+              echo "@surge-media/$name@$VERSION est déjà publiée : rien à faire."
+              continue
+            fi
+            npm publish "artifacts/surge-media-$name-$VERSION.tgz" --access public --tag "$DIST_TAG" --provenance="$PROVENANCE"
+          done
+
+  assets:
+    name: Archives jointes à la release
+    needs: [packages, npm]
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: libraries
+          path: artifacts
+
+      - name: Ajout à la release GitHub
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release upload "$TAG" artifacts/*.tgz --clobber --repo "$GITHUB_REPOSITORY"

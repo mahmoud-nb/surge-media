@@ -14,6 +14,7 @@
     "website:dev": "pnpm --filter @surge-media/website dev",
     "website:build": "pnpm --filter @surge-media/website build",
     "packages:build": "pnpm --filter \"./packages/*\" build",
+    "packages:smoke": "node packages/scripts/check-release.mjs && node packages/scripts/pack-smoke.mjs",
     "playground:dev": "pnpm --filter @surge-media/playground dev",
     "build": "pnpm -r build",
     "typecheck": "pnpm -r typecheck",
@@ -28,11 +29,16 @@
     "lint": "pnpm -r lint",
     "lint:fix": "pnpm -r lint:fix",
     "release": "pnpm --filter @surge-media/core release",
-    "release:dry": "pnpm --filter @surge-media/core release:dry"
+    "release:dry": "pnpm --filter @surge-media/core release:dry",
+    "release:libs": "release-it --config packages/.release-it.ts",
+    "release:libs:dry": "release-it --config packages/.release-it.ts --dry-run",
+    "changelog:libs": "release-it --config packages/.release-it.ts --changelog"
   },
   "devDependencies": {
     "@commitlint/cli": "^21.2.3",
     "@commitlint/config-conventional": "^21.2.3",
+    "@release-it/conventional-changelog": "^12.0.2",
+    "release-it": "^21.1.1",
     "simple-git-hooks": "^2.14.0"
   },
   "simple-git-hooks": {
