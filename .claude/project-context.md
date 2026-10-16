@@ -2202,7 +2202,14 @@ SQLite pose problème. Référence d'exploitation : `setup.md` § 12.1 (tableaux
 ### 9.25 Bibliothèques front : fondations et affichage (phase E1, étape 26)
 
 Architecture : `.claude/architecture-phase-e.md` (ED1–ED28 ; § 11 = plan d'E1, fin du document = état et écarts). Référence
-d'exploitation : `setup.md` § 17 et étape 26. Paquets **privés** (`0.0.0`, licence et publication en E5).
+d'exploitation : `setup.md` § 17 et étape 26. Paquets publiables, **licence MIT** (2026-10-16), encore en `0.0.0` ;
+**releases et publication** (`setup.md` § 17.2) : `packages/.release-it.ts` (release-it à la racine ; tags `libs-vX.Y.Z`,
+commits des seuls dossiers `packages/client`, `packages/vue`, `packages/scripts`, `packages/.release-it.ts` — le core vivait
+dans `packages/core` avant le 2026-10-11 —, `npm: false`, versions écrites par `packages/scripts/set-version.mjs`,
+`packages/CHANGELOG.md` commun), `packages/scripts/check-release.mjs` (`--tag`), `packages/scripts/pack-smoke.mjs` (archives
+dans `packages/.artifacts/`, contenu lu en Node sans `tar`, installation npm dans un dossier vide, rendu serveur) ;
+`.github/workflows/release-libraries.yml` (tags `libs-v*` : client puis vue, `latest` / `next` / `release-X.Y`) ;
+`release.yml` limité aux tags `v*`. Première version : `pnpm release:libs 0.1.0` (sinon `feat` → 0.0.1 avant 1.0).
 
 - **Core** : `apiProjectSchema` + `transformFormats` (formats de sortie activés) et `transformMaxDimension` ;
   `toApiProject(project, scopes, { formats, maxDimension })` (routes `projects/index.get` et `[projectId]/index.get` passent
@@ -2302,9 +2309,10 @@ d'exploitation : `setup.md` § 17 et étape 26. Paquets **privés** (`0.0.0`, li
 
 - **Licence BSL 1.1** (`LICENSE`, `BUSL-1.1`) **décidée par l'utilisateur le 2026-10-10** (avant : MIT par défaut, jamais publiée) ; Change Date 3 ans,
   Apache 2.0, production gratuite sauf CA du groupe > 500 000 USD ou service hébergé concurrent (`setup.md`, journal du 2026-10-10).
-  **À compléter avant publication** : nom légal du concédant et contact (`grep -n "TO BE COMPLETED" LICENSE`). Non tranchés : CLA
-  pour les contributions externes, licence des futurs composants Vue/React/Svelte (MIT conseillée ; phase E : `"private": true` dans
-  `packages/client` et `packages/vue` jusqu'à la décision, à prendre avant E5), relecture par un avocat.
+  Champs à compléter (concédant, contact) : **complétés** (0 occurrence de `TO BE COMPLETED` le 2026-10-16 ; concédant « Mahmoud NBET »).
+  **Librairies front : licence MIT décidée par l'utilisateur le 2026-10-16** (`packages/client/LICENSE`, `packages/vue/LICENSE` ; le
+  `LICENSE` BSL exclut les fichiers sous une autre licence ; README racine). Non tranchés : CLA pour les contributions externes,
+  licence des futurs composants React/Svelte (MIT par cohérence, à confirmer), relecture par un avocat.
 - **Distribution** (étapes 23 et 24, 2026-10-10) : image Docker et paquet npm `@surge-media/core` faits et vérifiés localement (npm 12 sous
   Windows, npm 11 sous Linux, image depuis l'archive). **Jamais exécutés sur GitHub** : workflows `ci.yml` et `release.yml` (validés par
   actionlint seulement), publication npm (organisation `surge-media`, jeton `NPM_TOKEN` puis publication de confiance, provenance =

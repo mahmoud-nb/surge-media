@@ -235,10 +235,13 @@ documents, envois reprenables (tus ou S3 multipart présigné), espace réservé
 
 ## 10. Points ouverts (à trancher avant la publication, E5)
 
-- **Licence des paquets front** : MIT conseillée (`project-context.md` § 22) ; d'ici là, `"private": true` dans leurs
-  `package.json`.
-- **Outil de publication par paquet** : release-it comme le core, ou changesets pour un monorepo multi-paquets.
-- **Nom de domaine des exemples** et compte npm (`@surge-media`, déjà prévu pour le core).
+- ~~**Licence des paquets front**~~ — **tranché le 2026-10-16 : MIT** (choix de l'utilisateur ; `LICENSE` dans chaque
+  paquet, le core reste en BSL 1.1, dont le fichier exclut déjà les fichiers sous une autre licence).
+- ~~**Outil de publication par paquet**~~ — **tranché le 2026-10-16 : release-it** comme le core, deux paquets
+  versionnés ensemble (tag `libs-vX.Y.Z`), publication npm **par la CI seulement** (`release-libraries.yml`) ;
+  `setup.md` § 17.2.
+- **Nom de domaine des exemples** et compte npm (`@surge-media`, déjà prévu pour le core) ; publication de confiance
+  à déclarer sur npmjs.com pour chacun des deux paquets.
 
 ---
 

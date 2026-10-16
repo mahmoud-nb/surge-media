@@ -1,7 +1,6 @@
 {
   "name": "@surge-media/vue",
   "version": "0.0.0",
-  "private": true,
   "type": "module",
   "description": "Vue 3 components for surgeMedia: responsive images, <picture>, videos with sources, posters and captions, processing status.",
   "keywords": [
@@ -22,7 +21,7 @@
     "url": "git+https://github.com/mahmoud-nb/surge-media.git",
     "directory": "packages/vue"
   },
-  "license": "BUSL-1.1",
+  "license": "MIT",
   "sideEffects": [
     "**/*.css"
   ],
@@ -38,6 +37,9 @@
   "files": [
     "dist"
   ],
+  "publishConfig": {
+    "access": "public"
+  },
   "scripts": {
     "build": "vite build && vue-tsc -p tsconfig.build.json && publint",
     "typecheck": "vue-tsc --noEmit",

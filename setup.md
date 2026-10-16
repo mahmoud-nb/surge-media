@@ -2445,8 +2445,8 @@ apps/website/
 
 ## 17. Bibliothèques front (`packages/`) et bac à sable
 
-Phase E (architecture : `.claude/architecture-phase-e.md`). Deux paquets **privés** pour l'instant (`"private":
-true`, version `0.0.0`, publication et licence décidées en E5) :
+Phase E (architecture : `.claude/architecture-phase-e.md`). Deux paquets publiables sur npm, sous **licence MIT**
+(le core reste en BSL 1.1), versionnés ensemble et encore en `0.0.0` (première version : § 17.2) :
 
 ```text
 packages/client/       @surge-media/client — TypeScript sans framework (navigateur, Node, edge), aucune dépendance
@@ -2516,6 +2516,54 @@ La clé secrète n'est lue que par le serveur Vite (`POST /api/token` émet des 
 pour que pnpm résolve les dépendances « pair » de Nuxt, de `@tailwindcss/vite` et de Vitest sur le Vite 8 du site
 (Astro) : `nuxt typecheck` échouait sur le plugin Tailwind de `nuxt.config.ts`. Garder la même version que
 `@nuxt/vite-builder`.
+
+### 17.2 Versions et publication des librairies
+
+`@surge-media/client` et `@surge-media/vue` sont **versionnés ensemble** (même numéro, tag `libs-vX.Y.Z`, release
+GitHub « Libraries vX.Y.Z ») et publiés sur npm **par la CI seulement**, comme le core (§ 15) dont le circuit reste
+séparé (tags `vX.Y.Z`, `release.yml`).
+
+| Fichier | Rôle |
+| --- | --- |
+| `packages/.release-it.ts` | configuration release-it des librairies (`release-it` et son plugin de changelog en dépendances de la racine) |
+| `packages/scripts/check-release.mjs` | contrôles : même version pour les deux paquets, pas `private`, licence MIT et `LICENSE`, `README.md`, dépendance `workspace:*` du client ; `--tag libs-vX.Y.Z` : tag = version |
+| `packages/scripts/set-version.mjs` | écrit la version dans les deux `package.json` (crochet `after:bump` de release-it) |
+| `packages/scripts/pack-smoke.mjs` | `pnpm pack` des deux paquets (archives dans `packages/.artifacts/`, ignoré par git, ou `--out`), contenu vérifié (`dist/`, `LICENSE`, `README.md`, `package.json` seulement), installation dans un dossier vide avec Vue, import, rendu serveur d'un `SmImage`, `style.css` et déclarations présents |
+| `packages/CHANGELOG.md` | créé par la première release ; commun aux deux paquets (lié depuis leurs README) |
+| `.github/workflows/release-libraries.yml` | publication quand une release `libs-v*` est publiée |
+
+**Scripts racine** :
+
+```bash
+pnpm packages:smoke        # contrôles + archives + essai d'installation (paquets construits : pnpm packages:build)
+pnpm changelog:libs        # aperçu du changelog de la prochaine version
+pnpm release:libs:dry      # simulation complète, rien n'est écrit
+pnpm release:libs 0.1.0    # release (version imposée) ; sans argument : version calculée
+```
+
+**Une release** (`pnpm release:libs`) : branche `main` ou `release/*`, arbre propre et à jour ; crochets (contrôles,
+lint, typecheck, tests, contrastes, build + publint, archives et essai) ; version suivante d'après les Conventional
+Commits qui touchent `packages/client`, `packages/vue`, `packages/scripts` ou `packages/.release-it.ts` (pas tout
+`packages/` : le core y vivait jusqu'au 2026-10-11) ; avant 1.0.0, un cran de moins (`feat` → correctif, rupture →
+mineure) : imposer **`0.1.0`** pour la première version, puis `minor` / `patch` ; préversion : `--preRelease=alpha`.
+Ensuite : version des deux `package.json`, `packages/CHANGELOG.md`, commit `chore(release): libs vX.Y.Z`, tag annoté
+`libs-vX.Y.Z`, push, release GitHub (page pré-remplie dans le navigateur, à publier d'un clic). **Retirer
+`GITHUB_TOKEN` de l'environnement** s'il n'a pas accès au dépôt : release-it échoue sinon (« not a collaborator »),
+comme pour le core.
+
+**Publication** (`release-libraries.yml`, à la publication de la release ou à la main : *Actions › Release
+(libraries) › Run workflow* avec le tag) : tag = version des paquets, mêmes vérifications, archives et essai, puis
+`npm publish` des archives — `@surge-media/client` d'abord (`@surge-media/vue` en dépend : `workspace:*` devient la
+version exacte au pack), étiquette `latest` (plus haute version stable), `next` (préversion) ou `release-X.Y`
+(correctif d'une ancienne ligne), provenance si le dépôt est public, paquet déjà publié sauté — et archives jointes à
+la release. `release.yml` ne traite que les tags `v*`.
+
+**Prérequis npm, une fois par paquet** (`@surge-media/client`, `@surge-media/vue`) : organisation `surge-media` sur
+npmjs.com (déjà prévue pour le core), puis soit la publication de confiance (paquet › *Settings › Trusted publishing*
+: dépôt `mahmoud-nb/surge-media`, workflow `release-libraries.yml`, environnement `npm`), soit un secret `NPM_TOKEN`
+(jeton granulaire limité aux paquets `@surge-media/*`) dans l'environnement GitHub `npm` — vérifier sur npmjs.com si
+la publication de confiance peut être déclarée avant la toute première publication d'un paquet ; sinon publier la
+première version avec `NPM_TOKEN`.
 
 ## Journal des étapes
 
@@ -4058,3 +4106,25 @@ URL signées (jeton délégué), lecture par clé publique (origine étrangère 
 clavier (44 × 44 px), aucune lecture automatique ailleurs.
 
 **Écarts** : `.claude/architecture-phase-e.md`, section « E1 — état de l'implémentation ».
+
+### Maintenance — 2026-10-16 — Livrables des librairies (licence MIT, releases, publication npm)
+
+**Cadre** : demande de l'utilisateur — scripts de gestion des livrables des nouvelles librairies. Choix de
+l'utilisateur : **licence MIT** pour `@surge-media/client` et `@surge-media/vue` (le core reste en BSL 1.1),
+publication npm **par la CI seulement**.
+
+**Ajouté** (§ 17.2) : `LICENSE` (MIT) et `README.md` (page npm, en anglais) dans chaque paquet, `private` retiré,
+`publishConfig.access: public` ; `packages/.release-it.ts`, `packages/scripts/{check-release,set-version,pack-smoke}.mjs`,
+scripts racine `packages:smoke`, `release:libs`, `release:libs:dry`, `changelog:libs` (release-it et son plugin en
+dépendances de la racine, mêmes versions que le core) ; workflow `release-libraries.yml` ; CI : archives et essai
+d'installation des librairies ; `release.yml` limité aux tags `v*` ; README racine : licence des librairies.
+
+**Vérifié** : `pnpm packages:smoke` sous Windows (archives de 6 et 22 fichiers, installation npm, import et rendu
+serveur des modules publiés) ; contrôles de version et de tag (cas d'erreur compris) ; `set-version` aller-retour
+sans autre changement ; release-it : crochets exécutés et réussis, changelog limité au commit des librairies, simulation
+d'une release `0.1.0` (version des deux paquets, changelog, commit, tag `libs-v0.1.0`, push) sans rien écrire ;
+verrou pnpm du core inchangé ; workflows lus et jobs cohérents (actionlint non disponible sur le poste : à lancer).
+
+**À faire par l'utilisateur** : déclarer la publication npm des deux paquets (§ 17.2, prérequis), puis, quand la 0.1
+sera prête (E5) : `pnpm release:libs 0.1.0` et publier la release GitHub. Pages du site (licence, SDK) à mettre à
+jour en E5.

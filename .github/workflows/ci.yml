@@ -54,6 +54,9 @@ jobs:
       - name: Build des bibliothèques (client, vue) et publint
         run: pnpm packages:build
 
+      - name: Archives des bibliothèques et essai d'installation
+        run: pnpm packages:smoke
+
       - name: Migrations à jour avec le schéma
         run: pnpm --filter @surge-media/core db:migration --check
 
