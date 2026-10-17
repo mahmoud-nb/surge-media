@@ -102,3 +102,27 @@ export const IconDownload = icon('download', [
   ['path', { d: 'M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4' }],
   ['path', { d: 'm7 10 5 5 5-5' }],
 ])
+
+export const IconUpload = icon('upload', [
+  ['path', { d: 'M12 3v12' }],
+  ['path', { d: 'm17 8-5-5-5 5' }],
+  ['path', { d: 'M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4' }],
+])
+
+export const IconX = icon('x', [
+  ['path', { d: 'M18 6 6 18' }],
+  ['path', { d: 'm6 6 12 12' }],
+])
+
+export const IconRotateCcw = icon('rotate-ccw', [
+  ['path', { d: 'M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8' }],
+  ['path', { d: 'M3 3v5h5' }],
+])
+
+export const IconTrash = icon('trash', [
+  ['path', { d: 'M10 11v6' }],
+  ['path', { d: 'M14 11v6' }],
+  ['path', { d: 'M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6' }],
+  ['path', { d: 'M3 6h18' }],
+  ['path', { d: 'M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2' }],
+])

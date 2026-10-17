@@ -2,6 +2,7 @@ import { defineApiHandler, requireApiProject, requireUploadAllowance } from '../
 import { apiProblem } from '../../../../../../lib/api/problem'
 import { findApiMedia } from '../../../../../../lib/api/queries'
 import { apiLinkExpiry, mediaEtag, toApiMedia } from '../../../../../../lib/api/serializers'
+import { canSetOwnPoster } from '../../../../../../lib/api/writes'
 import { uploadRules } from '../../../../../../lib/media/limits'
 import { POSTER_TYPES, posterTimeField, setMediaPoster } from '../../../../../../lib/media/service'
 import { receiveUpload } from '../../../../../../lib/media/upload'
@@ -12,7 +13,7 @@ defineRouteMeta({
     'operationId': 'setMediaPoster',
     'tags': ['media'],
     'summary': 'Définir l\'image d\'affiche d\'une vidéo',
-    'description': 'Image (JPEG, PNG, WebP, AVIF, GIF) normalisée en JPEG (orientation appliquée, 3840 px au plus, métadonnées retirées), puis source de `poster`, `previewUrl` et `urlTemplate`. Champ `time` facultatif : instant de la vidéo représenté (image capturée dans un navigateur, par exemple). Première affiche : même version ; nouvelle affiche : version incrémentée, donc nouvelles URL (les anciennes redirigent). Avec un jeton délégué : ne compte pas dans `maxFiles` et n\'est pas soumise à `types`.',
+    'description': 'Image (JPEG, PNG, WebP, AVIF, GIF) normalisée en JPEG (orientation appliquée, 3840 px au plus, métadonnées retirées), puis source de `poster`, `previewUrl` et `urlTemplate`. Champ `time` facultatif : instant de la vidéo représenté (image capturée dans un navigateur, par exemple). Première affiche : même version ; nouvelle affiche : version incrémentée, donc nouvelles URL (les anciennes redirigent). Avec un jeton délégué : ne compte pas dans `maxFiles` et n\'est pas soumise à `types` ; la portée `media:upload` suffit pour la première affiche d\'une vidéo envoyée pour le même sujet depuis moins d\'une heure (image capturée dans le navigateur pendant l\'envoi).',
     'x-scopes': ['media:write'],
     'x-credentials': ['secret', 'personal', 'delegated'],
     'x-errors': [
@@ -36,7 +37,7 @@ defineRouteMeta({
     'x-i18n': {
       en: {
         summary: 'Set the poster image of a video',
-        description: 'Image (JPEG, PNG, WebP, AVIF, GIF) normalised to JPEG (orientation applied, 3840 px at most, metadata removed), then source of `poster`, `previewUrl` and `urlTemplate`. Optional `time` field: moment of the video shown (frame captured in a browser, for example). First poster: same version; new poster: version incremented, hence new URLs (old ones redirect). With a delegated token: not counted in `maxFiles` and not subject to `types`.',
+        description: 'Image (JPEG, PNG, WebP, AVIF, GIF) normalised to JPEG (orientation applied, 3840 px at most, metadata removed), then source of `poster`, `previewUrl` and `urlTemplate`. Optional `time` field: moment of the video shown (frame captured in a browser, for example). First poster: same version; new poster: version incremented, hence new URLs (old ones redirect). With a delegated token: not counted in `maxFiles` and not subject to `types`; the `media:upload` scope is enough for the first poster of a video uploaded for the same subject less than an hour ago (frame captured in the browser during the upload).',
       },
     },
   },
@@ -45,13 +46,18 @@ defineRouteMeta({
 /**
  * PUT /api/v1/projects/:projectId/media/:mediaId/poster — multipart `file` (image) et `time` facultatif :
  * image d'affiche d'une vidéo (portée media:write ; débit des envois ; jeton délégué : hors quota de
- * fichiers et de types). → Media · 404 MEDIA_NOT_FOUND · 409 VERSION_CONFLICT · 415 · 422 KIND_MISMATCH.
+ * fichiers et de types, et media:upload suffit pour la première affiche d'une vidéo qu'il vient d'envoyer,
+ * architecture phase E, ED31). → Media · 404 MEDIA_NOT_FOUND · 409 VERSION_CONFLICT · 415 · 422 KIND_MISMATCH.
  */
 export default defineApiHandler(async (event, principal) => {
-  const { project } = await requireApiProject(event, principal, 'media:write')
+  // media:upload seul : jeton délégué, pour la première affiche d'une vidéo qu'il vient d'envoyer.
+  const { project, scopes } = await requireApiProject(event, principal, principal.delegated ? ['media:write', 'media:upload'] : 'media:write')
   const media = await findApiMedia(project.id, getRouterParam(event, 'mediaId') ?? '', false)
   if (!media) throw apiProblem('MEDIA_NOT_FOUND')
   if (media.kind !== 'VIDEO') throw apiProblem('KIND_MISMATCH', 'Only videos have a poster image.')
+  if (!scopes.includes('media:write') && !canSetOwnPoster(principal.delegated, media)) {
+    throw apiProblem('INSUFFICIENT_SCOPE', 'This credential lacks the media:write scope in this project (media:upload only sets the first poster of a video it uploaded less than an hour ago).')
+  }
   requireUploadAllowance(event, principal)
 
   const upload = await receiveUpload(event, uploadRules(POSTER_TYPES))

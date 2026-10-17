@@ -1,5 +1,6 @@
 import type { Credential } from './credentials'
-import { errorFromResponse, SurgeApiError } from './errors'
+import { errorFromBody, errorFromResponse, SurgeApiError } from './errors'
+import { type MultipartRequest, sendMultipart } from './upload/request'
 
 export type QueryValue = string | number | boolean | null | undefined
 export type Query = Record<string, QueryValue>
@@ -11,6 +12,8 @@ export interface RequestOptions {
 export interface HttpClient {
   /** Lecture JSON (GET), revalidée par ETag : une réponse 304 rend la copie gardée. */
   get: <T>(path: string, query?: Query, options?: RequestOptions) => Promise<T>
+  /** Envoi d'un fichier (`multipart/form-data`) avec progression ; réponse JSON. */
+  upload: <T>(path: string, request: MultipartRequest) => Promise<T>
 }
 
 export interface HttpOptions {
@@ -95,6 +98,25 @@ export function createHttpClient(options: HttpOptions): HttpClient {
         const etag = response.headers.get('etag')
         if (etag) remember(cacheKey, etag, body)
         return body
+      }
+    },
+
+    async upload<T>(path: string, request: MultipartRequest): Promise<T> {
+      const url = `${apiBaseUrl}${path}`
+      for (let attempt = 0; ; attempt++) {
+        const headers: Record<string, string> = { Accept: 'application/json' }
+        const authorization = await credential.authorization()
+        if (authorization) headers.Authorization = authorization
+        const response = await sendMultipart(fetchImpl, url, headers, request)
+        if (response.status >= 200 && response.status < 300) return response.body as T
+        const error = errorFromBody(response.status, response.body, response.header)
+        // Jeton expiré entre sa lecture et l'arrivée de la requête : refusé avant la lecture du fichier,
+        // un seul nouvel essai avec un jeton renouvelé (la progression repart de zéro).
+        if (error.code === 'TOKEN_EXPIRED' && credential.kind === 'delegated' && attempt === 0) {
+          credential.invalidate()
+          continue
+        }
+        throw error
       }
     },
   }

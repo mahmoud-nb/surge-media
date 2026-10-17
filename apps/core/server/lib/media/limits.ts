@@ -1,7 +1,9 @@
 import {
   ACCEPTED_MIME_TYPES,
+  CONVERTED_MIME_TYPES,
   DEFAULT_UPLOAD_SIZES,
   ENABLED_MEDIA_KINDS,
+  extensionForMime,
   MEDIA_SIZE_CEILING,
   type MediaKind,
   mediaKindForMime,
@@ -80,6 +82,30 @@ export function rulesFor(
  */
 export function largestSize(rules: UploadRules): number {
   return Math.max(0, ...rules.acceptedTypes.map(type => rules.maxSizeFor(type)))
+}
+
+/** Type accepté par des règles d'envoi, tel que publié par `GET /api/v1/me` (champ `upload.types`). */
+export interface UploadTypeRule {
+  mimeType: string
+  extension: string
+  kind: 'image' | 'video'
+  maxSize: number
+  /** Format vidéo lu par son rendu H.264 (MKV, AVI…). */
+  converted: boolean
+}
+
+/**
+ * Types acceptés par des règles, avec la taille maximale de chacun (pure) : ordre des règles, types sans
+ * genre connu ou de taille nulle écartés.
+ */
+export function uploadTypeRules(rules: UploadRules): UploadTypeRule[] {
+  return rules.acceptedTypes.flatMap((mimeType) => {
+    const kind = mediaKindForMime(mimeType)
+    const extension = extensionForMime(mimeType)
+    const maxSize = rules.maxSizeFor(mimeType)
+    if ((kind !== 'IMAGE' && kind !== 'VIDEO') || !extension || maxSize <= 0) return []
+    return [{ mimeType, extension, kind: kind === 'IMAGE' ? 'image' as const : 'video' as const, maxSize, converted: CONVERTED_MIME_TYPES.includes(mimeType) }]
+  })
 }
 
 let cached: UploadSizes | undefined

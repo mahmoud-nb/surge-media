@@ -7,7 +7,7 @@
 > acceptées avec le plan ; chaque étape (E1…E5) sera **détaillée puis validée avant d'être codée**, comme les phases B à D.
 > **E1 VALIDÉE tel quel puis FAITE le 2026-10-15** (§ 11, décisions ED18 à ED28 ; `setup.md` § 17 et étape 26 ;
 > état, écarts et vérifications : section « E1 — état de l'implémentation » en fin de document). Suite : **E2 (envoi)**,
-> à détailler et faire valider avant le code.
+> choisie avant le paquet React (2026-10-17) : **plan détaillé au § 12, à valider** avant le code (ED29 à ED38).
 >
 > Sources : `apps/core/shared/schemas/api.ts` (contrats v1), `apps/core/shared/utils/{api,permissions,transforms,
 > snippets,video,folders}.ts`, `server/api/v1/**`, `server/lib/access/principal.ts`, `.claude/project-context.md`
@@ -469,3 +469,216 @@ Fait dans l'ordre du § 11.10 ; référence d'exploitation : `setup.md` § 17 et
   (20 combinaisons) ; 375 px sans débordement ; bouton pause 44 × 44 au clavier.
 - Non vérifié en réel : la retenue 503 `PROCESSING_PENDING` d'une vidéo (aucune vidéo à piste de données disponible ;
   couverte par un test de composant) et une vidéo en cours de traitement (états simulés dans la page « Replis »).
+
+---
+
+## 12. E2 — Envoi : plan détaillé (À VALIDER)
+
+> Proposé le 2026-10-17, après le choix de l'utilisateur de faire **E2 avant le paquet React**. Rien n'est codé tant
+> que ce plan n'est pas validé. Décisions propres à E2 : ED29 à ED38 (§ 12.7). Sources vérifiées : `server/api/v1/
+> projects/[projectId]/media/index.post.ts`, `…/poster.put.ts`, `server/api/v1/me.get.ts`, `server/lib/api/{writes,
+> context,problem}.ts`, `server/lib/media/{upload,limits}.ts`, `server/lib/access/delegated.ts`, `shared/schemas/api.ts`,
+> `shared/utils/media.ts`, `server/middleware/api-v1.ts` (CORS), `app/components/admin/MediaUploader.vue`,
+> `app/composables/useMediaUpload.ts`, `app/utils/video-frame.ts`.
+
+### 12.1 Objectif et périmètre
+
+À la fin d'E2, une application Vue envoie des images et des vidéos dans un projet avec un **jeton délégué** : sélection
+native, dépôt ou collage, pré-contrôle exact (types, tailles, nombre d'envois restants), file avec progression,
+annulation et nouvel essai, affiche capturée dans le navigateur pour les vidéos, messages précis en fr / en, accessible.
+Son back-end émet les jetons avec **`@surge-media/client/server`**. **Toute la logique d'envoi est dans le client**
+(file, pré-contrôle, requête, capture) : le futur paquet React la réutilisera telle quelle (le déplacement de la logique
+d'affichage encore dans `@surge-media/vue` reste un préalable du paquet React). **Hors E2** : modification des
+métadonnées et remplacement du fichier après l'envoi (E4), sélecteur avec onglet d'envoi (E3), envois reprenables (plus tard).
+
+Ce que l'API permet déjà (vérifié) : `POST …/media` en `multipart/form-data` (champs `title`, `altText`, `visibility`,
+`folderId`, puis `file`), type reconnu d'après le contenu et refusé dès les premiers octets, limite par genre (images
+25 Mio, vidéos 512 Mio par défaut), 60 s sans donnée → 408, contraintes du jeton délégué (`maxFiles` compté de façon
+atomique par `jti`, `maxSize`, `types`, `visibility` et `folderId` imposés), débit 60 envois/min par (émetteur, IP),
+CORS des écritures (`POST`, `PUT`, `Authorization`, `Location` et `Retry-After` exposés).
+
+### 12.2 Évolutions du core
+
+**N° 2 — Règles d'envoi effectives dans `GET /me` (ED29).** Aujourd'hui `/me` ne rend que les contraintes brutes du jeton
+(`delegated.upload`) : ni les types de l'installation (qui dépendent du traitement des vidéos), ni les limites par genre,
+ni le nombre d'envois restants. Nouveau champ `upload`, `null` quand l'identifiant n'a pas `media:upload` :
+
+```ts
+upload: {
+  // Types de l'installation en ce moment ∩ `types` du jeton ; limite du genre bornée par `maxSize` du jeton.
+  types: { mimeType: string, extension: string, kind: 'image' | 'video', maxSize: number, converted: boolean }[]
+  remaining: number | null   // jeton avec maxFiles : maxFiles − envois réservés ; sinon null
+  visibility: 'public' | 'private' | null   // imposée par le jeton
+  folderId: string | null                   // imposé par le jeton
+} | null
+```
+
+Calcul par une fonction pure (`effectiveUploadRules`, réutilise `rulesFor` et `acceptedMimeTypes`), testée ; `remaining`
+lit `DelegatedTokenUsage` par sa clé primaire. Schéma zod + OpenAPI fr / en. Pas de nouvelle route : `/me` est lisible
+par tout identifiant.
+
+**N° 2 bis — Membres d'extension des problèmes d'envoi (ED30).** `toProblem` garde aujourd'hui `maxSize`, `accepted` et
+`timeout` dans le seul `detail` anglais. Ajout de membres d'extension RFC 9457 : 413 `FILE_TOO_LARGE` → `maxSize`
+(octets, limite du genre reconnu), 415 `UNSUPPORTED_TYPE` → `accepted` (types MIME), 408 `UPLOAD_TIMEOUT` → `timeout`
+(secondes). Schéma `Problem` de l'OpenAPI complété ; `detail` inchangé ; tests de `problemBody`.
+
+**N° 2 ter — Affiche d'une vidéo envoyée par le même jeton (ED31).** `PUT …/poster` exige `media:write`, qui permet
+aujourd'hui de modifier **tout** média du projet (évolution n° 3, prévue en E4). Pour que la capture de l'affiche ne
+demande pas ce droit : un jeton délégué avec `media:upload` peut définir l'affiche d'une vidéo **envoyée par le même
+émetteur et le même sujet** (`uploadedByTokenId`, `uploadSubject`), **depuis moins d'une heure** (durée maximale d'un
+jeton délégué, donc un jeton renouvelé entre-temps convient) et **sans affiche** ; sinon 403 `INSUFFICIENT_SCOPE` comme
+aujourd'hui. Description OpenAPI fr / en ; tests (même sujet, autre sujet, autre émetteur, vidéo ancienne, affiche existante).
+
+### 12.3 `@surge-media/client` en E2
+
+```text
+packages/client/src/
+├─ upload/rules.ts        UploadRules (de /me) ; checkFile(file, rules, kinds?) → null | { code, maxSize?, accepted? } :
+│                         type annoncé par le système (alias : video/x-m4v, image/jpg, types Windows des .ts/.avi…),
+│                         extension pour les formats convertis (.mkv, .mts…), plus grande limite si le type est inconnu ;
+│                         acceptAttribute(rules, kinds?), acceptedExtensions(rules, kinds?), maxSizeFor(rules, kind)
+│                         — repris d'app/composables/useMediaUpload.ts
+├─ upload/request.ts      envoi d'un fichier : XMLHttpRequest dans le navigateur (progression), sinon fetch (Node, edge :
+│                         sans progression) ; champs texte avant `file` ; 401 TOKEN_EXPIRED → jeton renouvelé, un seul
+│                         nouvel essai ; problem+json → SurgeApiError (extensions comprises) ; AbortSignal → AbortError
+├─ upload/queue.ts        createUploadQueue(options) : file sans framework (état immuable + subscribe), § ci-dessous
+├─ upload/video-frame.ts  captureVideoFrame(file) : port d'app/utils/video-frame.ts (10 % de la durée, 5 s au plus, image
+│                         presque noire évitée, 15 s au plus) ; null hors navigateur ou si le codec n'est pas décodable
+└─ server.ts              entrée `@surge-media/client/server` (§ ci-dessous)
+```
+
+- **Client** : `media.upload(file, fields?, { onProgress, signal, filename })` → `Media` ; `media.setPoster(id, image,
+  { time, signal })` → `Media` ; `uploadRules()` → `UploadRules | null` (lecture de `/me`, cache ETag).
+- **`SurgeApiError.extensions`** (`maxSize`, `accepted`, `timeout`) ; messages à paramètres (« Ce fichier dépasse
+  25 Mo. », « Types acceptés : JPG, PNG, WebP. »), tailles par `formatBytes` dans la langue demandée.
+- **File d'envoi** `createUploadQueue({ client, rules, kinds, fields, concurrency: 2, autoStart: true, capturePoster:
+  true, maxRetries: 3 })` :
+  - élément : `{ id, file, name, size, kind, status, progress, media, error, attempts, fields }`, `status` parmi `queued`,
+    `uploading`, `poster`, `done`, `error`, `canceled` ; `progress` de 0 à 1 (null si inconnu) ;
+  - `add(files, fields?)` : pré-contrôle immédiat (refus visible sans rien envoyer) ; `remaining` décompté localement
+    (fichiers au-delà → `UPLOAD_LIMIT_REACHED` sans envoi) ; `start()` (avec `autoStart: false`), `cancel(id)` (requête
+    interrompue : le serveur supprime le fichier temporaire, aucun média créé), `retry(id)`, `remove(id)`, `clear()`,
+    `snapshot()`, `subscribe(listener)`, `destroy()` ; rappels `onUploaded`, `onError`, `onSettled` ;
+  - nouvel essai automatique seulement pour 429 `RATE_LIMITED`, 503 `SERVER_BUSY` et une erreur réseau, après
+    `Retry-After` (sinon 2, 4, 8 s), 3 fois au plus ; jamais pour un refus 4xx (413, 415, 422, 403) ; 408 → nouvel essai
+    manuel ;
+  - vidéo créée : affiche capturée **pendant** l'envoi, puis `setPoster` ; un échec laisse la vidéo sans affiche (le
+    serveur en extrait une si le traitement des vidéos est actif).
+- **Entrée serveur** (ED37) :
+
+  ```ts
+  import { createDelegatedToken, UPLOAD_SCOPES } from '@surge-media/client/server'
+
+  const { token, expiresAt, scopes } = await createDelegatedToken({
+    baseUrl, projectId, secretKey,
+    scopes: UPLOAD_SCOPES, // project:read, media:read, media:upload
+    subject: String(user.id),
+    origin: 'https://app.example.com',
+    upload: { maxFiles: 10, maxSize: 50 * 1024 * 1024, visibility: 'private' },
+    expiresIn: 900,
+  })
+  ```
+
+  `DISPLAY_SCOPES` et `UPLOAD_SCOPES` exportés ; refuse de s'exécuter dans un navigateur (`SECRET_IN_BROWSER`) ; erreurs
+  `SurgeApiError`. Build : deuxième entrée tsdown (`dist/server.mjs`), `exports["./server"]` ; l'entrée principale ne
+  l'importe jamais (vérifié par `pack-smoke`).
+- **Tests** (Vitest, node) : règles (intersection, alias, extensions converties, tailles), requête (XHR simulé :
+  progression, problème avec extensions, rejeu sur 401, annulation ; chemin fetch), file (concurrence, annulation, nouvel
+  essai, nouveaux essais automatiques avec horloge simulée, `remaining`, affiche), entrée serveur (corps, erreurs, refus
+  dans un navigateur) ; **contrat** : `UploadRules` et `Me` comparés à `apiMeSchema` (`expectTypeOf`).
+
+### 12.4 `@surge-media/vue` en E2
+
+- **Composables** : `useUploadRules()` → `{ rules, pending, error, refresh }` (`null` sans droit d'envoi) ;
+  `useUploadQueue(options)` → éléments réactifs (`shallowRef`) + méthodes de la file du client, détruite au démontage.
+- **`SmUploader`** :
+
+| Propriétés | Rôle |
+| --- | --- |
+| `kinds` (`['image', 'video']`), `multiple` (vrai) | genres et nombre de fichiers proposés (bornés par les règles du jeton) |
+| `visibility`, `chooseVisibility` (faux), `folderId` | champs envoyés ; un choix imposé par le jeton l'emporte et masque le champ |
+| `details` (faux) | faux : envoi dès la sélection ; vrai : titre et texte alternatif (images) par fichier, puis « Envoyer » |
+| `capture` (`user` / `environment`) | appareil photo du mobile |
+| `concurrency` (2), `posterCapture` (vrai), `confirmLeave` (vrai), `disabled` | file, affiche, confirmation avant de quitter la page pendant un envoi |
+
+  Événements `uploaded(media)`, `error(item)`, `done(medias)`, `change(items)` ; emplacements `label`, `help`, `item`.
+- **Accessibilité** : champ de fichier natif avec bouton libellé visible ; aide (types et taille maximale par genre,
+  envois restants) reliée par `aria-describedby` ; dépôt et collage en complément sur la zone ; file en `<ul>`, chaque
+  ligne avec nom, taille, `<progress>` nommé par le fichier, état en texte (jamais la couleur seule), boutons Annuler /
+  Réessayer / Retirer nommés avec le fichier (cibles ≥ 24 px, 44 px avec le thème), aperçu local décoratif des images ;
+  annonces `role="status"` une fois par fichier terminé et un résumé en fin de file, jamais à chaque pourcentage ; focus
+  déplacé sur la ligne suivante (ou le bouton d'envoi) après « Retirer » ; sans droit d'envoi : composant désactivé avec
+  un message (et un avertissement en développement).
+- **SSR** : champ et aide rendus côté serveur (règles inconnues : texte générique), aucun accès à `window` à l'import.
+- **Thème** : classes `sm-uploader*` sur les jetons existants ; nouvelles paires de couleurs ajoutées au script de contrastes.
+- **Textes** : `upload.*` en fr / en (libellés, aide par genre, états, annonces, boutons).
+- **Tests** : rendu serveur, montage happy-dom avec un client simulé (états de la file, annulation, nouvel essai, mode
+  `details`, composant désactivé), annonces.
+
+### 12.5 Bac à sable
+
+- Page « Envoi » : `SmUploader` en envoi direct, en mode `details` et pour les vidéos (affiche), règles du jeton affichées.
+- `POST /api/token` du serveur Vite émis avec **`createDelegatedToken`** (premier usage réel de l'entrée serveur) ;
+  `{ purpose: 'upload' }` → `UPLOAD_SCOPES`, `maxFiles` 20, `maxSize` 50 Mio, origine du bac à sable, 15 min.
+- Envois dans le seul projet « Bac à sable » (données de test, supprimables par le script de nettoyage ; données de
+  l'utilisateur intactes).
+
+### 12.6 Documentation
+
+`setup.md` (§ 17 : envoi, route d'émission des jetons ; étape 27 du journal), `project-context.md`, état d'E2 en fin de ce
+document ; site fr / en : section « Envoyer des fichiers » de `reference/sdks` (`SmUploader`, route de jetons pour Node /
+Express, Nuxt, Next.js et en HTTP pour les autres langages), tableau des paquets à jour ; README des deux paquets.
+
+### 12.7 Décisions d'E2
+
+| N° | Décision | Alternative écartée |
+| --- | --- | --- |
+| ED29 | Règles d'envoi **effectives** dans `GET /me` (`upload` : types avec leur limite, envois restants, visibilité et dossier imposés) | nouvelle route `/upload-rules` ; champs dans `Project` (ne dépendent pas du jeton) |
+| ED30 | Membres d'extension RFC 9457 `maxSize`, `accepted`, `timeout` sur les problèmes d'envoi | lire le `detail` anglais |
+| ED31 | Affiche définie avec `media:upload` pour une vidéo du même émetteur et du même sujet, de moins d'une heure, sans affiche | exiger `media:write` (modifie tout le projet jusqu'à E4) ; affiche dans la même requête (retarde l'envoi jusqu'à 15 s) |
+| ED32 | Toute la logique d'envoi dans le client (file sans framework, `subscribe`) ; Vue n'ajoute que la réactivité et l'interface | file écrite en composable Vue (à refaire pour React) |
+| ED33 | XMLHttpRequest dans le navigateur (progression), fetch ailleurs (sans progression) | fetch avec flux (progression seulement dans Chrome, HTTP/2) |
+| ED34 | Concurrence 2 ; nouvel essai automatique seulement pour 429, 503 et une erreur réseau (3 au plus, `Retry-After`) ; 408 et refus 4xx : manuel ou aucun | nouvel essai de toute erreur |
+| ED35 | `SmPosterCapture` remplacé par l'option `capturePoster` de la file (automatique, comme l'administration) ; choix manuel de l'image dans `SmPosterEditor` (E4) | composant séparé |
+| ED36 | Titre et texte alternatif saisis **avant** l'envoi (mode `details`) : un jeton d'envoi ne peut pas modifier un média ensuite ; envoi immédiat par défaut | `PATCH` après l'envoi (exige `media:write`) |
+| ED37 | Entrée `@surge-media/client/server` dans le même paquet, refusée dans un navigateur, `createDelegatedToken` + `DISPLAY_SCOPES` / `UPLOAD_SCOPES` | paquet `@surge-media/server` séparé |
+| ED38 | Pas d'envoi reprenable ni découpé en E2 (2 Gio − 1 au plus, 60 s sans donnée → 408) | tus ou S3 multipart (plus tard) |
+
+### 12.8 Ordre de réalisation
+
+1. Core : évolutions n° 2, 2 bis et 2 ter, tests, OpenAPI (serveur de dev rechargé, sans migration).
+2. Client : types, règles, requête, `media.upload`, `media.setPoster`, `uploadRules`, extensions des erreurs ; tests.
+3. Client : file d'envoi et capture d'affiche ; tests.
+4. Client : entrée serveur, build à deux entrées, `exports`, publint, `pack-smoke` ; tests.
+5. Vue : `useUploadRules`, `useUploadQueue`, `SmUploader`, textes, thème ; tests.
+6. Bac à sable : page « Envoi », route de jetons par l'entrée serveur ; essais réels, axe, contrastes.
+7. Documentation : `setup.md`, `project-context.md`, ce document, site fr / en, README.
+
+### 12.9 Critères d'acceptation
+
+1. À la racine, `pnpm lint`, `pnpm typecheck` et `pnpm test` réussis (core + paquets) ; builds et publint ;
+   `pnpm packages:smoke` importe `@surge-media/client/server` dans Node et vérifie son absence de l'entrée principale.
+2. Core : `/me` rend `upload` (`null` pour une clé publique ; intersection effective pour un jeton délégué ; `remaining`
+   qui diminue) ; problèmes 413, 415 et 408 avec leurs extensions ; affiche avec `media:upload` acceptée seulement dans
+   le cas d'ED31 ; OpenAPI fr / en à jour ; tests du core verts ; données de l'utilisateur intactes.
+3. Contrat : `UploadRules` et `Me` du client conformes à `apiMeSchema`.
+4. Bac à sable sur le core local : image et vidéo envoyées avec progression, vidéo avec son affiche capturée ; envoi
+   annulé en cours (aucun média créé) ; fichier trop gros refusé avant l'envoi, et par le serveur (413, message avec la
+   taille) si le pré-contrôle est contourné ; fichier renommé d'un autre type → 415 et message ; `maxFiles` atteint →
+   message sans envoi ; coupure réseau → nouvel essai ; mode `details` : titre et texte alternatif enregistrés ; visibilité
+   imposée par le jeton respectée.
+5. axe : 0 violation sur la page « Envoi » en fr / en × clair / sombre ; au clavier seul : choisir, annuler, réessayer,
+   retirer ; une annonce par fichier ; 375 px sans débordement ; contrastes AA du thème.
+6. `SmUploader` rendu par `renderToString` sans `window`.
+
+### 12.10 Risques
+
+- **XHR dans happy-dom** : pas d'évènements de progression d'envoi → XHR simulé dans les tests du client ; progression
+  vérifiée en réel dans le bac à sable.
+- **Capture d'affiche** : codec non décodable par le navigateur (HEVC d'un `.mov` sous Firefox, par exemple) → vidéo
+  sans affiche (celle du serveur si le traitement est actif).
+- **`maxFiles` par jeton** : un jeton renouvelé (nouveau `jti`) recommence le décompte ; le quota par utilisateur reste à
+  l'application (documenté).
+- **Fichier long et jeton court** : le jeton n'est vérifié qu'au début de la requête ; le fichier suivant part avec un
+  jeton renouvelé si besoin.
+- **`beforeunload`** ignoré par certains navigateurs mobiles : simple confort.

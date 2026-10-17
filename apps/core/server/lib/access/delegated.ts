@@ -162,6 +162,15 @@ export async function reserveDelegatedUpload(grant: DelegatedGrant): Promise<boo
   return count === 1
 }
 
+/** Envois encore permis à un jeton limité en nombre de fichiers ; null sans limite de nombre. */
+export async function remainingDelegatedUploads(grant: DelegatedGrant): Promise<number | null> {
+  const maxFiles = grant.upload?.maxFiles
+  if (maxFiles === undefined) return null
+  const prisma = await usePrisma()
+  const usage = await prisma.delegatedTokenUsage.findUnique({ where: { jti: grant.jti }, select: { uploads: true } })
+  return Math.max(0, maxFiles - (usage?.uploads ?? 0))
+}
+
 export async function releaseDelegatedUpload(grant: DelegatedGrant): Promise<void> {
   if (grant.upload?.maxFiles === undefined) return
   try {

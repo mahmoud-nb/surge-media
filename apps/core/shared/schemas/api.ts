@@ -492,6 +492,31 @@ export const apiProjectListSchema = z.object({
 
 const projectRef = z.object({ id: z.string(), name: z.string(), slug: z.string() })
 
+/**
+ * Règles d'envoi effectives d'un identifiant (`GET /me`, champ `upload`) : types que l'installation accepte
+ * en ce moment, restreints par un jeton délégué, avec la taille maximale de chacun ; envois restants et
+ * choix imposés par le jeton. De quoi contrôler un fichier avant de l'envoyer.
+ */
+export const apiUploadRulesSchema = z.object({
+  types: z.array(z.object({
+    mimeType: z.string().meta(doc('Type MIME, reconnu d\'après le contenu du fichier.', 'MIME type, detected from the file contents.')),
+    extension: z.string().meta(doc('Extension canonique (`jpg`, `mp4`…).', 'Canonical extension (`jpg`, `mp4`…).')),
+    kind: z.enum(API_MEDIA_KINDS),
+    maxSize: z.number().int().meta(doc('Taille maximale d\'un fichier de ce type, en octets.', 'Maximum size of a file of this type, in bytes.')),
+    converted: z.boolean().meta(doc(
+      'Format vidéo lu par son rendu H.264 (MKV, AVI…), accepté seulement pendant que le traitement des vidéos est actif.',
+      'Video format played through its H.264 rendition (MKV, AVI…), accepted only while video processing is active.',
+    )),
+  })).meta(doc('Types acceptés, dans l\'ordre de l\'installation.', 'Accepted types, in the order of the installation.')),
+  remaining: z.number().int().min(0).nullable().meta(doc(
+    'Envois encore permis par un jeton délégué limité en nombre de fichiers (`maxFiles`) ; `null` : pas de limite de nombre.',
+    'Uploads still allowed by a delegated token limited in number of files (`maxFiles`); `null`: no count limit.',
+  )),
+  visibility: z.enum(API_VISIBILITIES).nullable().meta(doc('Visibilité imposée aux médias envoyés (jeton délégué).', 'Visibility enforced on uploaded media (delegated token).')),
+  folderId: z.string().nullable().meta(doc('Dossier imposé aux médias envoyés (jeton délégué).', 'Folder enforced on uploaded media (delegated token).')),
+})
+export type ApiUploadRules = z.input<typeof apiUploadRulesSchema>
+
 export const apiMeSchema = z.object({
   credential: z.object({
     id: z.string().meta(doc('Identifiant de l\'identifiant ; `jti` pour un jeton délégué.', 'Credential id; `jti` for a delegated token.')),
@@ -515,6 +540,10 @@ export const apiMeSchema = z.object({
     library: z.boolean(),
     projects: z.array(projectRef),
   }).nullable().meta(doc('Sélection d\'un jeton personnel.', 'Project selection of a personal token.')),
+  upload: apiUploadRulesSchema.nullable().meta(doc(
+    'Règles d\'envoi effectives : `null` quand l\'identifiant n\'a pas la portée `media:upload`.',
+    'Effective upload rules: `null` when the credential does not have the `media:upload` scope.',
+  )),
 })
 export type ApiMe = z.input<typeof apiMeSchema>
 
@@ -572,4 +601,7 @@ export const apiProblemSchema = z.object({
   instance: z.string(),
   requestId: z.string(),
   errors: z.array(z.object({ path: z.string(), message: z.string() })).optional().meta(doc('Détail des paramètres invalides (INVALID_REQUEST).', 'Details of the invalid parameters (INVALID_REQUEST).')),
+  maxSize: z.number().int().optional().meta(doc('Taille maximale admise, en octets (FILE_TOO_LARGE).', 'Maximum allowed size, in bytes (FILE_TOO_LARGE).')),
+  accepted: z.array(z.string()).optional().meta(doc('Types MIME acceptés, reconnus d\'après le contenu (UNSUPPORTED_TYPE).', 'Accepted MIME types, detected from the contents (UNSUPPORTED_TYPE).')),
+  timeout: z.number().int().optional().meta(doc('Délai sans donnée reçue, en secondes, après lequel l\'envoi a été arrêté (UPLOAD_TIMEOUT).', 'Time without data received, in seconds, after which the upload was stopped (UPLOAD_TIMEOUT).')),
 })

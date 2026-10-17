@@ -161,6 +161,42 @@ export interface UploadConstraints {
   folderId?: string
 }
 
+/** Type de fichier accepté par les règles d'envoi (`GET /me`, champ `upload.types`). */
+export interface UploadTypeRule {
+  /** Type MIME, reconnu par le serveur d'après le contenu du fichier. */
+  mimeType: string
+  /** Extension canonique (`jpg`, `mp4`…). */
+  extension: string
+  kind: MediaKind
+  /** Taille maximale d'un fichier de ce type, en octets. */
+  maxSize: number
+  /** Format vidéo lu par son rendu H.264 (MKV, AVI…), accepté pendant que le traitement des vidéos est actif. */
+  converted: boolean
+}
+
+/** Règles d'envoi effectives d'un identifiant (`GET /me`, champ `upload`). */
+export interface UploadRules {
+  /** Types acceptés en ce moment, dans l'ordre de l'installation. */
+  types: UploadTypeRule[]
+  /** Envois encore permis par un jeton délégué limité (`maxFiles`) ; null : pas de limite de nombre. */
+  remaining: number | null
+  /** Visibilité imposée par le jeton délégué. */
+  visibility: MediaVisibility | null
+  /** Dossier imposé par le jeton délégué. */
+  folderId: string | null
+}
+
+/** Champs d'un envoi (`multipart/form-data`, à côté du fichier) ; ceux qu'impose un jeton délégué l'emportent. */
+export interface UploadFields {
+  title?: string
+  /** Texte alternatif (accessibilité). */
+  altText?: string
+  /** `public` par défaut. */
+  visibility?: MediaVisibility
+  /** Dossier du projet (hors dossier par défaut). */
+  folderId?: string
+}
+
 interface ProjectRef {
   id: string
   name: string
@@ -190,4 +226,6 @@ export interface Me {
     library: boolean
     projects: ProjectRef[]
   } | null
+  /** Règles d'envoi effectives ; null sans la portée `media:upload`. */
+  upload: UploadRules | null
 }

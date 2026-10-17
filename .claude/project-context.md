@@ -43,7 +43,8 @@
 > dépendance CSS + thème facultatif, les quatre familles (affichage, envoi, parcours/sélection, édition) dans la 0.1 livrées
 > en étapes E1 à E5, `@surge-media/nuxt` séparé plus tard. **E1 faite le 2026-10-15** (étape 26 : fondations, composants
 > d'affichage, bac à sable `apps/playground`, `Project.transformFormats` / `transformMaxDimension` ; § 9.25). **Prochaine
-> étape : E2 (envoi)**, à détailler et faire valider avant le code.
+> étape : E2 (envoi)**, choisie avant le paquet React (2026-10-17) : plan détaillé dans `architecture-phase-e.md` § 12
+> (ED29 à ED38), à valider avant le code.
 >
 > Les éléments marqués **[À CONFIRMER]** sont des hypothèses ou des points non validés par
 > l'utilisateur (récapitulés en § 22).

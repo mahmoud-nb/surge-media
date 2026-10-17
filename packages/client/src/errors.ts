@@ -6,6 +6,16 @@ export interface ProblemFieldError {
   message: string
 }
 
+/** Membres d'extension d'une erreur d'envoi (RFC 9457) : de quoi écrire un message précis. */
+export interface ProblemExtensions {
+  /** Taille maximale admise, en octets (`FILE_TOO_LARGE`). */
+  maxSize?: number
+  /** Types MIME acceptés (`UNSUPPORTED_TYPE`). */
+  accepted?: string[]
+  /** Délai sans donnée reçue après lequel le serveur a arrêté l'envoi, en secondes (`UPLOAD_TIMEOUT`). */
+  timeout?: number
+}
+
 export interface SurgeApiErrorInit {
   status: number
   code: string
@@ -13,6 +23,7 @@ export interface SurgeApiErrorInit {
   requestId?: string | null
   retryAfter?: number | null
   errors?: ProblemFieldError[]
+  extensions?: ProblemExtensions
   cause?: unknown
 }
 
@@ -30,6 +41,8 @@ export class SurgeApiError extends Error {
   /** Délai conseillé avant un nouvel essai, en secondes (`Retry-After`) ; null s'il n'est pas indiqué. */
   readonly retryAfter: number | null
   readonly errors: ProblemFieldError[]
+  /** Taille maximale, types acceptés, délai : erreurs d'envoi du serveur ou du pré-contrôle du client. */
+  readonly extensions: ProblemExtensions
 
   constructor(init: SurgeApiErrorInit) {
     super(init.detail ? `${init.code}: ${init.detail}` : init.code, { cause: init.cause })
@@ -39,11 +52,12 @@ export class SurgeApiError extends Error {
     this.requestId = init.requestId ?? null
     this.retryAfter = init.retryAfter ?? null
     this.errors = init.errors ?? []
+    this.extensions = init.extensions ?? {}
   }
 
   /** Message destiné à l'utilisateur final, dans la langue demandée (français par défaut). */
   localizedMessage(locale?: string | null): string {
-    return errorMessage(this.code, locale)
+    return errorMessage(this.code, locale, this.extensions)
   }
 }
 
@@ -71,28 +85,44 @@ function codeForStatus(status: number): string {
   return 'UNKNOWN'
 }
 
+/** Membres d'extension lisibles d'un corps d'erreur (valeurs d'un autre type ignorées). */
+function extensionsOf(body: Record<string, unknown>): ProblemExtensions {
+  const extensions: ProblemExtensions = {}
+  if (Number.isInteger(body.maxSize)) extensions.maxSize = body.maxSize as number
+  if (Array.isArray(body.accepted)) extensions.accepted = body.accepted.filter((type): type is string => typeof type === 'string')
+  if (Number.isInteger(body.timeout)) extensions.timeout = body.timeout as number
+  return extensions
+}
+
 /**
- * Erreur tirée d'une réponse en échec : problème RFC 9457 de l'API v1 (`code`, `detail`, `requestId`,
- * `errors`) ou erreur de la diffusion `/m/` (`data.code`), sinon un code déduit du statut.
+ * Erreur tirée d'une réponse déjà lue (statut, corps JSON ou null, en-têtes) : problème RFC 9457 de l'API
+ * v1 (`code`, `detail`, `requestId`, `errors`, membres d'extension) ou erreur de la diffusion `/m/`
+ * (`data.code`), sinon un code déduit du statut. Sert aux réponses de `fetch` comme à celles d'un envoi.
  */
+export function errorFromBody(status: number, parsed: unknown, header: (name: string) => string | null): SurgeApiError {
+  const body = parsed && typeof parsed === 'object' ? parsed as Record<string, unknown> : {}
+  const data = body.data && typeof body.data === 'object' ? body.data as Record<string, unknown> : {}
+  const code = typeof body.code === 'string' ? body.code : typeof data.code === 'string' ? data.code : codeForStatus(status)
+  const detail = typeof body.detail === 'string' ? body.detail : typeof data.detail === 'string' ? data.detail : null
+  return new SurgeApiError({
+    status,
+    code,
+    detail,
+    requestId: typeof body.requestId === 'string' ? body.requestId : header('x-request-id'),
+    retryAfter: parseRetryAfter(header('retry-after')),
+    errors: Array.isArray(body.errors) ? body.errors as ProblemFieldError[] : [],
+    extensions: extensionsOf(typeof body.code === 'string' ? body : data),
+  })
+}
+
+/** Erreur tirée d'une réponse `fetch` en échec (voir `errorFromBody`). */
 export async function errorFromResponse(response: Response): Promise<SurgeApiError> {
-  let body: Record<string, unknown> = {}
+  let body: unknown = null
   if ((response.headers.get('content-type') ?? '').includes('json')) {
     try {
-      const parsed: unknown = await response.json()
-      if (parsed && typeof parsed === 'object') body = parsed as Record<string, unknown>
+      body = await response.json()
     }
     catch {}
   }
-  const data = body.data && typeof body.data === 'object' ? body.data as Record<string, unknown> : {}
-  const code = typeof body.code === 'string' ? body.code : typeof data.code === 'string' ? data.code : codeForStatus(response.status)
-  const detail = typeof body.detail === 'string' ? body.detail : typeof data.detail === 'string' ? data.detail : null
-  return new SurgeApiError({
-    status: response.status,
-    code,
-    detail,
-    requestId: typeof body.requestId === 'string' ? body.requestId : response.headers.get('x-request-id'),
-    retryAfter: parseRetryAfter(response.headers.get('retry-after')),
-    errors: Array.isArray(body.errors) ? body.errors as ProblemFieldError[] : [],
-  })
+  return errorFromBody(response.status, body, name => response.headers.get(name))
 }

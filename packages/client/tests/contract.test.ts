@@ -7,11 +7,14 @@ import type {
   apiMeSchema,
   apiPosterSchema,
   apiTextTrackSchema,
+  apiUploadRulesSchema,
 } from '../../../apps/core/shared/schemas/api'
 import { apiMediaSchema, apiPresetSchema, apiProjectSchema } from '../../../apps/core/shared/schemas/api'
 import { API_ERRORS } from '../../../apps/core/shared/utils/api'
+import { ACCEPTED_MEDIA_TYPES, CONVERTED_VIDEO_TYPES, mediaKindForMime } from '../../../apps/core/shared/utils/media'
 import { CLIENT_MESSAGES } from '../src/i18n'
-import type { Me, Media, MediaList, MediaProcessing, MediaSource, Poster, Preset, Project, TextTrack } from '../src/types'
+import type { Me, Media, MediaList, MediaProcessing, MediaSource, Poster, Preset, Project, TextTrack, UploadRules, UploadTypeRule } from '../src/types'
+import { UPLOAD_FILE_TYPES } from '../src/upload/file-types'
 import { imageMedia, presets, privateImage, project, videoMedia } from './fixtures'
 
 /**
@@ -41,6 +44,19 @@ describe('types du client = schémas de l\'API', () => {
     expectTypeOf<keyof Me>().toEqualTypeOf<keyof Input<typeof apiMeSchema>>()
     expectTypeOf<Me>().toExtend<Input<typeof apiMeSchema>>()
     expectTypeOf<keyof MediaList>().toEqualTypeOf<keyof Input<typeof apiMediaListSchema>>()
+    expectTypeOf<keyof UploadRules>().toEqualTypeOf<keyof Input<typeof apiUploadRulesSchema>>()
+    expectTypeOf<UploadRules>().toExtend<Input<typeof apiUploadRulesSchema>>()
+    expectTypeOf<keyof UploadTypeRule>().toEqualTypeOf<keyof Input<typeof apiUploadRulesSchema>['types'][number]>()
+  })
+
+  it('types de fichiers du client = ceux que le serveur sait recevoir (extension, genre, format converti)', () => {
+    const server: Record<string, string> = { ...CONVERTED_VIDEO_TYPES }
+    for (const types of Object.values(ACCEPTED_MEDIA_TYPES)) Object.assign(server, types)
+    expect(Object.fromEntries(Object.entries(UPLOAD_FILE_TYPES).map(([type, entry]) => [type, entry.extension]))).toEqual(server)
+    for (const [type, entry] of Object.entries(UPLOAD_FILE_TYPES)) {
+      expect(entry.kind, type).toBe(mediaKindForMime(type)?.toLowerCase())
+      expect(entry.converted, type).toBe(type in CONVERTED_VIDEO_TYPES)
+    }
   })
 
   it('les exemples passent les schémas du serveur', () => {
