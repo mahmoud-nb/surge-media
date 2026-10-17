@@ -2233,7 +2233,9 @@ dans `packages/.artifacts/`, contenu lu en Node sans `tar`, installation npm dan
   `dist/style.css`) : `createSurgeMedia(options)` → `{ context, install }` (projet lu au démarrage dans le navigateur, sauf
   `project` fourni ou `loadProject: false`) ; `useSurgeMedia()` (contexte par défaut sans plugin) ; `createTranslate` (repli
   langue → base → `fallbackLocale` → fr, surcharges `messages`) ; `imageSourceSet` (pur : préréglage, préréglages, densités si
-  taille fixe sans `sizes`, largeurs sinon ; `src` = candidat ≤ 1024 px) ; composants `SmImage`, `SmPicture` (une `<source>`
+  taille fixe sans `sizes`, largeurs sinon ; `src` = candidat ≤ 1024 px) — **déplacé dans `@surge-media/client`
+  (`src/urls/image-sources.ts`, avec `parseAspect`) le 2026-10-17** pour servir aussi React, Svelte et les librairies locales
+  (guide du site « Créer une intégration pour un framework ») ; composants `SmImage`, `SmPicture` (une `<source>`
   par format × media query, repli JPEG), `SmVideo` (`useLiveMedia`, sources renouvelées hors lecture, `HEAD` sur 503, mode
   `ambient`), `SmMedia`, `SmThumbnail`, `SmProcessingStatus` ; `useImageFallback` (original puis cadre d'erreur ; au montage,
   `decode()` décide si une image « complète » de largeur nulle est cassée) ; `DEV` = `process.env.NODE_ENV` (jamais

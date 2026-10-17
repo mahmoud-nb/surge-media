@@ -2472,7 +2472,8 @@ packages/client/       @surge-media/client — TypeScript sans framework (naviga
 │                      clé secrète ou jeton personnel refusés d'emblée dans un navigateur (SECRET_IN_BROWSER)
 ├─ src/http.ts         cache ETag des lectures (If-None-Match → 304), erreurs SurgeApiError (code, detail, retryAfter)
 ├─ src/urls/           transformations en forme canonique (aucune redirection 301), taille réelle des fichiers produits,
-│                      srcset en largeurs / densités / préréglages, formats d'un <picture>, point d'intérêt
+│                      srcset en largeurs / densités / préréglages, formats d'un <picture>, point d'intérêt,
+│                      imageSourceSet (tous les attributs d'une image : cœur des composants de toutes les librairies)
 ├─ src/processing.ts   suivi du traitement d'une vidéo (relecture par ETag, onglet visible)
 └─ src/i18n/           messages fr / en de tous les codes d'erreur de l'API
 packages/vue/          @surge-media/vue — Vue ≥ 3.5, rendu serveur
@@ -4199,3 +4200,27 @@ un script absent du build) ; raccourcir les lignes de code.
 ouvert (Rôles en sombre, SDK fr en clair, serveur de dev) ; aucun débordement horizontal ; bascule du `tabindex` des tableaux au redimensionnement
 (375 → 1 280 → 375 px). `astro check` (0 erreur, 23 fichiers), build (22 pages), `check:links` (1 092 liens et
 ancres, 0 cassé).
+
+### Maintenance — 2026-10-17 — Guide « Créer une intégration pour un framework »
+
+**Cadre** : demande de l'utilisateur, avant les paquets React et Svelte — une rubrique du site qui explique comment
+créer, avec `@surge-media/client`, une librairie locale pour un framework sans paquet officiel (Angular, SolidJS…).
+Choix de l'utilisateur : le calcul des attributs d'image vit dans le client.
+
+**Code** : `imageSourceSet` et `parseAspect` (et leurs 7 tests) déplacés de `packages/vue` vers
+`packages/client/src/urls/image-sources.ts` (`git mv`) et exportés par le client ; `@surge-media/vue` les importe
+depuis le client (plus exportés par le paquet Vue).
+
+**Site** (`apps/website`, anglais et français) : nouvelle page **Référence › Créer une intégration pour un framework**
+(`reference/framework-integration`) — ce que le client apporte, organisation (contexte partagé, cœur indépendant du
+framework, composants fins), cœur `src/core.ts` (`loadSettings`, `imageAttributes`, `videoPoster`,
+`followProcessing`), exemples SolidJS (fournisseur, `SurgeImage`) et Angular (`provideSurgeMedia`,
+`SurgeImageComponent` à signaux), balisage d'une vidéo, empaquetage (framework en dépendance pair), liste de contrôle.
+Page SDK : `imageSourceSet()` et lien vers le guide. Barre latérale ; noms des blocs de code TSX / JSX
+(`MarkdownContent.astro`).
+
+**Vérifié** : client (74 tests, types, lint, build), vue (16 tests, types, lint, build), `pnpm packages:smoke` ; le
+`src/core.ts` du guide compile en mode strict contre le client (les exemples SolidJS et Angular ne sont pas compilés :
+frameworks non installés) ; site : `astro check` (0 erreur), build (24 pages), `check:links` (1 234 liens, 0 cassé),
+axe 0 violation sur les nouvelles pages et les pages SDK (fr / en × clair / sombre × 1 280 / 375 px), aucun
+débordement.

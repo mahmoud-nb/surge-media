@@ -69,7 +69,11 @@ export default defineConfig({
         {
           label: 'Reference',
           translations: { fr: 'Référence' },
-          items: [{ slug: 'reference/image-transformations' }, { slug: 'reference/sdks' }],
+          items: [
+            { slug: 'reference/image-transformations' },
+            { slug: 'reference/sdks' },
+            { slug: 'reference/framework-integration' },
+          ],
         },
         {
           label: 'Project',

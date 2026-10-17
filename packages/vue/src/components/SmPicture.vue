@@ -4,11 +4,19 @@
  * et une image de repli (JPEG, sinon PNG) ; direction artistique par `sources` (un cadrage par media query).
  * Mêmes propriétés et même repli que SmImage. Pour une vidéo : son image d'affiche.
  */
-import { FORMAT_MIME_TYPES, type Media, pictureFormats, type TransformFormat } from '@surge-media/client'
+import {
+  FORMAT_MIME_TYPES,
+  type ImageSourceRequest,
+  imageSourceSet,
+  type ImageTransform,
+  type Media,
+  parseAspect,
+  pictureFormats,
+  type TransformFormat,
+} from '@surge-media/client'
 import { computed, type CSSProperties, ref } from 'vue'
 import { focusPosition, type ImageStage, useAltText, useImageFallback, useTransformMode } from '../composables/image'
 import { useSurgeMedia } from '../context'
-import { type ImageSourceRequest, type ImageTransform, imageSourceSet, parseAspect } from '../image-sources'
 
 /** Cadrage d'une media query (direction artistique). */
 export interface PictureArtSource {

@@ -453,6 +453,9 @@ Fait dans l'ordre du § 11.10 ; référence d'exploitation : `setup.md` § 17 et
   = image réellement illisible). Avec `complete && naturalWidth === 0` seul, une image en cache pas encore décodée (onglet
   masqué) basculait à tort sur l'original (vu dans le bac à sable).
 - **Vue — textes** : `image.unavailable` retiré (le cadre d'erreur affiche le texte alternatif, rien d'autre à dire).
+- **Après E1 (2026-10-17)** : `imageSourceSet` et `parseAspect` déplacés de `@surge-media/vue` vers `@surge-media/client`
+  (`src/urls/image-sources.ts`, tests compris), choix de l'utilisateur, conforme à ED1 : React, Svelte et les librairies locales
+  (guide du site `reference/framework-integration`) les réutilisent.
 - **Licence** : champ `license` à `BUSL-1.1` (celle du dépôt) en attendant la décision d'E5 ; paquets `private`.
 
 ### Vérifications

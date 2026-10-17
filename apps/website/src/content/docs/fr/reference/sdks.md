@@ -132,7 +132,9 @@ const srcset = srcsetAttribute(widthCandidates(items[0], {
 }))
 ```
 
-Il gère la revalidation par ETag, le renouvellement des jetons délégués et les erreurs traduites (`SurgeApiError`), et construit les URL de transformation sous forme canonique — exactement celle qu’attend le serveur, donc sans redirection.
+Il gère la revalidation par ETag, le renouvellement des jetons délégués et les erreurs traduites (`SurgeApiError`), et construit les URL de transformation sous forme canonique — exactement celle qu’attend le serveur, donc sans redirection. `imageSourceSet()` calcule tous les attributs d’une image (`src`, `srcset`, `sizes`, `width`, `height`) d’après la politique du projet : c’est le cœur de tout composant d’image.
+
+Pas encore de paquet pour votre framework (Angular, SolidJS, Qwik…) ? [Créez une intégration pour un framework](../framework-integration/) au-dessus du client, comme le sont les paquets officiels.
 
 ## Tous les langages
 
@@ -278,3 +280,4 @@ Le client demande un jeton à la première utilisation et le renouvelle avant so
 - [Architecture et API](../../guides/architecture/)
 - [Sécurité et contrôle d’accès](../../guides/security/)
 - [Transformations d’images](../image-transformations/)
+- [Créer une intégration pour un framework](../framework-integration/)
