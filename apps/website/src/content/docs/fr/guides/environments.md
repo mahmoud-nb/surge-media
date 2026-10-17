@@ -7,7 +7,7 @@ La plupart des équipes finissent avec un bucket de médias par environnement :
 
 ## Avant et après
 
-| | Un bucket par environnement | surgeMedia |
+| <span class="sr-only">Aspect</span> | Un bucket par environnement | surgeMedia |
 | --- | --- | --- |
 | Où vivent les médias | Copiés dans chaque environnement | Un projet, une médiathèque |
 | La préproduction montre les vrais contenus | Seulement après une synchronisation manuelle | Toujours — mêmes identifiants, mêmes URL |

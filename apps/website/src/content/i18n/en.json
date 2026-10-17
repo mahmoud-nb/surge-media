@@ -1,7 +1,9 @@
 {
   "nav.docs": "Docs",
   "nav.pricing": "Pricing",
-  "nav.primary": "Main",
+  "nav.primary": "Site sections",
+  "code.language": "{{language}} code",
+  "code.block": "Code block",
   "footer.tagline": "Self-hosted media platform. Your servers, your domain, your data.",
   "footer.product": "Product",
   "footer.resources": "Resources",

@@ -41,6 +41,7 @@ export default defineConfig({
         Hero: './src/components/overrides/Hero.astro',
         SocialIcons: './src/components/overrides/SocialIcons.astro',
         Footer: './src/components/overrides/Footer.astro',
+        MarkdownContent: './src/components/overrides/MarkdownContent.astro',
       },
       head: [
         { tag: 'meta', attrs: { property: 'og:image', content: new URL(`${base.replace(/\/$/, '')}/og.png`, site).href } },

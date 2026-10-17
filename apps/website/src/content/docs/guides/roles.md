@@ -7,7 +7,7 @@ surgeMedia has two levels of roles: a **platform role** for each user, and a **p
 
 ## Platform roles
 
-| | Admin | Manager | Developer | Editor |
+| <span class="sr-only">Permission</span> | Admin | Manager | Developer | Editor |
 | --- | :---: | :---: | :---: | :---: |
 | Read the shared library | ✓ | ✓ | ✓ | ✓ |
 | Manage the shared library | ✓ | | | |
@@ -27,7 +27,7 @@ surgeMedia has two levels of roles: a **platform role** for each user, and a **p
 
 ## Project roles
 
-| | Owner | Developer | Editor |
+| <span class="sr-only">Permission</span> | Owner | Developer | Editor |
 | --- | :---: | :---: | :---: |
 | Read, upload, edit and delete media | ✓ | ✓ | ✓ |
 | API keys and allowed origins | ✓ | ✓ | |

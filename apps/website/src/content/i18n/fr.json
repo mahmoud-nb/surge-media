@@ -1,7 +1,9 @@
 {
   "nav.docs": "Documentation",
   "nav.pricing": "Tarifs",
-  "nav.primary": "Principale",
+  "nav.primary": "Rubriques du site",
+  "code.language": "Code {{language}}",
+  "code.block": "Bloc de code",
   "footer.tagline": "Plateforme de médias auto-hébergée. Vos serveurs, votre domaine, vos données.",
   "footer.product": "Produit",
   "footer.resources": "Ressources",

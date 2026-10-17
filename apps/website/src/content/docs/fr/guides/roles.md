@@ -7,7 +7,7 @@ surgeMedia distingue deux niveaux de rôles : un **rôle de plateforme** pour c
 
 ## Rôles de plateforme
 
-| | Administrateur | Gestionnaire | Développeur | Éditeur |
+| <span class="sr-only">Permission</span> | Administrateur | Gestionnaire | Développeur | Éditeur |
 | --- | :---: | :---: | :---: | :---: |
 | Lire la bibliothèque partagée | ✓ | ✓ | ✓ | ✓ |
 | Gérer la bibliothèque partagée | ✓ | | | |
@@ -27,7 +27,7 @@ surgeMedia distingue deux niveaux de rôles : un **rôle de plateforme** pour c
 
 ## Rôles de projet
 
-| | Propriétaire | Développeur | Éditeur |
+| <span class="sr-only">Permission</span> | Propriétaire | Développeur | Éditeur |
 | --- | :---: | :---: | :---: |
 | Lire, envoyer, modifier et supprimer des médias | ✓ | ✓ | ✓ |
 | Clés d’API et origines autorisées | ✓ | ✓ | |

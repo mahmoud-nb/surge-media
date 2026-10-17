@@ -7,7 +7,7 @@ Most teams end up with one media bucket per environment: editors upload in produ
 
 ## Before and after
 
-| | One bucket per environment | surgeMedia |
+| <span class="sr-only">Aspect</span> | One bucket per environment | surgeMedia |
 | --- | --- | --- |
 | Where media live | Copied into each environment | One project, one library |
 | Staging shows real content | Only after a manual sync | Always — same IDs, same URLs |

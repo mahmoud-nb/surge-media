@@ -1,0 +1,56 @@
+---
+/**
+ * Starlight's Markdown content, plus keyboard access to what scrolls horizontally in it (see
+ * `focusWhileScrollable`): tables, which Starlight lets scroll on small screens, and code blocks,
+ * named after their title (or Expressive Code's terminal title), else their language.
+ */
+import Default from '@astrojs/starlight/components/MarkdownContent.astro';
+
+const { t } = Astro.locals;
+// Expressive Code languages (`data-language`); the others are named "Code block".
+const LANGUAGES: Record<string, string> = {
+  bash: 'Shell',
+  sh: 'Shell',
+  shell: 'Shell',
+  ts: 'TypeScript',
+  js: 'JavaScript',
+  vue: 'Vue',
+  html: 'HTML',
+  css: 'CSS',
+  json: 'JSON',
+  yaml: 'YAML',
+};
+const codeNames = Object.fromEntries(
+  Object.entries(LANGUAGES).map(([id, language]) => [id, t('code.language', { language })]),
+);
+---
+
+<Default><slot /></Default>
+<sm-scrollable-content data-code-names={JSON.stringify(codeNames)} data-code-block={t('code.block')} hidden
+></sm-scrollable-content>
+
+<script>
+  import { focusWhileScrollable, uniqueNames } from '../../lib/scrollable';
+
+  class ScrollableContent extends HTMLElement {
+    connectedCallback() {
+      const content = this.previousElementSibling;
+      if (!content?.matches('.sl-markdown-content')) return;
+      const codeNames: Record<string, string> = JSON.parse(this.dataset.codeNames ?? '{}');
+      const blocks = [...content.querySelectorAll<HTMLElement>('.expressive-code pre')];
+      const names = uniqueNames(
+        blocks.map(
+          (pre) =>
+            pre.parentElement?.querySelector(':scope > figcaption')?.textContent?.trim() ||
+            codeNames[pre.dataset.language ?? ''] ||
+            this.dataset.codeBlock ||
+            '',
+        ),
+      );
+      focusWhileScrollable(blocks, (pre) => names[blocks.indexOf(pre)] ?? '');
+      focusWhileScrollable(content.querySelectorAll<HTMLElement>('table:not(:where(.not-content *))'));
+    }
+  }
+
+  customElements.define('sm-scrollable-content', ScrollableContent);
+</script>

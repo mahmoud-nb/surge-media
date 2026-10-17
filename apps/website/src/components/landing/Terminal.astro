@@ -2,6 +2,7 @@
 /**
  * Decorative terminal window. Lines: `$ command` (with an optional trailing `# comment`, and
  * continuation lines after a final `\`), `# comment`, an empty line, anything else is output.
+ * When the lines overflow (small screens), the window is a focusable region named after its title.
  */
 interface Props {
   title: string;
@@ -34,6 +35,15 @@ for (const line of lines) {
   {/* Kept on one line: whitespace inside <pre> would be rendered. */}
   <pre><code>{parsed.map(({ kind, text, note }) => <span class:list={['line', kind]}>{kind === 'command' && <span class="prompt" aria-hidden="true">$ </span>}{text}{note && <span class="comment">{note}</span>}</span>)}</code></pre>
 </figure>
+
+<script>
+  import { focusWhileScrollable } from '../../lib/scrollable';
+
+  focusWhileScrollable(
+    document.querySelectorAll<HTMLElement>('.terminal > pre'),
+    (pre) => pre.parentElement?.querySelector('.title')?.textContent?.trim() ?? '',
+  );
+</script>
 
 <style>
   .terminal {
@@ -79,6 +89,12 @@ for (const line of lines) {
     background: transparent;
     font-size: var(--sl-text-sm);
     line-height: 1.75;
+  }
+
+  /* Inside the window: `.terminal` clips what overflows it. */
+  pre:focus-visible {
+    outline: 3px solid #8b9cf7;
+    outline-offset: -3px;
   }
 
   code {
