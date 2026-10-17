@@ -18,6 +18,10 @@ surgeMedia est distribué sous **Business Source License 1.1** (identifiant SPDX
 - Utiliser surgeMedia pour stocker, traiter ou diffuser les médias de **vos propres** sites, applications, produits ou services, même lorsque vos utilisateurs y envoient ou y consultent des médias.
 - Héberger une **instance dédiée à un client**, uniquement pour ses propres sites, applications ou usages internes, dans le cadre d’autres prestations que vous lui fournissez (conception, développement, maintenance), et sans la commercialiser comme une offre de médias autonome. Le seuil de chiffre d’affaires s’applique alors à vous comme à votre client.
 
+## Librairies front-end
+
+Les paquets front-end **`@surge-media/client`** et **`@surge-media/vue`** sont distribués sous **licence MIT** : utilisez-les, modifiez-les et livrez-les dans n’importe quel projet, commercial ou non, quel que soit votre chiffre d’affaires. Ils ne font pas partie de l’œuvre couverte par la Business Source License, qui s’applique au serveur surgeMedia (`@surge-media/core`) auquel ils se connectent.
+
 ## Des questions ?
 
 La [FAQ des tarifs](../pricing/#faq) répond aux questions les plus courantes. Pour d’autres arrangements de licence, [contactez-nous](mailto:mahmoud.nb@gmail.com?subject=Licence%20surgeMedia).
