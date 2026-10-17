@@ -131,7 +131,9 @@ const srcset = srcsetAttribute(widthCandidates(items[0], {
 }))
 ```
 
-It handles ETag revalidation, delegated token renewal and translated errors (`SurgeApiError`), and builds canonical transformation URLs — the exact form the server expects, so no redirect.
+It handles ETag revalidation, delegated token renewal and translated errors (`SurgeApiError`), and builds canonical transformation URLs — the exact form the server expects, so no redirect. `imageSourceSet()` computes all the attributes of an image (`src`, `srcset`, `sizes`, `width`, `height`) from the project's policy: it is the heart of every image component.
+
+No package for your framework yet (Angular, SolidJS, Qwik…)? [Build a framework integration](../framework-integration/) on top of the client, the way the official packages are built.
 
 ## Any language
 
@@ -277,3 +279,4 @@ The client asks for a token on first use and renews it before it expires. Becaus
 - [Architecture & APIs](../../guides/architecture/)
 - [Security & access control](../../guides/security/)
 - [Image transformations](../image-transformations/)
+- [Build a framework integration](../framework-integration/)

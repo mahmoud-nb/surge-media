@@ -5,12 +5,11 @@
  * politique du projet respectée (préréglages si les paramètres libres sont refusés), dimensions toujours
  * posées (aucun décalage au chargement), repli sur l'original puis état d'erreur. Rendu serveur déterministe.
  */
-import type { Media, TransformFormat } from '@surge-media/client'
-import { imageFormat } from '@surge-media/client'
+import type { ImageTransform, Media, TransformFormat } from '@surge-media/client'
+import { imageFormat, imageSourceSet, parseAspect } from '@surge-media/client'
 import { computed, type CSSProperties, ref } from 'vue'
 import { focusPosition, type ImageStage, useAltText, useImageFallback, useTransformMode } from '../composables/image'
 import { useSurgeMedia } from '../context'
-import { type ImageTransform, imageSourceSet, parseAspect } from '../image-sources'
 
 const props = withDefaults(defineProps<{
   media: Media

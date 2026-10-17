@@ -1,7 +1,7 @@
-import { BUILTIN_PRESETS } from '@surge-media/client'
 import { describe, expect, it } from 'vitest'
-import { imageSourceSet, type ImageSourceRequest, parseAspect } from '../src/image-sources'
-import { imageMedia, presets, videoMedia } from '../../client/tests/fixtures'
+import { imageSourceSet, type ImageSourceRequest, parseAspect } from '../src/urls/image-sources'
+import { BUILTIN_PRESETS } from '../src/urls/srcset'
+import { imageMedia, presets, videoMedia } from './fixtures'
 
 const base: ImageSourceRequest = { media: imageMedia, format: 'webp', mode: 'free', maxDimension: 4096, presets: [...BUILTIN_PRESETS, ...presets] }
 const path = (url: string) => url.split('/v3/')[1]

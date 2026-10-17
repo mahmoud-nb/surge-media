@@ -17,7 +17,5 @@ export { createSurgeMediaContext, SURGE_MEDIA_KEY, useSurgeMedia } from './conte
 export type { ProjectSettings, SurgeMediaContext, SurgeMediaDefaults, SurgeMediaOptions } from './context'
 export { BUILTIN_MESSAGES, createTranslate } from './i18n'
 export type { DeepPartial, Messages, Translate } from './i18n'
-export { imageSourceSet, parseAspect } from './image-sources'
-export type { ImageSourceRequest, ImageSourceSet, ImageTransform } from './image-sources'
 export { createSurgeMedia } from './plugin'
 export type { SurgeMediaPlugin } from './plugin'

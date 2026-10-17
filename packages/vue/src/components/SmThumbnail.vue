@@ -4,12 +4,11 @@
  * vidéo, sinon icône du genre ; durée d'une vidéo (visible, et en toutes lettres pour les lecteurs
  * d'écran) ; état du traitement (en attente, en cours, échec).
  */
-import { formatClock, formatDuration, imageFormat, type Media } from '@surge-media/client'
+import { formatClock, formatDuration, imageFormat, imageSourceSet, type Media } from '@surge-media/client'
 import { computed, type CSSProperties, ref } from 'vue'
 import { focusPosition, useTransformMode, VISUALLY_HIDDEN } from '../composables/image'
 import { useSurgeMedia } from '../context'
 import { IconFile, IconFilm, IconImage, IconPlay } from '../icons'
-import { imageSourceSet } from '../image-sources'
 import SmProcessingStatus from './SmProcessingStatus.vue'
 
 const props = withDefaults(defineProps<{

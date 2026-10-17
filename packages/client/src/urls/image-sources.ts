@@ -1,25 +1,14 @@
-import {
-  densityCandidates,
-  derivedSourceSize,
-  type Media,
-  mediaUrl,
-  outputSize,
-  parseTransform,
-  type Preset,
-  presetCandidates,
-  type SrcsetCandidate,
-  srcsetAttribute,
-  type TransformFit,
-  type TransformFormat,
-  type TransformMode,
-  type TransformOptions,
-  widthCandidates,
-} from '@surge-media/client'
+import type { TransformMode } from '../policy'
+import type { Media, Preset, TransformFormat } from '../types'
+import { mediaUrl } from './media-url'
+import { densityCandidates, derivedSourceSize, presetCandidates, type SrcsetCandidate, srcsetAttribute, widthCandidates } from './srcset'
+import { outputSize, parseTransform, type TransformFit, type TransformOptions } from './transform'
 
 /**
  * Attributs d'une image (`<img>` ou `<source>`) pour un média et un format : `src`, `srcset`, `sizes` et
- * dimensions, selon la politique du projet (paramètres libres ou préréglages). Fonction pure, partagée
- * par SmImage, SmPicture et SmThumbnail (rendu serveur déterministe).
+ * dimensions, selon la politique du projet (paramètres libres ou préréglages). Fonction pure, sans framework :
+ * le cœur des composants d'image de toutes les librairies (@surge-media/vue, puis React et Svelte, et celles
+ * que les utilisateurs écrivent pour d'autres frameworks). Rendu serveur déterministe.
  */
 
 /** Paramètres de rendu laissés à l'appelant (le reste est calculé). */
