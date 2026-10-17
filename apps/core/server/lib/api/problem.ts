@@ -5,15 +5,27 @@ import { TEXT_TRACKS_MAX } from '#shared/utils/text-tracks'
 
 /**
  * Erreurs de l'API v1 au format RFC 9457 (« Problem Details », `application/problem+json`) :
- *   { type, title, status, code, detail?, instance, requestId, errors? }
+ *   { type, title, status, code, detail?, instance, requestId, errors?, maxSize?, accepted?, timeout? }
  * `code` est stable (catalogue shared/utils/api.ts, documenté par GET /api/v1/errors) ; `type`
- * pointe vers ce catalogue. L'administration garde son propre format (`data.code`).
+ * pointe vers ce catalogue. Membres d'extension des envois (`maxSize`, `accepted`, `timeout`) : de quoi
+ * écrire un message précis sans lire `detail` (anglais). L'administration garde son propre format (`data.code`).
  */
+
+/** Membres d'extension d'un problème d'envoi (RFC 9457 § 3.2). */
+export interface ProblemExtensions {
+  /** Taille maximale admise, en octets (FILE_TOO_LARGE). */
+  maxSize?: number
+  /** Types MIME acceptés (UNSUPPORTED_TYPE). */
+  accepted?: string[]
+  /** Délai d'inactivité, en secondes (UPLOAD_TIMEOUT). */
+  timeout?: number
+}
 
 export interface ProblemOptions {
   detail?: string
   /** Paramètres invalides (INVALID_REQUEST). */
   errors?: { path: string, message: string }[]
+  extensions?: ProblemExtensions
   /** En-têtes à ajouter (WWW-Authenticate, Retry-After…). */
   headers?: Record<string, string>
 }
@@ -91,6 +103,14 @@ function problemDetail(code: ApiErrorCode, data: Record<string, unknown>): strin
   }
 }
 
+/** Membres d'extension tirés des données d'une erreur métier d'envoi (valeurs inattendues ignorées). */
+function problemExtensions(code: ApiErrorCode, data: Record<string, unknown>): ProblemExtensions | undefined {
+  if (code === 'FILE_TOO_LARGE' && Number.isInteger(data.maxSize)) return { maxSize: data.maxSize as number }
+  if (code === 'UNSUPPORTED_TYPE' && Array.isArray(data.accepted)) return { accepted: data.accepted.filter(type => typeof type === 'string') }
+  if (code === 'UPLOAD_TIMEOUT' && Number.isInteger(data.timeout)) return { timeout: data.timeout as number }
+  return undefined
+}
+
 /** Toute erreur (problème de l'API, erreur métier, erreur h3, exception inattendue) → problème normalisé. */
 export function toProblem(error: unknown): ApiProblem {
   if (error instanceof ApiProblem) return error
@@ -101,7 +121,7 @@ export function toProblem(error: unknown): ApiProblem {
     const code = dataCode as ApiErrorCode
     const details = data as Record<string, unknown>
     const headers: Record<string, string> = typeof details.retryAfter === 'number' ? { 'Retry-After': String(details.retryAfter) } : {}
-    return new ApiProblem(code, { detail: problemDetail(code, details), headers })
+    return new ApiProblem(code, { detail: problemDetail(code, details), extensions: problemExtensions(code, details), headers })
   }
   const status = (error as { statusCode?: number } | null)?.statusCode
   const code = status ? H3_STATUS_CODES[status] : undefined
@@ -128,6 +148,7 @@ export function problemBody(problem: ApiProblem, context: { base: string, instan
     instance: context.instance,
     requestId: context.requestId,
     ...(problem.options.errors ? { errors: problem.options.errors } : {}),
+    ...problem.options.extensions,
   }
 }
 

@@ -56,6 +56,12 @@ export const fr = {
     NETWORK_ERROR: 'Le serveur de médias est injoignable.',
     UNKNOWN: 'Erreur inattendue du serveur de médias.',
   },
+  /** Précisions ajoutées aux messages d'envoi (membres d'extension des erreurs). */
+  details: {
+    maxSize: 'Taille maximale : {max}.',
+    accepted: 'Types acceptés : {types}.',
+    acceptedNone: 'Aucun type de fichier n\'est accepté en ce moment.',
+  },
 }
 
 export type ClientMessages = typeof fr

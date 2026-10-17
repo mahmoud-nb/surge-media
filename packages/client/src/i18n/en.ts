@@ -54,4 +54,9 @@ export const en: ClientMessages = {
     NETWORK_ERROR: 'The media server cannot be reached.',
     UNKNOWN: 'Unexpected error from the media server.',
   },
+  details: {
+    maxSize: 'Maximum size: {max}.',
+    accepted: 'Accepted types: {types}.',
+    acceptedNone: 'No file type is accepted right now.',
+  },
 }

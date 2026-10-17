@@ -130,21 +130,23 @@ export interface ApiProjectAccess {
 }
 
 /**
- * Projet d'un identifiant de projet (`:projectId` par défaut) accessible avec la portée demandée :
+ * Projet d'un identifiant de projet (`:projectId` par défaut) accessible avec la portée demandée (l'une
+ * d'elles pour une liste) :
  * 404 s'il n'existe pas ou n'est pas couvert par l'identifiant (son existence n'est pas révélée),
  * 403 s'il est archivé ou si la portée manque.
  */
 export async function requireApiProject(
   event: H3Event,
   principal: ApiPrincipal,
-  scope: TokenScope,
+  scope: TokenScope | readonly TokenScope[],
   projectId = getRouterParam(event, 'projectId') ?? '',
 ): Promise<ApiProjectAccess> {
   const project = await getProjectState(projectId)
   const scopes = project ? await principalProjectScopes(principal, project) : []
   if (!project || scopes.length === 0) throw apiProblem('PROJECT_NOT_FOUND')
   if (project.archived) throw apiProblem('PROJECT_ARCHIVED', 'The project is archived: API credentials are refused until it is restored.')
-  if (!scopes.includes(scope)) throw apiProblem('INSUFFICIENT_SCOPE', `This credential lacks the ${scope} scope in this project.`)
+  const wanted: readonly TokenScope[] = typeof scope === 'string' ? [scope] : scope
+  if (!wanted.some(item => scopes.includes(item))) throw apiProblem('INSUFFICIENT_SCOPE', `This credential lacks the ${wanted.join(' or ')} scope in this project.`)
   return { project, scopes, publicOnly: principal.type === 'publishable' }
 }
 

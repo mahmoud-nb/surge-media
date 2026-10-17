@@ -1,8 +1,10 @@
+import { normalizeBaseUrl } from './base-url'
 import { type Credential, delegatedCredential, NO_CREDENTIAL, publishableCredential, type TokenProvider } from './credentials'
 import { isSurgeApiError } from './errors'
 import { createHttpClient, type HttpClient, type RequestOptions } from './http'
 import { errorMessage } from './i18n'
-import type { Me, Media, MediaList, MediaListQuery, Preset, Project } from './types'
+import type { Me, Media, MediaList, MediaListQuery, Preset, Project, UploadFields, UploadRules } from './types'
+import type { UploadProgress } from './upload/request'
 
 export interface SurgeClientOptions {
   /**
@@ -39,6 +41,11 @@ export interface SurgeClient {
   project: (options?: RequestOptions & { refresh?: boolean }) => Promise<Project>
   /** Préréglages utilisables dans le projet (intégrés, communs, propres au projet). */
   presets: (options?: RequestOptions) => Promise<Preset[]>
+  /**
+   * Règles d'envoi effectives de l'identifiant (types acceptés et leur taille maximale, envois restants,
+   * choix imposés) ; null sans la portée `media:upload`. Toujours relues (envois restants).
+   */
+  uploadRules: (options?: RequestOptions) => Promise<UploadRules | null>
   media: {
     get: (id: string, options?: RequestOptions) => Promise<Media>
     list: (query?: MediaListQuery, options?: RequestOptions) => Promise<MediaList>
@@ -46,19 +53,35 @@ export interface SurgeClient {
     getMany: (ids: readonly string[], options?: RequestOptions) => Promise<Media[]>
     /** Tous les médias d'une requête, page après page (curseur). */
     iterate: (query?: Omit<MediaListQuery, 'cursor'>, options?: RequestOptions) => AsyncGenerator<Media, void, undefined>
+    /**
+     * Envoie un fichier (image ou vidéo) : nouveau média du projet, `public` par défaut. Portée
+     * `media:upload` ; un jeton délégué impose ses contraintes (types, taille, nombre, visibilité, dossier).
+     */
+    upload: (file: Blob, fields?: UploadFields, options?: UploadOptions) => Promise<Media>
+    /** Image d'affiche d'une vidéo (JPEG, PNG, WebP, AVIF ou GIF, normalisée en JPEG par le serveur). */
+    setPoster: (id: string, image: Blob, options?: PosterOptions) => Promise<Media>
   }
   /** Message lisible d'une erreur (de l'API ou du réseau), dans la langue du client ou celle demandée. */
   errorMessage: (error: unknown, locale?: string) => string
 }
 
+/** Options d'un envoi de fichier. */
+export interface UploadOptions extends RequestOptions {
+  /** Nom du fichier (par défaut celui du `File`). */
+  filename?: string
+  /** Avancement de l'envoi (navigateur seulement : XMLHttpRequest). */
+  onProgress?: (progress: UploadProgress) => void
+}
+
+/** Options d'une affiche de vidéo. */
+export interface PosterOptions extends UploadOptions {
+  /** Instant de la vidéo représenté, en secondes (image capturée). */
+  time?: number
+}
+
 const MAX_IDS = 100
 
-/** Adresse de l'installation et de l'API, quelle que soit la forme donnée. */
-export function normalizeBaseUrl(value: string): { baseUrl: string, apiBaseUrl: string } {
-  const trimmed = value.trim().replace(/\/+$/, '')
-  const baseUrl = trimmed.replace(/\/api\/v1$/, '')
-  return { baseUrl, apiBaseUrl: `${baseUrl}/api/v1` }
-}
+export { normalizeBaseUrl }
 
 /**
  * Client de l'API v1 de surgeMedia pour un projet : lectures avec cache ETag, identifiant (clé publique
@@ -98,6 +121,7 @@ export function createSurgeClient(options: SurgeClientOptions): SurgeClient {
       return value
     },
     presets: async requestOptions => (await http.get<{ items: Preset[] }>(`${project}/presets`, undefined, requestOptions)).items,
+    uploadRules: async requestOptions => (await http.get<Me>('/me', undefined, requestOptions)).upload ?? null,
     media: {
       get: (id, requestOptions) => http.get<Media>(`${project}/media/${encodeURIComponent(id)}`, undefined, requestOptions),
       list,
@@ -119,9 +143,29 @@ export function createSurgeClient(options: SurgeClientOptions): SurgeClient {
           cursor = page.nextCursor ?? undefined
         } while (cursor)
       },
+      upload(file, fields = {}, uploadOptions = {}) {
+        return http.upload<Media>(`${project}/media`, {
+          method: 'POST',
+          fields: { title: fields.title, altText: fields.altText, visibility: fields.visibility, folderId: fields.folderId },
+          file,
+          filename: uploadOptions.filename,
+          signal: uploadOptions.signal,
+          onProgress: uploadOptions.onProgress,
+        })
+      },
+      setPoster(id, image, posterOptions = {}) {
+        return http.upload<Media>(`${project}/media/${encodeURIComponent(id)}/poster`, {
+          method: 'PUT',
+          fields: { time: posterOptions.time === undefined ? undefined : String(Math.round(posterOptions.time * 1000) / 1000) },
+          file: image,
+          filename: posterOptions.filename ?? 'poster.jpg',
+          signal: posterOptions.signal,
+          onProgress: posterOptions.onProgress,
+        })
+      },
     },
     errorMessage(error, locale) {
-      return errorMessage(isSurgeApiError(error) ? error.code : 'UNKNOWN', locale ?? options.locale)
+      return isSurgeApiError(error) ? error.localizedMessage(locale ?? options.locale) : errorMessage('UNKNOWN', locale ?? options.locale)
     },
   }
 }

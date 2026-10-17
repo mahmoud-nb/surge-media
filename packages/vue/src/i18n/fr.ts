@@ -47,6 +47,56 @@ export const fr = {
   media: {
     download: 'Télécharger « {name} »',
   },
+  upload: {
+    choose: 'Choisir des fichiers',
+    chooseOne: 'Choisir un fichier',
+    drop: 'ou les déposer ici',
+    dropOne: 'ou le déposer ici',
+    help: {
+      image: 'Images : {types}, {max} au plus.',
+      video: 'Vidéos : {types}, {max} au plus.',
+      converted: 'Vidéos converties après l\'envoi : {types}.',
+      remaining: 'Envois restants : {count}.',
+    },
+    unavailable: 'L\'envoi de fichiers n\'est pas disponible.',
+    visibility: {
+      label: 'Visibilité',
+      public: 'Public',
+      private: 'Privé',
+    },
+    details: {
+      title: 'Titre',
+      altText: 'Texte alternatif',
+      ofFile: '(« {name} »)',
+      altHint: 'Décrivez l\'image pour les personnes qui ne la voient pas.',
+      send: 'Envoyer les fichiers',
+    },
+    queue: 'Fichiers à envoyer',
+    progress: 'Avancement de l\'envoi de « {name} »',
+    status: {
+      queued: 'En attente',
+      retrying: 'Nouvel essai dans un instant',
+      uploading: 'Envoi en cours : {percent}',
+      poster: 'Envoi de l\'affiche',
+      done: 'Envoyé',
+      error: 'Échec',
+      canceled: 'Annulé',
+    },
+    actions: {
+      cancel: 'Annuler',
+      cancelFile: 'Annuler l\'envoi de « {name} »',
+      retry: 'Réessayer',
+      retryFile: 'Réessayer l\'envoi de « {name} »',
+      remove: 'Retirer',
+      removeFile: 'Retirer « {name} » de la liste',
+      clear: 'Retirer les fichiers terminés',
+    },
+    announce: {
+      done: '« {name} » est envoyé.',
+      error: 'Échec de l\'envoi de « {name} » : {message}',
+      summary: 'Envois terminés. Réussis : {done}. En échec : {failed}.',
+    },
+  },
 }
 
 export type Messages = typeof fr

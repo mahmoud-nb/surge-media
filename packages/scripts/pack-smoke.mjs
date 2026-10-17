@@ -4,7 +4,8 @@
  *   1. `pnpm pack` de @surge-media/client et @surge-media/vue (la dépendance `workspace:*` devient la version) ;
  *   2. contenu vérifié : dist/, LICENSE, README.md, package.json ; ni sources ni tests ;
  *   3. installation des deux archives (et de Vue) dans un dossier vide, comme chez un utilisateur ;
- *   4. import des modules publiés, rendu serveur d'un SmImage, feuille de style et déclarations présentes.
+ *   4. import des modules publiés (dont l'entrée serveur `@surge-media/client/server`, absente de l'entrée
+ *      principale), pré-contrôle et file d'envoi, rendu serveur d'un SmImage, feuille de style et déclarations.
  *
  *   node packages/scripts/pack-smoke.mjs [--out <dossier des archives>] [--keep]
  *
@@ -85,14 +86,28 @@ try {
     throw new Error(`@surge-media/vue publié dépend de « ${installed.dependencies['@surge-media/client']} » au lieu de ${tarballs.client.version}.`)
   }
   writeFileSync(join(sandbox, 'smoke.mjs'), `
-import { existsSync } from 'node:fs'
-import { buildTransform, createSurgeClient } from '@surge-media/client'
+import { existsSync, readFileSync } from 'node:fs'
+import { buildTransform, checkFile, createSurgeClient, createUploadQueue } from '@surge-media/client'
+import { createDelegatedToken, UPLOAD_SCOPES } from '@surge-media/client/server'
 import { createSurgeMedia, SmImage } from '@surge-media/vue'
 import { createSSRApp, h } from 'vue'
 import { renderToString } from 'vue/server-renderer'
 
 if (buildTransform({ height: 450, width: 800 }) !== 'w_800,h_450') throw new Error('buildTransform')
-createSurgeClient({ baseUrl: 'https://media.example.com', projectId: 'cmproject01', publishableKey: 'sm_pk_smoke' })
+const client = createSurgeClient({ baseUrl: 'https://media.example.com', projectId: 'cmproject01', publishableKey: 'sm_pk_smoke' })
+const rules = { types: [{ mimeType: 'image/png', extension: 'png', kind: 'image', maxSize: 10, converted: false }], remaining: null, visibility: null, folderId: null }
+if (checkFile({ name: 'a.png', type: 'image/png', size: 11 }, rules)?.code !== 'FILE_TOO_LARGE') throw new Error('checkFile')
+createUploadQueue({ client, rules }).destroy()
+
+// Entrée serveur : importable dans Node, jamais importée par l'entrée principale.
+if (UPLOAD_SCOPES.join(' ') !== 'project:read media:read media:upload') throw new Error('UPLOAD_SCOPES')
+const issued = await createDelegatedToken({
+  baseUrl: 'https://media.example.com', projectId: 'cmproject01', secretKey: 'sm_sk_smoke', scopes: UPLOAD_SCOPES,
+  fetch: async () => new Response(JSON.stringify({ token: 'sm_dt_x.y', expiresAt: '2026-01-01T00:15:00.000Z', scopes: UPLOAD_SCOPES }), { status: 201 }),
+})
+if (issued.token !== 'sm_dt_x.y') throw new Error('createDelegatedToken')
+const browserEntry = readFileSync(new URL('./node_modules/@surge-media/client/dist/index.mjs', import.meta.url), 'utf8')
+if (/createDelegatedToken|server\\.mjs/.test(browserEntry)) throw new Error("l'entrée principale importe l'aide serveur")
 const media = {
   id: 'cmimage0001', projectId: 'cmproject01', kind: 'image', visibility: 'public', title: 'Smoke', altText: 'Smoke test',
   filename: 'smoke.jpg', mimeType: 'image/jpeg', extension: 'jpg', size: 1, width: 1600, height: 900, duration: null,
@@ -104,10 +119,10 @@ const app = createSSRApp({ render: () => h(SmImage, { media, widths: [640] }) })
 app.use(createSurgeMedia())
 const html = await renderToString(app)
 if (!html.includes('/w_640/smoke.webp 640w')) throw new Error('rendu serveur : ' + html)
-for (const file of ['@surge-media/vue/dist/style.css', '@surge-media/vue/dist/index.d.ts', '@surge-media/client/dist/index.d.mts']) {
+for (const file of ['@surge-media/vue/dist/style.css', '@surge-media/vue/dist/index.d.ts', '@surge-media/client/dist/index.d.mts', '@surge-media/client/dist/server.d.mts']) {
   if (!existsSync(new URL('./node_modules/' + file, import.meta.url))) throw new Error(file + ' absent')
 }
-console.log('✔ Modules publiés : import, rendu serveur, style.css et déclarations')
+console.log('✔ Modules publiés : import, envoi, entrée serveur, rendu serveur, style.css et déclarations')
 `)
   process.stdout.write(run(process.execPath, ['smoke.mjs'], sandbox))
 }

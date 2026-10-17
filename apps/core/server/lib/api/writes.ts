@@ -1,10 +1,11 @@
 import type { H3Event } from 'h3'
-import type { ApiMediaUpdate } from '#shared/schemas/api'
+import type { ApiMediaUpdate, ApiUploadRules } from '#shared/schemas/api'
 import type { MediaMetadataInput } from '#shared/schemas/media'
+import { DELEGATED_TOKEN_TTL } from '#shared/utils/api'
 import { acceptedMimeTypes, type MediaKind, type MediaVisibility } from '#shared/utils/media'
 import type { Media } from '../../generated/prisma/client'
-import { releaseDelegatedUpload, reserveDelegatedUpload } from '../access/delegated'
-import { uploadRules } from '../media/limits'
+import { type DelegatedGrant, releaseDelegatedUpload, remainingDelegatedUploads, reserveDelegatedUpload } from '../access/delegated'
+import { uploadRules, uploadTypeRules } from '../media/limits'
 import type { MediaProvenance, UploadOptions } from '../media/service'
 import { type ReceivedUpload, receiveUpload } from '../media/upload'
 import { videoProcessingActive } from '../video-processing/status'
@@ -81,6 +82,43 @@ export async function withApiUpload<T>(
   finally {
     if (grant && !succeeded) await releaseDelegatedUpload(grant)
   }
+}
+
+/**
+ * Règles d'envoi effectives d'un identifiant (`GET /me`) : types que l'installation accepte en ce moment
+ * (formats convertis seulement si le traitement des vidéos est actif), restreints par un jeton délégué, avec
+ * la taille maximale de chacun ; envois restants et choix imposés par le jeton. null sans `media:upload`.
+ */
+export async function apiUploadRules(principal: ApiPrincipal): Promise<ApiUploadRules | null> {
+  const grant = principal.delegated
+  const scopes = grant ? grant.scopes : principal.credential.scopes
+  if (!scopes.includes('media:upload')) return null
+  const rules = uploadRules(grant?.upload?.types, grant?.upload?.maxSize, acceptedMimeTypes(await videoProcessingActive()))
+  return {
+    types: uploadTypeRules(rules),
+    remaining: grant ? await remainingDelegatedUploads(grant) : null,
+    visibility: grant?.upload?.visibility ?? null,
+    folderId: grant?.upload?.folderId ?? null,
+  }
+}
+
+/** Délai pendant lequel un jeton d'envoi peut poser l'affiche d'une vidéo envoyée : la durée maximale d'un jeton délégué. */
+export const OWN_POSTER_WINDOW_MS = DELEGATED_TOKEN_TTL.max * 1000
+
+/**
+ * Affiche posée avec la seule portée `media:upload` (architecture phase E, ED31 ; pure) : vidéo envoyée
+ * par le même émetteur et pour le même sujet qu'un jeton délégué, depuis moins d'une heure (un jeton
+ * renouvelé entre-temps convient), et encore sans affiche. Toute autre affiche exige `media:write`.
+ */
+export function canSetOwnPoster(
+  grant: Pick<DelegatedGrant, 'issuerId' | 'subject'> | null,
+  media: Pick<Media, 'uploadedByTokenId' | 'uploadSubject' | 'createdAt' | 'posterKey'>,
+  now = Date.now(),
+): boolean {
+  if (!grant || media.posterKey !== null) return false
+  if (media.uploadedByTokenId !== grant.issuerId || (media.uploadSubject ?? null) !== grant.subject) return false
+  const age = now - media.createdAt.getTime()
+  return age >= 0 && age < OWN_POSTER_WINDOW_MS
 }
 
 /** URL absolue d'un média dans l'API (en-tête Location). */
