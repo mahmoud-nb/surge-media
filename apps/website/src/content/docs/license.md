@@ -18,6 +18,10 @@ surgeMedia is distributed under the **Business Source License 1.1** (SPDX identi
 - Using surgeMedia to store, process or deliver media for **your own** websites, apps, products or services, even when your users upload or view media through them.
 - Hosting a **dedicated instance for one client**, solely for that client's own sites, apps or internal use, as part of other services you provide (design, development, maintenance), and not marketed as a standalone media offering. The revenue threshold then applies to both you and your client.
 
+## Front-end libraries
+
+The front-end packages **`@surge-media/client`** and **`@surge-media/vue`** are distributed under the **MIT License**: use, modify and ship them in any project, commercial or not, whatever your revenue. They are not part of the Licensed Work covered by the Business Source License, which applies to the surgeMedia server (`@surge-media/core`) they connect to.
+
 ## Questions
 
 The [pricing FAQ](../pricing/#faq) answers the most common questions. For alternative licensing arrangements, [contact us](mailto:mahmoud.nb@gmail.com?subject=surgeMedia%20license).

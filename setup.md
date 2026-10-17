@@ -4128,3 +4128,26 @@ verrou pnpm du core inchangé ; workflows lus et jobs cohérents (actionlint non
 **À faire par l'utilisateur** : déclarer la publication npm des deux paquets (§ 17.2, prérequis), puis, quand la 0.1
 sera prête (E5) : `pnpm release:libs 0.1.0` et publier la release GitHub. Pages du site (licence, SDK) à mettre à
 jour en E5.
+
+### Maintenance — 2026-10-17 — Site : librairies front et intégration Nuxt
+
+**Cadre** : demande de l'utilisateur — vérifier que le site présente complètement `@surge-media/vue` et ajouter, à
+la fin, l'utilisation dans un projet Nuxt (dont `plugins/surge-media.ts`). Décision : pas de module
+`@surge-media/nuxt` pour l'instant (évolution ultérieure) ; `@surge-media/vue` suffit dans Nuxt.
+
+**Modifié** (`apps/website`, anglais et français) : page **SDK et composants** réécrite — paquets, licences et
+états (client et vue « en développement, première version 0.1 », Nuxt « plus tard »), installation, mise en place,
+identifiants (aucun, clé publique, jetons délégués), composants et leurs propriétés, politique de transformation et
+repli, `useMedia`, thème et langues, `@surge-media/client`, OpenAPI, puis **Nuxt** : `nuxt.config.ts`
+(`runtimeConfig`, variables `NUXT_PUBLIC_SURGE_MEDIA_*`, feuille de style), `plugins/surge-media.ts` (plugin,
+composants globaux, `@nuxtjs/i18n`, `defaults` pour le rendu serveur), page avec `useFetch`, route
+`server/api/surge-media/token.post.ts` (jetons délégués émis avec la clé secrète) et `getToken` avec
+`useRequestFetch`. Accueil : cartes SDK à jour (client ajouté). Licence et FAQ des tarifs : librairies sous MIT.
+Démarrage : lien vers la page SDK. Lignes des blocs de code ≤ 75 caractères (un bloc qui déborde devient une région
+défilante sans nom, signalée par axe).
+
+**Vérifié** : `astro check` (0 erreur), build (22 pages), `check:links` (1 068 liens et ancres, 0 cassé) ; axe sur
+les pages SDK et l'accueil en fr / en × clair / sombre ; aucun débordement à 375 px. **Écarts préexistants** (non
+corrigés ici) : `landmark-unique` sur la navigation de l'en-tête (`SocialIcons`, toutes les pages de documentation),
+`empty-table-header` et `heading-order` sur les tarifs, `empty-table-header` et `scrollable-region-focusable` sur
+Démarrage.
