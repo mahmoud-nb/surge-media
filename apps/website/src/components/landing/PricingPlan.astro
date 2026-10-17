@@ -22,7 +22,7 @@ const { name, price, period, audience, cta, badge, featured = false } = Astro.pr
 <article class:list={['plan', { featured }]}>
   <header>
     <div class="title-row">
-      <h3>{name}</h3>
+      <h2>{name}</h2>
       {badge && <span class="badge">{badge}</span>}
     </div>
     <p class="price">
@@ -62,7 +62,7 @@ const { name, price, period, audience, cta, badge, featured = false } = Astro.pr
     gap: 0.75rem;
   }
 
-  h3 {
+  h2 {
     margin: 0;
     font-size: var(--sl-text-xl);
     font-weight: 700;

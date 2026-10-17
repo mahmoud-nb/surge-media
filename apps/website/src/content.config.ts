@@ -29,6 +29,9 @@ export const collections = {
         'nav.docs': z.string(),
         'nav.pricing': z.string(),
         'nav.primary': z.string(),
+        // Names of the code blocks that scroll (`{{language}}`: TypeScript, Shell…).
+        'code.language': z.string(),
+        'code.block': z.string(),
         'footer.tagline': z.string(),
         'footer.product': z.string(),
         'footer.resources': z.string(),

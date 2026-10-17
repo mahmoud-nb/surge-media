@@ -2416,9 +2416,11 @@ apps/website/
    │                           reference/ (image-transformations, sdks) ; fr/ = mêmes chemins en français
    ├─ content/i18n/            textes des composants du site (en.json, fr.json), en plus de ceux de Starlight
    ├─ components/overrides/    Hero (accroche, terminal, liens avec le chemin de base), SocialIcons (liens
-   │                           Docs / Tarifs de l'en-tête), Footer (pied de page, langues)
+   │                           Docs / Tarifs de l'en-tête), Footer (pied de page, langues), MarkdownContent
+   │                           (tableaux et blocs de code défilants accessibles au clavier)
    ├─ components/landing/      sections de l'accueil et des tarifs (Section, Feature, PricingPlan, schéma…)
-   ├─ lib/                     locales.mjs (langues), paths.ts (chemin de base), site.ts (liens, contact)
+   ├─ lib/                     locales.mjs (langues), paths.ts (chemin de base), site.ts (liens, contact),
+   │                           scrollable.ts (contenu qui défile : focalisable, région nommée)
    ├─ pages/robots.txt.ts
    └─ styles/theme.css         jetons de couleur Starlight + jetons du site (--sm-*)
 ```
@@ -2436,6 +2438,20 @@ apps/website/
   transformations, limites, rôles) ; à relire quand ces points changent.
 - **Vérifications** : `pnpm --filter @surge-media/website typecheck` (`astro check`), `build`, puis
   `check:links` (chaque lien interne et chaque ancre du build, 0 lien cassé exigé).
+- **Accessibilité** (WCAG 2.2 AA) : axe-core 4.13 sans aucune violation sur les 22 pages, en / fr × clair /
+  sombre, à 1 280 et 375 px, sans débordement horizontal. Règles du site :
+  - la case d'angle d'un tableau Markdown n'est jamais vide : texte masqué
+    (`| <span class="sr-only">Permission</span> | Admin | …`) ;
+  - ce qui défile horizontalement (tableaux sur petit écran, blocs de code, terminal de l'accueil) devient
+    focalisable tant qu'il déborde (`focusWhileScrollable`, vérifié au chargement puis à chaque
+    redimensionnement) ; les blocs de code et le terminal deviennent une région nommée d'après leur titre
+    (ou « Terminal window »), sinon leur langage (`code.language`, `code.block` dans `content/i18n/`), numérotée
+    quand le nom se répète sur la page (`landmark-unique`) ; un tableau garde son rôle de tableau ;
+  - chaque `nav` a un nom unique : « Main » / « Principale » est la barre latérale de Starlight, l'en-tête est
+    « Site sections » / « Rubriques du site » ;
+  - pas de plugin Expressive Code pour cela : modifier sa configuration change le nom de son script, que le cache
+    de contenu d'Astro ne régénère pas pour les pages `.md` inchangées (script introuvable dans un build local ;
+    supprimer alors `node_modules/.astro/data-store.json`).
 - **Publication** : `.github/workflows/website.yml` — à chaque pull request qui touche le site : types, build,
   liens ; à chaque push sur `main` (merge) : idem, puis publication sur GitHub Pages. Prérequis, une fois :
   *Settings › Pages › Source = GitHub Actions*. L'action `.github/actions/setup` accepte un `filter` pnpm
@@ -4151,3 +4167,35 @@ les pages SDK et l'accueil en fr / en × clair / sombre ; aucun débordement à 
 corrigés ici) : `landmark-unique` sur la navigation de l'en-tête (`SocialIcons`, toutes les pages de documentation),
 `empty-table-header` et `heading-order` sur les tarifs, `empty-table-header` et `scrollable-region-focusable` sur
 Démarrage.
+
+### Maintenance — 2026-10-17 — Site : écarts d'accessibilité préexistants (axe)
+
+**Cadre** : demande de l'utilisateur — corriger les écarts relevés par axe-core 4.13 sur `apps/website`, sans
+changer le contenu éditorial. Relevé initial (88 passes : 22 pages × clair / sombre × 1 280 / 375 px) :
+`landmark-unique` sur toutes les pages de documentation, `empty-table-header` (Tarifs, Démarrage, Environnements,
+Rôles), `heading-order` (Tarifs) et `scrollable-region-focusable` sur la plupart des pages à 375 px (tableaux,
+blocs de code, terminal de l'accueil) et sur quelques blocs à 1 280 px.
+
+**Modifié** (§ 16, « Accessibilité ») :
+- navigation de l'en-tête (`SocialIcons`) renommée « Site sections » / « Rubriques du site » : « Main » /
+  « Principale » reste à la barre latérale de Starlight ;
+- cases d'angle des tableaux comparatifs : texte masqué (`sr-only`) — « Rights and services » / « Droits et
+  services » (Tarifs), « Requirement » / « Prérequis » (Démarrage), « Aspect » (Environnements), « Permission »
+  (Rôles, deux tableaux) ;
+- cartes d'offre (`PricingPlan`) : nom de l'offre en `h2` (il suivait directement le `h1`), même apparence ;
+- contenu défilant : `lib/scrollable.ts` (`focusWhileScrollable`, `uniqueNames`), composant remplacé
+  `MarkdownContent` (tableaux : focalisables tant qu'ils débordent ; blocs de code : en plus, région nommée
+  d'après le titre, « Terminal window » / « Fenêtre de terminal » ou le langage — « TypeScript code » /
+  « Code TypeScript », « Code block » / « Bloc de code » —, numérotée si le nom se répète) et `Terminal` de
+  l'accueil (région nommée d'après son titre, contour de focus à l'intérieur de la fenêtre). Expressive Code
+  rendait déjà ses blocs focalisables, mais après un délai (~250 ms puis un moment d'inactivité) et sans nom.
+
+**Écarté** : un plugin Expressive Code (`jsModules`) pour nommer les blocs — il change le nom du script
+d'Expressive Code, que le cache de contenu d'Astro garde pour les pages `.md` inchangées (6 pages pointaient vers
+un script absent du build) ; raccourcir les lignes de code.
+
+**Vérifié** : axe-core 4.13 (chargé depuis jsdelivr dans des iframes) sur le build servi par `astro preview` :
+0 violation sur les 88 passes, analyse lancée 300 ms après le chargement ; 0 aussi à 375 px avec le menu mobile
+ouvert (Rôles en sombre, SDK fr en clair, serveur de dev) ; aucun débordement horizontal ; bascule du `tabindex` des tableaux au redimensionnement
+(375 → 1 280 → 375 px). `astro check` (0 erreur, 23 fichiers), build (22 pages), `check:links` (1 092 liens et
+ancres, 0 cassé).
