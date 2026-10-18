@@ -4,6 +4,7 @@ import { findDeliveryMedia, invalidateMedia, reloadDeliveryMedia } from '../serv
 import {
   contentDisposition,
   currentTargetPath,
+  deliveryCsp,
   deliveryReloadNeeded,
   holdApplies,
   originalDisposition,
@@ -274,6 +275,29 @@ describe('diffusion : décisions de la route', () => {
     expect(contentDisposition('clip.mkv', 'attachment')).toBe('attachment; filename="clip.mkv"; filename*=UTF-8\'\'clip.mkv')
     expect(contentDisposition('日本.avi', 'attachment')).toBe('attachment; filename=".avi"; filename*=UTF-8\'\'%E6%97%A5%E6%9C%AC.avi')
     expect(contentDisposition('', 'attachment')).toBe('attachment; filename="media"; filename*=UTF-8\'\'')
+  })
+
+  it('Content-Security-Policy : aucun script ni ressource d\'ailleurs, lecteur du navigateur autorisé sur son fichier', () => {
+    const directives = (mimeType: string) => new Map(deliveryCsp(mimeType).split(';').map((d) => {
+      const [name = '', ...values] = d.trim().split(/\s+/)
+      return [name, values] as const
+    }))
+    for (const type of ['image/jpeg', 'image/avif', 'text/vtt; charset=utf-8', 'application/octet-stream', 'video/mp4', 'audio/mpeg']) {
+      const csp = directives(type)
+      expect(csp.get('default-src'), type).toEqual(['\'none\''])
+      // Une vidéo ouverte dans un onglet : le lecteur du navigateur charge ce même fichier (bloqué sans media-src).
+      expect(csp.get('media-src'), type).toEqual(['\'self\''])
+      expect(csp.get('img-src'), type).toEqual(['\'self\''])
+    }
+    // Sans valeur : bac à sable complet (ni scripts, ni formulaires, ni fenêtres), sauf pour la vidéo et le son.
+    for (const type of ['image/jpeg', 'image/gif', 'text/vtt; charset=utf-8', 'application/octet-stream', 'text/html']) {
+      expect(directives(type).get('sandbox'), type).toEqual([])
+    }
+    for (const type of ['video/mp4', 'video/webm', 'video/quicktime', 'video/x-matroska', 'VIDEO/MP4', 'audio/mpeg', 'audio/ogg']) {
+      expect([...directives(type).keys()].sort(), type).toEqual(['default-src', 'img-src', 'media-src'])
+    }
+    // Préfixe exact : un type qui commence autrement garde le bac à sable.
+    expect(directives('application/video+xml').get('sandbox')).toEqual([])
   })
 })
 
