@@ -2,7 +2,7 @@
 import { describe, expect, it } from 'vitest'
 import { type Component, createSSRApp, h } from 'vue'
 import { renderToString } from 'vue/server-renderer'
-import { createSurgeMedia, SmImage, SmMedia, SmPicture, SmProcessingStatus, SmThumbnail, SmVideo } from '../src'
+import { createSurgeMedia, SmImage, SmMedia, SmPicture, SmProcessingStatus, SmThumbnail, SmUploader, SmVideo } from '../src'
 import { imageMedia, privateImage, project, videoMedia } from '../../client/tests/fixtures'
 
 /**
@@ -86,5 +86,21 @@ describe('rendu serveur', () => {
     expect(failed).toContain('Traitement interrompu')
     expect(failed).toContain('La vidéo dépasse la durée maximale de traitement.')
     expect(failed).toContain('role="status"')
+  })
+
+  it('SmUploader : champ natif et bouton libellé ; règles fournies : aide et attribut accept ; sans client : indisponible', async () => {
+    const client = { media: {}, uploadRules: async () => null } as never
+    const pending = await render(SmUploader, {}, { client, loadProject: false })
+    expect(pending).toContain('type="file"')
+    expect(pending).toContain('accept="image/*,video/*"')
+    expect(pending).toMatch(/<input id="([^"]+)"[^>]*type="file"[\s\S]*<label for="\1" class="sm-uploader__button"><!--\[-->Choisir des fichiers<!--\]--><\/label>/)
+    expect(pending).not.toContain('aria-describedby')
+    const rules = { types: [{ mimeType: 'image/png', extension: 'png', kind: 'image', maxSize: 2048, converted: false }], remaining: null, visibility: null, folderId: null }
+    const ready = await render(SmUploader, { rules, multiple: false }, { client, loadProject: false, locale: 'en' })
+    expect(ready).toContain('accept="image/png,.png"')
+    expect(ready).toContain('Choose a file')
+    expect(ready.replace(/[\u00A0\u202F]/g, ' ')).toContain('Images: PNG, 2 kB at most.')
+    expect(ready).toMatch(/aria-describedby="[^"]+"/)
+    expect(await render(SmUploader, {})).toContain('L&#39;envoi de fichiers n&#39;est pas disponible.')
   })
 })

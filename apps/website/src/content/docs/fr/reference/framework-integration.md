@@ -17,6 +17,8 @@ Les paquets officiels couvrent Vue, et React et Svelte sont prévus (voir [SDK e
 | Un recadrage CSS autour du point d’intérêt | `focalObjectPosition()`, `objectPosition()` |
 | Affiche, sources et pistes d’une vidéo | `posterUrl()`, `media.sources`, `media.textTracks` |
 | Suivre une vidéo que le serveur prépare | `isProcessing(media)`, `watchMedia(client, media, options)` |
+| Envoyer des fichiers : règles, contrôle, file avec progression, capture de l’affiche | `client.uploadRules()`, `checkFile()`, `acceptAttribute()`, `createUploadQueue()`, `captureVideoFrame()` |
+| Des jetons délégués émis par votre serveur | `createDelegatedToken()`, `UPLOAD_SCOPES` (`@surge-media/client/server`) |
 | Des erreurs lisibles | `SurgeApiError`, `errorMessage(code, locale)` |
 | Durées et tailles dans la langue de l’utilisateur | `formatDuration()`, `formatClock()`, `formatBytes()` |
 

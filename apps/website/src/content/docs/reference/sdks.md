@@ -16,7 +16,7 @@ surgeMedia is API-first: everything the admin does with media, your code can do 
 | `@surge-media/react` | React, Next.js | MIT | Planned |
 | `@surge-media/svelte` | Svelte, SvelteKit | MIT | Planned |
 
-The display components (images, `<picture>`, videos, thumbnails, processing status) are ready; uploads, media pickers and editing (focal point, crop, poster, subtitles) follow before the first release. Watch the [GitHub repository](https://github.com/mahmoud-nb/surge-media) releases to be notified.
+The display components (images, `<picture>`, videos, thumbnails, processing status) and uploads are ready; media pickers and editing (focal point, crop, poster, subtitles) follow before the first release. Watch the [GitHub repository](https://github.com/mahmoud-nb/surge-media) releases to be notified.
 
 ## @surge-media/vue
 
@@ -49,7 +49,7 @@ app.use(createSurgeMedia({
 | --- | --- |
 | No credential | Displaying `Media` objects your back end already fetched (public media, or private media with their signed URLs). |
 | Publishable key (`publishableKey`) | Public sites: public media, listing when the project enables it. Restricted to the project's allowed origins. |
-| Delegated tokens (`getToken`) | Signed-in users: private media, and later uploads and editing. Your back end issues short-lived tokens with its secret key; the client renews them before they expire. Include `project:read` in their scopes. |
+| Delegated tokens (`getToken`) | Signed-in users: private media, uploads, and later editing. Your back end issues short-lived tokens with its secret key; the client renews them before they expire. Include `project:read` in their scopes. |
 
 **Never put a secret key or a personal token in a browser**: the client refuses them and the API rejects them (`SECRET_IN_BROWSER`).
 
@@ -92,10 +92,77 @@ defineProps<{ hero: Media; gallery: Media[]; trailer: Media }>()
 | `SmMedia` | Picks `SmImage` or `SmVideo` from the media kind. |
 | `SmThumbnail` | Square thumbnail cropped around the focal point, video duration, processing badge. |
 | `SmProcessingStatus` | Processing status of a video, with a progress bar and polite announcements for screen readers. |
+| `SmUploader` | Uploads images and videos with delegated tokens: native file input, drag and drop, paste, checks before sending, progress, cancel, retry, poster capture — see [Upload files](#upload-files). |
 
 The components follow the project's transformation policy: with **presets only**, they build their `srcset` from presets; with **signed only**, from presets too, unless the media is private (its URLs are already signed). If a derivative fails to load, the image falls back to the original file, then to its alternative text.
 
 `useMedia(id)` loads a media item in the browser, refreshes the signed URLs of a private one before they expire, and follows the processing of a video until it is ready.
+
+### Upload files
+
+`SmUploader` sends images and videos to the project with **delegated tokens** that include the `media:upload` scope (see below):
+
+```vue
+<script setup lang="ts">
+import type { Media } from '@surge-media/client'
+import { SmUploader } from '@surge-media/vue'
+
+function onUploaded(media: Media) {
+  // Store media.id with your content
+}
+</script>
+
+<template>
+  <SmUploader :kinds="['image']" details @uploaded="onUploaded" />
+</template>
+```
+
+- **Checked before sending**: accepted types, maximum size per type and uploads left come from the token (`GET /me`); a refused file is explained at once, such as “This file is too large. Maximum size: 25 MB.” The server still checks the contents.
+- **Queue**: two uploads at a time, progress per file, cancel, retry; automatic retry after a `429`, a `503` or a network error, 3 times at most.
+- **Videos**: a poster frame is captured in the browser during the upload, then attached to the video.
+- **`details`**: title and alternative text are typed before the upload — an upload token cannot edit a media item afterwards. Without it, files leave as soon as they are chosen.
+- `visibility`, `chooseVisibility` and `folderId` set where files go, unless the token enforces them; `capture` (`user` or `environment`) opens the camera on phones. Events: `uploaded`, `error`, `done`.
+- Accessible: a native file input with a visible button (drag and drop and paste only add to it), constraints linked to the input, one announcement per finished file.
+
+Your back end issues the tokens with the project's **secret key**, through the server entry of the client. Add `@surge-media/client` to your dependencies, with the same version as `@surge-media/vue`:
+
+```ts
+// server.ts — Node.js with Express
+import express from 'express'
+import {
+  createDelegatedToken,
+  UPLOAD_SCOPES,
+} from '@surge-media/client/server'
+
+const app = express()
+
+app.post('/api/surge-media/token', async (req, res) => {
+  const user = req.user // your own authentication
+  if (!user) return res.sendStatus(401)
+  res.json(await createDelegatedToken({
+    baseUrl: process.env.SURGE_MEDIA_URL!,
+    projectId: process.env.SURGE_MEDIA_PROJECT!,
+    secretKey: process.env.SURGE_MEDIA_SECRET_KEY!,
+    scopes: UPLOAD_SCOPES, // project:read, media:read, media:upload
+    subject: String(user.id),
+    origin: 'https://www.example.com',
+    // Optional: types, visibility, folderId
+    upload: { maxFiles: 10, maxSize: 50 * 1024 * 1024 },
+  }))
+})
+```
+
+The plugin then gets its tokens from this route: `getToken: () => fetch('/api/surge-media/token', { method: 'POST' }).then(r => r.json())`. `@surge-media/client/server` refuses to run in a browser; the main entry never imports it. `maxFiles` counts per token: a renewed token starts again from zero, so keep any per-user quota in your application.
+
+From another language, call the API directly:
+
+```bash
+curl -X POST \
+  "https://media.example.com/api/v1/projects/cm…/delegated-tokens" \
+  -H "Authorization: Bearer $SURGE_MEDIA_SECRET_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"scopes":["project:read","media:read","media:upload"]}'
+```
 
 ### Theme and languages
 
@@ -132,6 +199,8 @@ const srcset = srcsetAttribute(widthCandidates(items[0], {
 ```
 
 It handles ETag revalidation, delegated token renewal and translated errors (`SurgeApiError`), and builds canonical transformation URLs — the exact form the server expects, so no redirect. `imageSourceSet()` computes all the attributes of an image (`src`, `srcset`, `sizes`, `width`, `height`) from the project's policy: it is the heart of every image component.
+
+For uploads, `client.media.upload()` sends a file (with progress in browsers), `client.uploadRules()` reads the rules of the token, `checkFile()` and `acceptAttribute()` apply them, and `createUploadQueue()` is the framework-free queue behind `SmUploader`. On your server, `@surge-media/client/server` issues delegated tokens.
 
 No package for your framework yet (Angular, SolidJS, Qwik…)? [Build a framework integration](../framework-integration/) on top of the client, the way the official packages are built.
 
@@ -188,6 +257,7 @@ import {
   SmMedia,
   SmPicture,
   SmThumbnail,
+  SmUploader,
   SmVideo,
 } from '@surge-media/vue'
 
@@ -206,7 +276,9 @@ export default defineNuxtPlugin((nuxtApp) => {
   }))
 
   // Available in every page and component, without imports.
-  const components = { SmImage, SmPicture, SmVideo, SmMedia, SmThumbnail }
+  const components = {
+    SmImage, SmPicture, SmVideo, SmMedia, SmThumbnail, SmUploader,
+  }
   for (const [name, component] of Object.entries(components)) {
     nuxtApp.vueApp.component(name, component)
   }
@@ -230,12 +302,17 @@ const { data: hero } = await useFetch(
 </template>
 ```
 
-### 3. Private media: delegated tokens (optional)
+### 3. Private media and uploads: delegated tokens (optional)
 
-To show private media to signed-in visitors, let your Nuxt server issue delegated tokens with the project's **secret key**, which never leaves the server:
+To show private media to signed-in visitors or let them upload files, let your Nuxt server issue delegated tokens with the project's **secret key**, which never leaves the server. Add `@surge-media/client` (same version as `@surge-media/vue`) for its server entry:
 
 ```ts
 // server/api/surge-media/token.post.ts
+import {
+  createDelegatedToken,
+  UPLOAD_SCOPES,
+} from '@surge-media/client/server'
+
 export default defineEventHandler(async (event) => {
   // Your own authentication: only signed-in visitors get a token
   // (requireUserSession comes from nuxt-auth-utils, for example).
@@ -244,15 +321,13 @@ export default defineEventHandler(async (event) => {
   const { baseUrl, projectId } = config.public.surgeMedia
 
   // Returns { token, expiresAt, scopes }, accepted as is by the plugin.
-  const url = `${baseUrl}/api/v1/projects/${projectId}/delegated-tokens`
-  return $fetch(url, {
-    method: 'POST',
-    headers: { Authorization: `Bearer ${config.surgeMedia.secretKey}` },
-    body: {
-      scopes: ['project:read', 'media:read'],
-      expiresIn: 900,
-      subject: String(user.id),
-    },
+  return createDelegatedToken({
+    baseUrl,
+    projectId,
+    secretKey: config.surgeMedia.secretKey,
+    // DISPLAY_SCOPES to show private media without uploads
+    scopes: UPLOAD_SCOPES,
+    subject: String(user.id),
   })
 })
 ```

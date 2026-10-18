@@ -17,6 +17,8 @@ The official packages cover Vue, and React and Svelte are planned (see [SDKs and
 | A CSS crop around the focal point | `focalObjectPosition()`, `objectPosition()` |
 | Video poster, sources and tracks | `posterUrl()`, `media.sources`, `media.textTracks` |
 | Follow a video the server is preparing | `isProcessing(media)`, `watchMedia(client, media, options)` |
+| Upload files: rules, checks, queue with progress, poster capture | `client.uploadRules()`, `checkFile()`, `acceptAttribute()`, `createUploadQueue()`, `captureVideoFrame()` |
+| Delegated tokens issued by your server | `createDelegatedToken()`, `UPLOAD_SCOPES` (`@surge-media/client/server`) |
 | Readable errors | `SurgeApiError`, `errorMessage(code, locale)` |
 | Durations and sizes in the user's language | `formatDuration()`, `formatClock()`, `formatBytes()` |
 

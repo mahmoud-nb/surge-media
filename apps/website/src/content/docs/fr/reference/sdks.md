@@ -16,7 +16,7 @@ surgeMedia est conçu « API d’abord » : tout ce que l’administration fa
 | `@surge-media/react` | React, Next.js | MIT | Prévu |
 | `@surge-media/svelte` | Svelte, SvelteKit | MIT | Prévu |
 
-Les composants d’affichage (images, `<picture>`, vidéos, vignettes, état du traitement) sont prêts ; l’envoi de fichiers, les sélecteurs de médias et l’édition (point d’intérêt, recadrage, image d’affiche, sous-titres) suivent avant la première version. Suivez les versions du [dépôt GitHub](https://github.com/mahmoud-nb/surge-media) pour être averti.
+Les composants d’affichage (images, `<picture>`, vidéos, vignettes, état du traitement) et l’envoi de fichiers sont prêts ; les sélecteurs de médias et l’édition (point d’intérêt, recadrage, image d’affiche, sous-titres) suivent avant la première version. Suivez les versions du [dépôt GitHub](https://github.com/mahmoud-nb/surge-media) pour être averti.
 
 ## @surge-media/vue
 
@@ -50,7 +50,7 @@ app.use(createSurgeMedia({
 | --- | --- |
 | Aucun | Afficher des objets `Media` déjà lus par votre back-end (médias publics, ou privés avec leurs URL signées). |
 | Clé publique (`publishableKey`) | Sites publics : médias publics, liste si le projet l’active. Limitée aux origines autorisées du projet. |
-| Jetons délégués (`getToken`) | Utilisateurs connectés : médias privés, puis envois et édition. Votre back-end émet des jetons de courte durée avec sa clé secrète ; le client les renouvelle avant leur échéance. Incluez `project:read` dans leurs portées. |
+| Jetons délégués (`getToken`) | Utilisateurs connectés : médias privés, envois, puis édition. Votre back-end émet des jetons de courte durée avec sa clé secrète ; le client les renouvelle avant leur échéance. Incluez `project:read` dans leurs portées. |
 
 **Ne placez jamais une clé secrète ou un jeton personnel dans un navigateur** : le client les refuse et l’API les rejette (`SECRET_IN_BROWSER`).
 
@@ -93,10 +93,77 @@ defineProps<{ hero: Media; gallery: Media[]; trailer: Media }>()
 | `SmMedia` | Choisit `SmImage` ou `SmVideo` selon le genre du média. |
 | `SmThumbnail` | Vignette carrée recadrée autour du point d’intérêt, durée d’une vidéo, pastille d’état du traitement. |
 | `SmProcessingStatus` | État du traitement d’une vidéo, avec barre de progression et annonces polies pour les lecteurs d’écran. |
+| `SmUploader` | Envoi d’images et de vidéos avec des jetons délégués : champ de fichier natif, dépôt, collage, contrôle avant l’envoi, progression, annulation, nouvel essai, capture de l’affiche — voir [Envoyer des fichiers](#envoyer-des-fichiers). |
 
 Les composants respectent la politique de transformation du projet : en **préréglages seulement**, ils construisent leur `srcset` à partir des préréglages ; en **signées seulement**, aussi, sauf pour un média privé (ses URL sont déjà signées). Si un dérivé ne se charge pas, l’image se replie sur le fichier original, puis sur son texte alternatif.
 
 `useMedia(id)` charge un média dans le navigateur, renouvelle les URL signées d’un média privé avant leur échéance et suit le traitement d’une vidéo jusqu’à ce qu’elle soit prête.
+
+### Envoyer des fichiers
+
+`SmUploader` envoie des images et des vidéos dans le projet avec des **jetons délégués** qui comprennent la portée `media:upload` (voir plus bas) :
+
+```vue
+<script setup lang="ts">
+import type { Media } from '@surge-media/client'
+import { SmUploader } from '@surge-media/vue'
+
+function onUploaded(media: Media) {
+  // Enregistrez media.id avec votre contenu
+}
+</script>
+
+<template>
+  <SmUploader :kinds="['image']" details @uploaded="onUploaded" />
+</template>
+```
+
+- **Contrôle avant l’envoi** : types acceptés, taille maximale par type et envois restants viennent du jeton (`GET /me`) ; un fichier refusé est expliqué aussitôt, par exemple « Ce fichier est trop volumineux. Taille maximale : 25 Mo. ». Le serveur vérifie toujours le contenu.
+- **File d’envoi** : deux envois à la fois, progression par fichier, annulation, nouvel essai ; nouvel essai automatique après un `429`, un `503` ou une erreur réseau, 3 fois au plus.
+- **Vidéos** : une image d’affiche est capturée dans le navigateur pendant l’envoi, puis jointe à la vidéo.
+- **`details`** : titre et texte alternatif sont saisis avant l’envoi — un jeton d’envoi ne peut pas modifier un média ensuite. Sans cette option, les fichiers partent dès qu’ils sont choisis.
+- `visibility`, `chooseVisibility` et `folderId` décident où vont les fichiers, sauf si le jeton les impose ; `capture` (`user` ou `environment`) ouvre l’appareil photo sur mobile. Événements : `uploaded`, `error`, `done`.
+- Accessible : un champ de fichier natif avec un bouton visible (le dépôt et le collage ne font que s’y ajouter), contraintes reliées au champ, une annonce par fichier terminé.
+
+Votre back-end émet les jetons avec la **clé secrète** du projet, grâce à l’entrée serveur du client. Ajoutez `@surge-media/client` à vos dépendances, dans la même version que `@surge-media/vue` :
+
+```ts
+// server.ts — Node.js avec Express
+import express from 'express'
+import {
+  createDelegatedToken,
+  UPLOAD_SCOPES,
+} from '@surge-media/client/server'
+
+const app = express()
+
+app.post('/api/surge-media/token', async (req, res) => {
+  const user = req.user // votre propre authentification
+  if (!user) return res.sendStatus(401)
+  res.json(await createDelegatedToken({
+    baseUrl: process.env.SURGE_MEDIA_URL!,
+    projectId: process.env.SURGE_MEDIA_PROJECT!,
+    secretKey: process.env.SURGE_MEDIA_SECRET_KEY!,
+    scopes: UPLOAD_SCOPES, // project:read, media:read, media:upload
+    subject: String(user.id),
+    origin: 'https://www.example.com',
+    // Facultatif : types, visibility, folderId
+    upload: { maxFiles: 10, maxSize: 50 * 1024 * 1024 },
+  }))
+})
+```
+
+Le plugin reçoit alors ses jetons de cette route : `getToken: () => fetch('/api/surge-media/token', { method: 'POST' }).then(r => r.json())`. `@surge-media/client/server` refuse de s’exécuter dans un navigateur ; l’entrée principale ne l’importe jamais. `maxFiles` compte par jeton : un jeton renouvelé repart de zéro, gardez donc un éventuel quota par utilisateur dans votre application.
+
+Depuis un autre langage, appelez directement l’API :
+
+```bash
+curl -X POST \
+  "https://media.example.com/api/v1/projects/cm…/delegated-tokens" \
+  -H "Authorization: Bearer $SURGE_MEDIA_SECRET_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"scopes":["project:read","media:read","media:upload"]}'
+```
 
 ### Thème et langues
 
@@ -133,6 +200,8 @@ const srcset = srcsetAttribute(widthCandidates(items[0], {
 ```
 
 Il gère la revalidation par ETag, le renouvellement des jetons délégués et les erreurs traduites (`SurgeApiError`), et construit les URL de transformation sous forme canonique — exactement celle qu’attend le serveur, donc sans redirection. `imageSourceSet()` calcule tous les attributs d’une image (`src`, `srcset`, `sizes`, `width`, `height`) d’après la politique du projet : c’est le cœur de tout composant d’image.
+
+Pour l’envoi, `client.media.upload()` envoie un fichier (avec sa progression dans un navigateur), `client.uploadRules()` lit les règles du jeton, `checkFile()` et `acceptAttribute()` les appliquent, et `createUploadQueue()` est la file sans framework sur laquelle repose `SmUploader`. Sur votre serveur, `@surge-media/client/server` émet les jetons délégués.
 
 Pas encore de paquet pour votre framework (Angular, SolidJS, Qwik…) ? [Créez une intégration pour un framework](../framework-integration/) au-dessus du client, comme le sont les paquets officiels.
 
@@ -189,6 +258,7 @@ import {
   SmMedia,
   SmPicture,
   SmThumbnail,
+  SmUploader,
   SmVideo,
 } from '@surge-media/vue'
 
@@ -207,7 +277,9 @@ export default defineNuxtPlugin((nuxtApp) => {
   }))
 
   // Disponibles partout (pages et composants), sans import.
-  const components = { SmImage, SmPicture, SmVideo, SmMedia, SmThumbnail }
+  const components = {
+    SmImage, SmPicture, SmVideo, SmMedia, SmThumbnail, SmUploader,
+  }
   for (const [name, component] of Object.entries(components)) {
     nuxtApp.vueApp.component(name, component)
   }
@@ -231,12 +303,17 @@ const { data: hero } = await useFetch(
 </template>
 ```
 
-### 3. Médias privés : jetons délégués (facultatif)
+### 3. Médias privés et envois : jetons délégués (facultatif)
 
-Pour montrer des médias privés aux visiteurs connectés, laissez votre serveur Nuxt émettre des jetons délégués avec la **clé secrète** du projet, qui ne quitte jamais le serveur :
+Pour montrer des médias privés aux visiteurs connectés ou les laisser envoyer des fichiers, laissez votre serveur Nuxt émettre des jetons délégués avec la **clé secrète** du projet, qui ne quitte jamais le serveur. Ajoutez `@surge-media/client` (même version que `@surge-media/vue`) pour son entrée serveur :
 
 ```ts
 // server/api/surge-media/token.post.ts
+import {
+  createDelegatedToken,
+  UPLOAD_SCOPES,
+} from '@surge-media/client/server'
+
 export default defineEventHandler(async (event) => {
   // Votre propre authentification : seuls les visiteurs connectés
   // reçoivent un jeton (requireUserSession vient de nuxt-auth-utils).
@@ -245,15 +322,13 @@ export default defineEventHandler(async (event) => {
   const { baseUrl, projectId } = config.public.surgeMedia
 
   // Renvoie { token, expiresAt, scopes } : accepté tel quel.
-  const url = `${baseUrl}/api/v1/projects/${projectId}/delegated-tokens`
-  return $fetch(url, {
-    method: 'POST',
-    headers: { Authorization: `Bearer ${config.surgeMedia.secretKey}` },
-    body: {
-      scopes: ['project:read', 'media:read'],
-      expiresIn: 900,
-      subject: String(user.id),
-    },
+  return createDelegatedToken({
+    baseUrl,
+    projectId,
+    secretKey: config.surgeMedia.secretKey,
+    // DISPLAY_SCOPES pour les médias privés sans envoi
+    scopes: UPLOAD_SCOPES,
+    subject: String(user.id),
   })
 })
 ```

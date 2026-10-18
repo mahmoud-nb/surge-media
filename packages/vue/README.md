@@ -8,6 +8,9 @@ Vue 3 components for [surgeMedia](https://github.com/mahmoud-nb/surge-media), th
 - **`SmVideo`**: the browser's native player with the server's playback sources (AV1, H.264, original), poster and
   captions, no autoplay (an `ambient` mode loops a muted video with a pause button), processing status while the
   server prepares the video.
+- **`SmUploader`**: uploads with delegated tokens (`media:upload`) — native file input, drag and drop, paste, checks
+  before sending from the rules of the token, progress, cancel, retry, poster captured from videos, title and
+  alternative text typed before the upload (`details`); `useUploadQueue()` and `useUploadRules()` for your own UI.
 - **`SmMedia`**, **`SmThumbnail`**, **`SmProcessingStatus`**, `useMedia()`.
 - Server-side rendering, French (default) and English texts, WCAG 2.2 AA, optional theme (`--sm-*` tokens, light
   and dark) in a CSS layer your styles always override.
@@ -34,9 +37,12 @@ app.use(createSurgeMedia({
 <SmImage :media="media" sizes="(min-width: 960px) 50vw, 100vw" />
 <SmPicture :media="media" :sources="[{ media: '(max-width: 640px)', aspect: 1 }]" />
 <SmVideo :media="video" />
+<SmUploader :kinds="['image']" details @uploaded="onUploaded" />
 ```
 
-With server-side rendering, create the plugin for each request: delegated tokens belong to one user.
+With server-side rendering, create the plugin for each request: delegated tokens belong to one user. Issue upload
+tokens on your server with `createDelegatedToken()` from `@surge-media/client/server` (add `@surge-media/client`,
+same version, to your dependencies).
 
 Changes: [CHANGELOG](https://github.com/mahmoud-nb/surge-media/blob/main/packages/CHANGELOG.md).
 
