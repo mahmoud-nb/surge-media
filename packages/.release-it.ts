@@ -11,8 +11,8 @@
  *      `pnpm release:libs minor`, préversion `--preRelease=alpha` ;
  *   3. version des deux package.json (packages/scripts/set-version.mjs), packages/CHANGELOG.md, commit
  *      `chore(release): libs v${version}`, tag annoté `libs-vX.Y.Z`, push ;
- *   4. release GitHub (notes = section du CHANGELOG) : par l'API si GITHUB_TOKEN est défini, sinon page
- *      pré-remplie ouverte dans le navigateur, à publier d'un clic.
+ *   4. release GitHub (notes = section du CHANGELOG, résumée si elle est trop longue pour la page du navigateur) :
+ *      par l'API si GITHUB_TOKEN est défini, sinon page pré-remplie ouverte dans le navigateur, à publier d'un clic.
  *
  * La publication npm est faite par .github/workflows/release-libraries.yml quand la release GitHub est publiée,
  * jamais depuis un poste de travail.
@@ -27,6 +27,35 @@ const { version } = JSON.parse(readFileSync(new URL('./client/package.json', imp
  * packages/ : le core y vivait (packages/core) jusqu'au 2026-10-11.
  */
 const LIBRARY_PATHS = ['packages/client', 'packages/vue', 'packages/scripts', 'packages/.release-it.ts']
+
+/**
+ * Sans GITHUB_TOKEN, release-it passe les notes dans l'adresse de la page pré-remplie (`…/releases/new?body=…`) :
+ * GitHub refuse une adresse de plus de quelques milliers de caractères (414 vers 8 200, erreurs dès 7 000 environ,
+ * mesuré le 2026-10-18). Au-delà de MAX_WEB_NOTES caractères encodés : titre de la version, nombre d'entrées par
+ * rubrique, ruptures en entier si elles tiennent, et lien vers le CHANGELOG du tag (complet). Comme le core
+ * (apps/core/.release-it.ts).
+ */
+const MAX_WEB_NOTES = 4000
+
+/** Contexte passé par release-it (ses types de la version 21 déclarent une fonction sans argument). */
+function releaseNotes(context?: { changelog?: string, version?: string }): string {
+  const changelog = context?.changelog ?? ''
+  const encodedLength = (text: string) => new URLSearchParams({ body: text }).toString().length
+  if (process.env.GITHUB_TOKEN || encodedLength(changelog) <= MAX_WEB_NOTES) return changelog
+
+  const [title = '', ...lines] = changelog.split('\n')
+  const sections: { name: string, lines: string[] }[] = []
+  for (const line of lines) {
+    if (line.startsWith('### ')) sections.push({ name: line.slice(4).trim(), lines: [] })
+    else if (line.trim()) sections.at(-1)?.lines.push(line)
+  }
+  const counts = sections.map(s => `${s.name} (${s.lines.filter(l => l.startsWith('* ')).length})`).join(', ')
+  const link = `https://github.com/mahmoud-nb/surge-media/blob/libs-v${context?.version ?? version}/packages/CHANGELOG.md`
+  const summary = [title, '', `${counts}.`, '', `The full list of changes is in the [changelog](${link}).`].join('\n')
+  const breaking = sections.find(s => /BREAKING/.test(s.name))
+  const withBreaking = breaking ? [summary, '', `### ${breaking.name}`, '', ...breaking.lines].join('\n') : summary
+  return encodedLength(withBreaking) <= MAX_WEB_NOTES ? withBreaking : summary
+}
 
 export default {
   git: {
@@ -46,6 +75,7 @@ export default {
   github: {
     release: true,
     releaseName: 'Libraries v${version} (@surge-media/client, @surge-media/vue)',
+    releaseNotes,
     web: !process.env.GITHUB_TOKEN,
   },
   plugins: {
