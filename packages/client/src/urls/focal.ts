@@ -1,4 +1,4 @@
-import type { FocalPoint } from '../types'
+import type { FocalPoint, Media } from '../types'
 
 /**
  * Recadrage CSS sur le point d'intérêt (`object-fit: cover`) d'une image `width` × `height` affichée au
@@ -20,4 +20,15 @@ export function focalObjectPosition(width: number, height: number, ratio: number
 export function objectPosition(point: FocalPoint): string {
   const percent = (value: number) => `${Math.round(value * 10_000) / 100}%`
   return `${percent(point.x)} ${percent(point.y)}`
+}
+
+/**
+ * Position CSS du recadrage d'un média sur son point d'intérêt (`object-fit: cover`) : exacte si le rapport
+ * affiché est connu, sinon le point lui-même ; sans point, le centre.
+ */
+export function focusPosition(media: Pick<Media, 'width' | 'height' | 'focalPoint'>, aspect: number | null): string {
+  const focal = media.focalPoint
+  if (!focal) return '50% 50%'
+  if (aspect && media.width && media.height) return objectPosition(focalObjectPosition(media.width, media.height, aspect, focal))
+  return objectPosition(focal)
 }

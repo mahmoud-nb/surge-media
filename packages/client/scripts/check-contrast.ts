@@ -2,7 +2,7 @@
  * Vérifie les contrastes WCAG 2.2 AA du thème facultatif (src/styles/theme.css), en clair et en sombre,
  * et que les deux blocs « sombre » (classe et préférence du système) sont identiques.
  *
- *   pnpm --filter @surge-media/vue a11y:contrast
+ *   pnpm --filter @surge-media/client a11y:contrast
  *
  * Texte : 4.5:1 minimum (1.4.3). Contour de focus et bordures porteuses de sens : 3:1 (1.4.11).
  * Repris de apps/core/scripts/check-contrast.ts.

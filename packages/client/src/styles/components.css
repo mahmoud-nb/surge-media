@@ -1,6 +1,7 @@
 /*
- * Styles des composants (facultatifs) : sans eux, dimensions, rapports et textes réservés aux lecteurs
- * d'écran restent corrects (styles en ligne minimaux). Classes `sm-*` stables, documentées.
+ * Styles des composants (facultatifs), communs à toutes les librairies (même balisage, mêmes classes) :
+ * sans eux, dimensions, rapports et textes réservés aux lecteurs d'écran restent corrects (styles en ligne
+ * minimaux du client). Classes `sm-*` stables, documentées.
  */
 @layer surge-media {
   .sm-image--error {

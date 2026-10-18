@@ -77,7 +77,7 @@ jobs:
         run: pnpm --filter "./packages/*" test
 
       - name: Contrastes du thème
-        run: pnpm --filter @surge-media/vue a11y:contrast
+        run: pnpm --filter @surge-media/client a11y:contrast
 
       - name: Build et publint
         run: pnpm packages:build

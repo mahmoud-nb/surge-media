@@ -4,12 +4,13 @@
  * fichiers produits) ou en densités pour une taille fixe, recadrage serveur centré sur le point d'intérêt,
  * politique du projet respectée (préréglages si les paramètres libres sont refusés), dimensions toujours
  * posées (aucun décalage au chargement), repli sur l'original puis état d'erreur. Rendu serveur déterministe.
+ * Toute la logique est dans le client (`imageSource`, `imageStyle`, `imageErrorFrameStyle`).
  */
-import type { ImageTransform, Media, TransformFormat } from '@surge-media/client'
-import { imageFormat, imageSourceSet, parseAspect } from '@surge-media/client'
+import type { ImageStage, ImageTransform, Media, TransformFormat } from '@surge-media/client'
+import { imageErrorFrameStyle, imageSource, imageStyle } from '@surge-media/client'
 import { computed, type CSSProperties, ref } from 'vue'
-import { focusPosition, type ImageStage, useAltText, useImageFallback, useTransformMode } from '../composables/image'
-import { useSurgeMedia } from '../context'
+import { useAltText, useImageFallback } from '../composables/image'
+import { useDisplaySettings } from '../context'
 
 const props = withDefaults(defineProps<{
   media: Media
@@ -64,47 +65,14 @@ const emit = defineEmits<{
   error: [stage: ImageStage]
 }>()
 
-const { settings, presets: knownPresets, defaults } = useSurgeMedia()
-const mode = useTransformMode(() => props.media)
+const display = useDisplaySettings()
 const alt = useAltText(props)
 const element = ref<HTMLImageElement | null>(null)
 const { stage, handleError } = useImageFallback(() => props.media, element, failed => emit('error', failed))
-const aspect = computed(() => parseAspect(props.aspect))
 
-const set = computed(() => imageSourceSet({
-  media: props.media,
-  format: imageFormat(settings.value.formats, props.format ?? defaults.imageFormat),
-  mode: mode.value,
-  maxDimension: settings.value.maxDimension,
-  presets: knownPresets.value,
-  width: props.width,
-  height: props.height,
-  aspect: aspect.value ?? undefined,
-  fit: props.fit,
-  transform: props.transform,
-  preset: props.preset,
-  presetNames: props.presets,
-  widths: props.widths ?? defaults.widths,
-  sizes: props.sizes,
-}))
-
-const style = computed<CSSProperties>(() => {
-  if (props.objectFit) {
-    return { width: '100%', height: '100%', objectFit: props.objectFit, objectPosition: focusPosition(props.media, aspect.value) }
-  }
-  return set.value.responsive ? { maxWidth: '100%', height: 'auto' } : {}
-})
-
-const frameStyle = computed<CSSProperties>(() => {
-  const { width, height } = set.value
-  return {
-    display: 'inline-flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    ...(width && height ? { aspectRatio: `${width} / ${height}` } : {}),
-    ...(set.value.responsive ? { width: '100%', maxWidth: width ? `${width}px` : undefined } : { width: width ? `${width}px` : undefined }),
-  }
-})
+const set = computed(() => imageSource(props.media, props, display.value))
+const style = computed<CSSProperties>(() => imageStyle(props.media, set.value, props))
+const frameStyle = computed<CSSProperties>(() => imageErrorFrameStyle(set.value))
 </script>
 
 <template>

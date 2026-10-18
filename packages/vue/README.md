@@ -14,6 +14,8 @@ Vue 3 components for [surgeMedia](https://github.com/mahmoud-nb/surge-media), th
 - **`SmMedia`**, **`SmThumbnail`**, **`SmProcessingStatus`**, `useMedia()`.
 - Server-side rendering, French (default) and English texts, WCAG 2.2 AA, optional theme (`--sm-*` tokens, light
   and dark) in a CSS layer your styles always override.
+- Built on [`@surge-media/client`](https://www.npmjs.com/package/@surge-media/client), which holds the
+  framework-free logic (texts, URLs, inline styles, states) and the theme: the same base for your own components.
 
 Requires Vue 3.5 or later.
 

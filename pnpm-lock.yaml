@@ -385,6 +385,9 @@ importers:
       tsdown:
         specifier: ^0.23.0
         version: 0.23.0(@volar/typescript@2.4.28(typescript@6.0.3))(@vue/language-core@3.3.11)(publint@0.3.25)(tsx@4.23.15)(typescript@6.0.3)(vue-tsc@3.3.11(typescript@6.0.3))
+      tsx:
+        specifier: ^4.23.15
+        version: 4.23.15
       typescript:
         specifier: ~6.0.3
         version: 6.0.3
@@ -419,9 +422,6 @@ importers:
       publint:
         specifier: ^0.3.25
         version: 0.3.25
-      tsx:
-        specifier: ^4.23.15
-        version: 4.23.15
       typescript:
         specifier: ~6.0.3
         version: 6.0.3

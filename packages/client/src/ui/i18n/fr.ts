@@ -1,7 +1,8 @@
 /**
- * Textes des composants en français (langue de référence et par défaut). Aucun texte n'est écrit en dur
- * dans les composants : libellés, annonces et `aria-label` passent par ces catalogues. Paramètres entre
- * accolades (`{name}`).
+ * Textes des composants en français (langue de référence et par défaut), communs à toutes les librairies
+ * de composants (@surge-media/vue, puis React et Svelte). Aucun texte n'est écrit en dur dans les
+ * composants : libellés, annonces et `aria-label` passent par ces catalogues. Paramètres entre accolades
+ * (`{name}`).
  */
 export const fr = {
   video: {
@@ -99,4 +100,4 @@ export const fr = {
   },
 }
 
-export type Messages = typeof fr
+export type ComponentMessages = typeof fr

@@ -2,13 +2,25 @@
 /**
  * Vignette carrée d'un média (galeries, sélecteurs) : image recadrée sur son point d'intérêt, affiche d'une
  * vidéo, sinon icône du genre ; durée d'une vidéo (visible, et en toutes lettres pour les lecteurs
- * d'écran) ; état du traitement (en attente, en cours, échec).
+ * d'écran) ; état du traitement (en attente, en cours, échec). Toute la logique est dans le client
+ * (`thumbnailSource`, `kindIcon`, styles en ligne).
  */
-import { formatClock, formatDuration, imageFormat, imageSourceSet, type Media } from '@surge-media/client'
+import {
+  formatClock,
+  formatDuration,
+  kindIcon,
+  kindLabelKey,
+  type Media,
+  processingVisible,
+  thumbnailFrameStyle,
+  thumbnailIconSizes,
+  thumbnailImageStyle,
+  thumbnailSource,
+  VISUALLY_HIDDEN,
+} from '@surge-media/client'
 import { computed, type CSSProperties, ref } from 'vue'
-import { focusPosition, useTransformMode, VISUALLY_HIDDEN } from '../composables/image'
-import { useSurgeMedia } from '../context'
-import { IconFile, IconFilm, IconImage, IconPlay } from '../icons'
+import { useDisplaySettings, useSurgeMedia } from '../context'
+import { ICON_COMPONENTS, IconPlay } from '../icons'
 import SmProcessingStatus from './SmProcessingStatus.vue'
 
 const props = withDefaults(defineProps<{
@@ -24,45 +36,19 @@ const props = withDefaults(defineProps<{
   loading: 'lazy',
 })
 
-const { settings, presets, defaults, locale, t } = useSurgeMedia()
-const mode = useTransformMode(() => props.media)
+const { locale, t } = useSurgeMedia()
+const display = useDisplaySettings()
 const failed = ref(false)
 
 const hasImage = computed(() => Boolean(props.media.urlTemplate) && !failed.value)
-const set = computed(() => imageSourceSet({
-  media: props.media,
-  format: imageFormat(settings.value.formats, defaults.imageFormat),
-  mode: mode.value,
-  maxDimension: settings.value.maxDimension,
-  presets: presets.value,
-  width: props.size,
-  height: props.size,
-  // Préréglages seulement : l'aperçu (480 px) recadré par le navigateur.
-  ...(mode.value === 'presets' ? { preset: 'preview' } : {}),
-}))
-
-const frame = computed<CSSProperties>(() => ({
-  position: 'relative',
-  display: 'inline-flex',
-  alignItems: 'center',
-  justifyContent: 'center',
-  overflow: 'hidden',
-  width: `${props.size}px`,
-  height: `${props.size}px`,
-  flex: 'none',
-}))
-
-const imageStyle = computed<CSSProperties>(() => ({
-  width: '100%',
-  height: '100%',
-  objectFit: 'cover',
-  objectPosition: focusPosition(props.media.kind === 'video' && props.media.poster ? { ...props.media.poster, focalPoint: props.media.focalPoint } : props.media, 1),
-}))
-
-const icon = computed(() => props.media.kind === 'image' ? IconImage : props.media.kind === 'video' ? IconFilm : IconFile)
-const kindLabel = computed(() => t(`thumbnail.kinds.${props.media.kind === 'image' || props.media.kind === 'video' ? props.media.kind : 'other'}`))
+const set = computed(() => thumbnailSource(props.media, props.size, display.value))
+const frame = computed<CSSProperties>(() => thumbnailFrameStyle(props.size))
+const imageStyle = computed<CSSProperties>(() => thumbnailImageStyle(props.media))
+const iconSizes = computed(() => thumbnailIconSizes(props.size))
+const icon = computed(() => ICON_COMPONENTS[kindIcon(props.media.kind)])
+const kindLabel = computed(() => t(kindLabelKey(props.media.kind)))
 const alt = computed(() => props.alt ?? props.media.altText ?? '')
-const showStatus = computed(() => props.media.processing && props.media.processing.status !== 'ready')
+const showStatus = computed(() => processingVisible(props.media.processing))
 </script>
 
 <template>
@@ -81,10 +67,10 @@ const showStatus = computed(() => props.media.processing && props.media.processi
       @error="failed = true"
     >
     <span v-else class="sm-thumbnail__placeholder" role="img" :aria-label="alt || kindLabel">
-      <component :is="icon" :size="Math.max(16, Math.round(props.size / 4))" />
+      <component :is="icon" :size="iconSizes.kind" />
     </span>
     <span v-if="props.media.kind === 'video' && hasImage" class="sm-thumbnail__play" aria-hidden="true">
-      <IconPlay :size="Math.max(12, Math.round(props.size / 8))" />
+      <IconPlay :size="iconSizes.play" />
     </span>
     <template v-if="props.media.duration">
       <span class="sm-thumbnail__duration" aria-hidden="true">{{ formatClock(props.media.duration) }}</span>

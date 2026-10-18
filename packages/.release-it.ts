@@ -88,7 +88,7 @@ export default {
       'pnpm --filter "./packages/*" lint',
       'pnpm --filter "./packages/*" typecheck',
       'pnpm --filter "./packages/*" test',
-      'pnpm --filter @surge-media/vue a11y:contrast',
+      'pnpm --filter @surge-media/client a11y:contrast',
       'pnpm packages:build',
       'node packages/scripts/pack-smoke.mjs',
     ],

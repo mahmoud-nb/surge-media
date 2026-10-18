@@ -4,13 +4,29 @@
  * l'ordre de préférence du serveur (AV1, H.264, original), affiche dimensionnée, sous-titres `<track>`,
  * aucune lecture automatique (sauf mode `ambient`, muet, avec un bouton pause : WCAG 2.2.2). Suit le
  * traitement d'une vidéo en préparation ; sans source lisible, affiche l'état et un lien vers l'original ;
- * une vidéo retenue par le serveur (503 `PROCESSING_PENDING`) est réessayée après `Retry-After`.
+ * une vidéo retenue par le serveur (503 `PROCESSING_PENDING`) est réessayée après `Retry-After`. La
+ * logique sans framework est dans le client (`videoPoster`, `heldVideoDelay`, styles en ligne…).
  */
-import { imageFormat, type Media, parseRetryAfter, posterUrl } from '@surge-media/client'
+import {
+  heldVideoDelay,
+  type Media,
+  prefersReducedMotion,
+  processingVisible,
+  VIDEO_EMPTY_POSTER_STYLE,
+  VIDEO_FRAME_STYLE,
+  VIDEO_LAYER_STYLE,
+  VIDEO_PLAYER_STYLE,
+  VIDEO_RETRY_LIMIT,
+  videoEmptyStyle,
+  videoLabel,
+  videoMessageKey,
+  videoPoster,
+  videoSize,
+  whenNearViewport,
+} from '@surge-media/client'
 import { computed, type CSSProperties, nextTick, onBeforeUnmount, onMounted, ref, shallowRef, watch as watchSource } from 'vue'
-import { useTransformMode } from '../composables/image'
 import { useLiveMedia } from '../composables/media'
-import { useSurgeMedia } from '../context'
+import { useDisplaySettings, useSurgeMedia } from '../context'
 import { IconPause, IconPlay } from '../icons'
 import SmProcessingStatus from './SmProcessingStatus.vue'
 
@@ -56,9 +72,9 @@ const emit = defineEmits<{
   error: []
 }>()
 
-const { settings, defaults, t } = useSurgeMedia()
+const { t } = useSurgeMedia()
+const display = useDisplaySettings()
 const live = useLiveMedia(() => props.media, () => props.watch, media => emit('update', media))
-const mode = useTransformMode(() => live.value)
 const video = ref<HTMLVideoElement | null>(null)
 
 // ─── Sources (renouvelées seulement si leurs URL changent, jamais en pleine lecture) ───
@@ -85,38 +101,18 @@ watchSource(sourcesKey, () => {
 })
 
 // ─── Affiche, dimensions, nom, pistes ───
-const posterSrc = computed(() => {
-  if (props.poster === false) return undefined
-  if (typeof props.poster === 'string') return props.poster
-  const media = live.value
-  if (!media.poster) return undefined
-  if (mode.value === 'presets') return media.poster.url
-  const width = props.posterWidth ?? Math.min(media.poster.width, 1280)
-  return posterUrl(media, { width, format: imageFormat(settings.value.formats, defaults.imageFormat), maxDimension: settings.value.maxDimension }) ?? undefined
-})
-const width = computed(() => props.width ?? live.value.width ?? live.value.poster?.width ?? undefined)
-const height = computed(() => props.height ?? live.value.height ?? live.value.poster?.height ?? undefined)
-const label = computed(() => props.label ?? live.value.title ?? live.value.altText ?? undefined)
+const posterSrc = computed(() => videoPoster(live.value, props, display.value))
+const size = computed(() => videoSize(live.value, props))
+const label = computed(() => videoLabel(live.value, props.label))
 const textTracks = computed(() => props.tracks ? live.value.textTracks : [])
 
-const frame = computed<CSSProperties>(() => ({ position: 'relative', display: 'inline-block', maxWidth: '100%', verticalAlign: 'top' }))
-const playerStyle: CSSProperties = { display: 'block', maxWidth: '100%', height: 'auto' }
-const emptyStyle = computed<CSSProperties>(() => ({
-  position: 'relative',
-  display: 'flex',
-  flexDirection: 'column',
-  alignItems: 'center',
-  justifyContent: 'center',
-  gap: '0.5rem',
-  overflow: 'hidden',
-  width: width.value ? `${width.value}px` : '640px',
-  maxWidth: '100%',
-  aspectRatio: width.value && height.value ? `${width.value} / ${height.value}` : '16 / 9',
-}))
+const frame: CSSProperties = VIDEO_FRAME_STYLE
+const playerStyle: CSSProperties = VIDEO_PLAYER_STYLE
+const emptyStyle = computed<CSSProperties>(() => videoEmptyStyle(size.value.width, size.value.height))
 
 // ─── Chargement différé ───
 const preload = ref(props.lazy ? 'none' : props.preload)
-let observer: IntersectionObserver | null = null
+let stopObserving: (() => void) | null = null
 
 // ─── Mode ambiant ───
 const paused = ref(true)
@@ -135,21 +131,16 @@ let retryTimer: ReturnType<typeof setTimeout> | null = null
 
 async function onSourceError(index: number) {
   if (index !== rendered.value.length - 1) return
-  const url = rendered.value[0]?.url ?? live.value.url
-  try {
-    const response = await fetch(url, { method: 'HEAD', cache: 'no-store' })
-    if (response.status === 503 && retries < 10) {
-      state.value = 'held'
-      retries++
-      const delay = (parseRetryAfter(response.headers.get('retry-after')) ?? 30) * 1000
-      retryTimer = setTimeout(() => {
-        state.value = 'ready'
-        void nextTick(() => video.value?.load())
-      }, Math.min(Math.max(delay, 5000), 300_000))
-      return
-    }
+  const delay = await heldVideoDelay(rendered.value[0]?.url ?? live.value.url)
+  if (delay !== null && retries < VIDEO_RETRY_LIMIT) {
+    state.value = 'held'
+    retries++
+    retryTimer = setTimeout(() => {
+      state.value = 'ready'
+      void nextTick(() => video.value?.load())
+    }, delay)
+    return
   }
-  catch {}
   state.value = 'error'
   emit('error')
 }
@@ -162,25 +153,18 @@ watchSource(() => `${live.value.id}:${live.value.version}`, () => {
 onMounted(() => {
   const element = video.value
   if (props.lazy && element) {
-    if (typeof IntersectionObserver === 'undefined') preload.value = props.preload
-    else {
-      observer = new IntersectionObserver((entries) => {
-        if (!entries.some(entry => entry.isIntersecting)) return
-        preload.value = props.preload
-        observer?.disconnect()
-        observer = null
-      }, { rootMargin: '200px' })
-      observer.observe(element)
-    }
+    stopObserving = whenNearViewport(element, () => {
+      preload.value = props.preload
+    })
   }
-  if (props.ambient && element && !window.matchMedia?.('(prefers-reduced-motion: reduce)').matches) {
+  if (props.ambient && element && !prefersReducedMotion()) {
     element.muted = true
     void element.play().catch(() => {})
   }
 })
 
 onBeforeUnmount(() => {
-  observer?.disconnect()
+  stopObserving?.()
   if (retryTimer) clearTimeout(retryTimer)
 })
 
@@ -202,8 +186,8 @@ function onPause() {
         :muted="props.ambient"
         :loop="props.ambient"
         :poster="posterSrc"
-        :width="width"
-        :height="height"
+        :width="size.width"
+        :height="size.height"
         :aria-label="label || undefined"
         :crossorigin="textTracks.length > 0 ? 'anonymous' : undefined"
         :style="playerStyle"
@@ -248,17 +232,17 @@ function onPause() {
         class="sm-video__poster"
         :src="posterSrc"
         alt=""
-        :style="{ position: 'absolute', inset: '0', width: '100%', height: '100%', objectFit: 'cover', opacity: '0.35' }"
+        :style="VIDEO_EMPTY_POSTER_STYLE"
       >
-      <p class="sm-video__message" :style="{ position: 'relative' }">
-        {{ state === 'error' || !live.processing || live.processing.status === 'failed' ? t('video.unavailable') : t('video.noSource') }}
+      <p class="sm-video__message" :style="VIDEO_LAYER_STYLE">
+        {{ t(videoMessageKey(live, state === 'error')) }}
       </p>
       <SmProcessingStatus
-        v-if="live.processing && live.processing.status !== 'ready'"
+        v-if="processingVisible(live.processing)"
         :processing="live.processing"
-        :style="{ position: 'relative' }"
+        :style="VIDEO_LAYER_STYLE"
       />
-      <a class="sm-video__download" :href="live.url" download :style="{ position: 'relative' }">{{ t('video.download') }}</a>
+      <a class="sm-video__download" :href="live.url" download :style="VIDEO_LAYER_STYLE">{{ t('video.download') }}</a>
     </div>
   </div>
 </template>
