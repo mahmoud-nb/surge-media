@@ -48,6 +48,9 @@
 > **Préparation du paquet React faite le 2026-10-18** (§ 9.27) : logique des composants (textes fr / en, icônes, attributs
 > et styles en ligne, états, affichage de l'envoi) et **thème** déplacés de `@surge-media/vue` vers `@surge-media/client`
 > (`src/ui/`, `@surge-media/client/style.css`), API publique de Vue inchangée — `@surge-media/react` n'aura rien à recopier.
+> **Vérifications avant la release 0.1.0 du core faites le 2026-10-18** (§ 22, journal de `setup.md`) : tout passe ; défauts É1
+> (page de release trop longue pour GitHub), É2 (CHANGELOG) et É3 (vidéo ouverte dans un onglet) **corrigés le même jour** (non
+> commités au moment de la rédaction ; lecture d'É3 à confirmer dans un vrai navigateur) ; S3 réel et MySQL 8 toujours pas essayés.
 >
 > Les éléments marqués **[À CONFIRMER]** sont des hypothèses ou des points non validés par
 > l'utilisateur (récapitulés en § 22).
@@ -678,7 +681,10 @@ clé `originals/…` ; nouvelle ligne (version 1, mêmes kind/visibility/origina
   échéance alignée sur 15 min) ; chemins publics inchangés sinon.
 
 - En-têtes : `Content-Type` (base, ou format du dérivé), `ETag` (original : 32 premiers hex du SHA-256 ; dérivé : 24 hex + `-` + 10 hex de l'opération), 304 sur `If-None-Match`,
-  `Content-Length`, `X-Content-Type-Options: nosniff`, `Content-Security-Policy: default-src 'none'; sandbox`,
+  `Content-Length`, `X-Content-Type-Options: nosniff`, `Content-Security-Policy` = `deliveryCsp(type)` (`server/lib/media/delivery.ts`,
+  `setup.md` § 7.4) : `default-src 'none'; img-src 'self'; media-src 'self'`, plus `sandbox` sauf pour `video/*` et `audio/*` (2026-10-18 :
+  sans `media-src`, une vidéo ouverte dans un onglet ne se lisait pas ; `sandbox` retiré pour la vidéo et le son par décision de
+  l'utilisateur, § 22),
   `Cross-Origin-Resource-Policy: cross-origin`, `Access-Control-Allow-Origin: *` (B1), `Content-Disposition: inline; filename="ascii"; filename*=UTF-8''…` (nom d'origine pour
   l'original), `X-Robots-Tag: noindex` hors public ; plus les en-têtes globaux (`X-Frame-Options: DENY`…).
 - **Flux interrompus** (2026-10-05) : `sendStream(event, closeWithResponse(event.node.res, await storage.getStream(…)))` — h3 1.15
@@ -2420,11 +2426,25 @@ Journal : `setup.md`, maintenance du 2026-10-18.
   dépôt public) et GHCR (visibilité du paquet), arm64 (QEMU). `CHANGELOG.md` créé par la première release (`pnpm release 0.1.0`).
   Le `GITHUB_TOKEN` (jeton classique `ghp_` sans accès au dépôt, qui faisait échouer release-it : « not a collaborator ») a été
   **retiré** des variables d'environnement utilisateur de Windows par l'utilisateur le 2026-10-18 : la release GitHub passe
-  désormais par la page pré-remplie du navigateur (relancer les terminaux et l'application avant, qui gardent l'ancienne valeur).
+  désormais par la page pré-remplie du navigateur (relancer les terminaux et l'application avant, qui gardent l'ancienne valeur :
+  encore le cas le 2026-10-18 pour l'application de bureau).
+  **Vérifications avant la release 0.1.0 faites le 2026-10-18** sur `72bc7da` (`setup.md`, journal du même jour) : lint, typecheck,
+  tests, i18n, contrastes, `license:check`, migrations, librairies (build, archives), build du core, `smoke:package` (npm 12),
+  image Docker depuis l'archive (SQLite, AV1), site (build, liens) : **tout passe**. `release:dry` passait mais révélait **É1**
+  (page de release de 9 926 caractères : GitHub répond 414) et **É2** (CHANGELOG du core calculé sur tout le dépôt : 8 entrées
+  des librairies, du site et des documents) : **corrigés le même jour** à la demande de l'utilisateur (`releaseNotes` résumées
+  au-delà de 4 000 caractères encodés → 368 pour la 0.1.0 ; `CORE_PATHS` → 38 entrées ; § 15.2 et § 15.3 de `setup.md`), non
+  commités au moment de la rédaction. Liste ordonnée des actions de l'utilisateur pour la release : même entrée du journal.
 - Portées et format des jetons : **implémentés en B2** selon l'architecture validée ; écarts listés en tête de `architecture-phase-b.md`.
 - **MySQL/MariaDB** : les 16 migrations ont été exécutées pour la première fois sur **MariaDB 11** (image Docker, 2026-10-10, parcours API
-  complet ensuite) ; **MySQL 8 jamais**. **PostgreSQL 17** réel aussi (Docker, même parcours) ; `db reset` jamais exécuté sur ces bases.
-- **S3 réel** (AWS, R2, MinIO) jamais testé (seulement `s3rver`) ; `MediaStorage.copy` (CopyObject) et la lecture par plage (`Range`) testés seulement en local.
+  complet ensuite) ; **MySQL 8 jamais** (prévu le 2026-10-18 avec `mysql:8.4` : téléchargement de l'image non autorisé ce jour-là).
+  **PostgreSQL 17** réel aussi (Docker, même parcours) ; `db reset` jamais exécuté sur ces bases.
+- **S3 réel** (AWS, R2, MinIO) jamais testé (seulement `s3rver` ; MinIO prévu le 2026-10-18, image non autorisée) ; `MediaStorage.copy`
+  (CopyObject) et la lecture par plage (`Range`) testés seulement en local.
+- **Dépôt public** (recherche du 2026-10-18, 65 commits, toutes les références) : **aucun secret** dans l'historique (script masqué :
+  préfixes `sm_*`, jetons GitHub et npm, AWS, clés privées, URL avec mot de passe, affectations de secrets ; gitleaks non lancé,
+  téléchargement non autorisé). À décider par l'utilisateur avant de le rendre public : adresse Gmail personnelle dans 44 commits,
+  `.claude/*.md` et journal de `setup.md` publics, branche distante `origin/main-7i2ki7`.
 - Lecteurs d'écran réels jamais testés.
 - **D3 sous Windows vérifié le 2026-10-10** (§ 9.24) ; reste non rejoué : Ctrl+C sur `pnpm dev` pendant un encodage. Aucune limite
   mémoire ni processeur par ffmpeg hors Linux (`prlimit`). Le Contrôle intelligent des applications peut bloquer ffmpeg sur un autre
@@ -2435,8 +2455,20 @@ Journal : `setup.md`, maintenance du 2026-10-18.
   `NUXT_TRUST_PROXY=true` par défaut (choix fait pour un déploiement Docker derrière mandataire) : un réseau privé non maîtrisé qui
   joindrait directement le serveur pourrait usurper une adresse (documenté : `false` sans mandataire).
 - D3 vérifié avec SQLite et le stockage local : aucun essai consigné avec S3 (original copié dans le dossier de la tâche), PostgreSQL ou
-  MySQL (l'ordre `nulls: 'first'` de la « dernière tâche » n'a été essayé que sous SQLite). Lecture réelle des rendus H.264 dans un navigateur
-  non vérifiée (Chromium du nuage sans H.264), ni le report du changement de sources pendant une lecture.
+  MySQL (l'ordre `nulls: 'first'` de la « dernière tâche » n'a été essayé que sous SQLite). **Lecture réelle des rendus vérifiée le
+  2026-10-18** (Chromium 152, navigateur intégré, copie des données de dev) : H.264 et AV1 de deux vidéos, `<source>` AV1 puis H.264,
+  saut dans la vidéo, ≈ 29 images/s sans perte ; non vérifiés : Safari et Firefox, le report du changement de sources pendant une
+  lecture. **É3** trouvé ce jour-là : une vidéo de `/m/` **ouverte directement dans un onglet** ne se lisait pas (CSP `default-src 'none'`
+  sans `media-src`) ; les `<video>` intégrés ne sont pas touchés. **Corrigé** : `deliveryCsp()` avec `img-src 'self'; media-src 'self'`,
+  et **sans `sandbox` pour `video/*` et `audio/*`** (décision de l'utilisateur : le navigateur de l'application refuse les requêtes
+  de tout document en bac à sable, `ERR_BLOCKED_BY_CLIENT`) ; lu dans ce navigateur, **pas encore dans Chrome, Firefox ni Safari**.
+- **Sécurité de la diffusion, à étudier plus tard** (demande de l'utilisateur du 2026-10-18, `setup.md` § 7.4) : `sandbox` n'est qu'une
+  défense en profondeur (barrières principales : types acceptés sans SVG, HTML ni PDF, type détecté à l'envoi, `nosniff`,
+  `default-src 'none'`). Avant d'accepter un nouveau type (SVG, PDF, documents, audio) : revoir `deliveryCsp`, la disposition
+  (`attachment`), et imposer pour les fichiers actifs un domaine de diffusion distinct (`NUXT_MEDIA_PUBLIC_URL`, seule vraie isolation
+  de la session de l'administration : par défaut `/m/` partage son domaine) ; envisager de recommander ce domaine en production.
+  `GET /api/admin/media/:id/transform` (aperçu, images seulement) garde `default-src 'none'; sandbox` : sans effet, à aligner s'il
+  servait un jour d'autres types.
 - **Décisions de l'utilisateur** (D3) : sa vidéo de téléphone (Samsung, projet « My Phone ») est **déjà optimisée** par lui (réponse
   du 2026-10-18 ; version 2 en base). Les 8 dérivés orphelins de `landscape.jpg` (`data/media/variants/<id>/v1-*` et `v2-*`,
   311 Kio, anciennes versions laissées avant le correctif `deletePrefix` de D2 ; seuls fichiers du stockage référencés par aucune

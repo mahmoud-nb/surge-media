@@ -499,9 +499,30 @@ signature est **permanente** (`perm`) : réservée à un dérivé précis d'un m
 ou retirer l'ancien secret (tous).
 
 En-têtes systématiques : type MIME lu en base, `X-Content-Type-Options: nosniff`,
-`Content-Security-Policy: default-src 'none'; sandbox`, `Content-Disposition` (nom d'origine encodé),
-`Cross-Origin-Resource-Policy: cross-origin`, `Access-Control-Allow-Origin: *` (l'URL est la preuve
+`Content-Security-Policy` (`deliveryCsp()`, `server/lib/media/delivery.ts`), `Content-Disposition` (nom d'origine
+encodé), `Cross-Origin-Resource-Policy: cross-origin`, `Access-Control-Allow-Origin: *` (l'URL est la preuve
 d'accès), `X-Robots-Tag: noindex` hors public.
+
+**Content-Security-Policy** (vaut pour le document ouvert quand l'adresse l'est dans un onglet ; sans effet sur un
+`<img>` ou un `<video>` intégré dans une page) :
+
+| Réponse | En-tête | Rôle |
+| --- | --- | --- |
+| `video/*`, `audio/*` | `default-src 'none'; img-src 'self'; media-src 'self'` | aucun script ni ressource d'ailleurs ; le lecteur du navigateur charge ce même fichier |
+| tout le reste (images, pistes `.vtt`…) | la même, plus `sandbox` | en plus : origine opaque, ni scripts, ni formulaires, ni fenêtres |
+
+- `media-src 'self'` : sans lui, Chromium refusait de lire une vidéo ouverte dans un onglet (corrigé le 2026-10-18).
+- `sandbox` est une **défense en profondeur** : les barrières principales sont la liste des types acceptés
+  (images matricielles et vidéos, aucun SVG, HTML ni PDF), le type **détecté à l'envoi** d'après le contenu,
+  `nosniff` et `default-src 'none'` (aucun script). Il protégerait l'administration si un fichier actif (HTML, SVG
+  avec script) était un jour servi depuis son domaine : script exécuté avec la session d'un administrateur, ou faux
+  formulaire de connexion (`form-action` ne retombe pas sur `default-src`). Retiré pour la vidéo et le son (servis
+  avec leur type et `nosniff`, ils ne s'ouvrent que dans le lecteur du navigateur) : certains navigateurs refusent
+  la requête du lecteur depuis l'origine opaque d'un document en bac à sable.
+- **Avant d'accepter un nouveau type** (SVG, PDF, documents, audio) : revoir cet en-tête, la disposition
+  (`attachment` pour ce qui ne doit pas s'afficher) et, pour les fichiers actifs, imposer un domaine de diffusion
+  distinct (`NUXT_MEDIA_PUBLIC_URL`, ci-dessous) — la meilleure isolation : un fichier servi d'un autre domaine ne
+  touche jamais à la session de l'administration.
 
 **Domaine de diffusion** : par défaut celui de l'application (`NUXT_SITE_URL`). Selon l'infrastructure :
 
@@ -2286,15 +2307,18 @@ Image construite localement : `SURGE_MEDIA_IMAGE=surge-media docker compose -f d
   en cache, installation).
 - **Site** (`.github/workflows/website.yml`, pull requests et push sur `main` qui touchent `apps/website`) : types,
   build et liens internes, puis publication sur GitHub Pages après un merge (§ 16). Les commits du site sont de type
-  `docs(website): …` : le CHANGELOG du core est calculé sur tous les commits du dépôt, un `feat` y apparaîtrait.
+  `docs(website): …` (le CHANGELOG du core ne retient que les commits qui touchent le core, § 15.2).
 
 ### 15.2 Versions
 
 - **SemVer**, une seule version pour le paquet npm et les images Docker : `version` de
   `apps/core/package.json`, tag annoté **`vX.Y.Z`**, notes dans `apps/core/CHANGELOG.md` (en anglais, publié
   avec le paquet) et dans la release GitHub.
-- **Calcul** d'après les commits écrits depuis le dernier tag : rupture → majeure, `feat` → mineure, `fix` / `perf`
-  → correctif ; **avant 1.0.0** (option `preMajor`), un cran de moins : rupture → mineure, `feat` → correctif. La
+- **Calcul** d'après les commits écrits depuis le dernier tag **qui touchent le core** (`apps/core`, `packages/core`
+  jusqu'au 2026-10-11, `Dockerfile`, `.dockerignore`, `docker/` : `CORE_PATHS` de `apps/core/.release-it.ts`, pour la
+  version comme pour le CHANGELOG ; ceux des librairies, du site et des documents n'y figurent pas) : rupture →
+  majeure, `feat` → mineure, `fix` / `perf` → correctif ; **avant 1.0.0** (option `preMajor`), un cran de moins :
+  rupture → mineure, `feat` → correctif. La
   **première release** impose sa version : `pnpm release 0.1.0` ; passage à 1.0.0 : `pnpm release major`.
 - **Préversions** : `pnpm release --preRelease=beta` (`0.2.0-beta.0`, puis `-beta.1`…) → étiquette npm `next`,
   image `X.Y.Z-beta.N` seulement ; `pnpm release` sans option publie ensuite la version stable.
@@ -2322,9 +2346,12 @@ release-it (`apps/core/.release-it.ts`) : vérifications (`pnpm lint`, `typechec
 `chore(release): vX.Y.Z`, tag annoté, push, puis **release GitHub** (notes = section du CHANGELOG) : par l'API si
 la variable **`GITHUB_TOKEN`** contient un jeton ayant le droit d'écrire sur le dépôt (`contents: write`), sinon
 page pré-remplie ouverte dans le navigateur, à publier d'un clic. Un `GITHUB_TOKEN` sans droit sur le dépôt fait
-échouer la release (« is not a collaborator ») : le retirer de la session pour passer par le navigateur. La
-publication de la release lance le workflow du § 15.4 ; si elle n'a pas été créée (interruption après le push),
-la créer à la main pour le tag.
+échouer la release (« is not a collaborator ») : le retirer de la session pour passer par le navigateur (et relancer
+les terminaux et l'application qui l'ont hérité). La page reçoit les notes dans son adresse, que GitHub refuse
+au-delà de quelques milliers de caractères (414) : des notes de plus de 4 000 caractères encodés y sont **résumées**
+(nombre d'entrées par rubrique, ruptures en entier si elles tiennent, lien vers le `CHANGELOG.md` du tag) ; la
+0.1.0 est dans ce cas. Par l'API, les notes sont complètes. La publication de la release lance le workflow du
+§ 15.4 ; si elle n'a pas été créée (interruption après le push), la créer à la main pour le tag.
 
 ### 15.4 Publication : `.github/workflows/release.yml`
 
@@ -2599,7 +2626,8 @@ Commits qui touchent `packages/client`, `packages/vue`, `packages/scripts` ou `p
 `packages/` : le core y vivait jusqu'au 2026-10-11) ; avant 1.0.0, un cran de moins (`feat` → correctif, rupture →
 mineure) : imposer **`0.1.0`** pour la première version, puis `minor` / `patch` ; préversion : `--preRelease=alpha`.
 Ensuite : version des deux `package.json`, `packages/CHANGELOG.md`, commit `chore(release): libs vX.Y.Z`, tag annoté
-`libs-vX.Y.Z`, push, release GitHub (page pré-remplie dans le navigateur, à publier d'un clic). **Retirer
+`libs-vX.Y.Z`, push, release GitHub (page pré-remplie dans le navigateur, à publier d'un clic ; notes trop longues
+pour son adresse résumées avec un lien vers `packages/CHANGELOG.md`, comme pour le core, § 15.3). **Retirer
 `GITHUB_TOKEN` de l'environnement** s'il n'a pas accès au dépôt : release-it échoue sinon (« not a collaborator »),
 comme pour le core.
 
@@ -4360,3 +4388,111 @@ et `@angular/core` 22.2.3 installés hors du dépôt (gabarits Angular non compi
 identique en fr et en hors commentaires ; `astro check` (0 erreur, 23 fichiers), build (24 pages), `check:links`
 (1 260 liens, 0 cassé) ; axe 0 violation sur le guide et la page SDK (fr / en × clair / sombre ; guide aussi à
 375 px), aucun débordement.
+
+### Maintenance — 2026-10-18 — Vérifications avant la release 0.1.0 du core
+
+**Cadre** : question de l'utilisateur (sortir une première version avant E3 et D4) ; recommandation retenue :
+`@surge-media/core` en **0.1.0** tel quel, librairies front en `0.0.0` jusqu'à E5 (ED14). Vérifications faites sur
+une copie de `main` (`72bc7da`, worktree), sans rien publier, pousser ni commiter ; Node 24.20, pnpm 12.4.2, Windows 11.
+
+| Vérification | Résultat |
+| --- | --- |
+| `pnpm install` | OK (33 s, aucun avertissement) |
+| `pnpm lint` · `pnpm typecheck` | OK : 0 problème (core, client, vue, bac à sable) ; types OK, `astro check` 0 erreur (23 fichiers) |
+| `pnpm test` | OK : core 566 + 9 ignorés, client 136, vue 24 |
+| `pnpm i18n:check` · `pnpm a11y:contrast` | OK : 1 536 clés, 1 427 appels `t()` ; contrastes AA (administration, thème des composants) |
+| `license:check` · `db:migration --check` | OK (crochets de la release lancés à part : `--dry-run` de release-it ne les exécute pas) |
+| `pnpm packages:build` · `pnpm packages:smoke` (PowerShell) | OK : publint ; archives `0.0.0` installées dans un dossier vide (import, rendu serveur, thèmes, déclarations) |
+| Build du core · archive npm | OK (105 s) ; 9,5 Mo ; `smoke:package` (npm 12, Windows) : `init`, `start`, `/api/health` en 28 s |
+| Image Docker construite depuis l'archive | OK (117 s, 1,4 Go) ; SQLite, `embedded`, AV1 : 16 migrations, connexion, projet, jeton, PNG → AVIF, MKV → AV1 + H.264 + affiche, arrêt propre (code 0) ; conteneur, volume et image supprimés |
+| Site : build · `check:links` | OK : 24 pages ; 1 260 liens internes, 0 cassé (avertissement sans effet : `/404` en conflit avec `/[...slug]`, les deux pages 404 sont produites) |
+| `pnpm release:dry 0.1.0` | passe (`--no-git.requireBranch --no-git.requireUpstream` : branche du worktree), mais défauts **É1** et **É2** |
+
+**Défauts trouvés**, puis **corrigés le même jour** à la demande de l'utilisateur (non commités au moment de la
+rédaction) :
+
+- **É1 — page de release GitHub refusée : bloquant pour `pnpm release 0.1.0`**. Sans `GITHUB_TOKEN`, release-it ouvre
+  `…/releases/new?tag=…&body=<notes>` : 9 926 caractères pour 0.1.0. GitHub répond **414** au-delà d'environ
+  8 200 caractères, 500 ou 502 dès 7 000 environ (mesuré sans connexion, avec un corps factice) : la page ne
+  s'ouvrirait pas. **Corrigé** : `github.releaseNotes` en fonction dans `apps/core/.release-it.ts` et
+  `packages/.release-it.ts` (§ 15.3) — notes complètes par l'API ou tant qu'elles tiennent dans 4 000 caractères
+  encodés ; sinon titre, nombre d'entrées par rubrique, ruptures en entier si elles tiennent, lien vers le
+  `CHANGELOG.md` du tag. Vérifié : `release:dry` → adresse de **368 caractères** pour 0.1.0 (« Features (33), Bug
+  Fixes (4), Build and Distribution (1) » et le lien), GitHub répond comme pour une adresse courte (404 sans
+  connexion, dépôt privé) au lieu de 414 ; librairies : 1 625 caractères, notes complètes gardées ; fonction essayée
+  sur des notes courtes (inchangées), longues avec rupture, ruptures trop longues, mode API, contexte absent.
+- **É2 — CHANGELOG du core trop large**. Calculé sur tous les commits du dépôt : 46 entrées, dont 8 hors du core
+  (E2 et logique des composants des librairies, `build(front)`, `feat(docs)`, `feat(website)`, deux propositions
+  d'architecture). **Corrigé** : `CORE_PATHS` (`apps/core`, `packages/core` avant le 2026-10-11, `Dockerfile`,
+  `.dockerignore`, `docker/`, exprimés depuis `apps/core` d'où release-it est lancé) pour `git.commitsPath`,
+  `commitsOpts.path` et `gitRawCommitsOpts.path`, comme `packages/.release-it.ts` (§ 15.2). Vérifié : 38 entrées,
+  les 8 commits retirés, ceux qui touchent aussi le core gardés (E1, Docker, ffmpeg 8…). Reste à décider : un résumé
+  rédigé (« Initial release ») serait plus lisible que l'historique du développement (« Address module E review
+  findings »…).
+- **É3 — vidéo ouverte directement dans un onglet : lecteur vide**. `Content-Security-Policy: default-src 'none';
+  sandbox` des réponses de `/m/` : sans `media-src`, Chromium interdit au lecteur de son propre document de charger
+  la vidéo (« violates … default-src 'none' »). Les images s'affichent (exemptées) ; les `<video>` intégrés dans une
+  page ne sont pas touchés (le CSP ne vaut que pour le document ouvert). Cas réel : « Copier le lien » d'une vidéo,
+  puis l'adresse collée dans un onglet. **Corrigé** en deux temps. D'abord `img-src 'self'; media-src 'self'` :
+  plus aucune violation du CSP, mais le navigateur intégré refusait encore la requête du lecteur
+  (`net::ERR_BLOCKED_BY_CLIENT`) — il refuse celles de tout document en bac à sable (même vidéo servie par un serveur
+  statique : `sandbox` seul → refusée ; sans `sandbox` → lue). Puis, **décision de l'utilisateur** après explication
+  du rôle de `sandbox` (défense en profondeur, § 7.4) : **plus de `sandbox` pour `video/*` et `audio/*`**, gardé pour
+  tout le reste — `deliveryCsp(type)` (`server/lib/media/delivery.ts`), test des directives par type (core 567 tests).
+  Vérifié (build de production, installation neuve) : en-têtes servis selon le type ; vidéo ouverte dans un onglet
+  lue jusqu'au bout (4 s, 120 images, aucune perdue, aucune erreur), image toujours affichée avec `sandbox`. Non
+  vérifié : Chrome, Firefox et Safari. Évolutions de sécurité à étudier ensuite : `.claude/project-context.md` § 22.
+
+**Lecture réelle des rendus** (jamais vérifiée jusqu'ici, § 7.7) : navigateur intégré de l'application (Chromium 152),
+serveur construit lancé sur une **copie** de la base et des médias de dev (`VACUUM INTO`, port 3200, secrets neufs,
+sans SMTP) avec `NUXT_VIDEO_PROCESSING=embedded`, `NUXT_VIDEO_AV1=on`, `NUXT_VIDEO_RENDITION=always`. La vidéo du
+projet « My Phone » (1080×1920, 14,1 s ; seul rendu existant en dev : H.264) et une vidéo du bac à sable (1180×518),
+remises en attente dans la copie, ont reçu leurs rendus H.264 et AV1 (`av01.0.08M.08`, Opus) par ffmpeg 9.0.2. Page
+de test sur une autre origine (`<video>` vers `/m/…/renditions/…`) : **6 lectures sur 6** — H.264 et AV1 des deux
+vidéos, rendu H.264 existant de la base de dev, `<source>` AV1 puis H.264 (AV1 choisi) — à ≈ 29 images/s, aucune
+image perdue, son décodé, saut à 10 s (requêtes partielles) sur les deux rendus ; `canPlayType` « probably » pour
+les deux codecs. Données de l'utilisateur jamais modifiées.
+
+**Secrets dans l'historique Git** (65 commits, toutes les références, dont `origin/main-7i2ki7`) : script qui
+n'affiche jamais une valeur (gitleaks non autorisé) — clés `sm_sk_`, `sm_pat_`, `sm_pt_`, `sm_pk_`, `sm_dt_`, jetons
+GitHub (`ghp_`, `github_pat_`…), npm, AWS, clés privées, Slack, `sk-…`, URL de base avec mot de passe, affectations
+`*PASSWORD*`, `*SECRET*`, `*TOKEN*` : **aucun vrai secret** ; 44 groupes, tous des exemples de la documentation
+(`un-mot-de-passe-long`, `user:password`, `${VAR:-}`) ou des tests. Jamais versionnés : `.env` (seuls des
+`.env.example`), base SQLite, archives, clés. **À savoir avant de rendre le dépôt public** : l'adresse Gmail
+personnelle signe 44 commits (métadonnées publiques ; les commits faits sur GitHub ont l'adresse `noreply`) ;
+`.claude/*.md` (contexte, architectures, notes D3) et ce journal deviennent publics (aucun secret, mais comptes de
+dev, décisions et poste de travail décrits) ; la branche distante `origin/main-7i2ki7` sera visible.
+
+**Non fait** : stockage S3 réel (MinIO) et MySQL 8, téléchargement de leurs images non autorisé ce jour (images de
+base seulement) ; gitleaks ; arm64 et workflows GitHub réels (premier passage à la publication). Docker Desktop 4.55
+plantait au démarrage (socket `%LOCALAPPDATA%\Docker\run\dockerInference` du 10/10 illisible ; « Reset to factory
+defaults » proposé, à éviter) : réparé par l'utilisateur, qui a aussi supprimé ses anciennes images et volumes.
+
+**Autres constats** (non bloquants) : l'application de bureau et ses terminaux gardent l'ancien `GITHUB_TOKEN`
+hérité, alors qu'il n'est plus dans les variables de Windows (vérifié) : relancer l'application avant
+`pnpm release`, sinon release-it passe par l'API et échoue (« not a collaborator ») ; messages du serveur en français
+seulement (55 appels `console.*` dans 28 fichiers ; la CLI est traduite).
+
+**À faire par l'utilisateur, dans l'ordre** :
+
+1. Relire et commiter les correctifs É1 à É3 sur `main` (avec la variante de É3 si retenue) ; décider des points du
+   dépôt public (adresse des commits, `.claude/`, branche `main-7i2ki7`) et d'un résumé rédigé pour la 0.1.0.
+2. Relancer l'application Claude et les terminaux (plus de `GITHUB_TOKEN` hérité).
+3. **Rendre le dépôt public** (*Settings › General › Danger Zone › Change visibility*) : la provenance npm l'exige ;
+   activer au passage la protection des secrets et le blocage à l'envoi (*push protection*), gratuits pour un dépôt
+   public.
+4. **npm** : organisation `surge-media` (gratuite pour des paquets publics) ; jeton d'accès granulaire (lecture et
+   écriture des paquets de `@surge-media`, utilisable sans 2FA interactive, courte durée) ; GitHub : *Settings ›
+   Environments › New environment* `npm`, puis secret d'environnement `NPM_TOKEN`.
+5. **GitHub Pages** : *Settings › Pages › Source = GitHub Actions*.
+6. **Pousser `main`** (`git push origin main` : 12 commits d'avance) et attendre la CI (`ci.yml` : vérifications,
+   paquet, image) et le site (`website.yml` → Pages) : leur premier passage réel.
+7. `pnpm release 0.1.0` depuis `main` à jour, arbre propre : vérifications, `CHANGELOG.md`, commit, tag `v0.1.0`,
+   push, page de release ouverte dans le navigateur → **Publish release** (lance `release.yml`).
+8. Suivre *Actions › Release* : package, npm, docker (amd64 + arm64 émulé, plusieurs minutes ; arm64 jamais essayé),
+   assets.
+9. **GHCR** : paquet `surge-media` › *Package settings › Change visibility › Public* ; puis
+   `docker pull ghcr.io/mahmoud-nb/surge-media:0.1.0` sans être connecté.
+10. **npm** : `@surge-media/core` › *Settings › Trusted publishing* › GitHub Actions (`mahmoud-nb`, `surge-media`,
+    `release.yml`, environnement `npm`), puis supprimer le secret `NPM_TOKEN` et révoquer le jeton ; vérifier
+    `npm view @surge-media/core` (0.1.0, provenance).
