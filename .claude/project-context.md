@@ -44,8 +44,10 @@
 > en étapes E1 à E5, `@surge-media/nuxt` séparé plus tard. **E1 faite le 2026-10-15** (étape 26 : fondations, composants
 > d'affichage, bac à sable `apps/playground`, `Project.transformFormats` / `transformMaxDimension` ; § 9.25). **E2 (envoi)**,
 > choisie avant le paquet React, **validée telle quelle puis faite le 2026-10-17** (étape 27 ; § 9.26 ; `architecture-phase-e.md`
-> § 12 et « E2 — état de l'implémentation »). **Prochaine étape : E3 (parcours et sélection)** à détailler et faire valider ;
-> le paquet React demandera d'abord de déplacer dans le client la logique d'affichage encore dans `@surge-media/vue`.
+> § 12 et « E2 — état de l'implémentation »). **Prochaine étape : E3 (parcours et sélection)** à détailler et faire valider.
+> **Préparation du paquet React faite le 2026-10-18** (§ 9.27) : logique des composants (textes fr / en, icônes, attributs
+> et styles en ligne, états, affichage de l'envoi) et **thème** déplacés de `@surge-media/vue` vers `@surge-media/client`
+> (`src/ui/`, `@surge-media/client/style.css`), API publique de Vue inchangée — `@surge-media/react` n'aura rien à recopier.
 >
 > Les éléments marqués **[À CONFIRMER]** sont des hypothèses ou des points non validés par
 > l'utilisateur (récapitulés en § 22).
@@ -113,8 +115,8 @@ surge-media/                         monorepo pnpm (workspaces apps/* et package
 ├─ README.md                         présentation courte
 ├─ .claude/launch.json               serveurs pour l'aperçu Claude : core (dev), core-start (prod), core-start-3100 (prod sur 3100, cwd apps/core)
 ├─ .claude/project-context.md        CE FICHIER
-├─ packages/client                  @surge-media/client (phases E1–E2, MIT) : client de l'API v1, URL d'images / vidéos, envoi (§ 9.25, § 9.26)
-├─ packages/vue                     @surge-media/vue (phases E1–E2, MIT) : composants Sm*, plugin, thème facultatif (§ 9.25, § 9.26)
+├─ packages/client                  @surge-media/client (phases E1–E2, MIT) : client de l'API v1, URL d'images / vidéos, envoi, logique des composants et thème (§ 9.25 à § 9.27)
+├─ packages/vue                     @surge-media/vue (phases E1–E2, MIT) : composants Sm*, plugin, thème du client repris (§ 9.25 à § 9.27)
 ├─ apps/playground                  bac à sable des bibliothèques (Vite, port 5173, .env.local ; jamais publié)
 ├─ apps/website                     site public et documentation (Astro Starlight, étape 25)
 └─ apps/core                         @surge-media/core (paquet npm publié, bin surge-media) ; apps/ = applications
@@ -1913,7 +1915,8 @@ image construite depuis ce paquet, ESLint, commitlint, `pnpm release` (release-i
 `packages/client` et `packages/vue`, client HTTP et constructeurs d'URL, `SmImage`, `SmPicture`, `SmVideo`, `SmMedia`, `SmThumbnail`,
 `SmProcessingStatus`, bac à sable, formats activés dans l'API v1 ; § 9.25) ; **E2 faite** le 2026-10-17 (étape 27 : règles d'envoi dans `/me`,
 membres d'extension des problèmes d'envoi, affiche posée avec `media:upload`, file d'envoi et entrée `@surge-media/client/server`,
-`SmUploader` ; § 9.26). **Ensuite E3 (parcours et sélection)**, à détailler et faire valider.
+`SmUploader` ; § 9.26) ; logique des composants et thème déplacés dans le client le 2026-10-18 (§ 9.27, avant le paquet
+React). **Ensuite E3 (parcours et sélection)**, à détailler et faire valider.
 
 **Section vide** : aucune (la section « à venir » des jetons a été remplacée en B2).
 
@@ -2245,7 +2248,8 @@ dans `packages/.artifacts/`, contenu lu en Node sans `tar`, installation npm dan
   `decode()` décide si une image « complète » de largeur nulle est cassée) ; `DEV` = `process.env.NODE_ENV` (jamais
   `import.meta.env` : figé au build d'une bibliothèque) ; styles minimaux en ligne (`VISUALLY_HIDDEN`, `max-width`,
   `aspect-ratio`) pour fonctionner sans le thème. Tests (23) : rendu serveur (`@vitest-environment node`) et happy-dom
-  (qui déclare les images « complètes » : `complete` simulé à faux).
+  (qui déclare les images « complètes » : `complete` simulé à faux). **Depuis le 2026-10-18, textes, icônes, calculs,
+  styles en ligne, `DEV` (`DEV_MODE`) et thème sont dans le client : § 9.27.**
 - **`apps/playground`** : Vite (5173), alias vers les sources des paquets, intergiciel `POST /api/token` (clé secrète de
   `.env.local` → `delegated-tokens`, `project:read` + `media:read`, 15 min, origine du bac à sable), `define __PLAYGROUND__`
   (sans la clé secrète). Données de test de l'étape 26 : projet **« Bac à sable (E1) »** (`e1-playground`) + compte ADMIN
@@ -2301,6 +2305,45 @@ dans `packages/.artifacts/`, contenu lu en Node sans `tar`, installation npm dan
   posé par script n'active pas `:focus-visible` (tester avec de vraies frappes de Tab) ; les outils d'écriture et le shell
   transforment les échappements `\u00A0` en caractères (ESLint `no-irregular-whitespace`) : écrire les échappements par
   `String.fromCharCode(92)`.
+
+### 9.27 Logique des composants dans le client (2026-10-18, avant le paquet React)
+
+Demande de l'utilisateur avant `@surge-media/react` (ED1 : logique écrite une fois dans le client) ; plan validé ; choix :
+thème dans le client (pas de paquet de thème), logique de `SmThumbnail`, `SmProcessingStatus` et `SmUploader` comprise.
+Journal : `setup.md`, maintenance du 2026-10-18.
+
+- **`packages/client/src/ui/`** (exporté par l'entrée principale, élagable) : `i18n/` (`COMPONENT_MESSAGES` fr / en,
+  `createTranslate`, `DeepPartial`, `Translate`, `ComponentMessages` = ancien `Messages` de Vue), `icons.ts` (`ICONS`
+  par `IconName`, `iconSvgAttributes(name, size)` aux noms du DOM — React les veut en camelCase —, licence ISC de Lucide
+  en commentaire `/*!` gardé par tsdown), `settings.ts` (`DisplayDefaults` = ancien `SurgeMediaDefaults`,
+  `ProjectSettings`, `projectSettings`, `knownPresets`, `displaySettings` → `DisplaySettings` = réglages + préréglages +
+  `widths` / `imageFormat`), `image.ts` (`ImageOptions` = propriétés des composants, `imageRequest`, `imageSource`,
+  `resolveAltText` + avertissement unique, `ImageStage`, `nextImageStage`, `imageFailedEarly(LoadedImage)`, `imageStyle`,
+  `imageErrorFrameStyle`), `picture.ts` (`pictureSources(media, options, display)` → `{ sources, fallback }`,
+  `PictureArtSource`), `thumbnail.ts`, `status.ts` (`PROCESSING_ICONS`, `processingVisible`, `processingProgress`,
+  `processingReason`, `processingAnnouncementKey`), `video.ts` (`videoPoster`, `videoSize`, `videoLabel`,
+  `videoMessageKey`, `heldVideoDelay` : `fetch` lu à l'appel, `VIDEO_RETRY_LIMIT` = 10, `whenNearViewport`,
+  `prefersReducedMotion`, `VIDEO_*_STYLE`, `videoEmptyStyle`), `uploader.ts` (`uploaderKinds`, `uploaderAccept`,
+  `uploaderFields`, `showsVisibilityChoice`, `uploadHelpLines`, `PERMANENT_UPLOAD_ERRORS`, `canCancelUpload` /
+  `canRetryUpload` / `canRemoveUpload`, `showsUploadError`, `awaitingUploads`, `previewableUpload`, `uploadStatusText`,
+  `takeSettledUploads`), `styles.ts` (`VISUALLY_HIDDEN`, `cssText`), `dev.ts` (`DEV_MODE`). Hors `ui/` : `focusPosition`
+  (`urls/focal.ts`), `refreshDelay` + `DEFAULT_REFRESH_BEFORE_MS` (`src/refresh.ts`). Les fonctions qui produisent du
+  texte prennent un `Translate`. Tests : `tests/ui.test.ts`, `tests/ui-upload.test.ts` (41).
+- **Thème** : `packages/client/src/styles/` (`index.css` liste `theme.css` puis `components.css`) →
+  `dist/style.css` par `scripts/build-css.mjs` (mise bout à bout, sans transformation ; tsdown demanderait
+  `@tsdown/css`) ; `exports["./style.css"]`, `sideEffects: ["**/*.css"]` ; `a11y:contrast` et `tsx` dans le client (aussi
+  dans `packages/.release-it.ts` et `release-libraries.yml`).
+  `@surge-media/vue/style.css` reste : `src/entry.ts` de Vue importe `@surge-media/client/style.css` (client construit
+  avant : ordre topologique de pnpm). Bac à sable : alias `/^@surge-media\/(vue|client)\/style\.css$/` vers les sources.
+- **`@surge-media/vue`** : rendu et réactivité seulement ; `useDisplaySettings()` interne (`context.ts`) ;
+  `ICON_COMPONENTS` (une icône Vue par nom) dans `icons.ts`. Noms publics conservés par réexport depuis le client
+  (`BUILTIN_MESSAGES`, `Messages`, `SurgeMediaDefaults` devenu alias de type, `ProjectSettings`, `PictureArtSource`,
+  `createTranslate`, `DeepPartial`, `Translate`) ; exports JS et `.d.ts` comparés avant / après (rien de retiré).
+- **Pièges vus** : `CSSProperties` de Vue a une signature d'index (`--*`) : les types de style publics du client sont
+  des alias `type` (une `interface` n'y est pas assignable) et les valeurs fixes des littéraux (`as const`) ;
+  `vue/no-dupe-keys` refuse une variable `width` / `height` homonyme d'une propriété si elle n'est pas lue depuis
+  `props.width` ; sous Git Bash, `MSYS_NO_PATHCONV=1` casse le lanceur de `pnpm` (lancer `pnpm packages:smoke` depuis
+  PowerShell).
 
 
 **Architecture de la phase B validée** (toutes les décisions D1–D15 confirmées le 2026-09-29) : `.claude/architecture-phase-b.md`

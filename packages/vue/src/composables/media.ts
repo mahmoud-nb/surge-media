@@ -1,4 +1,4 @@
-import { isProcessing, type Media, watchMedia } from '@surge-media/client'
+import { DEFAULT_REFRESH_BEFORE_MS, isProcessing, type Media, refreshDelay, watchMedia } from '@surge-media/client'
 import { onBeforeUnmount, onMounted, type Ref, ref, shallowRef, type ShallowRef, toValue, watch, type MaybeRefOrGetter } from 'vue'
 import { useSurgeMedia } from '../context'
 
@@ -69,7 +69,7 @@ export function useMedia(id: MaybeRefOrGetter<string | null | undefined>, option
   const media = shallowRef<Media | null>(null)
   const error = shallowRef<unknown>(null)
   const pending = ref(false)
-  const refreshBefore = options.refreshBeforeMs ?? 120_000
+  const refreshBefore = options.refreshBeforeMs ?? DEFAULT_REFRESH_BEFORE_MS
   let timer: ReturnType<typeof setTimeout> | null = null
   let controller: AbortController | null = null
   let mounted = false
@@ -77,9 +77,8 @@ export function useMedia(id: MaybeRefOrGetter<string | null | undefined>, option
   function schedule(value: Media) {
     if (timer) clearTimeout(timer)
     timer = null
-    if (!value.urlExpiresAt || refreshBefore <= 0) return
-    const delay = Date.parse(value.urlExpiresAt) - refreshBefore - Date.now()
-    timer = setTimeout(() => void refresh(), Math.max(10_000, Math.min(delay, 2_147_000_000)))
+    const delay = refreshDelay(value, refreshBefore)
+    if (delay !== null) timer = setTimeout(() => void refresh(), delay)
   }
 
   function track(value: Media) {

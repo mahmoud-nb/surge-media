@@ -162,7 +162,8 @@ Nitro/Nuxt, Next, Laravel en HTTP brut) dans la documentation.
   audit axe en fr / en × clair / sombre dans le bac à sable.
 - **Thème facultatif** `@surge-media/vue/style.css` : jetons `--sm-*`, clair / sombre (`prefers-color-scheme` + classe
   `.dark` ou `[data-theme]`), `@layer surge-media` (les styles du site client l'emportent toujours), contrastes AA
-  vérifiés par script ; classes `sm-*` stables documentées ; aucun Tailwind imposé.
+  vérifiés par script ; classes `sm-*` stables documentées ; aucun Tailwind imposé. Depuis le 2026-10-18, écrit dans
+  `@surge-media/client` (`@surge-media/client/style.css`) et repris par chaque librairie (`@surge-media/vue/style.css`).
 - **SSR** : rendu complet côté serveur pour l'affichage (srcset déterministe, `useId` de Vue 3.5), aucun accès à
   `window` à l'import ; interactions activées au montage.
 - **Distribution** : ESM seul, `sideEffects` limité au CSS, imports à la carte ; pair `vue >= 3.5`.
@@ -458,6 +459,11 @@ Fait dans l'ordre du § 11.10 ; référence d'exploitation : `setup.md` § 17 et
 - **Après E1 (2026-10-17)** : `imageSourceSet` et `parseAspect` déplacés de `@surge-media/vue` vers `@surge-media/client`
   (`src/urls/image-sources.ts`, tests compris), choix de l'utilisateur, conforme à ED1 : React, Svelte et les librairies locales
   (guide du site `reference/framework-integration`) les réutilisent.
+- **Avant le paquet React (2026-10-18)** : le reste de la logique sans framework (textes fr / en et `createTranslate`,
+  tracés des icônes, réglages effectifs et préréglages, attributs et styles en ligne des images, `<picture>`, vignettes,
+  vidéos, état du traitement, affichage de l'envoi, délai de relecture) et le **thème** (`@surge-media/client/style.css`,
+  script de contraste) passent dans le client (`src/ui/`, `src/styles/`), choix de l'utilisateur conforme à ED1 ;
+  `@surge-media/vue/style.css` et l'API publique de Vue inchangés (`project-context.md` § 9.27).
 - **Licence** : champ `license` à `BUSL-1.1` (celle du dépôt) en attendant la décision d'E5 ; paquets `private`.
 
 ### Vérifications

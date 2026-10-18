@@ -1,6 +1,7 @@
 /*
- * Thème facultatif de @surge-media/vue (`import '@surge-media/vue/style.css'`) : jetons de couleur en
- * clair et en sombre, contrastes WCAG 2.2 AA vérifiés par `pnpm a11y:contrast` (scripts/check-contrast.ts).
+ * Thème facultatif des composants surgeMedia (`import '@surge-media/client/style.css'`, repris par chaque
+ * librairie : `@surge-media/vue/style.css`…) : jetons de couleur en clair et en sombre, contrastes WCAG 2.2
+ * AA vérifiés par `pnpm a11y:contrast` (scripts/check-contrast.ts).
  * Tout est dans la couche `surge-media` : les styles du site l'emportent toujours. Pour adapter le thème,
  * redéfinir les variables `--sm-*`. Sombre : préférence du système (sauf `.light` ou `[data-theme="light"]`
  * sur un ancêtre), ou classe `.dark` / attribut `[data-theme="dark"]`.

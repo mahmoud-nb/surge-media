@@ -2478,14 +2478,21 @@ packages/client/       @surge-media/client — TypeScript sans framework (naviga
 ├─ src/upload/         envoi (E2) : règles et pré-contrôle (checkFile, acceptAttribute), requête multipart (XMLHttpRequest
 │                      dans un navigateur : progression ; fetch ailleurs), file d'envoi sans framework (createUploadQueue),
 │                      affiche capturée dans le navigateur (captureVideoFrame)
+├─ src/ui/             logique des composants commune à toutes les librairies (Vue, puis React et Svelte) : textes fr / en
+│                      (createTranslate), tracés des icônes (ICONS), réglages du projet, attributs et styles en ligne des
+│                      images, <picture> (direction artistique), vignettes, vidéos (affiche, nouvel essai après un 503),
+│                      état du traitement, affichage de l'envoi (aide, actions possibles, texte d'état)
+├─ src/styles/         thème facultatif → dist/style.css = `@surge-media/client/style.css` (jetons --sm-*, clair / sombre,
+│                      @layer surge-media, classes sm-* des composants) ; contrastes : scripts/check-contrast.ts
 ├─ src/server.ts       entrée `@surge-media/client/server` : createDelegatedToken, DISPLAY_SCOPES, UPLOAD_SCOPES (clé secrète :
 │                      jamais dans un navigateur ; l'entrée principale ne l'importe pas)
 └─ src/i18n/           messages fr / en de tous les codes d'erreur de l'API (taille maximale, types acceptés)
 packages/vue/          @surge-media/vue — Vue ≥ 3.5, rendu serveur
 ├─ src/plugin.ts       createSurgeMedia({ baseUrl, projectId, publishableKey | getToken, locale, messages, defaults, project })
-├─ src/components/     SmImage, SmPicture, SmVideo, SmMedia, SmThumbnail, SmProcessingStatus, SmUploader (E2)
+├─ src/components/     SmImage, SmPicture, SmVideo, SmMedia, SmThumbnail, SmProcessingStatus, SmUploader (E2) : rendu et
+│                      réactivité seulement, la logique vient du client
 ├─ src/composables/    useMedia(id), useLiveMedia, useTransformMode, useAltText, useUploadRules, useUploadQueue
-└─ src/styles/         thème facultatif → dist/style.css (jetons --sm-*, clair / sombre, @layer surge-media)
+└─ src/entry.ts        entrée du build : dist/style.css = thème du client (`@surge-media/vue/style.css` reste disponible)
 apps/playground/       bac à sable (Vite + Vue, port 5173), jamais publié
 ```
 
@@ -2493,7 +2500,7 @@ apps/playground/       bac à sable (Vite + Vue, port 5173), jamais publié
 
 ```ts
 import { createSurgeMedia } from '@surge-media/vue'
-import '@surge-media/vue/style.css' // facultatif
+import '@surge-media/vue/style.css' // facultatif (identique à @surge-media/client/style.css)
 
 app.use(createSurgeMedia({
   baseUrl: 'https://media.example.com',
@@ -2535,10 +2542,12 @@ app.use(createSurgeMedia({
   pas modifier un média ensuite). `maxFiles` compte par jeton : un jeton renouvelé repart de zéro, le quota d'un
   utilisateur reste à l'application.
 - **Scripts** : `pnpm test`, `pnpm lint`, `pnpm typecheck` (racine : tous les paquets) ; `pnpm packages:build`
-  (client puis vue, `publint`) ; `pnpm a11y:contrast` (thèmes de l'administration et des composants).
+  (client puis vue, `publint`) ; `pnpm a11y:contrast` (thèmes de l'administration, `apps/core`, et des composants,
+  `packages/client`).
 - **Tests** : client (Vitest, `fetch` simulé ; **recoupement avec le core** : forme canonique par
   `parseTransformation` et tailles par `planTransform` ; **contrat** : types du client = schémas zod de l'API,
-  vérifiés par `tsc`) ; vue (rendu serveur dans Node, montage dans happy-dom).
+  vérifiés par `tsc` ; logique des composants : `tests/ui*.test.ts`) ; vue (rendu serveur dans Node, montage dans
+  happy-dom).
 
 ### 17.1 Bac à sable
 
@@ -4284,3 +4293,44 @@ d'un fichier de 45 Mio à 51 % (aucun média créé, aucun fichier temporaire re
 `playground` (`Media.uploadSubject`) ; à supprimer avec l'accord de l'utilisateur, comme le reste du projet de test.
 
 **Écarts** : `.claude/architecture-phase-e.md`, section « E2 — état de l'implémentation ».
+
+### Maintenance — 2026-10-18 — Logique des composants dans `@surge-media/client` (avant le paquet React)
+
+**Cadre** : demande de l'utilisateur avant de créer `@surge-media/react`. Un audit montrait qu'une partie de la logique
+d'affichage restait dans `@surge-media/vue` et aurait été recopiée par React et Svelte (décision ED1 : logique écrite une
+fois dans le client). Plan validé ; choix de l'utilisateur : le **thème va dans le client** (pas de paquet de thème
+séparé) et la logique de `SmThumbnail`, `SmProcessingStatus` et `SmUploader` suit aussi.
+
+**Déplacé dans `packages/client`** (`src/ui/`, exporté par l'entrée principale, § 17) : textes des composants fr / en et
+leur traduction (`COMPONENT_MESSAGES`, `createTranslate`, `DeepPartial`, `Translate` ; `git mv` depuis
+`packages/vue/src/i18n`) ; tracés des icônes (`ICONS`, `iconSvgAttributes` ; mention de la licence ISC de Lucide gardée
+dans le build) ; réglages effectifs du projet et préréglages connus (`projectSettings`, `knownPresets`,
+`displaySettings`) ; images (`imageSource`, `resolveAltText` avec l'avertissement unique en développement,
+`nextImageStage`, `imageFailedEarly`, `imageStyle`, `imageErrorFrameStyle`, `focusPosition`, `VISUALLY_HIDDEN`, `cssText`
+pour les frameworks à styles en texte) ; `<picture>` (`pictureSources` : balises `<source>` avec direction artistique,
+`PictureArtSource`) ; vignettes (`thumbnailSource`, `kindIcon`, `kindLabelKey`…) ; état du traitement
+(`PROCESSING_ICONS`, `processingReason`, `processingAnnouncementKey`…) ; vidéos (`videoPoster`, `videoSize`,
+`videoLabel`, `videoMessageKey`, `heldVideoDelay` — `HEAD`, 503, `Retry-After` borné de 5 s à 5 min —,
+`whenNearViewport`, `prefersReducedMotion`, styles en ligne) ; affichage de l'envoi (`uploadHelpLines`,
+`canRetryUpload` et les refus définitifs, `uploadStatusText`, `uploaderFields`, `takeSettledUploads`…) ; délai de
+relecture avant `urlExpiresAt` (`refreshDelay`, `src/refresh.ts`) ; mode développement (`DEV_MODE`). Les styles en ligne
+sont des objets en camelCase acceptés tels quels par Vue et React.
+
+**Thème** : `packages/vue/src/styles/*.css` → `packages/client/src/styles/` ; le client publie
+**`@surge-media/client/style.css`** (`scripts/build-css.mjs` après tsdown, `sideEffects: ["**/*.css"]`) ;
+`@surge-media/vue/style.css` reste disponible (le build de Vue importe celui du client) ; `pnpm a11y:contrast` passe au
+client (`scripts/check-contrast.ts`, `tsx` déplacé), y compris dans les vérifications de release
+(`packages/.release-it.ts`, `.github/workflows/release-libraries.yml`) ; l'essai des archives (`pack-smoke.mjs`) vérifie
+les deux feuilles et les textes partagés. Bac à sable : les deux feuilles pointent vers
+`packages/client/src/styles/index.css`.
+
+**`@surge-media/vue`** : composants et composables réduits au rendu et à la réactivité (`useDisplaySettings` interne).
+**API publique inchangée** : `BUILTIN_MESSAGES`, `Messages`, `SurgeMediaDefaults`, `ProjectSettings`,
+`PictureArtSource`, `createTranslate`, `DeepPartial` et `Translate` sont réexportés depuis le client (mêmes noms, mêmes
+formes) ; exports JS et `.d.ts` des deux `dist` comparés avant / après : rien de retiré (le client gagne 61 exports).
+`dist/index.mjs` de Vue : 74 → 55 ko.
+
+**Vérifié** : `pnpm lint`, `pnpm typecheck`, `pnpm test` (core 566 + 9 ignorés, client 136 dont 41 nouveaux, vue 24
+inchangés), `pnpm a11y:contrast`, `pnpm packages:build` (publint), `pnpm packages:smoke` (les textes de Vue sont ceux du
+client, thème présent dans les deux paquets) ; build du bac à sable (thème résolu). **Non vérifié** : affichage dans un
+navigateur (bac à sable non relancé : il faut le core de dev et ses données).

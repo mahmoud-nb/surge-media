@@ -5,7 +5,8 @@
  *   2. contenu vérifié : dist/, LICENSE, README.md, package.json ; ni sources ni tests ;
  *   3. installation des deux archives (et de Vue) dans un dossier vide, comme chez un utilisateur ;
  *   4. import des modules publiés (dont l'entrée serveur `@surge-media/client/server`, absente de l'entrée
- *      principale), pré-contrôle et file d'envoi, rendu serveur d'un SmImage, feuille de style et déclarations.
+ *      principale), pré-contrôle et file d'envoi, logique des composants (textes) partagée par le client et la
+ *      librairie Vue, rendu serveur d'un SmImage, thème (`style.css` du client, repris par Vue) et déclarations.
  *
  *   node packages/scripts/pack-smoke.mjs [--out <dossier des archives>] [--keep]
  *
@@ -87,9 +88,10 @@ try {
   }
   writeFileSync(join(sandbox, 'smoke.mjs'), `
 import { existsSync, readFileSync } from 'node:fs'
-import { buildTransform, checkFile, createSurgeClient, createUploadQueue } from '@surge-media/client'
+import { fileURLToPath } from 'node:url'
+import { buildTransform, checkFile, COMPONENT_MESSAGES, createSurgeClient, createTranslate, createUploadQueue } from '@surge-media/client'
 import { createDelegatedToken, UPLOAD_SCOPES } from '@surge-media/client/server'
-import { createSurgeMedia, SmImage } from '@surge-media/vue'
+import { BUILTIN_MESSAGES, createSurgeMedia, SmImage } from '@surge-media/vue'
 import { createSSRApp, h } from 'vue'
 import { renderToString } from 'vue/server-renderer'
 
@@ -98,6 +100,10 @@ const client = createSurgeClient({ baseUrl: 'https://media.example.com', project
 const rules = { types: [{ mimeType: 'image/png', extension: 'png', kind: 'image', maxSize: 10, converted: false }], remaining: null, visibility: null, folderId: null }
 if (checkFile({ name: 'a.png', type: 'image/png', size: 11 }, rules)?.code !== 'FILE_TOO_LARGE') throw new Error('checkFile')
 createUploadQueue({ client, rules }).destroy()
+
+// Logique des composants : écrite dans le client, la librairie Vue la réexporte (un seul exemplaire installé).
+if (createTranslate('en')('video.download') !== 'Download the original video') throw new Error('createTranslate')
+if (BUILTIN_MESSAGES !== COMPONENT_MESSAGES) throw new Error('@surge-media/vue ne réexporte pas les textes du client')
 
 // Entrée serveur : importable dans Node, jamais importée par l'entrée principale.
 if (UPLOAD_SCOPES.join(' ') !== 'project:read media:read media:upload') throw new Error('UPLOAD_SCOPES')
@@ -119,10 +125,14 @@ const app = createSSRApp({ render: () => h(SmImage, { media, widths: [640] }) })
 app.use(createSurgeMedia())
 const html = await renderToString(app)
 if (!html.includes('/w_640/smoke.webp 640w')) throw new Error('rendu serveur : ' + html)
-for (const file of ['@surge-media/vue/dist/style.css', '@surge-media/vue/dist/index.d.ts', '@surge-media/client/dist/index.d.mts', '@surge-media/client/dist/server.d.mts']) {
+for (const file of ['@surge-media/vue/dist/style.css', '@surge-media/client/dist/style.css', '@surge-media/vue/dist/index.d.ts', '@surge-media/client/dist/index.d.mts', '@surge-media/client/dist/server.d.mts']) {
   if (!existsSync(new URL('./node_modules/' + file, import.meta.url))) throw new Error(file + ' absent')
 }
-console.log('✔ Modules publiés : import, envoi, entrée serveur, rendu serveur, style.css et déclarations')
+for (const file of ['@surge-media/client/style.css', '@surge-media/vue/style.css']) {
+  const css = readFileSync(fileURLToPath(import.meta.resolve(file)), 'utf8')
+  if (!css.includes('--sm-color-bg') || !css.includes('.sm-uploader')) throw new Error(file + ' : thème incomplet')
+}
+console.log('✔ Modules publiés : import, envoi, entrée serveur, textes partagés, rendu serveur, thèmes et déclarations')
 `)
   process.stdout.write(run(process.execPath, ['smoke.mjs'], sandbox))
 }

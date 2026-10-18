@@ -6,25 +6,35 @@
  * du serveur ; file avec progression, annulation et nouvel essai ; affiche capturée pendant l'envoi d'une
  * vidéo. Une annonce par fichier terminé et un résumé en fin de file (`role="status"`), jamais à chaque
  * pourcentage. Mode `details` : titre et texte alternatif saisis avant l'envoi (un jeton d'envoi ne peut
- * pas modifier un média ensuite). Toute la logique est dans la file du client (`createUploadQueue`).
+ * pas modifier un média ensuite). Toute la logique est dans le client : la file (`createUploadQueue`) et
+ * son affichage (`uploadHelpLines`, `canRetryUpload`, `uploadStatusText`…).
  */
 import {
-  acceptAttribute,
-  acceptedExtensions,
+  awaitingUploads,
+  canCancelUpload as canCancel,
+  canRemoveUpload as canRemove,
+  canRetryUpload as canRetry,
+  DEV_MODE,
   formatBytes,
-  formatPercent,
   type Media,
   type MediaKind,
   type MediaVisibility,
-  maxSizeFor,
-  UPLOAD_FILE_TYPES,
+  previewableUpload,
+  sentUploads,
+  showsUploadError,
+  showsVisibilityChoice,
+  takeSettledUploads,
   type UploadFields,
   type UploadItem,
-  uploadKinds,
+  uploaderAccept,
+  uploaderFields,
+  uploaderKinds,
+  uploadHelpLines,
   type UploadRules,
+  uploadStatusText,
+  VISUALLY_HIDDEN,
 } from '@surge-media/client'
 import { computed, nextTick, onBeforeUnmount, ref, shallowRef, useId, watch } from 'vue'
-import { DEV, VISUALLY_HIDDEN } from '../composables/image'
 import { useUploadQueue, useUploadRules } from '../composables/upload'
 import { useSurgeMedia } from '../context'
 import { IconCircleCheck, IconRotateCcw, IconTrash, IconTriangleAlert, IconUpload, IconX } from '../icons'
@@ -88,7 +98,7 @@ const { client, t, locale } = useSurgeMedia()
 const loaded = useUploadRules(() => props.rules === undefined)
 const rules = computed<UploadRules | null>(() => (props.rules !== undefined ? props.rules : loaded.rules.value))
 const ready = computed(() => props.rules !== undefined || loaded.ready.value)
-const kinds = computed<MediaKind[]>(() => (rules.value ? uploadKinds(rules.value, props.kinds) : props.kinds ?? ['image', 'video']))
+const kinds = computed<MediaKind[]>(() => uploaderKinds(rules.value, props.kinds))
 /** Envoi possible : un client, et des règles qui acceptent au moins un genre (inconnues : en attendant, oui). */
 const available = computed(() => client !== null && (!ready.value || (rules.value !== null && kinds.value.length > 0)))
 const enabled = computed(() => available.value && !props.disabled)
@@ -130,11 +140,9 @@ const { items, busy, add, update, start, cancel, retry, remove, clear } = useUpl
     emit('error', item)
   },
   onSettled(all) {
-    const finished = all.filter(item => (item.status === 'done' || item.status === 'error') && !reported.has(item.id))
-    for (const item of finished) reported.add(item.id)
-    const done = finished.filter(item => item.status === 'done' && item.media)
-    if (finished.length > 1) announce(t('upload.announce.summary', { done: done.length, failed: finished.length - done.length }))
-    emit('done', done.map(item => item.media!))
+    const settled = takeSettledUploads(all, reported)
+    if (settled.total > 1) announce(t('upload.announce.summary', { done: settled.media.length, failed: settled.failed }))
+    emit('done', settled.media)
   },
 })
 watch(items, next => emit('change', next))
@@ -144,12 +152,15 @@ const selectedVisibility = ref<MediaVisibility>(props.visibility ?? 'public')
 watch(() => props.visibility, (value) => {
   if (value) selectedVisibility.value = value
 })
-const showVisibility = computed(() => props.chooseVisibility && !rules.value?.visibility)
+const showVisibility = computed(() => showsVisibilityChoice(rules.value, props.chooseVisibility))
 
 function fields(): UploadFields {
-  const visibility = rules.value?.visibility ? undefined : props.chooseVisibility ? selectedVisibility.value : props.visibility
-  const folderId = rules.value?.folderId ? undefined : props.folderId
-  return { ...(visibility ? { visibility } : {}), ...(folderId ? { folderId } : {}) }
+  return uploaderFields(rules.value, {
+    visibility: props.visibility,
+    chooseVisibility: props.chooseVisibility,
+    selectedVisibility: selectedVisibility.value,
+    folderId: props.folderId,
+  })
 }
 
 function addFiles(files: File[]) {
@@ -193,41 +204,19 @@ function onPaste(event: ClipboardEvent) {
 }
 
 // ─── Aide : types et taille maximale par genre, envois restants ───
-const accept = computed(() => (rules.value ? acceptAttribute(rules.value, props.kinds) : kinds.value.map(kind => `${kind}/*`).join(',')))
-const sent = computed(() => items.value.filter(item => item.status === 'uploading' || item.status === 'poster' || item.status === 'done').length)
-const helpLines = computed(() => {
-  const current = rules.value
-  if (!ready.value || !current) return []
-  const lines: { key: string, text: string }[] = []
-  for (const kind of kinds.value) {
-    const types = acceptedExtensions(current, [kind], { converted: false }).map(extension => extension.toUpperCase()).join(', ')
-    if (types) lines.push({ key: kind, text: t(`upload.help.${kind}`, { types, max: formatBytes(maxSizeFor(current, kind), locale.value) }) })
-  }
-  const converted = current.types.filter(type => type.converted && kinds.value.includes(type.kind))
-  if (converted.length > 0) {
-    lines.push({ key: 'converted', text: t('upload.help.converted', { types: [...new Set(converted.map(type => type.extension.toUpperCase()))].join(', ') }) })
-  }
-  if (current.remaining !== null) lines.push({ key: 'remaining', text: t('upload.help.remaining', { count: Math.max(0, current.remaining - sent.value) }) })
-  return lines
-})
+const accept = computed(() => uploaderAccept(rules.value, props.kinds))
+const helpLines = computed(() => (ready.value && rules.value ? uploadHelpLines(rules.value, kinds.value, sentUploads(items.value), t, locale.value) : []))
 
-// ─── File ───
-/** Refus définitifs : un nouvel essai donnerait le même résultat. */
-const PERMANENT = new Set(['FILE_TOO_LARGE', 'UNSUPPORTED_TYPE', 'UNREADABLE_FILE', 'DIMENSIONS_TOO_LARGE', 'NO_FILE', 'KIND_MISMATCH'])
-const canCancel = (item: UploadItem) => item.status === 'queued' || item.status === 'uploading'
-const canRetry = (item: UploadItem) => item.status === 'canceled' || (item.status === 'error' && !PERMANENT.has(item.error?.code ?? ''))
-const canRemove = (item: UploadItem) => item.status === 'done' || item.status === 'error' || item.status === 'canceled'
+// ─── File (actions possibles : canCancelUpload, canRetryUpload, canRemoveUpload du client) ───
 const finished = computed(() => items.value.filter(canRemove).length)
 
 function statusText(item: UploadItem): string {
-  if (item.status === 'queued') return t(item.retryAt === null ? 'upload.status.queued' : 'upload.status.retrying')
-  if (item.status === 'uploading') return t('upload.status.uploading', { percent: formatPercent(item.progress ?? 0, locale.value) })
-  return t(`upload.status.${item.status}`)
+  return uploadStatusText(item, t, locale.value)
 }
 
 /** Mode `details` : fichiers pas encore lancés par « Envoyer les fichiers ». */
 const launched = ref(new Set<string>())
-const awaiting = computed(() => items.value.filter(item => item.status === 'queued' && item.attempts === 0 && !launched.value.has(item.id)))
+const awaiting = computed(() => awaitingUploads(items.value, launched.value))
 const editable = (item: UploadItem) => props.details && awaiting.value.includes(item)
 
 function sendAll() {
@@ -288,7 +277,7 @@ watch(items, (next) => {
   if (typeof URL === 'undefined' || typeof URL.createObjectURL !== 'function') return
   const map = new Map(previews.value)
   for (const item of next) {
-    if (!map.has(item.id) && UPLOAD_FILE_TYPES[item.file.type]?.kind === 'image') map.set(item.id, URL.createObjectURL(item.file))
+    if (!map.has(item.id) && previewableUpload(item)) map.set(item.id, URL.createObjectURL(item.file))
   }
   for (const [id, url] of map) {
     if (next.some(item => item.id === id)) continue
@@ -321,7 +310,7 @@ watch(busy, (value) => {
 
 let warned = false
 watch(() => ready.value && !available.value, (unavailable) => {
-  if (!unavailable || warned || !DEV) return
+  if (!unavailable || warned || !DEV_MODE) return
   warned = true
   console.warn('[surge-media] SmUploader: this credential cannot upload files. Give the plugin delegated tokens with the media:upload scope (UPLOAD_SCOPES of @surge-media/client/server).')
 })
@@ -420,7 +409,7 @@ onBeforeUnmount(() => {
               <IconTriangleAlert v-else-if="item.status === 'error'" class="sm-uploader__state-icon" />
               <span>{{ statusText(item) }}</span>
             </p>
-            <p v-if="item.error && (item.status === 'error' || item.retryAt !== null)" class="sm-uploader__error">
+            <p v-if="showsUploadError(item)" class="sm-uploader__error">
               {{ messageOf(item) }}
             </p>
             <div v-if="editable(item)" class="sm-uploader__details">

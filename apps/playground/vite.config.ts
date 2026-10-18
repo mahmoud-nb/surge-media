@@ -82,7 +82,7 @@ export default defineConfig(({ mode }) => {
     },
     resolve: {
       alias: [
-        { find: /^@surge-media\/vue\/style\.css$/, replacement: source('../../packages/vue/src/styles/index.css') },
+        { find: /^@surge-media\/(vue|client)\/style\.css$/, replacement: source('../../packages/client/src/styles/index.css') },
         { find: /^@surge-media\/vue$/, replacement: source('../../packages/vue/src/index.ts') },
         { find: /^@surge-media\/client$/, replacement: source('../../packages/client/src/index.ts') },
       ],

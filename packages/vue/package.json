@@ -45,8 +45,7 @@
     "typecheck": "vue-tsc --noEmit",
     "test": "vitest run",
     "lint": "eslint .",
-    "lint:fix": "eslint . --fix",
-    "a11y:contrast": "tsx scripts/check-contrast.ts"
+    "lint:fix": "eslint . --fix"
   },
   "peerDependencies": {
     "vue": "^3.5.0"
@@ -61,7 +60,6 @@
     "eslint": "^10.12.0",
     "happy-dom": "^21.0.1",
     "publint": "^0.3.25",
-    "tsx": "^4.23.15",
     "typescript": "~6.0.3",
     "vite": "7.3.6",
     "vitest": "^5.0.2",

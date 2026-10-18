@@ -1,7 +1,7 @@
-import type { Messages } from './fr'
+import type { ComponentMessages } from './fr'
 
 /** Textes des composants en anglais (mêmes clés que le français, vérifiées par le typage). */
-export const en: Messages = {
+export const en: ComponentMessages = {
   video: {
     noSource: 'This video will play here as soon as its compatible version is ready.',
     unavailable: 'This video cannot be played here.',

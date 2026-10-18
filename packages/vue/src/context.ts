@@ -1,31 +1,24 @@
 import {
-  ALL_FORMATS,
-  BUILTIN_PRESETS,
+  type ComponentMessages,
   createSurgeClient,
-  DEFAULT_MAX_DIMENSION,
+  createTranslate,
+  type DeepPartial,
+  type DisplayDefaults,
+  displaySettings,
+  type DisplaySettings,
+  knownPresets,
   type Preset,
   type Project,
+  type ProjectSettings,
+  projectSettings,
   type SurgeClient,
   type TokenProvider,
-  type TransformFormat,
-  type TransformPolicy,
+  type Translate,
 } from '@surge-media/client'
 import { computed, type ComputedRef, inject, type InjectionKey, isRef, type Ref, ref, shallowRef, type ShallowRef } from 'vue'
-import { createTranslate, type DeepPartial, type Messages, type Translate } from './i18n'
 
 /** Réglages utilisés tant que le projet n'est pas lu (ou sans client) : rendu serveur déterministe. */
-export interface SurgeMediaDefaults {
-  /** Formats de sortie activés sur le serveur (sinon ceux du projet ; à défaut, les quatre). */
-  formats?: TransformFormat[]
-  /** Politique de transformation (sinon celle du projet ; à défaut, `open`). */
-  policy?: TransformPolicy
-  /** Dimension maximale d'un dérivé (sinon celle du projet ; à défaut, 4096). */
-  maxDimension?: number
-  /** Largeurs des srcset (sinon celles du client). */
-  widths?: number[]
-  /** Format des images seules (`<img>`) : WebP par défaut. */
-  imageFormat?: TransformFormat
-}
+export type SurgeMediaDefaults = DisplayDefaults
 
 export interface SurgeMediaOptions {
   /** Client déjà créé ; sinon créé depuis `baseUrl`, `projectId` et l'identifiant. */
@@ -40,7 +33,7 @@ export interface SurgeMediaOptions {
   /** Langue de repli d'une langue sans traduction (`fr` par défaut). */
   fallbackLocale?: string
   /** Textes surchargés ou langues ajoutées : `{ fr: { video: { download: '…' } }, de: { … } }`. */
-  messages?: Record<string, DeepPartial<Messages>>
+  messages?: Record<string, DeepPartial<ComponentMessages>>
   defaults?: SurgeMediaDefaults
   /** Projet déjà lu (rendu serveur) : politique et formats connus dès le premier rendu. */
   project?: Project
@@ -50,12 +43,8 @@ export interface SurgeMediaOptions {
   loadProject?: boolean
 }
 
-/** Réglages effectifs du projet pour construire les URL. */
-export interface ProjectSettings {
-  policy: TransformPolicy | null
-  formats: readonly TransformFormat[]
-  maxDimension: number
-}
+/** Réglages effectifs du projet pour construire les URL (`projectSettings` du client). */
+export type { ProjectSettings }
 
 export interface SurgeMediaContext {
   readonly client: SurgeClient | null
@@ -102,15 +91,8 @@ export function createSurgeMediaContext(options: SurgeMediaOptions = {}): SurgeM
     t: (key, params) => translate.value(key, params),
     defaults,
     project,
-    settings: computed(() => ({
-      policy: project.value?.transformPolicy ?? defaults.policy ?? null,
-      formats: project.value?.transformFormats ?? defaults.formats ?? ALL_FORMATS,
-      maxDimension: project.value?.transformMaxDimension ?? defaults.maxDimension ?? DEFAULT_MAX_DIMENSION,
-    })),
-    presets: computed(() => {
-      const custom = projectPresets.value ?? []
-      return [...BUILTIN_PRESETS.filter(builtin => !custom.some(preset => preset.name === builtin.name)), ...custom]
-    }),
+    settings: computed(() => projectSettings(project.value, defaults)),
+    presets: computed(() => knownPresets(projectPresets.value)),
     async refreshProject() {
       if (!client) return
       try {
@@ -144,4 +126,10 @@ export function useSurgeMedia(): SurgeMediaContext {
   if (context) return context
   fallback ??= createSurgeMediaContext()
   return fallback
+}
+
+/** Réglages des composants d'affichage (réglages du projet, préréglages, valeurs par défaut), réactifs. */
+export function useDisplaySettings(): ComputedRef<DisplaySettings> {
+  const { settings, presets, defaults } = useSurgeMedia()
+  return computed(() => displaySettings(settings.value, presets.value, defaults))
 }
