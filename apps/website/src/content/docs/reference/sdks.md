@@ -166,7 +166,7 @@ curl -X POST \
 
 ### Theme and languages
 
-- `@surge-media/vue/style.css` is optional: without it, sizes, aspect ratios and screen reader texts stay correct. It defines `--sm-*` tokens (`--sm-color-primary`, `--sm-color-surface`, `--sm-radius`…) in light and dark — dark follows the system preference, unless an ancestor has `.light` or `[data-theme="light"]`, or when it has `.dark` or `[data-theme="dark"]`. Everything lives in the `surge-media` CSS layer, so your styles always win.
+- `@surge-media/vue/style.css`, the client's theme (`@surge-media/client/style.css`) reused as is, is optional: without it, sizes, aspect ratios and screen reader texts stay correct. It defines `--sm-*` tokens (`--sm-color-primary`, `--sm-color-surface`, `--sm-radius`…) in light and dark — dark follows the system preference, unless an ancestor has `.light` or `[data-theme="light"]`, or when it has `.dark` or `[data-theme="dark"]`. Everything lives in the `surge-media` CSS layer, so your styles always win.
 - French (default) and English are built in. Pass `locale` (a string or a ref) and override or add texts with `messages: { en: { video: { download: 'Download' } } }`.
 - The components target WCAG 2.2 AA: native elements, keyboard access, no autoplay, contrast checked in both themes.
 
@@ -198,11 +198,13 @@ const srcset = srcsetAttribute(widthCandidates(items[0], {
 }))
 ```
 
-It handles ETag revalidation, delegated token renewal and translated errors (`SurgeApiError`), and builds canonical transformation URLs — the exact form the server expects, so no redirect. `imageSourceSet()` computes all the attributes of an image (`src`, `srcset`, `sizes`, `width`, `height`) from the project's policy: it is the heart of every image component.
+It handles ETag revalidation, delegated token renewal and translated errors (`SurgeApiError`), and builds canonical transformation URLs — the exact form the server expects, so no redirect. `imageSourceSet()` computes all the attributes of an image (`src`, `srcset`, `sizes`, `width`, `height`) from the project's policy, and `imageSource()` derives them from a component's props and the project settings: it is the heart of every image component.
 
 For uploads, `client.media.upload()` sends a file (with progress in browsers), `client.uploadRules()` reads the rules of the token, `checkFile()` and `acceptAttribute()` apply them, and `createUploadQueue()` is the framework-free queue behind `SmUploader`. On your server, `@surge-media/client/server` issues delegated tokens.
 
-No package for your framework yet (Angular, SolidJS, Qwik…)? [Build a framework integration](../framework-integration/) on top of the client, the way the official packages are built.
+The component logic lives in the client too, shared by every library: the project's display settings (`displaySettings()`), alternative text and image fallback (`resolveAltText()`, `nextImageStage()`), the `<source>` tags of a `<picture>` (`pictureSources()`), poster, messages and retries of a video (`videoPoster()`, `heldVideoDelay()`), processing status, upload display, French and English texts (`createTranslate()`), icons (`ICONS`) and inline styles (`cssText()` for frameworks that take text styles). So does the theme: `@surge-media/client/style.css` (`sm-*` classes, `--sm-*` tokens). `@surge-media/vue` only adds rendering and reactivity.
+
+No package for your framework yet (Angular, SolidJS, Qwik…)? [Build a framework integration](../framework-integration/) on top of the client and its theme, the way the official packages are built.
 
 ## Any language
 

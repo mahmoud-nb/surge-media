@@ -167,7 +167,7 @@ curl -X POST \
 
 ### Thème et langues
 
-- `@surge-media/vue/style.css` est facultatif : sans lui, tailles, rapports et textes réservés aux lecteurs d’écran restent corrects. Il définit des jetons `--sm-*` (`--sm-color-primary`, `--sm-color-surface`, `--sm-radius`…) en clair et en sombre — le sombre suit la préférence du système, sauf si un ancêtre porte `.light` ou `[data-theme="light"]`, ou dès qu’il porte `.dark` ou `[data-theme="dark"]`. Tout est rangé dans la couche CSS `surge-media` : vos styles l’emportent toujours.
+- `@surge-media/vue/style.css`, le thème du client (`@surge-media/client/style.css`) repris tel quel, est facultatif : sans lui, tailles, rapports et textes réservés aux lecteurs d’écran restent corrects. Il définit des jetons `--sm-*` (`--sm-color-primary`, `--sm-color-surface`, `--sm-radius`…) en clair et en sombre — le sombre suit la préférence du système, sauf si un ancêtre porte `.light` ou `[data-theme="light"]`, ou dès qu’il porte `.dark` ou `[data-theme="dark"]`. Tout est rangé dans la couche CSS `surge-media` : vos styles l’emportent toujours.
 - Le français (par défaut) et l’anglais sont intégrés. Passez `locale` (chaîne ou ref) et surchargez ou ajoutez des textes avec `messages: { fr: { video: { download: 'Télécharger' } } }`.
 - Les composants visent le niveau WCAG 2.2 AA : éléments natifs, accès au clavier, aucune lecture automatique, contrastes vérifiés dans les deux thèmes.
 
@@ -199,11 +199,13 @@ const srcset = srcsetAttribute(widthCandidates(items[0], {
 }))
 ```
 
-Il gère la revalidation par ETag, le renouvellement des jetons délégués et les erreurs traduites (`SurgeApiError`), et construit les URL de transformation sous forme canonique — exactement celle qu’attend le serveur, donc sans redirection. `imageSourceSet()` calcule tous les attributs d’une image (`src`, `srcset`, `sizes`, `width`, `height`) d’après la politique du projet : c’est le cœur de tout composant d’image.
+Il gère la revalidation par ETag, le renouvellement des jetons délégués et les erreurs traduites (`SurgeApiError`), et construit les URL de transformation sous forme canonique — exactement celle qu’attend le serveur, donc sans redirection. `imageSourceSet()` calcule tous les attributs d’une image (`src`, `srcset`, `sizes`, `width`, `height`) d’après la politique du projet, et `imageSource()` les tire des propriétés d’un composant et des réglages du projet : c’est le cœur de tout composant d’image.
 
 Pour l’envoi, `client.media.upload()` envoie un fichier (avec sa progression dans un navigateur), `client.uploadRules()` lit les règles du jeton, `checkFile()` et `acceptAttribute()` les appliquent, et `createUploadQueue()` est la file sans framework sur laquelle repose `SmUploader`. Sur votre serveur, `@surge-media/client/server` émet les jetons délégués.
 
-Pas encore de paquet pour votre framework (Angular, SolidJS, Qwik…) ? [Créez une intégration pour un framework](../framework-integration/) au-dessus du client, comme le sont les paquets officiels.
+La logique des composants est elle aussi dans le client, commune à toutes les librairies : réglages d’affichage du projet (`displaySettings()`), texte alternatif et repli d’une image (`resolveAltText()`, `nextImageStage()`), balises `<source>` d’un `<picture>` (`pictureSources()`), affiche, messages et nouvel essai d’une vidéo (`videoPoster()`, `heldVideoDelay()`), état du traitement, affichage de l’envoi, textes en français et en anglais (`createTranslate()`), icônes (`ICONS`) et styles en ligne (`cssText()` pour les frameworks à styles en texte). Le thème aussi : `@surge-media/client/style.css` (classes `sm-*`, jetons `--sm-*`). `@surge-media/vue` n’y ajoute que le rendu et la réactivité.
+
+Pas encore de paquet pour votre framework (Angular, SolidJS, Qwik…) ? [Créez une intégration pour un framework](../framework-integration/) au-dessus du client et de son thème, comme le sont les paquets officiels.
 
 ## Tous les langages
 
