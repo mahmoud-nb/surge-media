@@ -188,6 +188,24 @@ export function holdApplies(
   return deliveryHeld(media, mode)
 }
 
+/**
+ * Content-Security-Policy des fichiers servis par /m/, pour le document ouvert quand l'adresse l'est dans un onglet
+ * (sans effet sur un `<video>` ou un `<img>` intégré dans une page) :
+ * - `default-src 'none'` : aucun script, rien chargé d'ailleurs ;
+ * - `img-src` et `media-src` 'self' : le lecteur que le navigateur crée pour une image, une vidéo ou un son charge
+ *   ce même fichier (sans `media-src`, Chromium bloque la vidéo : constaté le 2026-10-18) ;
+ * - `sandbox` (origine opaque, ni scripts, ni formulaires, ni fenêtres) : défense en profondeur si un fichier
+ *   actif (HTML, SVG…) était un jour servi depuis le domaine de l'administration. **Pas pour `video/*` et
+ *   `audio/*`** : servis avec leur type détecté à l'envoi et `nosniff`, ils ne s'ouvrent que dans le lecteur du
+ *   navigateur, jamais comme une page ; `sandbox` n'y protège de rien et empêche des navigateurs de lire le fichier
+ *   (requête du lecteur refusée depuis l'origine opaque, constaté dans celui de l'application de bureau).
+ * À revoir avant d'accepter un nouveau type de fichier (SVG, PDF, documents) : setup.md § 7.4.
+ */
+export function deliveryCsp(mimeType: string): string {
+  const base = 'default-src \'none\'; img-src \'self\'; media-src \'self\''
+  return /^(?:video|audio)\//i.test(mimeType) ? base : `${base}; sandbox`
+}
+
 /** `inline` : affiché par le navigateur ; `attachment` : proposé en téléchargement. */
 export type ContentDispositionType = 'inline' | 'attachment'
 

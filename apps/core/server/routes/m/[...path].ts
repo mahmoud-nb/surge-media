@@ -10,6 +10,7 @@ import {
   cacheControl,
   contentDisposition,
   currentTargetPath,
+  deliveryCsp,
   deliveryReloadNeeded,
   generationRateLimited,
   holdApplies,
@@ -147,7 +148,7 @@ export default defineEventHandler(async (event) => {
     'Cache-Control': cacheControl(access, mutable ? settings.presetMaxAge : undefined),
     'Accept-Ranges': 'bytes',
     'X-Content-Type-Options': 'nosniff',
-    'Content-Security-Policy': 'default-src \'none\'; sandbox',
+    'Content-Security-Policy': deliveryCsp(object.mimeType),
     'Cross-Origin-Resource-Policy': 'cross-origin',
     // Lecture par fetch() ou <canvas> depuis n'importe quel site : l'URL (publique ou signée) ou
     // l'identifiant présenté est la preuve d'accès (jamais de cookie).
