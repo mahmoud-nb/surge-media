@@ -4334,3 +4334,29 @@ formes) ; exports JS et `.d.ts` des deux `dist` comparés avant / après : rien 
 inchangés), `pnpm a11y:contrast`, `pnpm packages:build` (publint), `pnpm packages:smoke` (les textes de Vue sont ceux du
 client, thème présent dans les deux paquets) ; build du bac à sable (thème résolu). **Non vérifié** : affichage dans un
 navigateur (bac à sable non relancé : il faut le core de dev et ses données).
+
+### Maintenance — 2026-10-18 — Guide d'intégration : logique des composants du client
+
+**Cadre** : suite de la maintenance du même jour (logique des composants et thème déplacés de `@surge-media/vue` vers
+`@surge-media/client`) : le guide du site « Créer une intégration pour un framework » (2026-10-17) recopiait encore une
+partie de cette logique dans son exemple.
+
+**Site** (`apps/website`, anglais et français, `reference/framework-integration`) : « Ce que le client vous apporte » en
+deux tableaux — l'API et les URL ; la logique des composants (`projectSettings`, `knownPresets`, `displaySettings`,
+`imageSource`, `pictureSources`, `resolveAltText`, `nextImageStage`, `imageFailedEarly`, `videoPoster`, `videoSize`,
+`videoLabel`, `videoMessageKey`, `heldVideoDelay`, vignettes, état du traitement, affichage de l'envoi, `refreshDelay`,
+`createTranslate`, `ICONS` et `iconSvgAttributes`, styles en ligne, `VISUALLY_HIDDEN`, `cssText`) — et le thème
+`@surge-media/client/style.css` (classes `sm-*`, jetons `--sm-*`). Cœur `src/core.ts` réduit à `DEFAULT_SETTINGS`,
+`loadSettings` (→ `DisplaySettings`), `followProcessing` et `followExpiry` (relecture d'un média privé, `refreshDelay`) :
+`imageAttributes` et le `videoPoster` recopiés sont retirés. Exemples SolidJS (contexte avec `t`, `SurgeImage` avec
+repli `nextImageStage`, `SurgeIcon`) et Angular (`createTranslate(LOCALE_ID)`, repli par `linkedSignal`) qui appellent
+le client, styles en texte par `cssText()` ; balisage vidéo avec les classes du thème et les fonctions du client ;
+liste de contrôle (textes, thème, état, repli, médias privés). Page SDK : `imageSource()`, logique des composants et
+thème du client.
+
+**Vérifié** : le code des deux pages (cœur, exemples SolidJS et Angular, fichiers d'application) compile en mode strict
+(`noUncheckedIndexedAccess`, `verbatimModuleSyntax`) contre les sources du client, avec les types de `solid-js` 1.9.17
+et `@angular/core` 22.2.3 installés hors du dépôt (gabarits Angular non compilés : pas de compilateur Angular) ; code
+identique en fr et en hors commentaires ; `astro check` (0 erreur, 23 fichiers), build (24 pages), `check:links`
+(1 260 liens, 0 cassé) ; axe 0 violation sur le guide et la page SDK (fr / en × clair / sombre ; guide aussi à
+375 px), aucun débordement.
