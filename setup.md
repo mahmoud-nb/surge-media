@@ -2467,7 +2467,7 @@ Phase E (architecture : `.claude/architecture-phase-e.md`). Deux paquets publiab
 ```text
 packages/client/       @surge-media/client — TypeScript sans framework (navigateur, Node, edge), aucune dépendance
 ├─ src/client.ts       createSurgeClient({ baseUrl, projectId, publishableKey | getToken }) : me, project (cache 5 min),
-│                      presets, media.get / list / getMany (lots de 100) / iterate (curseur)
+│                      presets, uploadRules, media.get / list / getMany (lots de 100) / iterate (curseur) / upload / setPoster
 ├─ src/credentials.ts  clé publique ; jetons délégués renouvelés 60 s avant l'échéance, un rejeu sur 401 TOKEN_EXPIRED ;
 │                      clé secrète ou jeton personnel refusés d'emblée dans un navigateur (SECRET_IN_BROWSER)
 ├─ src/http.ts         cache ETag des lectures (If-None-Match → 304), erreurs SurgeApiError (code, detail, retryAfter)
@@ -2475,11 +2475,16 @@ packages/client/       @surge-media/client — TypeScript sans framework (naviga
 │                      srcset en largeurs / densités / préréglages, formats d'un <picture>, point d'intérêt,
 │                      imageSourceSet (tous les attributs d'une image : cœur des composants de toutes les librairies)
 ├─ src/processing.ts   suivi du traitement d'une vidéo (relecture par ETag, onglet visible)
-└─ src/i18n/           messages fr / en de tous les codes d'erreur de l'API
+├─ src/upload/         envoi (E2) : règles et pré-contrôle (checkFile, acceptAttribute), requête multipart (XMLHttpRequest
+│                      dans un navigateur : progression ; fetch ailleurs), file d'envoi sans framework (createUploadQueue),
+│                      affiche capturée dans le navigateur (captureVideoFrame)
+├─ src/server.ts       entrée `@surge-media/client/server` : createDelegatedToken, DISPLAY_SCOPES, UPLOAD_SCOPES (clé secrète :
+│                      jamais dans un navigateur ; l'entrée principale ne l'importe pas)
+└─ src/i18n/           messages fr / en de tous les codes d'erreur de l'API (taille maximale, types acceptés)
 packages/vue/          @surge-media/vue — Vue ≥ 3.5, rendu serveur
 ├─ src/plugin.ts       createSurgeMedia({ baseUrl, projectId, publishableKey | getToken, locale, messages, defaults, project })
-├─ src/components/     SmImage, SmPicture, SmVideo, SmMedia, SmThumbnail, SmProcessingStatus
-├─ src/composables/    useMedia(id), useLiveMedia, useTransformMode, useAltText
+├─ src/components/     SmImage, SmPicture, SmVideo, SmMedia, SmThumbnail, SmProcessingStatus, SmUploader (E2)
+├─ src/composables/    useMedia(id), useLiveMedia, useTransformMode, useAltText, useUploadRules, useUploadQueue
 └─ src/styles/         thème facultatif → dist/style.css (jetons --sm-*, clair / sombre, @layer surge-media)
 apps/playground/       bac à sable (Vite + Vue, port 5173), jamais publié
 ```
@@ -2510,6 +2515,25 @@ app.use(createSurgeMedia({
   libres pour un média privé (gabarit signé), préréglages sinon. Rendu serveur : passer `project` (ou `defaults`)
   au plugin, et **créer le plugin pour chaque requête** (un jeton délégué est propre à un utilisateur).
 - **Repli d'une image** : dérivé → fichier original → cadre avec le texte alternatif.
+- **Envoi (E2)** : `<SmUploader />` avec un plugin alimenté par des **jetons délégués d'envoi** — le back-end les émet
+  avec sa clé secrète :
+
+  ```ts
+  import { createDelegatedToken, UPLOAD_SCOPES } from '@surge-media/client/server'
+
+  const token = await createDelegatedToken({
+    baseUrl, projectId, secretKey, scopes: UPLOAD_SCOPES, subject: String(user.id),
+    upload: { maxFiles: 10, maxSize: 50 * 1024 * 1024 }, // facultatif : types, visibility, folderId
+  })
+  ```
+
+  Règles lues dans `GET /me` (champ `upload` : types acceptés et leur taille maximale, envois restants, visibilité et
+  dossier imposés) ; fichier refusé avant l'envoi ; file de deux envois à la fois, nouvel essai automatique après
+  429, 503 ou une coupure réseau (3 au plus) ; vidéo : image capturée pendant l'envoi puis `PUT …/poster` (la portée
+  `media:upload` suffit pour la première affiche d'une vidéo envoyée par le même émetteur et le même sujet depuis
+  moins d'une heure). Mode `details` : titre et texte alternatif saisis **avant** l'envoi (un jeton d'envoi ne peut
+  pas modifier un média ensuite). `maxFiles` compte par jeton : un jeton renouvelé repart de zéro, le quota d'un
+  utilisateur reste à l'application.
 - **Scripts** : `pnpm test`, `pnpm lint`, `pnpm typecheck` (racine : tous les paquets) ; `pnpm packages:build`
   (client puis vue, `publint`) ; `pnpm a11y:contrast` (thèmes de l'administration et des composants).
 - **Tests** : client (Vitest, `fetch` simulé ; **recoupement avec le core** : forme canonique par
@@ -2523,11 +2547,13 @@ app.use(createSurgeMedia({
    publique et une clé secrète ; **origines** : `http://localhost:5173`. Y envoyer quelques images et une vidéo.
 3. Copier `apps/playground/.env.example` en `apps/playground/.env.local` (ignoré par git) et le compléter :
    `SURGE_BASE_URL`, `SURGE_PROJECT_ID`, `SURGE_PUBLISHABLE_KEY`, `SURGE_SECRET_KEY`.
-4. `pnpm playground:dev`, puis http://localhost:5173 : pages Images, Vidéos, Média privé, Clé publique, Replis ;
-   langue et thème dans l'en-tête.
+4. `pnpm playground:dev`, puis http://localhost:5173 : pages Images, Vidéos, Média privé, Clé publique, Replis,
+   Envoi ; langue et thème dans l'en-tête.
 
-La clé secrète n'est lue que par le serveur Vite (`POST /api/token` émet des jetons délégués `project:read` +
-`media:read` de 15 min, liés à l'origine du bac à sable) : elle n'atteint jamais le navigateur.
+La clé secrète (portée `media:upload` comprise) n'est lue que par le serveur Vite : `POST /api/token` émet avec
+`createDelegatedToken` des jetons de 15 min liés à l'origine du bac à sable — lecture (`DISPLAY_SCOPES`) par
+défaut, envoi (`UPLOAD_SCOPES`, 20 fichiers par jeton, 50 Mio au plus) avec `{ "purpose": "upload" }` pour la page
+Envoi. Elle n'atteint jamais le navigateur. Les fichiers envoyés vont dans le projet de test.
 
 **Piège pnpm** : le core déclare `vite` 7.3.6 en dépendance de développement. Sans elle, l'ajout d'un paquet a suffi
 pour que pnpm résolve les dépendances « pair » de Nuxt, de `@tailwindcss/vite` et de Vitest sur le Vite 8 du site
@@ -4224,3 +4250,37 @@ Page SDK : `imageSourceSet()` et lien vers le guide. Barre latérale ; noms des 
 frameworks non installés) ; site : `astro check` (0 erreur), build (24 pages), `check:links` (1 234 liens, 0 cassé),
 axe 0 violation sur les nouvelles pages et les pages SDK (fr / en × clair / sombre × 1 280 / 375 px), aucun
 débordement.
+
+### Étape 27 — 2026-10-17 — Phase E2 : envoi de fichiers depuis les bibliothèques front
+
+**Cadre** : l'utilisateur a choisi de faire E2 avant le paquet React ; plan validé tel quel
+(`.claude/architecture-phase-e.md` § 12, décisions ED29 à ED38).
+
+**Core** (aucune migration) : `GET /api/v1/me` rend les **règles d'envoi effectives** (`upload` : types acceptés en ce
+moment avec leur taille maximale, envois restants d'un jeton délégué, visibilité et dossier imposés ; `null` sans
+`media:upload`) ; les problèmes 413 `FILE_TOO_LARGE`, 415 `UNSUPPORTED_TYPE` et 408 `UPLOAD_TIMEOUT` portent les membres
+d'extension `maxSize`, `accepted` et `timeout` ; `PUT …/poster` accepte un jeton délégué avec seulement `media:upload` pour
+la première affiche d'une vidéo envoyée par le même émetteur et le même sujet depuis moins d'une heure. OpenAPI fr / en
+à jour.
+
+**Ajouté** (§ 17) : dans `@surge-media/client`, règles et pré-contrôle (`checkFile`, `acceptAttribute`),
+`client.media.upload` (progression par XMLHttpRequest dans un navigateur), `setPoster`, `uploadRules()`, file d'envoi sans
+framework (`createUploadQueue`), capture d'affiche (`captureVideoFrame`), messages précis (taille maximale, types
+acceptés) et l'entrée **`@surge-media/client/server`** (`createDelegatedToken`, `DISPLAY_SCOPES`, `UPLOAD_SCOPES`) ; dans
+`@surge-media/vue`, **`SmUploader`**, `useUploadRules` et `useUploadQueue` (textes fr / en, styles du thème) ; dans le bac à
+sable, la page Envoi et une route de jetons émise par `createDelegatedToken`. Site (fr / en) : section « Envoyer des
+fichiers » de la page SDK (composant, routes de jetons Express et Nuxt, appel HTTP), guide d'intégration et README des
+paquets mis à jour.
+
+**Vérifié** : lint, typecheck, i18n, contrastes ; tests (core 566 + 9 ignorés, client 95, vue 24) ; builds + publint,
+`pnpm packages:smoke` (entrée serveur importée dans Node, absente de l'entrée principale). Sur le core de dev avec le
+projet du bac à sable (base sauvegardée avant les essais) : règles de `/me` et envois restants, 413 et 415 avec leurs
+extensions, affiche posée avec un jeton d'envoi puis refusée la deuxième fois ; dans le navigateur, image et vidéo
+envoyées avec affiche capturée, fichier trop gros refusé sans requête, visibilité « Privé », mode « détails », annulation
+d'un fichier de 45 Mio à 51 % (aucun média créé, aucun fichier temporaire restant) ; axe 0 violation sur la page Envoi
+(fr / en × clair / sombre) et sur les pages SDK et le guide du site (× 1 280 / 375 px) ; aucun débordement à 375 px.
+
+**Données d'essai** : 7 médias (images, vidéos) envoyés dans le projet « Bac à sable (E1) », reconnaissables à leur sujet
+`playground` (`Media.uploadSubject`) ; à supprimer avec l'accord de l'utilisateur, comme le reste du projet de test.
+
+**Écarts** : `.claude/architecture-phase-e.md`, section « E2 — état de l'implémentation ».

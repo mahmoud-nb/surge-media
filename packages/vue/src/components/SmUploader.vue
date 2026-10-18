@@ -239,13 +239,27 @@ function onField(item: UploadItem, name: 'title' | 'altText', event: Event) {
   update(item.id, { [name]: (event.target as HTMLInputElement).value })
 }
 
+/** Ligne à qui rendre le focus (null : le champ de fichier) après une action sur la file. */
+let focusTarget: { id: string | null } | null = null
+
+function applyFocus() {
+  if (!focusTarget) return
+  const row = focusTarget.id ? list.value?.querySelector<HTMLElement>(`[data-upload-id="${focusTarget.id}"] button`) : null
+  ;(row ?? input.value)?.focus()
+}
+
 /** Focus sur la ligne d'un fichier (son premier bouton), sinon sur le champ de fichier. */
 function focusRow(id: string | undefined) {
-  void nextTick(() => {
-    const row = id ? list.value?.querySelector<HTMLElement>(`[data-upload-id="${id}"] button`) : null
-    ;(row ?? input.value)?.focus()
-  })
+  focusTarget = { id: id ?? null }
+  void nextTick(applyFocus)
 }
+
+// Boutons remplacés après coup (annulation, nouvel essai) : le focus perdu revient sur la ligne, une fois.
+watch(items, () => {
+  if (!focusTarget || typeof document === 'undefined') return
+  if (document.activeElement === null || document.activeElement === document.body) applyFocus()
+  focusTarget = null
+}, { flush: 'post' })
 
 function cancelItem(id: string) {
   cancel(id)
@@ -283,6 +297,16 @@ watch(items, (next) => {
   }
   previews.value = map
 })
+
+/** Aperçu illisible (fichier corrompu, format inconnu du navigateur) : retiré plutôt qu'une image cassée. */
+function dropPreview(id: string) {
+  const url = previews.value.get(id)
+  if (!url) return
+  URL.revokeObjectURL(url)
+  const map = new Map(previews.value)
+  map.set(id, '')
+  previews.value = map
+}
 
 // ─── Quitter la page pendant un envoi : confirmation du navigateur (son propre message) ───
 function onBeforeUnload(event: BeforeUnloadEvent) {
@@ -377,6 +401,7 @@ onBeforeUnmount(() => {
             alt=""
             width="48"
             height="48"
+            @error="dropPreview(item.id)"
           >
           <div class="sm-uploader__body">
             <p class="sm-uploader__meta">

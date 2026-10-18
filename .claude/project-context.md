@@ -42,9 +42,10 @@
 > — `packages/client` (`@surge-media/client`, sans framework) + `packages/vue` (`@surge-media/vue`), composants sans
 > dépendance CSS + thème facultatif, les quatre familles (affichage, envoi, parcours/sélection, édition) dans la 0.1 livrées
 > en étapes E1 à E5, `@surge-media/nuxt` séparé plus tard. **E1 faite le 2026-10-15** (étape 26 : fondations, composants
-> d'affichage, bac à sable `apps/playground`, `Project.transformFormats` / `transformMaxDimension` ; § 9.25). **Prochaine
-> étape : E2 (envoi)**, choisie avant le paquet React (2026-10-17) : plan détaillé dans `architecture-phase-e.md` § 12
-> (ED29 à ED38), à valider avant le code.
+> d'affichage, bac à sable `apps/playground`, `Project.transformFormats` / `transformMaxDimension` ; § 9.25). **E2 (envoi)**,
+> choisie avant le paquet React, **validée telle quelle puis faite le 2026-10-17** (étape 27 ; § 9.26 ; `architecture-phase-e.md`
+> § 12 et « E2 — état de l'implémentation »). **Prochaine étape : E3 (parcours et sélection)** à détailler et faire valider ;
+> le paquet React demandera d'abord de déplacer dans le client la logique d'affichage encore dans `@surge-media/vue`.
 >
 > Les éléments marqués **[À CONFIRMER]** sont des hypothèses ou des points non validés par
 > l'utilisateur (récapitulés en § 22).
@@ -62,7 +63,7 @@
 - Monorepo cible : `@surge-media/core` (admin + API, `apps/core`), site et documentation (`apps/website`, étape 25),
   `@surge-media/client` (client sans framework) + `@surge-media/vue` (composants : images optimisées, vidéos, galeries,
   sélecteurs, envoi, édition — phase E, `.claude/architecture-phase-e.md`), puis `@surge-media/nuxt`, `react`, `svelte`.
-  **Aujourd'hui : `apps/core`, `apps/website`, `apps/playground` ; `packages/client` et `packages/vue` (privés, E1 faite, § 9.25).**
+  **Aujourd'hui : `apps/core`, `apps/website`, `apps/playground` ; `packages/client` et `packages/vue` (MIT, pas encore publiés ; E1 et E2 faites, § 9.25 et § 9.26).**
 - Base de données par défaut SQLite, configurable (PostgreSQL, MySQL/MariaDB) via la CLI
   `surge-media init` ou un script de réinitialisation.
 - Exigences transverses de l'utilisateur (permanentes) :
@@ -112,8 +113,8 @@ surge-media/                         monorepo pnpm (workspaces apps/* et package
 ├─ README.md                         présentation courte
 ├─ .claude/launch.json               serveurs pour l'aperçu Claude : core (dev), core-start (prod), core-start-3100 (prod sur 3100, cwd apps/core)
 ├─ .claude/project-context.md        CE FICHIER
-├─ packages/client                  @surge-media/client (phase E1, privé) : client de l'API v1 et URL d'images / vidéos (§ 9.25)
-├─ packages/vue                     @surge-media/vue (phase E1, privé) : composants Sm*, plugin, thème facultatif (§ 9.25)
+├─ packages/client                  @surge-media/client (phases E1–E2, MIT) : client de l'API v1, URL d'images / vidéos, envoi (§ 9.25, § 9.26)
+├─ packages/vue                     @surge-media/vue (phases E1–E2, MIT) : composants Sm*, plugin, thème facultatif (§ 9.25, § 9.26)
 ├─ apps/playground                  bac à sable des bibliothèques (Vite, port 5173, .env.local ; jamais publié)
 ├─ apps/website                     site public et documentation (Astro Starlight, étape 25)
 └─ apps/core                         @surge-media/core (paquet npm publié, bin surge-media) ; apps/ = applications
@@ -1910,7 +1911,9 @@ image construite depuis ce paquet, ESLint, commitlint, `pnpm release` (release-i
 **Étape 25** (2026-10-15) : site public et documentation `apps/website` (Astro Starlight). **Phase E** (bibliothèques front) :
 étude validée le 2026-10-15 (`.claude/architecture-phase-e.md`, ED1 à ED28) ; **E1 faite** le 2026-10-15 (étape 26 : espaces
 `packages/client` et `packages/vue`, client HTTP et constructeurs d'URL, `SmImage`, `SmPicture`, `SmVideo`, `SmMedia`, `SmThumbnail`,
-`SmProcessingStatus`, bac à sable, formats activés dans l'API v1 ; § 9.25). **Ensuite E2 (envoi)**, à détailler et faire valider.
+`SmProcessingStatus`, bac à sable, formats activés dans l'API v1 ; § 9.25) ; **E2 faite** le 2026-10-17 (étape 27 : règles d'envoi dans `/me`,
+membres d'extension des problèmes d'envoi, affiche posée avec `media:upload`, file d'envoi et entrée `@surge-media/client/server`,
+`SmUploader` ; § 9.26). **Ensuite E3 (parcours et sélection)**, à détailler et faire valider.
 
 **Section vide** : aucune (la section « à venir » des jetons a été remplacée en B2).
 
@@ -2252,6 +2255,53 @@ dans `packages/.artifacts/`, contenu lu en Node sans `tar`, installation npm dan
   `loading = 'eager'` pour mesurer) ; réponses 404 JSON d'images bloquées par ORB (normal) ; `alt=""` rendu `alt` par le
   rendu serveur de Vue ; espaces insécables d'`Intl` dans les durées.
 
+### 9.26 Envoi de fichiers (phase E2, étape 27)
+
+- **Core** (aucune migration) : `GET /me` → champ **`upload`** (`apiUploadRulesSchema` ; `null` sans `media:upload` déclarée) =
+  `apiUploadRules(principal)` (`server/lib/api/writes.ts`) : `uploadTypeRules(uploadRules(types du jeton, maxSize du jeton,
+  acceptedMimeTypes(traitement actif)))` (`server/lib/media/limits.ts`, pur : `{ mimeType, extension, kind, maxSize, converted }`
+  dans l'ordre de l'installation), `remaining` = `remainingDelegatedUploads` (lecture de `DelegatedTokenUsage` par `jti`),
+  `visibility` / `folderId` imposés. Problèmes RFC 9457 : **membres d'extension** `maxSize` (413), `accepted` (415),
+  `timeout` (408) tirés de `data` des erreurs métier (`problemExtensions`, `ProblemOptions.extensions`, schéma `Problem`).
+  `requireApiProject` accepte une liste de portées (« l'une d'elles », message qui les cite). `PUT …/poster` : un jeton
+  délégué avec seulement `media:upload` pose la **première** affiche d'une vidéo du même émetteur (`uploadedByTokenId`) et du
+  même sujet (`uploadSubject`, null = null), créée depuis moins d'une heure (`OWN_POSTER_WINDOW_MS` = durée maximale d'un jeton
+  délégué : un jeton renouvelé convient) — `canSetOwnPoster` (pur) ; sinon `media:write`. Tests : `tests/api-upload.test.ts`.
+- **`@surge-media/client`** : `src/upload/` — `file-types.ts` (miroir des types du core, recoupé par le test de contrat ;
+  alias annoncés par les systèmes, extensions secondaires `.m4v`, `.mts`…), `rules.ts` (`checkFile` → `SurgeApiError` statut 0
+  `NO_FILE` / `UNSUPPORTED_TYPE` + `accepted` / `FILE_TOO_LARGE` + `maxSize` ; l'extension ne décide que pour un type annoncé
+  vide ou générique, ou un format converti ; type inconnu sans extension connue → plus grande limite, le serveur juge ;
+  `acceptAttribute`, `acceptedExtensions`, `maxSizeFor`, `uploadKinds`, `fileKind`), `request.ts` (`sendMultipart` :
+  XMLHttpRequest s'il existe, `responseType: 'text'`, sinon `fetch` ; champs avant `file`), `queue.ts` (`createUploadQueue` :
+  éléments immuables + `subscribe`, `queued`/`uploading`/`poster`/`done`/`error`/`canceled`, `retryAt`, envois restants
+  décomptés localement — partis depuis les dernières règles + en attente —, nouveaux essais automatiques 429/503/réseau
+  (`Retry-After` ou 2, 4, 8 s, 60 s au plus, 3 fois), `autoStart: false` + `start()` pour le mode « détails »,
+  `captureFrame` injectable), `video-frame.ts` (`captureVideoFrame`, port d'`app/utils/video-frame.ts`). `http.upload` (un
+  rejeu sur 401 `TOKEN_EXPIRED`), `client.media.upload` / `setPoster` (`time` arrondi au millième) / `uploadRules()` (`/me`,
+  jamais en cache : pas d'ETag). `SurgeApiError.extensions` ; `errorMessage(code, locale, extensions)` ajoute « Taille
+  maximale : 25 Mo. » / « Types acceptés : JPG, PNG. » (`details` des catalogues). **Entrée `./server`** (`src/server.ts`,
+  deuxième entrée tsdown, `exports["./server"]`) : `createDelegatedToken`, `DISPLAY_SCOPES`, `UPLOAD_SCOPES` ; refuse
+  `window` + `document` (`SECRET_IN_BROWSER`) ; `normalizeBaseUrl` déplacé dans `src/base-url.ts` pour que l'entrée serveur
+  n'embarque pas le client (morceau partagé : erreurs + messages). Tests (95) : `upload.test.ts` (XHR simulé), `server.test.ts`.
+- **`@surge-media/vue`** : `useUploadRules(enabled)` (lecture au montage, navigateur seulement), `useUploadQueue(options)`
+  (file du client + `shallowRef`, détruite avec la portée), **`SmUploader`** (champ natif masqué visuellement + `<label>`
+  stylé en bouton, focus visible par `:focus-visible + label` ; dépôt avec compteur `dragenter`/`dragleave` ; collage ;
+  aide reliée par `aria-describedby` ; visibilité `<select>` si `chooseVisibility` et non imposée ; ligne : aperçu local
+  décoratif — retiré s'il ne se charge pas —, nom, taille, `<progress>` nommé, état, erreur traduite, boutons dont le nom
+  accessible commence par le libellé visible ; pas de « Réessayer » pour un refus définitif ; focus rendu à la ligne quand
+  ses boutons changent, sinon au champ ; annonces `role="status"` par fichier + résumé ; `beforeunload` pendant un envoi ;
+  avertissement en développement sans droit d'envoi). Textes `upload.*` fr / en, icônes `IconUpload`, `IconX`,
+  `IconRotateCcw`, `IconTrash`, styles `.sm-uploader*` (jetons existants seulement). Tests (24) : `uploader.test.ts` + rendu serveur.
+- **Bac à sable** : `/api/token` émis par `createDelegatedToken` (import des sources `packages/client/src/server.ts` depuis
+  `vite.config.ts`), `{ "purpose": "upload" }` → `UPLOAD_SCOPES`, 20 fichiers, 50 Mio ; page **Envoi** (contexte propre :
+  `createSurgeMediaContext` + `provide(SURGE_MEDIA_KEY)`). Médias d'essai d'E2 dans le projet « Bac à sable (E1) »
+  (`uploadSubject = 'playground'`).
+- **Pièges vus** : un refus précoce (415) du serveur de dev laisse la connexion `fetch` réutilisée inutilisable
+  (`ECONNRESET` à la requête suivante : relais de Nitro) → nouvel essai sur une autre connexion dans les scripts ; un focus
+  posé par script n'active pas `:focus-visible` (tester avec de vraies frappes de Tab) ; les outils d'écriture et le shell
+  transforment les échappements `\u00A0` en caractères (ESLint `no-irregular-whitespace`) : écrire les échappements par
+  `String.fromCharCode(92)`.
+
 
 **Architecture de la phase B validée** (toutes les décisions D1–D15 confirmées le 2026-09-29) : `.claude/architecture-phase-b.md`
 — contrats détaillés des sous-étapes suivantes (types de jetons et formats, API v1, CORS, cache, transformations).
@@ -2274,7 +2324,7 @@ dans `packages/.artifacts/`, contenu lu en Node sans `tar`, installation npm dan
   valider** ; transverses : envois reprenables / directs vers S3, `BigInt` au-delà de 2 Gio, délestage de la diffusion, webhooks de fin de
   traitement, accélération matérielle, filtre « État » de la médiathèque, `<SmVideo>`. Audio et documents : phases ultérieures (DD13).
   `@surge-media/client` + composants (Vue d'abord) : **phase E**, étude validée le 2026-10-15 (`.claude/architecture-phase-e.md` :
-  catalogue, matrice des identifiants, évolutions du core, découpage E1 à E5) ; **E1 faite** (§ 9.25 : client, `SmImage`, `SmPicture`, `SmVideo`, `SmMedia`, `SmThumbnail`, `SmProcessingStatus`) ; ensuite E2 (envoi).
+  catalogue, matrice des identifiants, évolutions du core, découpage E1 à E5) ; **E1 faite** (§ 9.25 : client, `SmImage`, `SmPicture`, `SmVideo`, `SmMedia`, `SmThumbnail`, `SmProcessingStatus`) ; **E2 faite** (§ 9.26 : envoi, `SmUploader`, `@surge-media/client/server`) ; ensuite E3 (parcours et sélection).
 - Pistes étape 19 : widgets masquables / réordonnables (préférence par compte), cache des agrégats pour de très grandes
   bibliothèques, médias récents en vignettes, journal par projet pour les propriétaires.
 - Pistes étape 18 : « Envoyer un e-mail de test » (Réglages ou CLI), envoi automatique à la création d'un compte, file d'envoi, alerte à

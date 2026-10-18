@@ -6,12 +6,13 @@ import FallbacksPage from './pages/FallbacksPage.vue'
 import ImagesPage from './pages/ImagesPage.vue'
 import PrivatePage from './pages/PrivatePage.vue'
 import PublicPage from './pages/PublicPage.vue'
+import UploadPage from './pages/UploadPage.vue'
 import VideosPage from './pages/VideosPage.vue'
 import { configured, locale, theme } from './state'
 
 const t = usePlaygroundText(locale)
 const { project } = useSurgeMedia()
-const PAGES = { images: ImagesPage, videos: VideosPage, private: PrivatePage, public: PublicPage, fallbacks: FallbacksPage } as const
+const PAGES = { images: ImagesPage, videos: VideosPage, private: PrivatePage, public: PublicPage, fallbacks: FallbacksPage, upload: UploadPage } as const
 type Page = keyof typeof PAGES
 
 const current = ref<Page>('images')
@@ -168,6 +169,15 @@ figcaption {
   height: 240px;
   overflow: hidden;
   border-radius: 0.5rem;
+}
+
+.playground-section {
+  margin-bottom: 2rem;
+}
+
+.playground-section h3 {
+  margin: 0 0 0.75rem;
+  font-size: 1.125rem;
 }
 
 .playground-row {

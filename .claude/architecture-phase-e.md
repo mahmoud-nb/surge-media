@@ -7,7 +7,9 @@
 > acceptées avec le plan ; chaque étape (E1…E5) sera **détaillée puis validée avant d'être codée**, comme les phases B à D.
 > **E1 VALIDÉE tel quel puis FAITE le 2026-10-15** (§ 11, décisions ED18 à ED28 ; `setup.md` § 17 et étape 26 ;
 > état, écarts et vérifications : section « E1 — état de l'implémentation » en fin de document). Suite : **E2 (envoi)**,
-> choisie avant le paquet React (2026-10-17) : **plan détaillé au § 12, à valider** avant le code (ED29 à ED38).
+> choisie avant le paquet React (2026-10-17) : plan du § 12 (ED29 à ED38) **validé tel quel puis FAIT le 2026-10-17**
+> (`setup.md` § 17 et étape 27 ; `project-context.md` § 9.26 ; section « E2 — état de l'implémentation » en fin de
+> document). Suite : **E3 (parcours et sélection)**, à détailler et faire valider.
 >
 > Sources : `apps/core/shared/schemas/api.ts` (contrats v1), `apps/core/shared/utils/{api,permissions,transforms,
 > snippets,video,folders}.ts`, `server/api/v1/**`, `server/lib/access/principal.ts`, `.claude/project-context.md`
@@ -682,3 +684,44 @@ Express, Nuxt, Next.js et en HTTP pour les autres langages), tableau des paquets
 - **Fichier long et jeton court** : le jeton n'est vérifié qu'au début de la requête ; le fichier suivant part avec un
   jeton renouvelé si besoin.
 - **`beforeunload`** ignoré par certains navigateurs mobiles : simple confort.
+
+## E2 — état de l'implémentation (2026-10-17)
+
+Fait dans l'ordre du § 12.8 ; référence d'exploitation : `setup.md` § 17 et étape 27 ; contexte : `project-context.md` § 9.26.
+
+### Écarts et précisions
+
+- **Core** : `requireApiProject` accepte une liste de portées (« l'une d'elles ») pour `PUT …/poster` (`media:write` ou
+  `media:upload`, puis ED31) ; le message d'`INSUFFICIENT_SCOPE` les cite. Les règles de `/me` sont `null` dès que la portée
+  `media:upload` n'est pas **déclarée** (un jeton personnel peut la déclarer sans l'avoir dans un projet : le serveur refuse
+  alors l'envoi).
+- **Client** : `normalizeBaseUrl` déplacé dans `src/base-url.ts` (réexporté) pour que l'entrée serveur ne contienne pas le
+  client ; `file-types.ts` (table des types connus) ajouté pour nommer les types dans les messages et deviner le genre sans
+  règles ; un refus du pré-contrôle est une `SurgeApiError` de statut 0 ; un envoi interrompu après la création du média
+  (pendant l'affiche) finit `done`.
+- **Vue** : pas de bouton « Réessayer » pour un refus définitif (`FILE_TOO_LARGE`, `UNSUPPORTED_TYPE`, `UNREADABLE_FILE`,
+  `DIMENSIONS_TOO_LARGE`, `NO_FILE`, `KIND_MISMATCH`) ; aperçu local retiré s'il ne se charge pas (fichier illisible) ;
+  aucune nouvelle couleur dans le thème (bordures des champs et boutons secondaires : `--sm-color-muted-fg`, 4.5:1).
+- **Site** : recettes de la route de jetons pour Express et Nuxt (`createDelegatedToken`), et en HTTP (`curl`) pour les
+  autres langages ; la recette Next.js prévue est laissée au paquet React. Le guide « Créer une intégration » cite les
+  fonctions d'envoi.
+
+### Vérifications
+
+- Tests : core **566** + 9 ignorés (+12 : `tests/api-upload.test.ts`), client **95** (+21 : envoi, entrée serveur, contrat),
+  vue **24** (+8 : `SmUploader` monté et rendu serveur) ; lint, typecheck (core, client, vue, bac à sable, site), i18n du
+  core, contrastes des deux thèmes, builds + publint, `pnpm packages:smoke` (entrée serveur importée dans Node, absente de
+  l'entrée principale).
+- Sur le core de dev (projet du bac à sable, base sauvegardée avant les essais, données de l'utilisateur intactes) :
+  `/me` (15 types, `remaining` 20 → 19 → 18, images 25 Mio, vidéos 50 Mio bornées par le jeton, `null` pour un jeton de
+  lecture) ; 413 avec `maxSize` = 26 214 400 ; 415 avec `accepted` ; affiche posée avec `media:upload` (puis deuxième pose
+  et jeton de lecture refusés en 403, affiche hors quota) ; dans le navigateur : image et vidéo envoyées par XMLHttpRequest,
+  affiche capturée dans le navigateur puis `PUT …/poster`, refus d'un fichier de 26 Mio sans requête, visibilité « Privé »
+  (vignette signée), mode « détails » (titre et texte alternatif enregistrés), annulation à 51 % d'un fichier de 45 Mio
+  (aucun média créé, aucun fichier temporaire restant, journaux sans erreur) ; axe 0 violation sur la page Envoi
+  (fr / en × clair / sombre, file remplie, champs du mode « détails ») ; 375 px sans débordement, cibles ≥ 44 px ;
+  focus visible du champ de fichier au clavier.
+- Site : `astro check` 0 erreur, 24 pages, 1 242 liens et ancres sans lien cassé, axe 0 violation sur les pages SDK et le
+  guide (fr / en × clair / sombre × 1 280 / 375 px), aucun débordement.
+- Non vérifié en réel : la limite `maxFiles` atteinte dans l'interface (20 envois) et le nouvel essai après une coupure
+  réseau ou un 429 — couverts par les tests de la file.
