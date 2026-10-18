@@ -2253,8 +2253,10 @@ dans `packages/.artifacts/`, contenu lu en Node sans `tar`, installation npm dan
 - **`apps/playground`** : Vite (5173), alias vers les sources des paquets, intergiciel `POST /api/token` (clé secrète de
   `.env.local` → `delegated-tokens`, `project:read` + `media:read`, 15 min, origine du bac à sable), `define __PLAYGROUND__`
   (sans la clé secrète). Données de test de l'étape 26 : projet **« Bac à sable (E1) »** (`e1-playground`) + compte ADMIN
-  temporaire `e1-playground-admin@surge-media.test` créés par un script du scratchpad (voir la mémoire) — à supprimer avec
-  l'accord de l'utilisateur.
+  temporaire `e1-playground-admin@surge-media.test` créés par un script du scratchpad. Décision de l'utilisateur du
+  2026-10-18 : projet et médias d'essai (E1, E2) **gardés comme exemples** — ne pas les supprimer dans les nettoyages — ;
+  compte ADMIN temporaire **supprimé** le même jour (ses sessions et son adhésion OWNER avec lui ; projet, clés et médias
+  gardés sans auteur, comme `DELETE /api/admin/users/:id` ; audit `user.deleted` par « Système »).
 - **Pièges vus** : volet du navigateur masqué → `decode()` en attente, images différées jamais chargées (forcer
   `loading = 'eager'` pour mesurer) ; réponses 404 JSON d'images bloquées par ORB (normal) ; `alt=""` rendu `alt` par le
   rendu serveur de Vue ; espaces insécables d'`Intl` dans les durées.
@@ -2407,14 +2409,18 @@ Journal : `setup.md`, maintenance du 2026-10-18.
   Apache 2.0, production gratuite sauf CA du groupe > 500 000 USD ou service hébergé concurrent (`setup.md`, journal du 2026-10-10).
   Champs à compléter (concédant, contact) : **complétés** (0 occurrence de `TO BE COMPLETED` le 2026-10-16 ; concédant « Mahmoud NBET »).
   **Librairies front : licence MIT décidée par l'utilisateur le 2026-10-16** (`packages/client/LICENSE`, `packages/vue/LICENSE` ; le
-  `LICENSE` BSL exclut les fichiers sous une autre licence ; README racine). Non tranchés : CLA pour les contributions externes,
-  licence des futurs composants React/Svelte (MIT par cohérence, à confirmer), relecture par un avocat.
+  `LICENSE` BSL exclut les fichiers sous une autre licence ; README racine). **Contributions externes** : **acceptées**
+  (décision de l'utilisateur du 2026-10-18, après explication : refuser était possible sans changer de licence, par le réglage
+  GitHub *Settings › General › Features › Pull requests*). Non tranchés : forme de l'accord des contributeurs (CLA, recommandé
+  pour pouvoir vendre des licences commerciales du code BSL contribué ; une simple signature DCO ne donne pas ce droit), licence
+  des futurs composants React/Svelte (MIT par cohérence, à confirmer), relecture par un avocat.
 - **Distribution** (étapes 23 et 24, 2026-10-10) : image Docker et paquet npm `@surge-media/core` faits et vérifiés localement (npm 12 sous
   Windows, npm 11 sous Linux, image depuis l'archive). **Jamais exécutés sur GitHub** : workflows `ci.yml` et `release.yml` (validés par
   actionlint seulement), publication npm (organisation `surge-media`, jeton `NPM_TOKEN` puis publication de confiance, provenance =
   dépôt public) et GHCR (visibilité du paquet), arm64 (QEMU). `CHANGELOG.md` créé par la première release (`pnpm release 0.1.0`).
-  Un `GITHUB_TOKEN` présent dans l'environnement de l'utilisateur n'a pas accès au dépôt : release-it échoue (« not a collaborator »)
-  tant qu'il est défini (le retirer pour passer par le navigateur, ou fournir un jeton valide).
+  Le `GITHUB_TOKEN` (jeton classique `ghp_` sans accès au dépôt, qui faisait échouer release-it : « not a collaborator ») a été
+  **retiré** des variables d'environnement utilisateur de Windows par l'utilisateur le 2026-10-18 : la release GitHub passe
+  désormais par la page pré-remplie du navigateur (relancer les terminaux et l'application avant, qui gardent l'ancienne valeur).
 - Portées et format des jetons : **implémentés en B2** selon l'architecture validée ; écarts listés en tête de `architecture-phase-b.md`.
 - **MySQL/MariaDB** : les 16 migrations ont été exécutées pour la première fois sur **MariaDB 11** (image Docker, 2026-10-10, parcours API
   complet ensuite) ; **MySQL 8 jamais**. **PostgreSQL 17** réel aussi (Docker, même parcours) ; `db reset` jamais exécuté sur ces bases.
@@ -2431,9 +2437,11 @@ Journal : `setup.md`, maintenance du 2026-10-18.
 - D3 vérifié avec SQLite et le stockage local : aucun essai consigné avec S3 (original copié dans le dossier de la tâche), PostgreSQL ou
   MySQL (l'ordre `nulls: 'first'` de la « dernière tâche » n'a été essayé que sous SQLite). Lecture réelle des rendus H.264 dans un navigateur
   non vérifiée (Chromium du nuage sans H.264), ni le report du changement de sources pendant une lecture.
-- **Décisions de l'utilisateur en attente** (D3) : sa vidéo de téléphone (Samsung, projet « My Phone », envoyée avant D2, publique) contient
-  encore son lieu de tournage — l'« Optimiser », la rendre privée ou la laisser ; les 8 dérivés orphelins de `landscape.jpg` (anciennes versions,
-  laissés avant le correctif `deletePrefix` de D2) — les supprimer à la main ou non.
+- **Décisions de l'utilisateur** (D3) : sa vidéo de téléphone (Samsung, projet « My Phone ») est **déjà optimisée** par lui (réponse
+  du 2026-10-18 ; version 2 en base). Les 8 dérivés orphelins de `landscape.jpg` (`data/media/variants/<id>/v1-*` et `v2-*`,
+  311 Kio, anciennes versions laissées avant le correctif `deletePrefix` de D2 ; seuls fichiers du stockage référencés par aucune
+  table) ont été **mis à la corbeille de Windows** le 2026-10-18 à sa demande ; restent les 2 dérivés `v3-*` utilisés. Base
+  sauvegardée avant ce nettoyage : `apps/core/data/surge-media-sauvegarde-2026-10-18-avant-nettoyage.db`.
 - Démarrage de la build de production : bloqué à l'étape 10 (argon2, Smart App Control), mais **fonctionnel le 2026-10-01 en C1**.
 - **Override `oxc-transform` 0.141.0** hors de la plage de Nuxt 3.21 : fonctionne (typecheck, dev, build), mais à surveiller et retirer.
 - Environnement local actuel (non versionné, indicatif) : compte `admin@surge-media.test` (ADMIN, créé par amorçage ; mot de passe dans
