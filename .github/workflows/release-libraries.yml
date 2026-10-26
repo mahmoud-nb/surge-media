@@ -40,7 +40,7 @@ jobs:
       version: ${{ steps.version.outputs.version }}
       npm-tag: ${{ steps.version.outputs.npm-tag }}
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
         with:
           ref: ${{ env.TAG }}
           # Tous les tags : une version n'est « latest » que si c'est la plus haute version stable.
@@ -85,7 +85,7 @@ jobs:
       - name: Archives et essai d'installation
         run: node packages/scripts/pack-smoke.mjs --out "$GITHUB_WORKSPACE/artifacts"
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: libraries
           path: artifacts/*.tgz
@@ -101,11 +101,11 @@ jobs:
       # Publication de confiance (OIDC, sans jeton) et attestation de provenance.
       id-token: write
     steps:
-      - uses: actions/setup-node@v5
+      - uses: actions/setup-node@v7
         with:
           node-version: 24
 
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8
         with:
           name: libraries
           path: artifacts
@@ -138,7 +138,7 @@ jobs:
     permissions:
       contents: write
     steps:
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8
         with:
           name: libraries
           path: artifacts
