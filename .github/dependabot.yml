@@ -1,0 +1,68 @@
+# Dependabot : mises à jour des dépendances npm et des GitHub Actions (setup.md § 15.1, SECURITY.md).
+#
+# Limite connue : pnpm 12, qui épingle sa propre version (champ `packageManager`), écrit `pnpm-lock.yaml` en deux
+# documents YAML, format que le graphe des dépendances de GitHub ne lit pas. Pour npm, Dependabot ne crée donc ni
+# alerte ni mise à jour de sécurité : seules les mises à jour de versions ci-dessous fonctionnent, et la veille des
+# vulnérabilités passe par `pnpm audit` (setup.md § 15.1). Les GitHub Actions ont alertes et mises à jour.
+#
+# Messages de commit au format Conventional Commits, vérifiés par commitlint en CI : `build(deps)` et
+# `build(deps-dev)` (rubrique « Build and Distribution » du CHANGELOG), `ci(deps)` pour les actions. Les
+# dépendances de développement du core sont en `build` elles aussi : le serveur construit embarque la plupart
+# d'entre elles (Nuxt, zod, SDK S3, pilotes de base…).
+version: 2
+
+updates:
+  - package-ecosystem: npm
+    # Espace de travail pnpm : chaque package.json, un seul pnpm-lock.yaml à la racine.
+    directories:
+      - /
+      - /apps/core
+      - /apps/website
+      - /apps/playground
+      - /packages/client
+      - /packages/vue
+    schedule:
+      interval: weekly
+      day: monday
+      time: '06:00'
+      timezone: Europe/Paris
+    # Une version publiée depuis moins de 7 jours n'est pas proposée : un paquet compromis puis retiré du registre
+    # dans ce délai n'atteint jamais le dépôt.
+    cooldown:
+      default-days: 7
+    # Versions majeures exclues : chacune demande une décision et une revue (Nuxt 4, Prisma 8, TypeScript 7 que
+    # vue-tsc ne prend pas en charge…). Les versions épinglées exprès (Prisma, Scalar, TypeScript) restent
+    # proposées en correctif et en mineure : la CI de la pull request décide.
+    ignore:
+      - dependency-name: '*'
+        update-types: ['version-update:semver-major']
+    # Une pull request pour les correctifs, une pour les mineures : un échec des mineures ne bloque pas les correctifs.
+    groups:
+      patch-updates:
+        update-types: [patch]
+      minor-updates:
+        update-types: [minor]
+    open-pull-requests-limit: 5
+    commit-message:
+      prefix: build
+      prefix-development: build
+      include: scope
+
+  - package-ecosystem: github-actions
+    # « / » : workflows de .github/workflows ; chaque action composite de .github/actions a son propre dossier.
+    directories:
+      - /
+      - /.github/actions/*
+    schedule:
+      interval: weekly
+      day: monday
+      time: '06:00'
+      timezone: Europe/Paris
+    cooldown:
+      default-days: 7
+    groups:
+      github-actions:
+        patterns: ['*']
+    commit-message:
+      prefix: ci
+      include: scope
