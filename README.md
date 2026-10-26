@@ -45,6 +45,11 @@ Guide complet de développement : [setup.md](setup.md) ; versions, releases et p
 [§ 15](setup.md#15-qualité-du-code-versions-et-publication) ; historique :
 [CHANGELOG](apps/core/CHANGELOG.md).
 
+## Sécurité
+
+Pour signaler une vulnérabilité, n'ouvrez pas d'issue publique : suivez la [politique de sécurité](SECURITY.md)
+(signalement privé par GitHub, versions maintenues, délais de traitement).
+
 ## Licence
 
 surgeMedia est distribué sous **Business Source License 1.1** (identifiant SPDX `BUSL-1.1`) : voir [LICENSE](LICENSE).

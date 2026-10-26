@@ -86,7 +86,7 @@
 | Node.js | **≥ 24** (`.nvmrc` = 24, machine : 24.20) | exigé par Flydrive 2 ; `engines` racine et core `>=24.0.0` |
 | pnpm | 12.4.2 (`packageManager`) | pnpm 12 bloque les scripts d'install : `pnpm approve-builds` ; `allowBuilds` : `@prisma/engines`, `better-sqlite3`, `esbuild`, `prisma` |
 | Nuxt | **3.21.11** + `future.compatibilityVersion: 4` | Nuxt 3 demandé ; structure `app/`, `shared/`, `server/` de Nuxt 4 ; Nitro 2.13, Vite 7 |
-| Prisma | **7.10.0 exact** (prisma, @prisma/client, adapters) | le tag npm `latest` pointe vers une 8.0.0-rc : ne pas mettre à jour sans tester |
+| Prisma | **7.10.1 exact** (prisma, @prisma/client, adapters ; 7.10.0 avant le 2026-10-26) | le tag npm `latest` pointe vers une 8.0.0-rc : ne pas mettre à jour sans tester ; 7.10.1 corrige les avis de `mariadb`, `mysql2`, `deepmerge-ts` |
 | TypeScript | **~6.0.3** | TS 7 (natif) incompatible avec vue-tsc |
 | vue-router | 5.3.x | |
 | Tailwind CSS | 4.3 (plugin `@tailwindcss/vite`) | pas de `@nuxtjs/tailwindcss` |
@@ -2438,7 +2438,9 @@ Journal : `setup.md`, maintenance du 2026-10-18.
 - Portées et format des jetons : **implémentés en B2** selon l'architecture validée ; écarts listés en tête de `architecture-phase-b.md`.
 - **MySQL/MariaDB** : les 16 migrations ont été exécutées pour la première fois sur **MariaDB 11** (image Docker, 2026-10-10, parcours API
   complet ensuite) ; **MySQL 8 jamais** (prévu le 2026-10-18 avec `mysql:8.4` : téléchargement de l'image non autorisé ce jour-là).
-  **PostgreSQL 17** réel aussi (Docker, même parcours) ; `db reset` jamais exécuté sur ces bases.
+  **PostgreSQL 17** réel aussi (Docker, même parcours) ; `db reset` jamais exécuté sur ces bases. **Rejoué le
+  2026-10-26 avec Prisma 7.10.1** (paquet npm installé, `mariadb` 3.5.4) : PostgreSQL 17.11 et MariaDB 11.8.9, 16
+  migrations et parcours de 33 contrôles réussis sur chacune (`setup.md`, journal du 2026-10-26).
 - **S3 réel** (AWS, R2, MinIO) jamais testé (seulement `s3rver` ; MinIO prévu le 2026-10-18, image non autorisée) ; `MediaStorage.copy`
   (CopyObject) et la lecture par plage (`Range`) testés seulement en local.
 - **Dépôt public** (recherche du 2026-10-18, 65 commits, toutes les références) : **aucun secret** dans l'historique (script masqué :
@@ -2462,6 +2464,20 @@ Journal : `setup.md`, maintenance du 2026-10-18.
   sans `media-src`) ; les `<video>` intégrés ne sont pas touchés. **Corrigé** : `deliveryCsp()` avec `img-src 'self'; media-src 'self'`,
   et **sans `sandbox` pour `video/*` et `audio/*`** (décision de l'utilisateur : le navigateur de l'application refuse les requêtes
   de tout document en bac à sable, `ERR_BLOCKED_BY_CLIENT`) ; lu dans ce navigateur, **pas encore dans Chrome, Firefox ni Safari**.
+- **Politique de sécurité et Dependabot (2026-10-26)**, demande de l'utilisateur après le questionnaire de due
+  diligence (Claude Doc, réponses RSSI-22 et DO-09) : `SECURITY.md` (racine, anglais puis français ; signalement privé
+  GitHub, sans adresse e-mail ; objectifs de délais **proposés, à confirmer par l'utilisateur**) et
+  `.github/dependabot.yml` (npm : six dossiers, correctifs et mineures groupés, majeures exclues, `cooldown` 7 jours,
+  préfixe `build` partout ; Actions : `ci`). **Limite** : le `pnpm-lock.yaml` de pnpm 12 (deux documents YAML) n'est
+  pas lu par le graphe des dépendances → aucune alerte Dependabot npm ; veille par `pnpm audit` (complet : `--prod`
+  ignore les paquets embarqués par la build, déclarés en `devDependencies`). **Audit du 2026-10-26 : 62 avis (3
+  critiques côté outils de Nuxt, absents de `.output`) ; côté serveur, élevés : sharp < 0.35.5, zod < 4.6.6,
+  mariadb < 3.4.7, source-map-js < 1.2.2 → corrigés le même jour** (sharp 0.35.5, zod 4.6.7, Prisma 7.10.1 →
+  mariadb 3.5.4, source-map-js 1.2.2 ; audit 62 → 49, typecheck, tests, build, `smoke:package` verts ; MySQL/MariaDB
+  et PostgreSQL réels non rejoués). nodemailer ensuite monté en 10.1.7 (`~10.1.7`, envoi SMTP réel vérifié) :
+  audit 46, **aucun avis sur le serveur construit** (reste `fast-uri` 3.1.8 du verrou, via `@prisma/dev`, inutilisé).
+  À faire par l'utilisateur sur GitHub :
+  signalement privé (dépôt public seulement), alertes et mises à jour de sécurité Dependabot (`setup.md` § 15.1).
 - **Sécurité de la diffusion, à étudier plus tard** (demande de l'utilisateur du 2026-10-18, `setup.md` § 7.4) : `sandbox` n'est qu'une
   défense en profondeur (barrières principales : types acceptés sans SVG, HTML ni PDF, type détecté à l'envoi, `nosniff`,
   `default-src 'none'`). Avant d'accepter un nouveau type (SVG, PDF, documents, audio) : revoir `deliveryCsp`, la disposition

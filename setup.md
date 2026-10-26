@@ -125,8 +125,8 @@ pnpm dlx nuxi@3.37.0 init apps/core --template v4-compat --packageManager pnpm -
 # renommer le package en "@surge-media/core" dans apps/core/package.json
 
 # étape 1 — base de données, images, stockage, CLI
-pnpm --filter @surge-media/core add prisma@7.10.0 @prisma/client@7.10.0 \
-  @prisma/adapter-better-sqlite3@7.10.0 @prisma/adapter-pg@7.10.0 @prisma/adapter-mariadb@7.10.0 \
+pnpm --filter @surge-media/core add prisma@7.10.1 @prisma/client@7.10.1 \
+  @prisma/adapter-better-sqlite3@7.10.1 @prisma/adapter-pg@7.10.1 @prisma/adapter-mariadb@7.10.1 \
   sharp unstorage citty @clack/prompts
 pnpm --filter @surge-media/core add -D typescript@~6.0.3 vue-tsc tsx tsdown @types/node@24
 
@@ -2116,7 +2116,7 @@ Image construite localement : `SURGE_MEDIA_IMAGE=surge-media docker compose -f d
 | Choix | Pourquoi |
 | --- | --- |
 | Nuxt 3.21 + `future.compatibilityVersion: 4` | Nuxt 3 demandé, toujours maintenu en parallèle de Nuxt 4 ; structure `app/` et comportements Nuxt 4 déjà actifs, la migration se limitera à la mise à jour de la dépendance |
-| Prisma **7.10.0** épinglé exactement | le tag npm `latest` de `prisma` pointe vers une 8.0.0-rc ; ne pas mettre à jour sans tester |
+| Prisma **7.10.1** épinglé exactement (tous les paquets Prisma à la même version) | le tag npm `latest` de `prisma` pointe vers une 8.0.0-rc ; ne pas mettre à jour sans tester ; 7.10.1 (2026-10-26) corrige les avis de sécurité de `mariadb`, `mysql2` et `deepmerge-ts` |
 | Prisma 7 + driver adapters | client sans moteur Rust ; un adapter par fournisseur, choisi à l'exécution |
 | TypeScript **~6.0** | TypeScript 7 (compilateur natif) n'est pas encore utilisable par `vue-tsc` |
 | `prisma` en dépendance (pas devDependency) | la CLI `surge-media` en a besoin chez l'utilisateur final pour générer et migrer |
@@ -2308,6 +2308,29 @@ Image construite localement : `SURGE_MEDIA_IMAGE=surge-media docker compose -f d
 - **Site** (`.github/workflows/website.yml`, pull requests et push sur `main` qui touchent `apps/website`) : types,
   build et liens internes, puis publication sur GitHub Pages après un merge (§ 16). Les commits du site sont de type
   `docs(website): …` (le CHANGELOG du core ne retient que les commits qui touchent le core, § 15.2).
+- **Politique de sécurité** (`SECURITY.md` à la racine, en anglais puis en français ; 2026-10-26) : signalement
+  privé par GitHub (*Security › Report a vulnerability*), sinon issue publique qui demande seulement un canal
+  privé ; versions maintenues (dernière ligne avant 1.0.0) ; objectifs de traitement (accusé de réception en 3 jours
+  ouvrés, analyse en 10, correctif critique en 14 jours, élevé en 30, moyen en 90), publication coordonnée (avis de
+  sécurité GitHub, CVE demandé par GitHub, crédit du découvreur, 90 jours au plus) ; périmètre et règles de test.
+  Ces délais sont des objectifs, pas des engagements contractuels. **À faire une fois**, le dépôt étant public :
+  *Settings*, section *Advanced Security* (ou *Code security*) › *Private vulnerability reporting* › *Enable* ; le
+  signalement privé n'existe pas pour un dépôt privé.
+- **Dependabot** (`.github/dependabot.yml`) : chaque lundi à 6 h (heure de Paris), **npm** (les six `package.json`
+  de l'espace de travail ; une pull request pour les correctifs, une pour les mineures ; majeures exclues ; version
+  publiée depuis moins de 7 jours écartée) et **GitHub Actions** (workflows et actions composites de
+  `.github/actions`, une pull request groupée). Messages `build(deps): …`, `build(deps-dev): …` (le serveur construit
+  embarque la plupart des dépendances de développement du core) et `ci(deps): …`, acceptés par commitlint. **Limite**
+  : pnpm 12, qui épingle sa version (`packageManager`), écrit `pnpm-lock.yaml` en deux documents YAML, que le graphe
+  des dépendances de GitHub ne lit pas : **aucune alerte ni mise à jour de sécurité Dependabot pour npm** (les
+  Actions en ont), seulement les mises à jour de versions. **À faire une fois** : *Settings*, section *Advanced
+  Security* (ou *Code security*) › *Dependabot alerts* et *Dependabot security updates* (pour les Actions) ; les mises
+  à jour de versions démarrent seules quand le fichier arrive sur la branche par défaut.
+- **Vulnérabilités des dépendances npm** : `pnpm audit` (avis de la base GitHub, interrogée par le registre npm),
+  à lancer avant chaque release. Lire l'audit **complet** : `pnpm audit --prod` sous-estime l'exposition du core,
+  car le serveur construit embarque des paquets déclarés en `devDependencies` (Nuxt, zod, SDK S3, pilotes de base) ;
+  seuls sharp, argon2, better-sqlite3, la CLI Prisma et la CLI restent des `dependencies`. État au 2026-10-26 : voir
+  le journal.
 
 ### 15.2 Versions
 
@@ -4496,3 +4519,124 @@ seulement (55 appels `console.*` dans 28 fichiers ; la CLI est traduite).
 10. **npm** : `@surge-media/core` › *Settings › Trusted publishing* › GitHub Actions (`mahmoud-nb`, `surge-media`,
     `release.yml`, environnement `npm`), puis supprimer le secret `NPM_TOKEN` et révoquer le jeton ; vérifier
     `npm view @surge-media/core` (0.1.0, provenance).
+
+### Maintenance — 2026-10-26 — Politique de sécurité et Dependabot
+
+**Cadre** : écarts relevés par le questionnaire de due diligence technique (document partagé hors du dépôt, réponses
+RSSI-22 et DO-09) ; demande de l'utilisateur : une politique de divulgation et une configuration Dependabot.
+
+**Ajouté** :
+
+- `SECURITY.md` (racine, anglais puis français) : signalement privé par GitHub, versions maintenues, objectifs de
+  traitement, publication coordonnée, périmètre, règles de test (§ 15.1). Aucune adresse e-mail publiée : le
+  signalement passe par GitHub.
+- `.github/dependabot.yml` : npm (six dossiers de l'espace de travail, correctifs et mineures groupés, majeures
+  exclues, délai de 7 jours) et GitHub Actions (workflows et actions composites), chaque lundi (§ 15.1).
+- `README.md` : section « Sécurité » qui renvoie à `SECURITY.md`.
+
+**Vérifié** : syntaxe YAML de `dependabot.yml` ; options confrontées à la documentation de GitHub (`directories`
+avec joker, `cooldown`, `groups` par `update-types`, `prefix-development`, pnpm 12 pris en charge) ; préfixes de
+commit conformes à `commitlint.config.mjs` ; le fichier de verrouillage est bien en deux documents YAML (lignes 1 et
+158), d'où la limite ci-dessous.
+
+**Limites** :
+
+- **Pas d'alertes Dependabot pour npm** : le graphe des dépendances de GitHub ne lit pas le `pnpm-lock.yaml` en deux
+  documents de pnpm 12 ; seules les mises à jour de versions fonctionnent. La veille des vulnérabilités npm repose
+  sur `pnpm audit` (§ 15.1). Pistes : un audit hebdomadaire en CI, ou un outil qui lit ce format.
+- Rien n'a encore tourné sur GitHub : le premier passage de Dependabot aura lieu après le push, le signalement privé
+  exige un dépôt public et son activation (§ 15.1, « À faire une fois »).
+- Délais de traitement de `SECURITY.md` = objectifs proposés, à confirmer par l'utilisateur (engagement public).
+- Non couverts : image de base Docker (le `FROM` paramétré par `ARG` n'est pas lisible par Dependabot ; les paquets
+  Debian, ffmpeg compris, se mettent à jour à chaque reconstruction de l'image), exemples Compose (`postgres:17` :
+  une nouvelle majeure de PostgreSQL demande une migration des données), analyse de l'image (Trivy, Grype), signature
+  des images (cosign), actions référencées par version et non par empreinte.
+
+**`pnpm audit` du 2026-10-26** (complet) : **62 avis : 3 critiques, 20 élevés, 30 moyens, 9 faibles**. Les 3
+critiques (`simple-git`, `@simple-git/argv-parser`, `shell-quote`) viennent des outils de développement de Nuxt,
+absents du serveur construit. Côté serveur (dépendances ou paquets embarqués par la build), avis **élevés** :
+`sharp` < 0.35.5, `zod` < 4.6.6, `mariadb` < 3.4.7 (adaptateur MySQL/MariaDB de Prisma) et `source-map-js`
+< 1.2.2 — les trois derniers dans `.output/server/node_modules` (vérifié ; `simple-git` et `shell-quote` n'y sont
+pas), sharp installé comme dépendance du paquet ;
+la CLI Prisma des migrations tire en plus `deepmerge-ts` et `mysql2` vulnérables. Le reste touche les outils (Vite ≤ 7.3.6,
+happy-dom, release-it, `@nuxt/eslint`), le site (Astro, undici 8) ou `@scalar/api-reference` (undici 7). **À
+corriger avant la release 0.1.0**, puis rejouer l'audit et les vérifications du 2026-10-18.
+
+**Après `git pull`** : rien à faire localement (aucune dépendance ajoutée) ; activer une fois les réglages GitHub
+du § 15.1.
+
+### Maintenance — 2026-10-26 (suite) — Dépendances vulnérables du serveur
+
+**Cadre** : demande de l'utilisateur après l'audit de l'entrée précédente : corriger sharp, zod, l'adaptateur
+MariaDB de Prisma et `source-map-js`, puis rejouer typecheck, tests, build et `pnpm audit`.
+
+**Modifié** (aucun code de l'application) :
+
+| Paquet | Avant | Après | Comment |
+| --- | --- | --- | --- |
+| `sharp` (core, site) | 0.35.4 | **0.35.5** | version épinglée relevée (libvips 8.18.7) |
+| `zod` (core, client) | 4.6.5 | **4.6.7** | plage `^4.6.7` ; aussi la copie tirée par Scalar et le site |
+| Prisma (`prisma`, `@prisma/client`, trois adaptateurs) | 7.10.0 | **7.10.1** | correctif officiel : l'adaptateur MariaDB passe à `mariadb` **3.5.4** (3.4.5 épinglé exactement par 7.10.0, pas de 3.4.7 possible sans override), la CLI à `mysql2` **3.24.4** et `deepmerge-ts` **8.0.2** ; publié le 2026-10-15 |
+| `source-map-js` (postcss, compilateur Vue…) | 1.2.1 | **1.2.2** | `pnpm update -r` dans les plages existantes, sans override |
+
+`pnpm update -r source-map-js zod mysql2` a remplacé les dernières copies anciennes (pnpm 12 : `--depth` attend un
+nombre et vaut « illimité » par défaut). Plus aucune version antérieure de ces paquets dans `pnpm-lock.yaml`.
+
+**Vérifié** (Windows 11, Node 24.20, pnpm 12.4.2) :
+
+| Vérification | Résultat |
+| --- | --- |
+| `pnpm install` | OK (73 s) ; clients Prisma régénérés pour les trois fournisseurs ; avertissements de pairs inchangés (`@nuxt/cli` → `@nuxt/schema` 4, `cac`) |
+| Modules natifs | sharp 0.35.5 (libvips 8.18.7), argon2, better-sqlite3 chargés (aucun blocage du Contrôle intelligent des applications) ; CLI Prisma 7.10.1 |
+| `pnpm typecheck` · `pnpm lint` | OK : core, client, vue, bac à sable ; site 0 erreur (23 fichiers) |
+| `pnpm test` | OK : core 567 + 9 ignorés, client 136, vue 24 (mêmes chiffres que le 2026-10-18 ; dont le vrai pipeline sharp) |
+| `db:migration --check` | OK (schéma inchangé, diff hors ligne par Prisma 7.10.1) |
+| Build du core | OK ; `.output/server/node_modules` : zod 4.6.7, mariadb 3.5.4, source-map-js 1.2.2 ; constantes renommées par Rollup identiques à la build du 2026-10-18 (91) |
+| Archive npm · `smoke:package` (npm 12) | OK : 9,5 Mo ; installation, `init` (16 migrations), `start`, `/api/health` tout `ok` |
+| `pnpm audit` (complet) | **62 → 49 avis** (3 critiques, 11 élevés, 26 moyens, 9 faibles) ; plus aucun sur les six paquets visés |
+
+**Reste** : sur le serveur construit, seul `nodemailer` 10.0.14 (3 avis **moyens**, corrigés en 10.1.4 ; corrigé
+le même jour, voir ci-dessous). Les
+critiques et élevés restants viennent des outils : `@nuxt/devtools` et la CLI de Nuxt (`simple-git`,
+`shell-quote`, `node-forge`, `launch-editor`), `release-it` (`basic-ftp`, `undici`), Vite 7.3.6 et happy-dom des
+tests, Astro (`undici` 8), `@scalar/api-reference` (`undici` 7, absent du serveur construit). **Non vérifié** à ce
+stade : MySQL / MariaDB et PostgreSQL réels avec Prisma 7.10.1 (faits ensuite, voir « Bases réelles » ci-dessous),
+image Docker.
+
+**Après `git pull`** : `pnpm install` (nouvelles versions ; régénère les clients Prisma) ; aucune migration.
+
+**nodemailer** (même jour, demande de l'utilisateur) : 10.0.14 → **10.1.7**, plage `~10.1.7` (dernière version de la
+ligne 10.1, publiée le 2026-10-18 ; 10.2.1, du 2026-10-22, écartée par la règle des 7 jours de Dependabot, que
+`^10.1.7` aurait choisie à l'installation). Vérifié : typecheck du core, `pnpm test` (core 567 + 9 ignorés,
+client 136, vue 24), build (`.output/server/node_modules/nodemailer` 10.1.7, `dist/esm` seulement ; mêmes 91
+constantes renommées), `smoke:package` OK, et **envoi SMTP réel** avec les options de
+`server/lib/mail/transport.ts` contre un faux serveur SMTP local (script du bloc-notes) — copie du dépôt puis copie
+de la build : 6 contrôles sur 6 (envoi accepté, AUTH PLAIN, sujet UTF-8 encodé, parties texte et HTML, refus 550
+remonté en `EENVELOPE`). `pnpm audit` : **49 → 46 avis** (3 critiques, 11 élevés, 23 moyens, 9 faibles), **aucun sur
+un paquet du serveur construit**. Seul avis tiré par une `dependency` du core : `fast-uri` 3.1.8 (2 moyens, 2
+faibles), via la CLI Prisma › `@prisma/dev` › `ajv`, inutilisé par surgeMedia ; `ajv` demande `^3.0.1`, donc une
+installation du paquet npm ou de l'image résout la 3.1.9 corrigée (seul le verrou du dépôt garde 3.1.8).
+
+**Bases réelles avec Prisma 7.10.1** (même jour, demande de l'utilisateur, images `postgres:17` et `mariadb:11`
+téléchargées avec son accord) : archive npm de cette build (Prisma 7.10.1, `mariadb` 3.5.4, nodemailer 10.1.7)
+installée dans un dossier vide du bloc-notes (npm 12, scripts approuvés), conteneurs jetables sur `127.0.0.1`
+seulement, mots de passe aléatoires jamais affichés. Pour chaque base : `surge-media init` (16 migrations), second
+`surge-media db migrate` (rien en attente), `surge-media start` avec un compte d'amorçage, puis un parcours de
+**33 contrôles** (scripts `db-e2e/run.mjs` + `scenario.mjs` du bloc-notes, non versionnés) — amorçage de l'ADMIN,
+unicités en `409` (`SLUG_TAKEN`, `ORIGIN_EXISTS` normalisée : `isUniqueViolation` par adaptateur), clés secrète et
+publique, 3 envois par l'API v1, pagination par curseur, recherche sans accents ni casse, `304` du média et de la
+liste, `/m/` (original, AVIF, 6 demandes simultanées d'un même dérivé), média privé (signé, nu `403`, `Bearer`), liens
+signés unitaire et par lot, point d'intérêt → version 2 et `302`, dossiers, jeton délégué (`maxFiles` 1 → second
+envoi `403 UPLOAD_LIMIT_REACHED`), vidéo MP4 (métadonnées JSON), corbeille / restauration / purge, invitation →
+mot de passe → connexion d'une éditrice, ajout comme membre (sudo), tableau de bord (`groupBy`), journal d'audit,
+liste publique et révocation de la clé publique, archivage (`403 PROJECT_ARCHIVED`), suppression du projet avec
+purge (transaction, cascades), suppression du compte.
+
+| Base | Migrations | Parcours | Après le parcours |
+| --- | --- | --- | --- |
+| PostgreSQL 17.11 | 16 / 16 terminées, 0 annulée (init 7,0 s) | **33 / 33** (5,8 s) | 1 compte, 0 média, 12 entrées d'audit conservées |
+| MariaDB 11.8.9 | 16 / 16 terminées, 0 annulée (init 8,9 s) | **33 / 33** (4,6 s) | idem |
+
+Aucune erreur dans le journal du serveur. Conteneurs, volumes et installation de test supprimés ; images
+`postgres:17` (646 Mo) et `mariadb:11` (458 Mo) gardées. Toujours **non vérifiés** : MySQL 8, stockage S3 réel,
+image Docker, traitement vidéo sur ces bases.
