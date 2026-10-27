@@ -1,0 +1,76 @@
+---
+title: Questions fréquentes
+description: Des réponses franches sur surgeMedia — architecture, sécurité, exploitation, conformité et licence — avec l’état réel de chaque fonctionnalité.
+template: splash
+editUrl: false
+lastUpdated: false
+eyebrow: FAQ
+hero:
+  title: Des réponses franches <span class="sm-gradient">aux questions que vous vous posez vraiment</span>.
+  tagline: Architecture, sécurité, exploitation, conformité et licence — ce que les DSI, les RSSI, les équipes techniques et les acheteurs nous demandent avant d’adopter surgeMedia, avec l’état réel de chaque fonctionnalité.
+---
+
+import FaqExplorer from '../../../components/faq/FaqExplorer.astro';
+import CtaBand from '../../../components/landing/CtaBand.astro';
+import { ISSUES_URL, SALES_URL } from '../../../lib/site';
+
+<FaqExplorer
+  themes={[
+    {
+      id: 'start',
+      icon: 'rocket',
+      title: 'Découvrir surgeMedia',
+      description: 'Ce que fait la plateforme, ce qui la distingue et comment l’essayer.',
+      audience: 'Direction, chefs de projet',
+    },
+    {
+      id: 'architecture',
+      icon: 'puzzle',
+      title: 'Architecture et intégration',
+      description: 'Déploiement, bases de données, stockage, CDN et environnements.',
+      audience: 'Architectes, DSI',
+    },
+    {
+      id: 'developers',
+      icon: 'laptop',
+      title: 'Développeurs',
+      description: 'API, SDK, images responsives, envois depuis le navigateur et vidéos.',
+      audience: 'Tech leads, développeurs',
+    },
+    {
+      id: 'security',
+      icon: 'padlock',
+      title: 'Sécurité',
+      description: 'Authentification, clés d’API, médias privés, fichiers envoyés et vulnérabilités.',
+      audience: 'RSSI, équipes sécurité',
+    },
+    {
+      id: 'operations',
+      icon: 'server',
+      title: 'Exploitation et performance',
+      description: 'Prérequis, montée en charge, sauvegardes, mises à jour et supervision.',
+      audience: 'Administrateurs, DevOps, SRE',
+    },
+    {
+      id: 'compliance',
+      icon: 'approve-check-circle',
+      title: 'Données et conformité',
+      description: 'RGPD, localisation des données, métadonnées et accessibilité.',
+      audience: 'DPO, juridique, conformité',
+    },
+    {
+      id: 'licensing',
+      icon: 'document',
+      title: 'Licence, tarifs et support',
+      description: 'Licence BSL, offres commerciales, support et réversibilité.',
+      audience: 'Achats, direction',
+    },
+  ]}
+/>
+
+<CtaBand
+  title="Vous n’avez pas trouvé votre réponse ?"
+  text="Posez-la sur GitHub, ou écrivez à l’équipe pour une évaluation, une licence commerciale ou votre questionnaire de sécurité."
+  primary={{ label: 'Poser la question sur GitHub', href: ISSUES_URL }}
+  secondary={{ label: 'Contacter l’équipe', href: SALES_URL }}
+/>

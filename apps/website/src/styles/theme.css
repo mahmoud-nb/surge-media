@@ -29,6 +29,7 @@
   --sm-brand-strong: #a3b1fa;
   --sm-brand-soft: rgb(139 156 247 / 0.12);
   --sm-success: #47cd89;
+  --sm-warning: #f2b34c;
   --sm-glow: radial-gradient(60% 60% at 50% 0%, rgb(111 128 240 / 0.28), transparent 70%);
   --sm-terminal-bg: #0a0e17;
   --sm-terminal-fg: #e6e9ef;
@@ -59,6 +60,7 @@
   --sm-brand-strong: #3140a6;
   --sm-brand-soft: #eceffd;
   --sm-success: #067647;
+  --sm-warning: #8f5300;
   --sm-glow: radial-gradient(60% 60% at 50% 0%, rgb(59 76 192 / 0.14), transparent 70%);
   --sm-terminal-bg: #111827;
   --sm-terminal-fg: #e6e9ef;

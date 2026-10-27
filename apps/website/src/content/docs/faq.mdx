@@ -1,0 +1,76 @@
+---
+title: Frequently asked questions
+description: Straight answers about surgeMedia — architecture, security, operations, compliance and licensing — with the real state of every feature.
+template: splash
+editUrl: false
+lastUpdated: false
+eyebrow: FAQ
+hero:
+  title: Straight answers to <span class="sm-gradient">the questions you really ask</span>.
+  tagline: Architecture, security, operations, compliance and licensing — what CIOs, security officers, engineering teams and buyers ask us before adopting surgeMedia, with the real state of every feature.
+---
+
+import FaqExplorer from '../../components/faq/FaqExplorer.astro';
+import CtaBand from '../../components/landing/CtaBand.astro';
+import { ISSUES_URL, SALES_URL } from '../../lib/site';
+
+<FaqExplorer
+  themes={[
+    {
+      id: 'start',
+      icon: 'rocket',
+      title: 'Discover surgeMedia',
+      description: 'What the platform does, what sets it apart, and how to try it.',
+      audience: 'Leadership, project leads',
+    },
+    {
+      id: 'architecture',
+      icon: 'puzzle',
+      title: 'Architecture & integration',
+      description: 'Deployment, databases, storage, CDN and environments.',
+      audience: 'Architects, CIOs',
+    },
+    {
+      id: 'developers',
+      icon: 'laptop',
+      title: 'Developers',
+      description: 'API, SDKs, responsive images, browser uploads and video.',
+      audience: 'Tech leads, developers',
+    },
+    {
+      id: 'security',
+      icon: 'padlock',
+      title: 'Security',
+      description: 'Sign-in, API keys, private media, uploaded files and vulnerabilities.',
+      audience: 'Security officers, security teams',
+    },
+    {
+      id: 'operations',
+      icon: 'server',
+      title: 'Operations & performance',
+      description: 'Requirements, scaling, backups, updates and monitoring.',
+      audience: 'System admins, DevOps, SRE',
+    },
+    {
+      id: 'compliance',
+      icon: 'approve-check-circle',
+      title: 'Data & compliance',
+      description: 'GDPR, data location, metadata and accessibility.',
+      audience: 'DPOs, legal, compliance',
+    },
+    {
+      id: 'licensing',
+      icon: 'document',
+      title: 'Licensing, pricing & support',
+      description: 'The BSL license, commercial plans, support and reversibility.',
+      audience: 'Procurement, leadership',
+    },
+  ]}
+/>
+
+<CtaBand
+  title="Didn't find your answer?"
+  text="Ask it on GitHub, or write to the team for an evaluation, a commercial license or your security questionnaire."
+  primary={{ label: 'Ask on GitHub', href: ISSUES_URL }}
+  secondary={{ label: 'Contact the team', href: SALES_URL }}
+/>

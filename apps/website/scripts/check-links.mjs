@@ -1,10 +1,11 @@
 /**
  * Checks the internal links of the built site (`dist/`): every `<a href>` and `src` under the base
- * path must point to an existing file, and every `#anchor` to an existing id. Run after `astro build`,
+ * path, absolute or relative to its page, must point to an existing file, and every `#anchor` to an
+ * existing id. Run after `astro build`,
  * with the same BASE_PATH: `pnpm --filter @surge-media/website check:links`.
  */
 import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
-import { join } from 'node:path';
+import { join, relative, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const dist = fileURLToPath(new URL('../dist/', import.meta.url));
@@ -34,6 +35,8 @@ const problems = [];
 let checked = 0;
 for (const page of pages) {
   const html = readFileSync(page, 'utf8');
+  // Address of the page, to resolve relative links (`../guides/security/`) as a browser would.
+  const pageUrl = new URL(`${base}${relative(dist, page).split(sep).join('/')}`, 'https://site.invalid');
   const urls = [...html.matchAll(/<a\s[^>]*?href="([^"]+)"|\ssrc="([^"]+)"/g)].map((m) => (m[1] ?? m[2]).replace(/&amp;/g, '&'));
   for (const url of urls) {
     let path = null;
@@ -43,6 +46,14 @@ for (const page of pages) {
     else if (url.startsWith('/') && !url.startsWith('//')) {
       problems.push(`${page}: ${url} (missing base path ${base})`);
       continue;
+    } else if (!url.startsWith('//') && !/^[a-z][a-z0-9+.-]*:/i.test(url)) {
+      const resolved = new URL(url, pageUrl);
+      path = resolved.pathname;
+      hash = resolved.hash ? resolved.hash.slice(1) : null;
+      if (!path.startsWith(base)) {
+        problems.push(`${page}: ${url} (outside the base path ${base})`);
+        continue;
+      }
     } else continue;
     checked++;
     const target = path ? fileFor(path.split('?')[0]) : page;

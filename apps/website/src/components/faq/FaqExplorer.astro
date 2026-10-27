@@ -1,0 +1,970 @@
+---
+/**
+ * FAQ explorer: topic cards, live search and the questions of the `faq` collection grouped by topic
+ * (`src/content/faq/<lang>/<topic>/<slug>.md`, see src/lib/faq.ts). Without JavaScript every question is
+ * listed and opens on its own (`<details>`); the search, the counters and the "expand all" and "copy link"
+ * buttons come with the script. Also writes the `FAQPage` structured data of the page.
+ */
+import { Icon } from '@astrojs/starlight/components';
+import type { ComponentProps } from 'astro/types';
+import { getCollection, render } from 'astro:content';
+import { localePath } from '../../lib/paths';
+import { ISSUES_URL, SALES_URL } from '../../lib/site';
+import { FAQ_DEFAULT_LANG, FAQ_STATUSES, faqQuestions, plainText, searchText, type FaqTheme } from '../../lib/faq';
+
+type IconName = ComponentProps<typeof Icon>['name'];
+
+interface Props {
+  /** Topics in the order of the page, with their texts in the page's language. */
+  themes: { id: FaqTheme; icon: IconName; title: string; description: string; audience: string }[];
+}
+
+const { themes } = Astro.props;
+const { t } = Astro.locals;
+const { locale, lang = FAQ_DEFAULT_LANG } = Astro.locals.starlightRoute;
+const pageLang = lang.split('-')[0] ?? FAQ_DEFAULT_LANG;
+
+const groups = faqQuestions(await getCollection('faq'), pageLang);
+const sections = await Promise.all(
+  themes.map(async (theme) => ({
+    ...theme,
+    questions: await Promise.all(
+      (groups.get(theme.id) ?? []).map(async (question) => {
+        const { Content } = await render(question.entry);
+        const text = plainText(question.entry.body ?? '');
+        const { data } = question.entry;
+        return {
+          ...question,
+          Content,
+          text,
+          search: searchText([data.question, ...data.keywords, theme.title, text].join(' ')),
+        };
+      }),
+    ),
+  })),
+);
+
+const total = sections.reduce((sum, section) => sum + section.questions.length, 0);
+const count = (n: number) => t(n === 1 ? 'faq.count.one' : 'faq.count.other').replace('%count%', String(n));
+const href = (path: string) => (path.startsWith('/') ? localePath(path, locale) : path);
+
+const structuredData = JSON.stringify({
+  '@context': 'https://schema.org',
+  '@type': 'FAQPage',
+  inLanguage: pageLang,
+  mainEntity: sections.flatMap((section) =>
+    section.questions.map(({ entry, text }) => ({
+      '@type': 'Question',
+      name: entry.data.question,
+      acceptedAnswer: { '@type': 'Answer', text },
+    })),
+  ),
+}).replace(/</g, '\\u003c');
+---
+
+<sm-faq
+  class="faq not-content"
+  data-count-one={t('faq.count.one')}
+  data-count-other={t('faq.count.other')}
+  data-count-filtered={t('faq.count.filtered')}
+  data-results-total={t('faq.results.total')}
+  data-results-one={t('faq.results.one')}
+  data-results-other={t('faq.results.other')}
+  data-results-none={t('faq.results.none')}
+  data-copied={t('faq.copied')}
+>
+  <nav class="topics" aria-label={t('faq.themes')}>
+    <ul role="list">
+      {
+        sections.map((section) => (
+          <li class="topic sm-card-hover" data-topic={section.id}>
+            <span class="topic-icon" aria-hidden="true">
+              <Icon name={section.icon} size="1.375rem" />
+            </span>
+            <a class="topic-link" href={`#topic-${section.id}`}>
+              {section.title}
+            </a>
+            <span class="topic-description">{section.description}</span>
+            <span class="topic-meta">
+              <span class="topic-count" data-count={section.id}>
+                {count(section.questions.length)}
+              </span>
+              <span class="topic-audience">{section.audience}</span>
+            </span>
+          </li>
+        ))
+      }
+    </ul>
+  </nav>
+
+  <div class="toolbar" data-enhanced hidden>
+    <label class="search-label" for="faq-search">{t('faq.search.label')}</label>
+    <div class="search-field">
+      <span class="search-icon" aria-hidden="true"><Icon name="magnifier" size="1.25rem" /></span>
+      <input
+        id="faq-search"
+        type="search"
+        data-search
+        placeholder={t('faq.search.placeholder')}
+        autocomplete="off"
+        spellcheck="false"
+        enterkeyhint="search"
+        aria-describedby="faq-search-hint"
+      />
+    </div>
+    <p id="faq-search-hint" class="search-hint">{t('faq.search.hint')}</p>
+    <div class="toolbar-row">
+      <p class="results" role="status" data-results>
+        {t('faq.results.total').replace('%count%', String(total))}
+      </p>
+      <div class="toolbar-actions">
+        <button type="button" class="ghost-button" data-expand>
+          <Icon name="down-caret" size="1rem" />
+          {t('faq.expandAll')}
+        </button>
+        <button type="button" class="ghost-button" data-collapse>
+          <Icon name="up-caret" size="1rem" />
+          {t('faq.collapseAll')}
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <p class="legend">
+    <span>{t('faq.legend')}</span>
+    {
+      FAQ_STATUSES.map((status) => (
+        <span class="legend-item">
+          <span class={`badge badge-${status}`}>{t(`faq.status.${status}`)}</span>
+          <span class="legend-hint">{t(`faq.statusHint.${status}`)}</span>
+        </span>
+      ))
+    }
+  </p>
+
+  <div class="empty" data-empty hidden>
+    <span class="empty-icon" aria-hidden="true"><Icon name="magnifier" size="1.75rem" /></span>
+    <p class="empty-title" data-empty-title>{t('faq.empty.title')}</p>
+    <p class="empty-text">{t('faq.empty.text')}</p>
+    <div class="empty-actions">
+      <button type="button" class="ghost-button" data-reset>{t('faq.empty.reset')}</button>
+      <a class="ghost-button" href={ISSUES_URL}>{t('faq.empty.ask')}</a>
+      <a class="ghost-button" href={SALES_URL}>{t('faq.empty.contact')}</a>
+    </div>
+  </div>
+
+  {
+    sections.map((section) => (
+      <section class="group" id={`topic-${section.id}`} aria-labelledby={`topic-${section.id}-title`} data-group={section.id}>
+        <header class="group-head">
+          <span class="topic-icon" aria-hidden="true">
+            <Icon name={section.icon} size="1.375rem" />
+          </span>
+          <div>
+            <h2 id={`topic-${section.id}-title`}>{section.title}</h2>
+            <p>
+              {section.description}{' '}
+              <span class="group-audience">
+                {t('faq.audience')} {section.audience}
+              </span>
+            </p>
+          </div>
+        </header>
+        <div class="items">
+          {section.questions.map(({ entry, anchor, fallback, search, Content }) => (
+            <details class="item" id={anchor} data-item data-search={search} lang={fallback ? FAQ_DEFAULT_LANG : undefined}>
+              <summary>
+                <span class="question" data-question>
+                  {entry.data.question}
+                </span>
+                <span class="summary-end">
+                  {fallback && (
+                    <span class="badge badge-fallback" lang={pageLang}>
+                      {t('faq.fallback')}
+                    </span>
+                  )}
+                  {entry.data.status && (
+                    <span class={`badge badge-${entry.data.status}`} lang={pageLang}>
+                      {t(`faq.status.${entry.data.status}`)}
+                    </span>
+                  )}
+                  <span class="chevron" aria-hidden="true">
+                    <Icon name="down-caret" size="1.25rem" />
+                  </span>
+                </span>
+              </summary>
+              <div class="answer">
+                <Content />
+                <div class="answer-foot" lang={fallback ? pageLang : undefined}>
+                  {entry.data.related.length > 0 && (
+                    <p class="related">
+                      <span>{t('faq.related')}</span>
+                      {entry.data.related.map((link) => (
+                        <a href={href(link.href)}>{link.label}</a>
+                      ))}
+                    </p>
+                  )}
+                  <button type="button" class="copy-button" data-copy hidden>
+                    <span class="copy-icon" aria-hidden="true">
+                      <Icon name="link" size="1rem" />
+                    </span>
+                    <span class="copied-icon" aria-hidden="true">
+                      <Icon name="approve-check" size="1rem" />
+                    </span>
+                    {t('faq.copyLink')}
+                  </button>
+                </div>
+              </div>
+            </details>
+          ))}
+        </div>
+      </section>
+    ))
+  }
+
+  <p class="sr-only" role="status" data-announcer></p>
+  <script type="application/ld+json" set:html={structuredData} />
+</sm-faq>
+
+<script>
+  /** Search form of a text, as `searchText` of src/lib/faq.ts: lower case, without accents. */
+  const fold = (text: string) => text.normalize('NFD').replace(/\p{M}/gu, '').toLowerCase();
+  const escapeHtml = (text: string) => text.replace(/[&<>"']/g, (char) => `&#${char.charCodeAt(0)};`);
+
+  /** The question with every occurrence of the search words in `<mark>`, accents ignored. */
+  function highlight(text: string, words: string[]): string {
+    let folded = '';
+    const origin: number[] = [];
+    for (let index = 0; index < text.length; index++) {
+      for (const char of fold(text.charAt(index))) {
+        folded += char;
+        origin.push(index);
+      }
+    }
+    const marked = new Array<boolean>(text.length).fill(false);
+    for (const word of words) {
+      for (let at = folded.indexOf(word); at !== -1; at = folded.indexOf(word, at + word.length)) {
+        for (let k = at; k < at + word.length; k++) marked[origin[k]!] = true;
+      }
+    }
+    let html = '';
+    for (let index = 0; index < text.length; index++) {
+      if (marked[index] && !marked[index - 1]) html += '<mark>';
+      html += escapeHtml(text.charAt(index));
+      if (marked[index] && !marked[index + 1]) html += '</mark>';
+    }
+    return html;
+  }
+
+  class SurgeFaq extends HTMLElement {
+    private input!: HTMLInputElement;
+    private items: HTMLDetailsElement[] = [];
+    private statusTimer: ReturnType<typeof setTimeout> | undefined;
+    private urlTimer: ReturnType<typeof setTimeout> | undefined;
+
+    connectedCallback() {
+      this.input = this.querySelector<HTMLInputElement>('[data-search]')!;
+      this.items = [...this.querySelectorAll<HTMLDetailsElement>('[data-item]')];
+      for (const question of this.querySelectorAll<HTMLElement>('[data-question]')) {
+        question.dataset.text = question.textContent?.trim() ?? '';
+      }
+      for (const element of this.querySelectorAll<HTMLElement>('[data-enhanced]')) element.hidden = false;
+      if (navigator.clipboard) for (const button of this.querySelectorAll<HTMLElement>('[data-copy]')) button.hidden = false;
+
+      this.input.addEventListener('input', () => this.filter(true));
+      this.querySelector('[data-expand]')?.addEventListener('click', () => this.toggleAll(true));
+      this.querySelector('[data-collapse]')?.addEventListener('click', () => this.toggleAll(false));
+      this.querySelector('[data-reset]')?.addEventListener('click', () => {
+        this.input.value = '';
+        this.filter(true);
+        this.input.focus();
+      });
+      // A topic hidden by the search: show everything again before following the link.
+      for (const link of this.querySelectorAll<HTMLAnchorElement>('.topic-link')) {
+        link.addEventListener('click', () => {
+          if (this.input.value.trim()) {
+            this.input.value = '';
+            this.filter(true);
+          }
+        });
+      }
+      this.addEventListener('click', (event) => {
+        const button = (event.target as Element).closest<HTMLButtonElement>('[data-copy]');
+        if (button) void this.copyLink(button);
+      });
+
+      const query = new URLSearchParams(location.search).get('q');
+      if (query) this.input.value = query;
+      this.filter(false);
+      this.openFromHash();
+      window.addEventListener('hashchange', () => this.openFromHash());
+    }
+
+    /** Shows the questions that contain every word of the search, in their text or their answer. */
+    private filter(userInput: boolean) {
+      const query = this.input.value.trim();
+      const words = fold(query).split(/\s+/).filter(Boolean);
+      let shown = 0;
+      for (const item of this.items) {
+        const match = words.every((word) => item.dataset.search?.includes(word));
+        item.hidden = !match;
+        if (match) shown++;
+        const question = item.querySelector<HTMLElement>('[data-question]')!;
+        question.innerHTML = words.length > 0 ? highlight(question.dataset.text ?? '', words) : escapeHtml(question.dataset.text ?? '');
+      }
+      for (const group of this.querySelectorAll<HTMLElement>('[data-group]')) {
+        const all = group.querySelectorAll('[data-item]').length;
+        const visible = group.querySelectorAll('[data-item]:not([hidden])').length;
+        group.hidden = visible === 0;
+        const counter = this.querySelector<HTMLElement>(`[data-count="${group.dataset.group}"]`);
+        if (counter) {
+          counter.textContent =
+            words.length > 0
+              ? (this.dataset.countFiltered ?? '').replace('%shown%', String(visible)).replace('%total%', String(all))
+              : this.message(all === 1 ? 'countOne' : 'countOther', all, '');
+          counter.closest('.topic')?.classList.toggle('is-empty', visible === 0);
+        }
+      }
+      const empty = this.querySelector<HTMLElement>('[data-empty]')!;
+      empty.hidden = shown > 0;
+
+      // The count is announced once typing pauses, not at every key.
+      clearTimeout(this.statusTimer);
+      const update = () => {
+        const key = words.length === 0 ? 'resultsTotal' : shown === 0 ? 'resultsNone' : shown === 1 ? 'resultsOne' : 'resultsOther';
+        this.querySelector('[data-results]')!.textContent = this.message(key, words.length ? shown : this.items.length, query);
+        const title = this.querySelector('[data-empty-title]');
+        if (title && shown === 0) title.textContent = this.message('resultsNone', 0, query);
+      };
+      if (userInput) this.statusTimer = setTimeout(update, 450);
+      else update();
+
+      if (userInput) {
+        clearTimeout(this.urlTimer);
+        this.urlTimer = setTimeout(() => {
+          const url = new URL(location.href);
+          if (query) url.searchParams.set('q', query);
+          else url.searchParams.delete('q');
+          history.replaceState(history.state, '', url);
+        }, 400);
+      }
+    }
+
+    private message(key: string, count: number, query: string): string {
+      return (this.dataset[key] ?? '').replace('%count%', String(count)).replace('%query%', query);
+    }
+
+    private toggleAll(open: boolean) {
+      for (const item of this.items) if (!item.hidden) item.open = open;
+    }
+
+    /** `#security-sso-mfa` in the address: opens that question, even if the search hid it. */
+    private openFromHash() {
+      const id = decodeURIComponent(location.hash.slice(1));
+      const target = id ? document.getElementById(id) : null;
+      if (!(target instanceof HTMLDetailsElement) || !this.contains(target)) return;
+      const wasHidden = target.hidden;
+      if (wasHidden) {
+        this.input.value = '';
+        this.filter(false);
+      }
+      target.open = true;
+      if (wasHidden) target.scrollIntoView({ block: 'start' });
+    }
+
+    private async copyLink(button: HTMLButtonElement) {
+      const item = button.closest('details');
+      if (!item) return;
+      const url = new URL(location.href);
+      url.search = '';
+      url.hash = item.id;
+      try {
+        await navigator.clipboard.writeText(url.href);
+      } catch {
+        return;
+      }
+      const announcer = this.querySelector('[data-announcer]')!;
+      announcer.textContent = '';
+      requestAnimationFrame(() => (announcer.textContent = this.dataset.copied ?? ''));
+      button.classList.add('is-copied');
+      setTimeout(() => button.classList.remove('is-copied'), 2000);
+    }
+  }
+
+  customElements.define('sm-faq', SurgeFaq);
+</script>
+
+<style>
+  .faq {
+    display: block;
+    margin-block: 1rem 0;
+  }
+
+  .faq [hidden] {
+    display: none !important;
+  }
+
+  .sr-only {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    margin: -1px;
+    padding: 0;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+    border: 0;
+  }
+
+  /* ─── Topic cards ─────────────────────────────────────────────────────────────────────────── */
+
+  .topics ul {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(min(100%, 15.5rem), 1fr));
+    gap: 1rem;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  .topic {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    padding: 1.25rem;
+    border: 1px solid var(--sm-border);
+    border-radius: var(--sm-radius);
+    background: var(--sm-surface);
+  }
+
+  .topic:hover,
+  .topic:has(.topic-link:focus-visible) {
+    border-color: var(--sm-brand);
+  }
+
+  .topic:has(.topic-link:focus-visible) {
+    outline: 2px solid var(--sl-color-accent);
+    outline-offset: 2px;
+  }
+
+  .topic.is-empty {
+    opacity: 0.55;
+  }
+
+  .topic-icon {
+    display: inline-grid;
+    flex: none;
+    place-items: center;
+    width: 2.75rem;
+    height: 2.75rem;
+    border-radius: 0.75rem;
+    background: var(--sm-brand-soft);
+    color: var(--sm-brand);
+  }
+
+  .topic-link {
+    color: var(--sl-color-white);
+    font-size: var(--sl-text-lg);
+    font-weight: 650;
+    text-decoration: none;
+  }
+
+  /* The whole card follows the link. */
+  .topic-link::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+  }
+
+  .topic-link:focus-visible {
+    outline: none;
+  }
+
+  .topic-description {
+    color: var(--sm-muted);
+    font-size: var(--sl-text-sm);
+    line-height: 1.55;
+  }
+
+  .topic-meta {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: 0.25rem 0.75rem;
+    margin-top: auto;
+    padding-top: 0.5rem;
+    font-size: var(--sl-text-xs);
+  }
+
+  .topic-count {
+    color: var(--sm-brand);
+    font-weight: 650;
+  }
+
+  .topic-audience {
+    color: var(--sm-muted);
+  }
+
+  /* ─── Search ──────────────────────────────────────────────────────────────────────────────── */
+
+  .toolbar,
+  .legend,
+  .empty,
+  .group {
+    max-width: 52rem;
+    margin-inline: auto;
+  }
+
+  .toolbar {
+    display: block;
+    margin-top: clamp(2.5rem, 6vw, 4rem);
+  }
+
+  .search-label {
+    display: block;
+    margin-bottom: 0.5rem;
+    color: var(--sl-color-white);
+    font-size: var(--sl-text-lg);
+    font-weight: 650;
+  }
+
+  .search-field {
+    position: relative;
+  }
+
+  .search-icon {
+    position: absolute;
+    inset-block: 0;
+    inset-inline-start: 1rem;
+    display: grid;
+    place-items: center;
+    color: var(--sm-muted);
+    pointer-events: none;
+  }
+
+  .search-field input {
+    width: 100%;
+    padding: 0.875rem 1rem 0.875rem 3rem;
+    border: 1px solid var(--sl-color-gray-4);
+    border-radius: 0.875rem;
+    background: var(--sm-surface);
+    color: var(--sl-color-white);
+    font: inherit;
+    font-size: var(--sl-text-lg);
+    box-shadow: var(--sm-shadow);
+  }
+
+  .search-field input::placeholder {
+    color: var(--sm-muted);
+    opacity: 1;
+  }
+
+  .search-field input:focus-visible {
+    border-color: var(--sm-brand);
+    outline: 2px solid var(--sl-color-accent);
+    outline-offset: 2px;
+  }
+
+  .search-hint {
+    margin: 0.5rem 0 0;
+    color: var(--sm-muted);
+    font-size: var(--sl-text-sm);
+  }
+
+  .toolbar-row {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.75rem 1rem;
+    margin-top: 1.25rem;
+  }
+
+  .results {
+    margin: 0;
+    color: var(--sl-color-gray-2);
+    font-weight: 600;
+  }
+
+  .toolbar-actions,
+  .empty-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+  }
+
+  .ghost-button {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.375rem;
+    padding: 0.5rem 0.875rem;
+    border: 1px solid var(--sm-border);
+    border-radius: 999px;
+    background: var(--sm-surface);
+    color: var(--sl-color-gray-1);
+    font: inherit;
+    font-size: var(--sl-text-sm);
+    font-weight: 600;
+    text-decoration: none;
+    cursor: pointer;
+  }
+
+  .ghost-button:hover {
+    border-color: var(--sm-brand);
+    color: var(--sl-color-white);
+  }
+
+  .ghost-button:focus-visible,
+  .copy-button:focus-visible {
+    outline: 2px solid var(--sl-color-accent);
+    outline-offset: 2px;
+  }
+
+  /* ─── Badges and legend ───────────────────────────────────────────────────────────────────── */
+
+  .legend {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.5rem 1.25rem;
+    margin-top: 1.25rem;
+    padding: 0.875rem 1rem;
+    border: 1px dashed var(--sm-border);
+    border-radius: 0.75rem;
+    color: var(--sm-muted);
+    font-size: var(--sl-text-sm);
+  }
+
+  .legend-item {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+  }
+
+  .badge {
+    display: inline-flex;
+    flex: none;
+    align-items: center;
+    padding: 0.125rem 0.625rem;
+    border: 1px solid currentColor;
+    border-radius: 999px;
+    font-size: var(--sl-text-xs);
+    font-weight: 650;
+    line-height: 1.6;
+    white-space: nowrap;
+  }
+
+  .badge-available {
+    color: var(--sm-success);
+    background: color-mix(in srgb, var(--sm-success) 10%, transparent);
+  }
+
+  .badge-partial {
+    color: var(--sm-warning);
+    background: color-mix(in srgb, var(--sm-warning) 10%, transparent);
+  }
+
+  .badge-planned {
+    color: var(--sm-brand);
+    background: var(--sm-brand-soft);
+  }
+
+  .badge-fallback {
+    color: var(--sm-muted);
+  }
+
+  /* ─── No result ───────────────────────────────────────────────────────────────────────────── */
+
+  .empty {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.5rem;
+    margin-top: 2rem;
+    padding: 2.5rem 1.5rem;
+    border: 1px solid var(--sm-border);
+    border-radius: var(--sm-radius);
+    background: var(--sm-glow), var(--sm-surface);
+    text-align: center;
+  }
+
+  .empty-icon {
+    color: var(--sm-brand);
+  }
+
+  .empty-title {
+    margin: 0;
+    color: var(--sl-color-white);
+    font-size: var(--sl-text-xl);
+    font-weight: 650;
+  }
+
+  .empty-text {
+    margin: 0 0 0.75rem;
+    color: var(--sm-muted);
+  }
+
+  .empty-actions {
+    justify-content: center;
+  }
+
+  /* ─── Topics and questions ────────────────────────────────────────────────────────────────── */
+
+  .group {
+    margin-top: clamp(2.5rem, 6vw, 4rem);
+    scroll-margin-top: calc(var(--sl-nav-height) + 1.5rem);
+  }
+
+  .group-head {
+    display: flex;
+    gap: 1rem;
+    align-items: flex-start;
+    margin-bottom: 1.25rem;
+  }
+
+  .group-head h2 {
+    margin: 0.25rem 0 0;
+    color: var(--sl-color-white);
+    font-size: var(--sl-text-2xl);
+    font-weight: 650;
+    letter-spacing: -0.015em;
+    line-height: 1.25;
+  }
+
+  .group-head p {
+    margin: 0.375rem 0 0;
+    color: var(--sm-muted);
+  }
+
+  .group-audience {
+    display: inline-block;
+    color: var(--sl-color-gray-2);
+    font-size: var(--sl-text-sm);
+    font-weight: 600;
+  }
+
+  .items {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+  }
+
+  .item {
+    border: 1px solid var(--sm-border);
+    border-radius: 0.875rem;
+    background: var(--sm-surface);
+    scroll-margin-top: calc(var(--sl-nav-height) + 1rem);
+  }
+
+  .item:hover {
+    border-color: color-mix(in srgb, var(--sm-brand) 55%, var(--sm-border));
+  }
+
+  .item[open] {
+    border-color: var(--sm-brand);
+    box-shadow: var(--sm-shadow);
+  }
+
+  .item:target {
+    border-color: var(--sm-brand);
+  }
+
+  summary {
+    display: flex;
+    gap: 1rem;
+    align-items: center;
+    justify-content: space-between;
+    padding: 1rem 1.25rem;
+    border-radius: 0.875rem;
+    color: var(--sl-color-white);
+    font-weight: 600;
+    line-height: 1.45;
+    list-style: none;
+    cursor: pointer;
+  }
+
+  summary::-webkit-details-marker {
+    display: none;
+  }
+
+  summary:focus-visible {
+    outline: 2px solid var(--sl-color-accent);
+    outline-offset: 2px;
+  }
+
+  .question :global(mark) {
+    padding-inline: 0.1em;
+    border-radius: 0.2em;
+    background: color-mix(in srgb, var(--sm-brand) 30%, transparent);
+    color: inherit;
+  }
+
+  .summary-end {
+    display: inline-flex;
+    flex: none;
+    align-items: center;
+    gap: 0.625rem;
+  }
+
+  .chevron {
+    display: inline-grid;
+    place-items: center;
+    width: 2rem;
+    height: 2rem;
+    border-radius: 50%;
+    background: var(--sm-brand-soft);
+    color: var(--sm-brand);
+  }
+
+  .item[open] .chevron {
+    transform: rotate(180deg);
+  }
+
+  .answer {
+    padding: 0 1.25rem 1.25rem;
+    color: var(--sl-color-gray-2);
+    line-height: 1.7;
+  }
+
+  @media (prefers-reduced-motion: no-preference) {
+    .faq {
+      interpolate-size: allow-keywords;
+    }
+
+    .chevron {
+      transition: transform 200ms ease;
+    }
+
+    .item::details-content {
+      height: 0;
+      overflow: clip;
+      transition:
+        height 220ms ease,
+        content-visibility 220ms allow-discrete;
+    }
+
+    .item[open]::details-content {
+      height: auto;
+    }
+  }
+
+  /* Answers are Markdown, outside Starlight's content styles (`not-content`). */
+  .answer :global(:where(p, ul, ol, .expressive-code)) {
+    margin: 0;
+  }
+
+  .answer :global(:where(p, ul, ol, .expressive-code) + :where(p, ul, ol, .expressive-code)) {
+    margin-top: 0.875rem;
+  }
+
+  .answer :global(:where(ul, ol)) {
+    padding-inline-start: 1.25rem;
+  }
+
+  .answer :global(li + li) {
+    margin-top: 0.375rem;
+  }
+
+  .answer :global(li::marker) {
+    color: var(--sm-brand);
+  }
+
+  .answer :global(strong) {
+    color: var(--sl-color-white);
+    font-weight: 650;
+  }
+
+  .answer :global(a) {
+    color: var(--sl-color-text-accent);
+  }
+
+  .answer :global(:not(pre) > code) {
+    padding: 0.1em 0.35em;
+    border-radius: 0.3em;
+    background: var(--sl-color-bg-inline-code);
+    color: var(--sl-color-white);
+    font-size: 0.875em;
+    overflow-wrap: anywhere;
+  }
+
+  .answer-foot {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.75rem 1rem;
+    margin-top: 1.25rem;
+    padding-top: 1rem;
+    border-top: 1px solid var(--sm-border);
+    font-size: var(--sl-text-sm);
+  }
+
+  .related {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.25rem 0.875rem;
+    margin: 0;
+  }
+
+  .related span {
+    color: var(--sm-muted);
+  }
+
+  .related a {
+    color: var(--sl-color-text-accent);
+    font-weight: 600;
+  }
+
+  .copy-button {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.375rem;
+    margin-inline-start: auto;
+    padding: 0.25rem 0.5rem;
+    border: 0;
+    border-radius: 0.5rem;
+    background: transparent;
+    color: var(--sl-color-gray-2);
+    font: inherit;
+    font-weight: 600;
+    cursor: pointer;
+  }
+
+  .copy-button:hover {
+    color: var(--sl-color-white);
+    background: var(--sm-brand-soft);
+  }
+
+  .copied-icon,
+  .copy-button.is-copied .copy-icon {
+    display: none;
+  }
+
+  .copy-button.is-copied .copied-icon {
+    display: inline;
+    color: var(--sm-success);
+  }
+
+  @media (max-width: 40rem) {
+    summary {
+      align-items: flex-start;
+      padding: 0.875rem 1rem;
+    }
+
+    .summary-end {
+      flex-direction: column-reverse;
+      align-items: flex-end;
+      gap: 0.375rem;
+    }
+
+    .answer {
+      padding: 0 1rem 1rem;
+    }
+
+    .group-head .topic-icon {
+      display: none;
+    }
+  }
+</style>

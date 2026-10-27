@@ -11,6 +11,7 @@ const { pathname } = Astro.url;
 
 const links = [
   { label: Astro.locals.t('nav.docs'), href: localePath('/guides/getting-started/', locale), section: '/guides/' },
+  { label: Astro.locals.t('nav.faq'), href: localePath('/faq/', locale), section: '/faq/' },
   { label: Astro.locals.t('nav.pricing'), href: localePath('/pricing/', locale), section: '/pricing/' },
 ];
 ---

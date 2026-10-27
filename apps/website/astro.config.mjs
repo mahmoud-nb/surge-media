@@ -54,6 +54,7 @@ export default defineConfig({
           items: [
             { slug: 'guides/getting-started' },
             { slug: 'guides/architecture' },
+            { slug: 'faq' },
             { slug: 'pricing' },
           ],
         },
