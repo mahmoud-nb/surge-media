@@ -10,8 +10,9 @@ export const en: Record<MessageKey, string> = {
   'args.yes': 'Non-interactive mode: accept defaults without confirmation',
   'args.skipMigrate': 'Configure the database without applying migrations',
   'args.siteUrl': 'Public URL of the installation (e.g. https://media.example.com)',
-  'args.port': 'Port of the worker process (/api/health probe only)',
+  'args.port': 'Port of the worker process (/api/health probe only; default: WORKER_PORT variable, otherwise 3001)',
   'args.startPort': 'Web server port (default: PORT variable, otherwise 3000)',
+  'args.initPort': 'Web server port, written to .env (PORT); default 3000, or the next free port',
 
   'command.init': 'Configure the database (provider and URL), then apply migrations',
   'command.db': 'Database management',
@@ -29,6 +30,7 @@ export const en: Record<MessageKey, string> = {
 
   'prompt.provider': 'Which database provider do you want to use?',
   'prompt.url': 'Connection URL',
+  'prompt.port': 'Web server port',
   'prompt.siteUrl': 'Public URL of surgeMedia (base of media links)',
   'provider.sqlite.label': 'SQLite',
   'provider.sqlite.hint': 'local file, nothing to install (ideal to get started)',
@@ -41,10 +43,14 @@ export const en: Record<MessageKey, string> = {
   'summary.provider': 'Provider',
   'summary.url': 'URL',
   'summary.siteUrl': 'Public URL',
+  'summary.port': 'Web server port',
   'summary.root': 'Installation directory',
 
   'warn.providerChange': 'Provider change ({from} → {to}): existing data is not transferred.',
   'warn.reset': 'All tables and data in {url} will be deleted and recreated.',
+  'warn.portDefaultBusy': 'Port {busy} is already in use: free port {port} is proposed.',
+  'warn.portBusy': 'Port {port} is in use right now (another application, or surgeMedia already running): "surge-media start" will fail until it is free.',
+  'warn.portDenied': 'Port {port} requires administrator rights (ports below 1024 on Linux and macOS): "surge-media start" will fail without them.',
 
   'confirm.apply': 'Apply this configuration?',
   'confirm.reset': 'Do you confirm the permanent deletion of the data?',
@@ -81,6 +87,10 @@ export const en: Record<MessageKey, string> = {
   'error.command': '"{command}" failed',
   'error.buildMissing': 'Built server not found ({path}): run "pnpm build" first.',
   'error.invalidPort': 'Invalid port "{value}" (integer from 1 to 65535).',
+  'error.portBusy': 'Port {port} is already in use (another application, or surgeMedia already running). Free it, or choose another port with --port or the {variable} variable in the .env file.',
+  'error.portFree': 'Port {port} is free.',
+  'error.portSiteUrl': 'NUXT_SITE_URL ({url}) contains this port: change it too.',
+  'error.portDenied': 'Port {port} requires administrator rights (ports below 1024 on Linux and macOS). Choose a port from 1024 upwards, behind a reverse proxy that serves ports 80 and 443.',
   'error.processFailed': 'Could not start the server: {message}',
   'error.sqliteDriver': 'SQLite driver unusable ({message}): its native module was not installed (npm 12 and later, like pnpm, block dependency install scripts). Run "npm install-scripts approve better-sqlite3 @prisma/engines" then "npm rebuild better-sqlite3" (pnpm: "pnpm approve-builds").',
 }

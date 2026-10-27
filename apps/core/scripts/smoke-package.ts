@@ -1,7 +1,8 @@
 /**
  * Essai du paquet npm construit, comme l'installerait un utilisateur (CI avant publication, ou à la main) :
- * installation dans un dossier vide, `surge-media init` (SQLite), `surge-media start`, puis /api/health ; le
- * dossier est supprimé ensuite.
+ * installation dans un dossier vide, `surge-media init` (SQLite, port écrit dans le .env), `surge-media start`
+ * sur ce port, puis /api/health ; un second `start` sur le port occupé doit être refusé (code 1). Le dossier
+ * est supprimé ensuite.
  *
  *   pnpm --filter @surge-media/core smoke:package <archive .tgz> [--port 3300]
  */
@@ -66,11 +67,18 @@ try {
     allowScripts: { 'better-sqlite3': true, '@prisma/engines': true, 'prisma': true },
   }, null, 2)}\n`)
   run(`npm install ${tarball}`, `npm install --no-audit --no-fund "${tarball}"`)
-  run('surge-media init', process.execPath, [cli, 'init', '--provider', 'sqlite', '--yes', '--site-url', `http://127.0.0.1:${port}`, '--lang', 'en'])
+  run('surge-media init', process.execPath, [cli, 'init', '--provider', 'sqlite', '--yes', '--port', port, '--site-url', `http://127.0.0.1:${port}`, '--lang', 'en'])
 
   console.log('▸ surge-media start')
-  server = spawn(process.execPath, [cli, 'start', '--port', port, '--lang', 'en'], { cwd: dir, stdio: 'inherit' })
+  server = spawn(process.execPath, [cli, 'start', '--lang', 'en'], { cwd: dir, stdio: 'inherit' })
   console.log(`✔ Paquet fonctionnel : ${JSON.stringify(await health())}`)
+
+  console.log('▸ surge-media start (port déjà utilisé)')
+  const busy = spawnSync(process.execPath, [cli, 'start', '--lang', 'en'], { cwd: dir, encoding: 'utf8' })
+  if (busy.status !== 1 || !busy.stderr.includes(`Port ${port} is already in use`)) {
+    throw new Error(`port occupé : code ${busy.status}, ${busy.stderr.trim() || busy.stdout.trim()}`)
+  }
+  console.log('✔ Port occupé refusé (code 1)')
 }
 catch (error) {
   console.error(`✖ ${error instanceof Error ? error.message : String(error)}`)

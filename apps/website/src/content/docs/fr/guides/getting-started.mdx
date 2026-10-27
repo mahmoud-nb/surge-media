@@ -46,7 +46,7 @@ Vous pouvez commencer avec SQLite et passer à PostgreSQL plus tard : la base d
    npm rebuild better-sqlite3 @prisma/engines
    ```
 
-3. Lancez la configuration interactive. Elle demande la base de données (SQLite, PostgreSQL ou MySQL / MariaDB), applique les migrations et génère les secrets dans `.env` :
+3. Lancez la configuration interactive. Elle demande la base de données (SQLite, PostgreSQL ou MySQL / MariaDB), le port du serveur web (3000, ou le prochain port libre si une autre application l’utilise déjà) et l’URL publique, applique les migrations et génère les secrets dans `.env` :
 
    ```bash
    npx surge-media init
@@ -58,7 +58,7 @@ Vous pouvez commencer avec SQLite et passer à PostgreSQL plus tard : la base d
    npx surge-media start
    ```
 
-   L’administration, l’API et la diffusion des médias répondent sur `http://localhost:3000`.
+   L’administration, l’API et la diffusion des médias répondent sur `http://localhost:3000` (ou sur le port choisi). Si ce port est pris au démarrage, `start` s’arrête avec un message clair au lieu d’échouer en silence.
 
 </Steps>
 
@@ -78,7 +78,7 @@ Vous pouvez commencer avec SQLite et passer à PostgreSQL plus tard : la base d
      ghcr.io/mahmoud-nb/surge-media
    ```
 
-   Les migrations sont appliquées au démarrage. Utilisez `DATABASE_URL=postgresql://…` ou `mysql://…` pour changer de base de données.
+   Les migrations sont appliquées au démarrage. Utilisez `DATABASE_URL=postgresql://…` ou `mysql://…` pour changer de base de données. Port 3000 déjà utilisé sur la machine : publiez-en un autre, par exemple `-p 127.0.0.1:8080:3000` (le conteneur écoute toujours sur 3000).
 
 2. Pour une image plus légère sans traitement vidéo, utilisez les étiquettes `-slim` (par exemple `ghcr.io/mahmoud-nb/surge-media:latest-slim`).
 
@@ -95,7 +95,7 @@ NUXT_SITE_URL=https://media.example.com \
 docker compose -f docker/compose.postgres.yaml up -d
 ```
 
-Pour MySQL ou MariaDB, remplacez le service `postgres` et donnez à `DATABASE_URL` une adresse `mysql://…`.
+Pour MySQL ou MariaDB, remplacez le service `postgres` et donnez à `DATABASE_URL` une adresse `mysql://…`. Pour publier un autre port que 3000 sur la machine, ajoutez `SURGE_MEDIA_PORT=8080`.
 
 </TabItem>
 </Tabs>

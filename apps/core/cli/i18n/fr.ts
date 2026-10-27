@@ -11,8 +11,9 @@ export const fr = {
   'args.yes': 'Mode non interactif : accepte les valeurs par défaut sans confirmation',
   'args.skipMigrate': 'Configure la base sans appliquer les migrations',
   'args.siteUrl': 'URL publique de l\'installation (ex. https://media.example.com)',
-  'args.port': 'Port du processus de travail (sonde /api/health seulement)',
+  'args.port': 'Port du processus de travail (sonde /api/health seulement ; par défaut : variable WORKER_PORT, sinon 3001)',
   'args.startPort': 'Port du serveur web (par défaut : variable PORT, sinon 3000)',
+  'args.initPort': 'Port du serveur web, écrit dans le .env (PORT) ; par défaut 3000, ou le prochain port libre',
 
   'command.init': 'Configure la base de données (fournisseur et URL) puis applique les migrations',
   'command.db': 'Gestion de la base de données',
@@ -30,6 +31,7 @@ export const fr = {
 
   'prompt.provider': 'Quel fournisseur de base de données utiliser ?',
   'prompt.url': 'URL de connexion',
+  'prompt.port': 'Port du serveur web',
   'prompt.siteUrl': 'URL publique de surgeMedia (base des liens vers les médias)',
   'provider.sqlite.label': 'SQLite',
   'provider.sqlite.hint': 'fichier local, rien à installer (idéal pour démarrer)',
@@ -42,10 +44,14 @@ export const fr = {
   'summary.provider': 'Fournisseur',
   'summary.url': 'URL',
   'summary.siteUrl': 'URL publique',
+  'summary.port': 'Port du serveur web',
   'summary.root': 'Dossier de l\'installation',
 
   'warn.providerChange': 'Changement de fournisseur ({from} → {to}) : les données existantes ne sont pas transférées.',
   'warn.reset': 'Toutes les tables et données de {url} vont être supprimées puis recréées.',
+  'warn.portDefaultBusy': 'Le port {busy} est déjà utilisé : le port {port}, libre, est proposé.',
+  'warn.portBusy': 'Le port {port} est utilisé en ce moment (autre application, ou surgeMedia déjà lancé) : « surge-media start » échouera tant qu\'il ne sera pas libre.',
+  'warn.portDenied': 'Le port {port} exige des droits d\'administrateur (ports inférieurs à 1024 sous Linux et macOS) : « surge-media start » échouera sans eux.',
 
   'confirm.apply': 'Appliquer cette configuration ?',
   'confirm.reset': 'Confirmez-vous la suppression définitive des données ?',
@@ -82,6 +88,10 @@ export const fr = {
   'error.command': 'Échec de « {command} »',
   'error.buildMissing': 'Serveur construit introuvable ({path}) : lancez d\'abord « pnpm build ».',
   'error.invalidPort': 'Port « {value} » invalide (entier de 1 à 65535).',
+  'error.portBusy': 'Le port {port} est déjà utilisé (autre application, ou surgeMedia déjà lancé). Libérez-le, ou choisissez un autre port avec --port ou la variable {variable} du fichier .env.',
+  'error.portFree': 'Le port {port} est libre.',
+  'error.portSiteUrl': 'NUXT_SITE_URL ({url}) contient ce port : changez-le aussi.',
+  'error.portDenied': 'Le port {port} exige des droits d\'administrateur (ports inférieurs à 1024 sous Linux et macOS). Choisissez un port à partir de 1024, derrière un mandataire inverse qui sert les ports 80 et 443.',
   'error.processFailed': 'Impossible de lancer le serveur : {message}',
   'error.sqliteDriver': 'Pilote SQLite inutilisable ({message}) : son module natif n\'a pas été installé (npm 12 et plus, comme pnpm, bloquent les scripts d\'installation des dépendances). Lancez « npm install-scripts approve better-sqlite3 @prisma/engines » puis « npm rebuild better-sqlite3 » (pnpm : « pnpm approve-builds »).',
 } as const

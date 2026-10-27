@@ -18,8 +18,10 @@ import { readEnvFile, updateEnvFile } from './lib/env-file'
 import { generateClients, providerSchemaFile } from './lib/generate'
 import { sqliteDriverError } from './lib/native'
 import { runPrisma } from './lib/prisma'
+import { checkPort, findFreePort, listenHost, parsePort } from './lib/port'
 import { ENV_EXAMPLE_FILE, ENV_FILE, SCHEMA_FILE, type CoreLocation } from './lib/project'
 import { writeSchemaProvider } from './lib/schema'
+import { DEFAULT_WEB_PORT } from './server'
 
 /** Paquet (code), installation (.env, données) et mode sources ou paquet publié : cli/lib/project.ts. */
 export interface CliContext extends CoreLocation {
@@ -47,25 +49,30 @@ const GENERATED_SECRETS = ['NUXT_SESSION_PASSWORD', 'NUXT_MEDIA_SIGNING_SECRET']
 // ─── Commandes ───────────────────────────────────────────────────────────────
 
 /**
- * `surge-media init` : choisit le fournisseur et l'URL de la base, l'URL publique de
- * l'installation (NUXT_SITE_URL), puis applique les migrations.
+ * `surge-media init` : choisit le fournisseur et l'URL de la base, le port du serveur web (PORT, paquet publié ;
+ * dans le dépôt, `pnpm dev` garde celui de Nuxt, sauf `--port` explicite), l'URL publique de l'installation
+ * (NUXT_SITE_URL), puis applique les migrations.
  */
-export async function runInit(ctx: CliContext, args: TargetArgs & { skipMigrate?: boolean, siteUrl?: string }): Promise<void> {
+export async function runInit(ctx: CliContext, args: TargetArgs & { skipMigrate?: boolean, siteUrl?: string, port?: string }): Promise<void> {
   const { t } = ctx
   intro(t('intro.init'))
 
   const current = readCurrentTarget(ctx)
   const target = await resolveTarget(ctx, args, current)
-  const siteUrl = await resolveSiteUrl(ctx, args)
+  const port = ctx.isSource && !args.port ? undefined : await resolvePort(ctx, args)
+  const siteUrl = await resolveSiteUrl(ctx, args, port)
   warnProviderChange(ctx, current, target)
-  showSummary(ctx, target, siteUrl)
+  showSummary(ctx, target, siteUrl, port)
 
   if (!args.yes) {
     const apply = unwrap(ctx, await confirm({ message: t('confirm.apply'), initialValue: true }))
     if (!apply) return abort(ctx)
   }
 
-  await applyTarget(ctx, target, args.skipMigrate ? 'skip' : 'deploy', { NUXT_SITE_URL: siteUrl })
+  await applyTarget(ctx, target, args.skipMigrate ? 'skip' : 'deploy', {
+    ...(port ? { PORT: String(port) } : {}),
+    NUXT_SITE_URL: siteUrl,
+  })
   if (current.provider && current.provider !== target.provider) note(t('note.providerChanged'))
   outro(t(ctx.isSource ? 'outro.init' : 'outro.initPackage'))
 }
@@ -188,14 +195,60 @@ function validateUrl(ctx: CliContext, provider: DatabaseProvider, value: string 
   return undefined
 }
 
-const DEFAULT_SITE_URL = 'http://localhost:3000'
+const localSiteUrl = (port: number | string) => `http://localhost:${port}`
+
+/**
+ * Port du serveur web, écrit dans le .env (PORT) : argument, sinon question (--yes : valeur proposée). Proposé :
+ * le port déjà configuré, sinon 3000 ou, s'il est pris, le prochain port libre. Un port déjà configuré n'est
+ * jamais remplacé d'office : il peut être occupé par surgeMedia lui-même, lancé pendant que l'on change la base.
+ */
+async function resolvePort(ctx: CliContext, args: { port?: string, yes?: boolean }): Promise<number> {
+  const { t } = ctx
+  const env = readEnvFile(join(ctx.instanceDir, ENV_FILE))
+  const host = listenHost(env)
+  let port: number
+  if (args.port) {
+    const parsed = parsePort(args.port)
+    if (!parsed) fail(t('error.invalidPort', { value: args.port }))
+    port = parsed
+  }
+  else {
+    let proposed = parsePort(env.PORT)
+    if (!proposed) {
+      proposed = Number(DEFAULT_WEB_PORT)
+      const free = await checkPort(proposed, host) === 'busy' ? await findFreePort(proposed + 1, host) : undefined
+      if (free) {
+        log.warn(t('warn.portDefaultBusy', { busy: proposed, port: free }))
+        proposed = free
+      }
+    }
+    port = args.yes
+      ? proposed
+      : Number(unwrap(ctx, await text({
+          message: t('prompt.port'),
+          initialValue: String(proposed),
+          validate: input => parsePort(input) ? undefined : t('error.invalidPort', { value: input ?? '' }),
+        })).trim())
+  }
+  const state = await checkPort(port, host)
+  if (state === 'busy') log.warn(t('warn.portBusy', { port }))
+  else if (state === 'denied') log.warn(t('warn.portDenied', { port }))
+  if (process.env.PORT !== undefined) log.warn(t('config.shellOverride', { name: 'PORT' }))
+  return port
+}
 
 /**
  * URL publique de l'installation (base des liens vers les médias) : argument, sinon question
- * (valeur actuelle du .env proposée), sinon valeur actuelle ou http://localhost:3000 (--yes).
+ * (valeur actuelle du .env proposée), sinon valeur actuelle ou http://localhost:<port> (--yes). L'adresse
+ * locale par défaut suit le port choisi tant qu'elle n'a pas été remplacée par une vraie URL publique.
  */
-async function resolveSiteUrl(ctx: CliContext, args: { siteUrl?: string, yes?: boolean }): Promise<string> {
-  const current = readEnvFile(join(ctx.instanceDir, ENV_FILE)).NUXT_SITE_URL || DEFAULT_SITE_URL
+async function resolveSiteUrl(ctx: CliContext, args: { siteUrl?: string, yes?: boolean }, port?: number): Promise<string> {
+  const env = readEnvFile(join(ctx.instanceDir, ENV_FILE))
+  const configured = env.NUXT_SITE_URL?.replace(/\/+$/, '')
+  const previousDefault = localSiteUrl(parsePort(env.PORT) ?? DEFAULT_WEB_PORT)
+  const current = port && (!configured || configured === previousDefault)
+    ? localSiteUrl(port)
+    : configured || localSiteUrl(DEFAULT_WEB_PORT)
   let value: string
   if (args.siteUrl) value = args.siteUrl.trim()
   else if (args.yes) value = current
@@ -232,12 +285,13 @@ function warnProviderChange(ctx: CliContext, current: Partial<DatabaseTarget>, t
   }
 }
 
-function showSummary(ctx: CliContext, target: DatabaseTarget, siteUrl?: string): void {
+function showSummary(ctx: CliContext, target: DatabaseTarget, siteUrl?: string, port?: number): void {
   const { t } = ctx
   note(
     [
       `${t('summary.provider')} : ${t(`provider.${target.provider}.label`)}`,
       `${t('summary.url')} : ${maskUrl(target.url)}`,
+      ...(port ? [`${t('summary.port')} : ${port}`] : []),
       ...(siteUrl ? [`${t('summary.siteUrl')} : ${siteUrl}`] : []),
       `${t('summary.root')} : ${ctx.instanceDir}`,
     ].join('\n'),

@@ -2,7 +2,7 @@
 /**
  * CLI `surge-media` : installation et administration du core.
  *
- *   surge-media init        choisir le fournisseur de base de données, l'URL publique, et migrer
+ *   surge-media init        choisir le fournisseur de base de données, le port, l'URL publique, et migrer
  *   surge-media start       lancer le serveur (administration, API, diffusion des médias)
  *   surge-media worker      processus de travail du traitement des vidéos (serveur construit, rôle worker)
  *   surge-media db migrate  appliquer les migrations en attente
@@ -47,6 +47,7 @@ const init = defineCommand({
     ...targetArgs,
     skipMigrate: { type: 'boolean', description: t('args.skipMigrate') },
     siteUrl: { type: 'string', description: t('args.siteUrl'), valueHint: 'url' },
+    port: { type: 'string', description: t('args.initPort'), valueHint: DEFAULT_WEB_PORT },
   },
   run: ({ args }) => runInit(context(args.cwd), args),
 })

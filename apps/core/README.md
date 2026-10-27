@@ -33,7 +33,7 @@ Install the package in the directory that will hold your configuration (`.env`) 
 ```bash
 mkdir surge-media && cd surge-media
 npm install @surge-media/core
-npx surge-media init      # choose the database and public URL, apply migrations, generate the secrets
+npx surge-media init      # choose the database, port and public URL, apply migrations, generate the secrets
 ```
 
 With npm 12 or later, dependency install scripts only run once approved. SQLite needs the one of
@@ -54,6 +54,10 @@ NUXT_BOOTSTRAP_ADMIN_PASSWORD="a-long-unique-password"   # 12 characters minimum
 ```bash
 npx surge-media start     # http://localhost:3000 — sign in at /login
 ```
+
+`init` proposes port 3000, or the next free port when another application already uses it, and writes the
+choice to `.env` (`PORT`). If the port is taken when the server starts, `start` stops with a clear message and
+exit code 1 instead of failing silently.
 
 Remove the two bootstrap variables once your account exists. `GET /api/health` reports the state of the
 database, the storage and the image engine. To update: `npm install @surge-media/core@latest`,
@@ -88,6 +92,8 @@ docker run -d --name surge-media -p 127.0.0.1:3000:3000 -v surge-media-data:/app
   when you do not provide them.
 - Another database is a matter of `DATABASE_URL` (`postgresql://…` or `mysql://…`): the provider is inferred from it.
 - The image command is `server` (default), `worker` (video processing worker) or `migrate`.
+- Port 3000 already taken on the host? Publish another one, such as `-p 127.0.0.1:8080:3000`, or set
+  `SURGE_MEDIA_PORT=8080` with the Compose files. The container itself always listens on 3000.
 - Sensitive variables can be read from files (Docker secrets) with the `_FILE` suffix, such as
   `NUXT_SMTP_PASSWORD_FILE=/run/secrets/smtp_password`.
 
@@ -102,9 +108,9 @@ repository). It works in the current directory, or the one given by `--cwd`:
 
 | Command | Purpose |
 | --- | --- |
-| `init` | choose the database (`--provider sqlite\|postgresql\|mysql`, `--url`), set the public URL (`--site-url`), apply migrations and generate the missing secrets; `--yes` for non-interactive use |
-| `start` | start the server (`--port`, default `PORT` or 3000) |
-| `worker` | start a video processing worker (`--port`, 3001 by default) |
+| `init` | choose the database (`--provider sqlite\|postgresql\|mysql`, `--url`), the web server port (`--port`, written to `.env` as `PORT`) and the public URL (`--site-url`), apply migrations and generate the missing secrets; `--yes` for non-interactive use |
+| `start` | start the server (`--port`, default `PORT` or 3000); stops with exit code 1 if the port is taken |
+| `worker` | start a video processing worker (`--port`, default `WORKER_PORT` or 3001) |
 | `db migrate` | apply pending migrations after an update |
 | `db reset` | recreate the database (confirmation required) |
 

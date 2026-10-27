@@ -4,6 +4,7 @@
 #   docker compose -f docker/compose.sqlite.yaml up -d
 #
 # Image construite localement (docker build -t surge-media .) : SURGE_MEDIA_IMAGE=surge-media docker compose …
+# Port de la machine déjà pris : SURGE_MEDIA_PORT=8080 (le conteneur écoute toujours sur 3000).
 
 services:
   surge-media:
@@ -11,9 +12,9 @@ services:
     restart: unless-stopped
     # Joignable depuis cette machine seulement : un mandataire inverse (nginx, Caddy, Traefik) en HTTPS devant.
     ports:
-      - "127.0.0.1:3000:3000"
+      - "127.0.0.1:${SURGE_MEDIA_PORT:-3000}:3000"
     environment:
-      NUXT_SITE_URL: ${NUXT_SITE_URL:-http://localhost:3000}
+      NUXT_SITE_URL: ${NUXT_SITE_URL:-http://localhost:${SURGE_MEDIA_PORT:-3000}}
       # Compte d'amorçage (12 caractères au moins) : à retirer après la première connexion.
       NUXT_BOOTSTRAP_ADMIN_EMAIL: ${NUXT_BOOTSTRAP_ADMIN_EMAIL:-}
       NUXT_BOOTSTRAP_ADMIN_PASSWORD: ${NUXT_BOOTSTRAP_ADMIN_PASSWORD:-}

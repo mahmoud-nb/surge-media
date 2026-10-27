@@ -46,7 +46,7 @@ You can start on SQLite and move to PostgreSQL later: the database is selected b
    npm rebuild better-sqlite3 @prisma/engines
    ```
 
-3. Run the interactive setup. It asks for the database (SQLite, PostgreSQL or MySQL / MariaDB), applies the migrations and generates the secrets into `.env`:
+3. Run the interactive setup. It asks for the database (SQLite, PostgreSQL or MySQL / MariaDB), the web server port (3000, or the next free port if another application already uses it) and the public URL, applies the migrations and generates the secrets into `.env`:
 
    ```bash
    npx surge-media init
@@ -58,7 +58,7 @@ You can start on SQLite and move to PostgreSQL later: the database is selected b
    npx surge-media start
    ```
 
-   The admin, the API and media delivery answer on `http://localhost:3000`.
+   The admin, the API and media delivery answer on `http://localhost:3000` (or on the port you chose). If that port is taken at startup, `start` stops with a clear message instead of failing silently.
 
 </Steps>
 
@@ -78,7 +78,7 @@ You can start on SQLite and move to PostgreSQL later: the database is selected b
      ghcr.io/mahmoud-nb/surge-media
    ```
 
-   Migrations are applied at startup. Use `DATABASE_URL=postgresql://…` or `mysql://…` to switch databases.
+   Migrations are applied at startup. Use `DATABASE_URL=postgresql://…` or `mysql://…` to switch databases. Port 3000 already taken on the host? Publish another one, for example `-p 127.0.0.1:8080:3000` (the container always listens on 3000).
 
 2. For a smaller image without video processing, use the `-slim` tags (for example `ghcr.io/mahmoud-nb/surge-media:latest-slim`).
 
@@ -95,7 +95,7 @@ NUXT_SITE_URL=https://media.example.com \
 docker compose -f docker/compose.postgres.yaml up -d
 ```
 
-For MySQL or MariaDB, replace the `postgres` service and set `DATABASE_URL` to `mysql://…`.
+For MySQL or MariaDB, replace the `postgres` service and set `DATABASE_URL` to `mysql://…`. To publish another host port than 3000, add `SURGE_MEDIA_PORT=8080`.
 
 </TabItem>
 </Tabs>
