@@ -114,6 +114,27 @@
     "notices": {
       "passwordSet": "Your password has been saved. You can now sign in.",
       "expired": "Your session has expired. Sign in again to continue."
+    },
+    "mfa": {
+      "title": "Two-step verification",
+      "description": "Enter the 6-digit code shown by your authenticator app.",
+      "recoveryDescription": "Enter one of your recovery codes. Each code works only once.",
+      "code": "App code",
+      "recoveryCode": "Recovery code",
+      "useRecovery": "Use a recovery code",
+      "useApp": "Use the app",
+      "trustDeviceHint": "This browser will no longer ask for the code at sign-in, nor for the password before sensitive actions. Do not check this on a shared computer.",
+      "submit": "Verify",
+      "submitting": "Verifying…",
+      "back": "Back to sign-in",
+      "setupTitle": "Set up two-factor authentication",
+      "setupDescription": "Your organization requires it for your account. Set up your authenticator app to continue.",
+      "codesTitle": "Save your recovery codes",
+      "recoveryUsedTitle": "Recovery code accepted",
+      "recoveryUsed": "You have no recovery codes left. | You have {count} recovery code left. | You have {count} recovery codes left.",
+      "recoveryUsedHint": "If you lost your app, set up two-factor authentication again from “My account”: you will get new codes.",
+      "continue": "Continue",
+      "expired": "The verification time ran out. Sign in again."
     }
   },
   "admin": {
@@ -129,7 +150,8 @@
       "audit": "Audit log",
       "apiDocs": "API documentation",
       "settings": "Settings",
-      "invitations": "My invitations"
+      "invitations": "My invitations",
+      "account": "My account"
     },
     "dashboard": {
       "meta": {
@@ -247,6 +269,16 @@
         "all": "See the full log",
         "by": "by {actor}, {date}",
         "empty": "No activity recorded."
+      },
+      "mfa": {
+        "keyMissingTitle": "Two-factor authentication unavailable",
+        "keyMissing": "The NUXT_MFA_ENCRYPTION_KEY encryption key is not set: nobody can turn on two-factor authentication. Run “surge-media init” again (or set the variable), then restart the server.",
+        "adminsWithout": "{count} administrator has not turned on two-factor authentication. | {count} administrators have not turned on two-factor authentication.",
+        "policyLink": "Security policy",
+        "enableTitle": "Protect your account",
+        "enable": "Turn on two-factor authentication: a code from your phone will be asked at every sign-in.",
+        "accountLink": "My account",
+        "codesLow": "You have no recovery codes left: regenerate them. | You have only one recovery code left: regenerate them. | You have only {count} recovery codes left: regenerate them."
       }
     }
   },
@@ -375,7 +407,8 @@
       "role": "Role",
       "status": "Status",
       "lastLogin": "Last sign-in",
-      "invitedBy": "Invited by"
+      "invitedBy": "Invited by",
+      "mfa": "Two-factor"
     },
     "fields": {
       "email": "Email address",
@@ -483,6 +516,18 @@
       "projectsTitle": "Projects",
       "noProjects": "Not a member of any project.",
       "noSharedProjects": "Not a member of any of your projects."
+    },
+    "mfa": {
+      "label": "Two-factor authentication",
+      "on": "On",
+      "off": "Off",
+      "enabledOn": "Turned on {date}",
+      "codesLeft": "No recovery codes left | {count} recovery code left | {count} recovery codes left",
+      "reset": "Reset two-factor authentication",
+      "resetTitle": "Reset two-factor authentication?",
+      "resetDescription": "The secret, recovery codes and trusted devices of {email} will be removed. The holder will set up their app again, at their next sign-in if the policy requires it; they will be told by email if sending is configured.",
+      "resetConfirm": "Reset",
+      "resetDone": "Two-factor authentication reset."
     }
   },
   "password": {
@@ -1684,7 +1729,12 @@
         "sessions_revoked": "Sessions closed",
         "device_trusted": "Trusted device added",
         "devices_revoked": "Trust removed",
-        "link_emailed": "Link sent by email"
+        "link_emailed": "Link sent by email",
+        "mfa_enabled": "Two-factor authentication enabled",
+        "mfa_disabled": "Two-factor authentication disabled",
+        "mfa_reset": "Two-factor authentication reset",
+        "mfa_recovery_used": "Recovery code used",
+        "mfa_recovery_regenerated": "Recovery codes regenerated"
       },
       "preset": {
         "created": "Preset created",
@@ -1717,7 +1767,8 @@
       "deviceForgotten": "This device",
       "devicesRevoked": "No device | One device | {count} devices",
       "processingBackfill": "No video queued | One video queued | {count} videos queued",
-      "processingBackfillPartial": "Stopped by an error: the remaining videos were not queued"
+      "processingBackfillPartial": "Stopped by an error: the remaining videos were not queued",
+      "mfaPolicy": "Two-factor authentication: {from} → {to}"
     },
     "fields": {
       "name": "name",
@@ -2007,6 +2058,28 @@
           "PROCESSING_DISABLED": "Video processing is not active: no job was created. Close this dialog to see its status."
         }
       }
+    },
+    "security": {
+      "title": "Security",
+      "description": "Two-factor authentication for administration accounts.",
+      "legend": "Two-factor authentication",
+      "policies": {
+        "optional": {
+          "label": "Optional",
+          "description": "Each account decides for itself."
+        },
+        "admins": {
+          "label": "Required for administrators",
+          "description": "Administrator accounts must use it."
+        },
+        "everyone": {
+          "label": "Required for everyone",
+          "description": "Every account must use it."
+        }
+      },
+      "pending": "{count} account will set it up at its next sign-in. | {count} accounts will set it up at their next sign-in.",
+      "unavailable": "The NUXT_MFA_ENCRYPTION_KEY encryption key is not set: only the “Optional” policy is possible.",
+      "saved": "Two-factor authentication policy saved. It applies at each account's next sign-in."
     }
   },
   "transforms": {
@@ -2203,6 +2276,99 @@
         "expires": "This link is personal and works only once. It is valid until {date}; your current password keeps working until then.",
         "ignore": "If you did not request this, let your administrator know."
       }
+    },
+    "mfa": {
+      "enabled": {
+        "subject": "Two-factor authentication enabled on {app}",
+        "heading": "Two-factor authentication enabled",
+        "intro": "Two-factor authentication was enabled on your {app} account ({email}) on {date}. Every sign-in will now ask for a code from your app."
+      },
+      "disabled": {
+        "subject": "Two-factor authentication disabled on {app}",
+        "heading": "Two-factor authentication disabled",
+        "intro": "Two-factor authentication was disabled on your {app} account ({email}) on {date}. Your password alone is enough to sign in again."
+      },
+      "reset": {
+        "subject": "Two-factor authentication reset on {app}",
+        "heading": "Two-factor authentication reset",
+        "intro": "Two-factor authentication on your {app} account ({email}) was reset by {by} on {date}. Your app no longer works for this account: set it up again from “My account”, or at your next sign-in if your organization requires it."
+      },
+      "recoveryUsed": {
+        "subject": "Recovery code used on {app}",
+        "heading": "Signed in with a recovery code",
+        "intro": "A recovery code was used to sign in to {app} ({email}) on {date}. You have {remaining} left. If you lost your app, set up two-factor authentication again from “My account”."
+      },
+      "notYou": "If you did not make this change, tell your administrator right away."
+    }
+  },
+  "mfa": {
+    "setup": {
+      "intro": "With an authenticator app (Google Authenticator, Microsoft Authenticator, 1Password, Bitwarden, Aegis…):",
+      "step1": "Scan this QR code with the app, or type in the key.",
+      "step2": "Enter the 6-digit code the app shows.",
+      "qrAlt": "Two-factor authentication setup QR code",
+      "key": "Setup key",
+      "copyKey": "Copy the setup key",
+      "code": "6-digit code",
+      "submit": "Turn on",
+      "loading": "Preparing the setup…",
+      "restart": "Start over",
+      "openLink": "On this phone? Open in the authenticator app"
+    },
+    "codes": {
+      "description": "If you lose your app, these codes let you sign in. Each one works only once. They will not be shown again: copy or download them, then keep them somewhere safe.",
+      "listLabel": "Recovery codes",
+      "copy": "Copy the codes",
+      "download": "Download",
+      "fileName": "surgemedia-recovery-codes.txt",
+      "fileHeader": "surgeMedia recovery codes — {email}",
+      "confirm": "I have saved these codes somewhere safe",
+      "continue": "Continue"
+    },
+    "errors": {
+      "MFA_CODE_INVALID": "Incorrect or already used code. Check your phone's clock and try again.",
+      "MFA_CHALLENGE_EXPIRED": "The verification time ran out. Sign in again.",
+      "MFA_SETUP_EXPIRED": "The setup expired. Start over.",
+      "MFA_UNAVAILABLE": "Two-factor authentication is unavailable on this server (encryption key missing or changed). Tell the operator.",
+      "MFA_ALREADY_ENABLED": "Two-factor authentication is already on.",
+      "MFA_NOT_ENABLED": "Two-factor authentication is not on.",
+      "MFA_REQUIRED_BY_POLICY": "Your organization requires two-factor authentication: it cannot be turned off.",
+      "MFA_SELF_RESET": "For your own account, use “My account”.",
+      "tooManyAttempts": "Too many attempts. Try again in {minutes} min.",
+      "unexpected": "The operation failed. Try again in a moment."
+    }
+  },
+  "account": {
+    "meta": {
+      "title": "My account"
+    },
+    "title": "My account",
+    "description": "Your identity and the security of your account.",
+    "identity": {
+      "title": "Identity",
+      "email": "Email address",
+      "role": "Role"
+    },
+    "mfa": {
+      "title": "Two-factor authentication",
+      "description": "A code from your authenticator app is asked at every sign-in, on top of your password.",
+      "statusOn": "Turned on {date}",
+      "statusOff": "Off",
+      "required": "Your organization requires two-factor authentication for your account.",
+      "unavailable": "Two-factor authentication is not available on this server: the encryption key (NUXT_MFA_ENCRYPTION_KEY) is not set.",
+      "enable": "Turn on two-factor authentication",
+      "codesLeft": "No recovery codes left | {count} recovery code left | {count} recovery codes left",
+      "codesLow": "You have few recovery codes left: regenerate them.",
+      "regenerate": "Regenerate recovery codes",
+      "regenerateHint": "The current codes will stop working.",
+      "disable": "Turn off",
+      "disableTitle": "Turn off two-factor authentication",
+      "disableDescription": "Enter a code from your app, or a recovery code, to confirm.",
+      "enabledDone": "Two-factor authentication is on.",
+      "disabledDone": "Two-factor authentication is off.",
+      "regeneratedDone": "New recovery codes generated: the old ones no longer work.",
+      "devices": "Trusted devices are managed from the dashboard.",
+      "devicesLink": "Open the dashboard"
     }
   }
 }

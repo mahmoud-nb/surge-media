@@ -34,6 +34,13 @@ export const AUDIT_ACTIONS = [
   'user.device_trusted',
   'user.devices_revoked',
   'user.link_emailed',
+  // Double authentification : data.by = self | admin | cli (désactivation, réinitialisation),
+  // data.remaining = codes de secours restants. Jamais de secret ni de code.
+  'user.mfa_enabled',
+  'user.mfa_disabled',
+  'user.mfa_reset',
+  'user.mfa_recovery_used',
+  'user.mfa_recovery_regenerated',
   'preset.created',
   'preset.updated',
   'preset.deleted',

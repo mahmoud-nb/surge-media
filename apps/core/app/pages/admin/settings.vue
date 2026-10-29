@@ -28,6 +28,18 @@ useSeoMeta({ title: () => t('settings.meta.title') })
       <AdminTransformSettings :heading-level="3" />
     </section>
 
+    <section aria-labelledby="settings-security-title" class="mt-12 grid gap-4">
+      <div class="grid max-w-3xl gap-1">
+        <h2 id="settings-security-title" class="text-xl font-semibold text-foreground">
+          {{ t('settings.security.title') }}
+        </h2>
+        <p class="text-sm text-muted-foreground">
+          {{ t('settings.security.description') }}
+        </p>
+      </div>
+      <AdminSecuritySettings />
+    </section>
+
     <section aria-labelledby="settings-video-processing-title" class="mt-12 grid gap-4">
       <div class="grid max-w-3xl gap-1">
         <h2 id="settings-video-processing-title" class="text-xl font-semibold text-foreground">

@@ -22,7 +22,10 @@ async function authenticate(event: H3Event, email: string, password: string): Pr
 }
 
 /**
- * POST /api/auth/login — { email, password } → ouvre une session d'administration.
+ * POST /api/auth/login — { email, password } → ouvre une session d'administration, ou demande le second
+ * facteur (server/utils/mfa.ts) : 200 { user } (session ouverte) · 200 { mfa: 'code' } (code de
+ * l'application ou de secours à donner : POST /api/auth/mfa/verify) · 200 { mfa: 'setup' } (la politique
+ * exige la double authentification : configurer l'application, POST /api/auth/mfa/setup puis enable).
  * 400 données invalides · 401 identifiants refusés (message volontairement générique)
  * · 429 trop de tentatives (en-tête Retry-After).
  */
@@ -44,6 +47,5 @@ export default defineEventHandler(async (event) => {
   }
 
   failuresByEmail.reset(email)
-  await startSession(event, user)
-  return { user: toSessionUser(user) }
+  return continueLogin(event, user)
 })

@@ -43,8 +43,11 @@ type MigrationMode = 'deploy' | 'reset' | 'skip'
 
 const DATABASE_ENV_KEYS = ['DATABASE_PROVIDER', 'DATABASE_URL'] as const
 
-/** Secrets aléatoires ajoutés au .env s'ils sont absents : sessions (nuxt-auth-utils), liens signés des médias. */
-const GENERATED_SECRETS = ['NUXT_SESSION_PASSWORD', 'NUXT_MEDIA_SIGNING_SECRET'] as const
+/**
+ * Secrets aléatoires ajoutés au .env s'ils sont absents : sessions (nuxt-auth-utils), liens signés des médias,
+ * chiffrement des secrets de la double authentification.
+ */
+const GENERATED_SECRETS = ['NUXT_SESSION_PASSWORD', 'NUXT_MEDIA_SIGNING_SECRET', 'NUXT_MFA_ENCRYPTION_KEY'] as const
 
 // ─── Commandes ───────────────────────────────────────────────────────────────
 

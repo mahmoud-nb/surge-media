@@ -152,13 +152,13 @@ When the database is not reachable yet (database container still starting), migr
 
 - A host directory mounted on `/app/data` must belong to uid 1000: `chown -R 1000:1000 <directory>`.
 - The image reads no `.env` file: pass variables with `-e`, `--env-file` or Compose.
-- `NUXT_SESSION_PASSWORD` and `NUXT_MEDIA_SIGNING_SECRET`, when not provided, are generated on first start and
-  stored in `secrets/` (mode `0600`), then never replaced. Containers on different volumes or hosts must receive
+- `NUXT_SESSION_PASSWORD`, `NUXT_MEDIA_SIGNING_SECRET` and `NUXT_MFA_ENCRYPTION_KEY`, when not provided, are generated
+  on first start and stored in `secrets/` (mode `0600`), then never replaced. Containers on different volumes or hosts must receive
   the same values explicitly.
 - Sensitive variables can be read from files (Docker or Kubernetes secrets) with the `_FILE` suffix:
   `DATABASE_URL`, `NUXT_SESSION_PASSWORD`, `NUXT_MEDIA_SIGNING_SECRET`, `NUXT_MEDIA_PREVIOUS_SIGNING_SECRET`,
   `NUXT_MEDIA_STORAGE_S3_ACCESS_KEY_ID`, `NUXT_MEDIA_STORAGE_S3_SECRET_ACCESS_KEY`, `NUXT_SMTP_PASSWORD`,
-  `NUXT_BOOTSTRAP_ADMIN_PASSWORD`. Example: `NUXT_SMTP_PASSWORD_FILE=/run/secrets/smtp_password`.
+  `NUXT_BOOTSTRAP_ADMIN_PASSWORD`, `NUXT_MFA_ENCRYPTION_KEY`. Example: `NUXT_SMTP_PASSWORD_FILE=/run/secrets/smtp_password`.
 - Allow 30 seconds for shutdown (`--stop-timeout 30`, `stop_grace_period: 30s`) so a running video job is
   handed back to the queue cleanly.
 
@@ -189,7 +189,7 @@ npx surge-media init
 ```
 
 `init` asks for the database (SQLite by default), the web server port (3000, or the next free port) and the
-public URL, writes `.env`, applies the migrations and generates the session and signing secrets. Non-interactive
+public URL, writes `.env`, applies the migrations and generates the session, signing and two-factor encryption secrets. Non-interactive
 form:
 
 ```bash
@@ -249,6 +249,7 @@ For video processing in `external` mode, add a second unit running `surge-media 
 | `worker` | Start a video processing worker (`--port`, else `WORKER_PORT`, else 3001) |
 | `db migrate` | Apply pending migrations (after each update) |
 | `db reset` | Recreate the database schema, **deleting its data** (confirmation required; `--yes` to skip it) |
+| `user mfa-reset <email>` | Reset an account's two-factor authentication (lost phone and recovery codes, including the last administrator); `--all` for every account when `NUXT_MFA_ENCRYPTION_KEY` is lost; `--yes` to skip the confirmation |
 
 Every command accepts `--cwd <directory>` (installation directory, default: the current one) and `--lang en`
 (or `SURGE_MEDIA_LANG=en`; French is the default). `npx surge-media --help` lists the options. The CLI refuses an
@@ -266,6 +267,14 @@ There is no public sign-up: accounts are created by administrators. The first on
 
 Then invite your colleagues from **Users** (`/admin/users`). Invitation and password reset links can be copied,
 or emailed when SMTP is configured (§ 7.8).
+
+**Two-factor authentication (TOTP).** Each account can turn it on from **My account** (`/admin/account`) with any
+authenticator app (Google or Microsoft Authenticator, 1Password, Bitwarden, Aegis…) and receives ten single-use
+recovery codes. In **Settings › Security**, an administrator can make it required for administrators or for everyone:
+accounts concerned set it up during their next sign-in, before reaching the administration. A browser trusted at the
+code step skips the code for `NUXT_PUBLIC_TRUSTED_DEVICE_DAYS` days. An administrator can reset another account's
+two-factor authentication from its page; the server operator can do it with `surge-media user mfa-reset` (§ 5.3).
+Account holders are notified by email of every change when SMTP is configured.
 
 ## 7. Configuration reference
 
@@ -302,6 +311,7 @@ over `.env`.
 | `NUXT_PUBLIC_TRUSTED_DEVICE_DAYS` | `15` | Days during which a browser marked "Trust this device" is not asked again for the password before sensitive actions (365 maximum, `0` disables the option) |
 | `NUXT_MEDIA_SIGNING_SECRET` | generated | Secret of signed media URLs and delegated tokens. Changing it invalidates links already shared |
 | `NUXT_MEDIA_PREVIOUS_SIGNING_SECRET` | — | Previous signing secret, still accepted during a rotation (keep it 7 days) |
+| `NUXT_MFA_ENCRYPTION_KEY` | generated | Encrypts two-factor secrets in the database (32 characters minimum). Back it up: if it is lost or changed, codes can no longer be checked and every account must set two-factor authentication up again (`surge-media user mfa-reset --all`). Missing: two-factor authentication cannot be turned on |
 | `NUXT_BOOTSTRAP_ADMIN_EMAIL`, `NUXT_BOOTSTRAP_ADMIN_PASSWORD` | — | First administrator (§ 6); remove after the first sign-in |
 
 "Generated" means: by `surge-media init` (npm) or on the container's first start (Docker), and never replaced
@@ -544,8 +554,9 @@ Traefik also appends `X-Forwarded-For` by default; raise its timeouts and body s
 - [ ] `NUXT_SITE_URL` set to the public URL; `NUXT_MEDIA_PUBLIC_URL` set if media use a CDN or their own domain.
 - [ ] `NUXT_TRUST_PROXY` matches your proxies and CDN (§ 11.3).
 - [ ] Bootstrap variables removed after the first sign-in (§ 6).
-- [ ] `NUXT_SESSION_PASSWORD` and `NUXT_MEDIA_SIGNING_SECRET` stored safely, identical on every process, and
-      included in backups.
+- [ ] Two-factor authentication required at least for administrators (**Settings › Security**, § 6).
+- [ ] `NUXT_SESSION_PASSWORD`, `NUXT_MEDIA_SIGNING_SECRET` and `NUXT_MFA_ENCRYPTION_KEY` stored safely, identical
+      on every process, and included in backups.
 - [ ] Upload size and timeouts aligned between surgeMedia and the proxy (§ 11.1); enough space in `TMPDIR`.
 - [ ] Database: PostgreSQL or MySQL if more than one process or sustained traffic (§ 13).
 - [ ] Backups of the database, the media storage and the secrets, with a restore test (§ 15).
@@ -554,9 +565,10 @@ Traefik also appends `X-Forwarded-For` by default; raise its timeouts and body s
 - [ ] A retention policy for the audit log: there is no automatic purge yet.
 - [ ] Users invited with the least role they need; API secret keys only on your servers.
 
-Not available yet, to take into account in your security assessment: multi-factor authentication and single
-sign-on (SSO) for the administration, an account recovery command when every administrator is locked out, and
-shared rate limits across instances (each process counts its own).
+Not available yet, to take into account in your security assessment: single sign-on (SSO) for the
+administration, a password recovery command when every administrator has forgotten their password (a lost second
+factor is covered by `surge-media user mfa-reset`), and shared rate limits across instances (each process counts
+its own).
 
 ## 13. Scaling
 
@@ -596,7 +608,8 @@ Measure on your own hardware before sizing.
 - Logs go to the standard output: `docker logs`, `journalctl`, or your log collector. Some server messages are
   in French only.
 - The administration dashboard shows warnings to administrators: bootstrap variables still set, SQLite under
-  pressure, video processing problems (**Settings › Video processing**).
+  pressure, missing two-factor encryption key, administrators without two-factor authentication, video processing
+  problems (**Settings › Video processing**).
 - The audit log (`/admin/audit`) records changes to users, projects and members, API keys, tokens and origins,
   presets and settings, and sensitive media actions (visibility, move, deletion), with the real client address
   when `NUXT_TRUST_PROXY` is right. Sign-ins are not recorded there yet.
@@ -609,7 +622,7 @@ Back up together:
 | --- | --- |
 | Database | SQLite file with its `-wal` and `-shm` files, or your PostgreSQL / MySQL database |
 | Media | `NUXT_MEDIA_STORAGE_ROOT` (local storage), or the bucket (versioning or replication on your side) |
-| Secrets | `NUXT_SESSION_PASSWORD` and `NUXT_MEDIA_SIGNING_SECRET`: `.env`, your secret store, or `/app/data/secrets` in Docker |
+| Secrets | `NUXT_SESSION_PASSWORD`, `NUXT_MEDIA_SIGNING_SECRET` and `NUXT_MFA_ENCRYPTION_KEY`: `.env`, your secret store, or `/app/data/secrets` in Docker |
 | Configuration | `.env`, Compose files, proxy configuration |
 
 ```bash
@@ -658,6 +671,9 @@ have run: restore the backup instead.
 | --- | --- |
 | Sign-in accepted, then back to `/login` | Session cookie refused over plain HTTP: serve over HTTPS (or `localhost`); `NUXT_SESSION_COOKIE_SECURE=false` for a test only |
 | First sign-in refused | A user already exists, the bootstrap variables are missing, or the password has fewer than 12 characters (the server logs the reason at startup) |
+| Two-factor code always refused | The phone's clock is off (codes change every 30 s): turn on automatic time; a code cannot be used twice |
+| "Two-factor authentication is unavailable on this server" | `NUXT_MFA_ENCRYPTION_KEY` missing or changed: restore the backed-up key; if it is lost, `surge-media user mfa-reset --all` and every account sets it up again |
+| Phone and recovery codes lost | An administrator resets it from the account's page; for the last administrator, `surge-media user mfa-reset <email>` on the server |
 | `403 Cross-origin request blocked` | The proxy rewrites the `Host` header, or a modifying request comes from another origin |
 | `NUXT_SESSION_PASSWORD … was not set` | Run `surge-media init`, or set a secret of 32 characters or more |
 | `start` stops at once with exit code 1 | Port already used: another `--port`/`PORT`, or stop the other application; update `NUXT_SITE_URL` if it contains the port |

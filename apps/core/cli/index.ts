@@ -7,6 +7,7 @@
  *   surge-media worker      processus de travail du traitement des vidéos (serveur construit, rôle worker)
  *   surge-media db migrate  appliquer les migrations en attente
  *   surge-media db reset    recréer la base (éventuellement avec un autre fournisseur)
+ *   surge-media user mfa-reset <e-mail> | --all   réinitialiser la double authentification (secours de l'exploitant)
  *
  * Le .env et les données vivent dans le dossier de l'installation : le dossier courant pour le paquet publié,
  * apps/core dans le dépôt des sources (`--cwd` pour un autre dossier ; cli/lib/project.ts).
@@ -17,6 +18,7 @@ import { runInit, runMigrate, runReset, type CliContext } from './database'
 import { createTranslator, detectLocale, langFromArgv, LOCALES } from './i18n'
 import { isInsideNodeModules, packageVersion, resolveLocation } from './lib/project'
 import { DEFAULT_WEB_PORT, DEFAULT_WORKER_PORT, runServer } from './server'
+import { runMfaReset } from './user'
 
 const t = createTranslator(detectLocale(langFromArgv(process.argv)))
 
@@ -82,6 +84,17 @@ const reset = defineCommand({
   run: ({ args }) => runReset(context(args.cwd), args),
 })
 
+const mfaReset = defineCommand({
+  meta: { name: 'mfa-reset', description: t('command.user.mfaReset') },
+  args: {
+    ...commonArgs,
+    email: { type: 'positional', required: false, description: t('args.email'), valueHint: 'email' },
+    all: { type: 'boolean', description: t('args.all') },
+    yes: { type: 'boolean', alias: 'y', description: t('args.yes') },
+  },
+  run: ({ args }) => runMfaReset(context(args.cwd), args),
+})
+
 const main = defineCommand({
   meta: { name: 'surge-media', version: packageVersion(), description: t('cli.description') },
   subCommands: {
@@ -91,6 +104,10 @@ const main = defineCommand({
     db: defineCommand({
       meta: { name: 'db', description: t('command.db') },
       subCommands: { migrate, reset },
+    }),
+    user: defineCommand({
+      meta: { name: 'user', description: t('command.user') },
+      subCommands: { 'mfa-reset': mfaReset },
     }),
   },
 })

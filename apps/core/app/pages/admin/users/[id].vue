@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ArrowLeft, KeyRound, LogOut, MonitorX, Trash2 } from '@lucide/vue'
+import { ArrowLeft, KeyRound, LogOut, MonitorX, ShieldOff, Trash2 } from '@lucide/vue'
 import { NAME_MAX_LENGTH, updateUserSchema } from '#shared/schemas/users'
 
 /**
@@ -108,6 +108,31 @@ async function generateLink() {
 }
 
 const revokingDevices = ref(false)
+
+// ─── Double authentification : réinitialisation par un administrateur (mode sudo) ──
+
+const reauth = useReauth()
+const { mfaErrorMessage } = useMfaErrors()
+const mfaResetOpen = ref(false)
+const resettingMfa = ref(false)
+
+async function resetMfa() {
+  accessStatus.value = null
+  resettingMfa.value = true
+  try {
+    await reauth.run(() => $api(`/api/admin/users/${userId.value}/mfa`, { method: 'DELETE' }))
+    mfaResetOpen.value = false
+    accessStatus.value = { variant: 'success', message: t('users.mfa.resetDone') }
+    await refresh()
+  }
+  catch (err) {
+    mfaResetOpen.value = false
+    if (!isReauthCancelled(err)) accessStatus.value = { variant: 'error', message: mfaErrorMessage(err) }
+  }
+  finally {
+    resettingMfa.value = false
+  }
+}
 
 /** Retire la confiance de tous les appareils du compte : ses actions sensibles redemanderont le mot de passe. */
 async function revokeDevices() {
@@ -334,6 +359,20 @@ async function deleteUser() {
                 {{ data.trustedDevices }}
               </dd>
             </div>
+            <div class="grid gap-1">
+              <dt class="text-muted-foreground">
+                {{ t('users.mfa.label') }}
+              </dt>
+              <dd class="font-medium text-foreground">
+                <template v-if="data.mfa">
+                  {{ t('users.mfa.enabledOn', { date: new Intl.DateTimeFormat(locale, { dateStyle: 'medium' }).format(new Date(data.mfa.enabledAt ?? Date.now())) }) }}
+                  <span class="block font-normal text-muted-foreground">{{ t('users.mfa.codesLeft', { count: data.mfa.recoveryCodesLeft }, data.mfa.recoveryCodesLeft) }}</span>
+                </template>
+                <template v-else>
+                  {{ user.mfaEnabled ? t('users.mfa.on') : t('users.mfa.off') }}
+                </template>
+              </dd>
+            </div>
           </dl>
 
           <p v-if="data.pendingLink" class="mt-4 text-sm text-muted-foreground">
@@ -364,7 +403,25 @@ async function deleteUser() {
               <MonitorX aria-hidden="true" />
               {{ t('users.access.revokeDevices') }}
             </UiButton>
+            <UiButton v-if="isAdmin && user.mfaEnabled && !isSelf" variant="outline" @click="mfaResetOpen = true">
+              <ShieldOff aria-hidden="true" />
+              {{ t('users.mfa.reset') }}
+            </UiButton>
           </div>
+          <UiDialog
+            v-model:open="mfaResetOpen"
+            :title="t('users.mfa.resetTitle')"
+            :description="t('users.mfa.resetDescription', { email: user.email })"
+          >
+            <template #actions>
+              <UiButton variant="outline" autofocus @click="mfaResetOpen = false">
+                {{ t('common.cancel') }}
+              </UiButton>
+              <UiButton variant="destructive" :loading="resettingMfa" @click="resetMfa">
+                {{ t('users.mfa.resetConfirm') }}
+              </UiButton>
+            </template>
+          </UiDialog>
           <p v-if="!user.isActive" class="mt-3 text-sm text-muted-foreground">
             {{ isAdmin ? t('users.access.inactiveHint') : t('users.access.inactiveByAdmin') }}
           </p>

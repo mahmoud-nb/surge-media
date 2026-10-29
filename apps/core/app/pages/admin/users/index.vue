@@ -135,6 +135,9 @@ const statusOptions = computed(() => [
               <th scope="col" class="px-4 py-3 font-medium">
                 {{ t('users.columns.lastLogin') }}
               </th>
+              <th scope="col" class="px-4 py-3 font-medium">
+                {{ t('users.columns.mfa') }}
+              </th>
               <th v-if="isAdmin" scope="col" class="px-4 py-3 font-medium">
                 {{ t('users.columns.invitedBy') }}
               </th>
@@ -164,6 +167,12 @@ const statusOptions = computed(() => [
               <td class="px-4 py-3 text-muted-foreground">
                 <NuxtTime v-if="item.lastLoginAt" :datetime="item.lastLoginAt" :locale="locale" date-style="medium" time-style="short" />
                 <span v-else>{{ t('users.list.never') }}</span>
+              </td>
+              <td class="px-4 py-3">
+                <UiBadge v-if="item.mfaEnabled" variant="success">
+                  {{ t('users.mfa.on') }}
+                </UiBadge>
+                <span v-else class="text-muted-foreground">{{ t('users.mfa.off') }}</span>
               </td>
               <td v-if="isAdmin" class="px-4 py-3 text-muted-foreground">
                 <template v-if="item.invitedBy">

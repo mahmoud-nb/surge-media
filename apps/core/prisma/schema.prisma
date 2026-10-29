@@ -47,6 +47,12 @@ model User {
   lastLoginAt  DateTime?
   /// Compte qui a créé (invité) celui-ci ; un gestionnaire suit ainsi ses invitations
   invitedById  String?
+  /// Double authentification (TOTP) : secret chiffré (v1.<iv>.<tag>.<données>, server/lib/mfa/secret-box.ts) ;
+  /// null = inactive
+  mfaSecret    String?
+  mfaEnabledAt DateTime?
+  /// Dernier pas TOTP accepté : un code déjà utilisé est refusé (anti-rejeu)
+  mfaLastStep  Int?
   createdAt    DateTime  @default(now())
   updatedAt    DateTime  @updatedAt
 
@@ -61,24 +67,42 @@ model User {
   passwordTokens       PasswordToken[] @relation("PasswordTokenUser")
   issuedPasswordTokens PasswordToken[] @relation("PasswordTokenCreatedBy")
   trustedDevices       TrustedDevice[]
+  mfaRecoveryCodes     MfaRecoveryCode[]
 
   @@index([invitedById])
 }
 
+/// Code de secours de la double authentification : empreinte SHA-256, usage unique
+/// (server/lib/mfa/recovery-codes.ts). Remplacés en bloc à chaque régénération.
+model MfaRecoveryCode {
+  id        String    @id @default(cuid())
+  userId    String
+  codeHash  String    @unique
+  usedAt    DateTime?
+  createdAt DateTime  @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
 /// Appareil de confiance (« mode sudo ») : jusqu'à son échéance, les actions sensibles ne redemandent pas le
 /// mot de passe dans ce navigateur. Le jeton vit dans un cookie HTTP-only ; seule son empreinte est stockée.
-/// Ne remplace jamais la connexion (server/utils/trusted-devices.ts).
+/// Ne remplace la connexion que pour le second facteur, et seulement s'il a été approuvé juste après lui
+/// (`secondFactorAt`) : le mot de passe reste toujours demandé (server/utils/trusted-devices.ts).
 model TrustedDevice {
-  id         String   @id @default(cuid())
-  userId     String
+  id             String    @id @default(cuid())
+  userId         String
   /// Empreinte SHA-256 du jeton du cookie
-  tokenHash  String   @unique
-  ipAddress  String?
-  userAgent  String?
-  expiresAt  DateTime
+  tokenHash      String    @unique
+  ipAddress      String?
+  userAgent      String?
+  expiresAt      DateTime
   /// Dernière action sensible autorisée par cet appareil (mise à jour au plus toutes les 5 minutes)
-  lastUsedAt DateTime @default(now())
-  createdAt  DateTime @default(now())
+  lastUsedAt     DateTime  @default(now())
+  /// Approuvé à l'étape du code de la connexion : dispense alors du code TOTP jusqu'à son échéance
+  secondFactorAt DateTime?
+  createdAt      DateTime  @default(now())
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 

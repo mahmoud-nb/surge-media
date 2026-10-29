@@ -1,7 +1,8 @@
 /**
  * GET /api/admin/users/:id — détail d'un compte : profil, sessions ouvertes, lien de mot de passe
  * en attente (type et échéance seulement, jamais le jeton), projets dont il est membre, parmi
- * ceux que voit l'auteur de la requête, et appareils de confiance valables (administrateur). Administrateur : tout compte ; gestionnaire : ses invités
+ * ceux que voit l'auteur de la requête, appareils de confiance valables et double authentification (date
+ * d'activation, codes de secours restants) pour un administrateur. Administrateur : tout compte ; gestionnaire : ses invités
  * (404 sinon).
  */
 export default defineEventHandler(async (event) => {
@@ -25,5 +26,8 @@ export default defineEventHandler(async (event) => {
   const projects = memberships.map(({ role, project }) => ({ ...project, role: effectiveProjectRole(user.role, role) }))
   // Appareils de confiance encore valables : administrateur seulement (null pour un gestionnaire).
   const trustedDevices = hasPermission(actor.role, 'users:manage') ? await countTrustedDevices(user.id) : null
-  return { user: toUserSummary(user), activeSessions, pendingLink, projects, trustedDevices }
+  const mfa = hasPermission(actor.role, 'users:manage') && user.mfaSecret
+    ? { enabledAt: user.mfaEnabledAt, recoveryCodesLeft: await countRecoveryCodes(user.id) }
+    : null
+  return { user: toUserSummary(user), activeSessions, pendingLink, projects, trustedDevices, mfa }
 })

@@ -114,6 +114,27 @@
     "notices": {
       "passwordSet": "Votre mot de passe est enregistré. Vous pouvez maintenant vous connecter.",
       "expired": "Votre session a expiré. Reconnectez-vous pour continuer."
+    },
+    "mfa": {
+      "title": "Vérification en deux étapes",
+      "description": "Saisissez le code à 6 chiffres affiché par votre application d'authentification.",
+      "recoveryDescription": "Saisissez l'un de vos codes de secours. Chaque code ne sert qu'une fois.",
+      "code": "Code de l'application",
+      "recoveryCode": "Code de secours",
+      "useRecovery": "Utiliser un code de secours",
+      "useApp": "Utiliser l'application",
+      "trustDeviceHint": "Ce navigateur ne vous demandera plus le code à la connexion, ni le mot de passe avant les actions sensibles. Ne cochez pas sur un ordinateur partagé.",
+      "submit": "Vérifier",
+      "submitting": "Vérification en cours…",
+      "back": "Revenir à la connexion",
+      "setupTitle": "Activez la double authentification",
+      "setupDescription": "Votre organisation l'exige pour votre compte. Configurez votre application d'authentification pour continuer.",
+      "codesTitle": "Enregistrez vos codes de secours",
+      "recoveryUsedTitle": "Code de secours accepté",
+      "recoveryUsed": "Il ne vous reste aucun code de secours. | Il vous reste {count} code de secours. | Il vous reste {count} codes de secours.",
+      "recoveryUsedHint": "Si vous avez perdu votre application, réactivez la double authentification depuis « Mon compte » : de nouveaux codes vous seront remis.",
+      "continue": "Continuer",
+      "expired": "Le délai de vérification est dépassé. Reconnectez-vous."
     }
   },
   "admin": {
@@ -129,7 +150,8 @@
       "audit": "Journal d'audit",
       "apiDocs": "Documentation de l'API",
       "settings": "Réglages",
-      "invitations": "Mes invitations"
+      "invitations": "Mes invitations",
+      "account": "Mon compte"
     },
     "dashboard": {
       "meta": {
@@ -247,6 +269,16 @@
         "all": "Voir tout le journal",
         "by": "par {actor}, {date}",
         "empty": "Aucune activité enregistrée."
+      },
+      "mfa": {
+        "keyMissingTitle": "Double authentification indisponible",
+        "keyMissing": "La clé de chiffrement NUXT_MFA_ENCRYPTION_KEY n'est pas configurée : personne ne peut activer la double authentification. Relancez « surge-media init » (ou définissez la variable), puis redémarrez le serveur.",
+        "adminsWithout": "{count} administrateur n'a pas activé la double authentification. | {count} administrateurs n'ont pas activé la double authentification.",
+        "policyLink": "Politique de sécurité",
+        "enableTitle": "Protégez votre compte",
+        "enable": "Activez la double authentification : un code de votre téléphone sera demandé à chaque connexion.",
+        "accountLink": "Mon compte",
+        "codesLow": "Il ne vous reste aucun code de secours : régénérez-les. | Il ne vous reste qu'un code de secours : régénérez-les. | Il ne vous reste que {count} codes de secours : régénérez-les."
       }
     }
   },
@@ -375,7 +407,8 @@
       "role": "Rôle",
       "status": "Statut",
       "lastLogin": "Dernière connexion",
-      "invitedBy": "Invité par"
+      "invitedBy": "Invité par",
+      "mfa": "Double authentification"
     },
     "fields": {
       "email": "Adresse e-mail",
@@ -483,6 +516,18 @@
       "projectsTitle": "Projets",
       "noProjects": "Membre d'aucun projet.",
       "noSharedProjects": "Membre d'aucun de vos projets."
+    },
+    "mfa": {
+      "label": "Double authentification",
+      "on": "Activée",
+      "off": "Inactive",
+      "enabledOn": "Activée le {date}",
+      "codesLeft": "Aucun code de secours restant | {count} code de secours restant | {count} codes de secours restants",
+      "reset": "Réinitialiser la double authentification",
+      "resetTitle": "Réinitialiser la double authentification ?",
+      "resetDescription": "Le secret, les codes de secours et les appareils de confiance de {email} seront retirés. Le titulaire reconfigurera son application, à sa prochaine connexion si la politique l'exige ; il en sera prévenu par e-mail si l'envoi est configuré.",
+      "resetConfirm": "Réinitialiser",
+      "resetDone": "Double authentification réinitialisée."
     }
   },
   "password": {
@@ -1684,7 +1729,12 @@
         "sessions_revoked": "Sessions fermées",
         "device_trusted": "Appareil de confiance ajouté",
         "devices_revoked": "Confiance retirée",
-        "link_emailed": "Lien envoyé par e-mail"
+        "link_emailed": "Lien envoyé par e-mail",
+        "mfa_enabled": "Double authentification activée",
+        "mfa_disabled": "Double authentification désactivée",
+        "mfa_reset": "Double authentification réinitialisée",
+        "mfa_recovery_used": "Code de secours utilisé",
+        "mfa_recovery_regenerated": "Codes de secours régénérés"
       },
       "preset": {
         "created": "Préréglage créé",
@@ -1717,7 +1767,8 @@
       "deviceForgotten": "Cet appareil",
       "devicesRevoked": "Aucun appareil | Un appareil | {count} appareils",
       "processingBackfill": "Aucune vidéo ajoutée à la file | Une vidéo ajoutée à la file | {count} vidéos ajoutées à la file",
-      "processingBackfillPartial": "Interrompu par une erreur : les vidéos restantes n'ont pas été ajoutées"
+      "processingBackfillPartial": "Interrompu par une erreur : les vidéos restantes n'ont pas été ajoutées",
+      "mfaPolicy": "Double authentification : {from} → {to}"
     },
     "fields": {
       "name": "nom",
@@ -2007,6 +2058,28 @@
           "PROCESSING_DISABLED": "Le traitement des vidéos n'est pas actif : aucune tâche n'a été créée. Fermez cette fenêtre pour voir son état."
         }
       }
+    },
+    "security": {
+      "title": "Sécurité",
+      "description": "Double authentification des comptes de l'administration.",
+      "legend": "Double authentification",
+      "policies": {
+        "optional": {
+          "label": "Facultative",
+          "description": "Chaque compte décide pour lui-même."
+        },
+        "admins": {
+          "label": "Obligatoire pour les administrateurs",
+          "description": "Les comptes Administrateur doivent l'utiliser."
+        },
+        "everyone": {
+          "label": "Obligatoire pour tous",
+          "description": "Tous les comptes doivent l'utiliser."
+        }
+      },
+      "pending": "{count} compte la configurera à sa prochaine connexion. | {count} comptes la configureront à leur prochaine connexion.",
+      "unavailable": "La clé de chiffrement NUXT_MFA_ENCRYPTION_KEY n'est pas configurée : seule la politique « Facultative » est possible.",
+      "saved": "Politique de double authentification enregistrée. Elle s'applique à la prochaine connexion de chaque compte."
     }
   },
   "transforms": {
@@ -2203,6 +2276,99 @@
         "expires": "Ce lien est personnel et ne sert qu'une fois. Il est valable jusqu'au {date} ; votre mot de passe actuel reste valable jusque-là.",
         "ignore": "Si vous n'êtes pas à l'origine de cette demande, prévenez votre administrateur."
       }
+    },
+    "mfa": {
+      "enabled": {
+        "subject": "Double authentification activée sur {app}",
+        "heading": "Double authentification activée",
+        "intro": "La double authentification a été activée sur votre compte {app} ({email}) le {date}. Chaque connexion demandera désormais un code de votre application."
+      },
+      "disabled": {
+        "subject": "Double authentification désactivée sur {app}",
+        "heading": "Double authentification désactivée",
+        "intro": "La double authentification a été désactivée sur votre compte {app} ({email}) le {date}. Votre mot de passe suffit de nouveau pour vous connecter."
+      },
+      "reset": {
+        "subject": "Double authentification réinitialisée sur {app}",
+        "heading": "Double authentification réinitialisée",
+        "intro": "La double authentification de votre compte {app} ({email}) a été réinitialisée par {by} le {date}. Votre application ne fonctionne plus pour ce compte : réactivez-la depuis « Mon compte », ou à votre prochaine connexion si votre organisation l’exige."
+      },
+      "recoveryUsed": {
+        "subject": "Code de secours utilisé sur {app}",
+        "heading": "Connexion avec un code de secours",
+        "intro": "Un code de secours a servi à vous connecter à {app} ({email}) le {date}. Il vous en reste {remaining}. Si vous avez perdu votre application, réactivez la double authentification depuis « Mon compte »."
+      },
+      "notYou": "Si vous n’êtes pas à l’origine de ce changement, prévenez sans attendre votre administrateur."
+    }
+  },
+  "mfa": {
+    "setup": {
+      "intro": "Avec une application d'authentification (Google Authenticator, Microsoft Authenticator, 1Password, Bitwarden, Aegis…) :",
+      "step1": "Scannez ce QR code avec l'application, ou saisissez la clé à la main.",
+      "step2": "Saisissez le code à 6 chiffres que l'application affiche.",
+      "qrAlt": "QR code de configuration de la double authentification",
+      "key": "Clé de configuration",
+      "copyKey": "Copier la clé de configuration",
+      "code": "Code à 6 chiffres",
+      "submit": "Activer",
+      "loading": "Préparation de la configuration…",
+      "restart": "Recommencer",
+      "openLink": "Sur ce téléphone ? Ouvrir dans l’application d’authentification"
+    },
+    "codes": {
+      "description": "Si vous perdez votre application, ces codes vous permettront de vous connecter. Chacun ne sert qu'une fois. Ils ne seront plus affichés : copiez-les ou téléchargez-les, puis rangez-les en lieu sûr.",
+      "listLabel": "Codes de secours",
+      "copy": "Copier les codes",
+      "download": "Télécharger",
+      "fileName": "surgemedia-codes-de-secours.txt",
+      "fileHeader": "Codes de secours surgeMedia — {email}",
+      "confirm": "J'ai enregistré ces codes en lieu sûr",
+      "continue": "Continuer"
+    },
+    "errors": {
+      "MFA_CODE_INVALID": "Code incorrect ou déjà utilisé. Vérifiez l'heure de votre téléphone et réessayez.",
+      "MFA_CHALLENGE_EXPIRED": "Le délai de vérification est dépassé. Reconnectez-vous.",
+      "MFA_SETUP_EXPIRED": "La configuration a expiré. Recommencez.",
+      "MFA_UNAVAILABLE": "La double authentification est indisponible sur ce serveur (clé de chiffrement absente ou modifiée). Prévenez l'exploitant.",
+      "MFA_ALREADY_ENABLED": "La double authentification est déjà activée.",
+      "MFA_NOT_ENABLED": "La double authentification n'est pas activée.",
+      "MFA_REQUIRED_BY_POLICY": "Votre organisation exige la double authentification : elle ne peut pas être désactivée.",
+      "MFA_SELF_RESET": "Pour votre propre compte, passez par « Mon compte ».",
+      "tooManyAttempts": "Trop d'essais. Réessayez dans {minutes} min.",
+      "unexpected": "L'opération a échoué. Réessayez dans un instant."
+    }
+  },
+  "account": {
+    "meta": {
+      "title": "Mon compte"
+    },
+    "title": "Mon compte",
+    "description": "Votre identité et la sécurité de votre compte.",
+    "identity": {
+      "title": "Identité",
+      "email": "Adresse e-mail",
+      "role": "Rôle"
+    },
+    "mfa": {
+      "title": "Double authentification",
+      "description": "Un code de votre application d'authentification est demandé à chaque connexion, en plus du mot de passe.",
+      "statusOn": "Activée le {date}",
+      "statusOff": "Désactivée",
+      "required": "Votre organisation exige la double authentification pour votre compte.",
+      "unavailable": "La double authentification n'est pas disponible sur ce serveur : la clé de chiffrement (NUXT_MFA_ENCRYPTION_KEY) n'est pas configurée.",
+      "enable": "Activer la double authentification",
+      "codesLeft": "Aucun code de secours restant | {count} code de secours restant | {count} codes de secours restants",
+      "codesLow": "Il vous reste peu de codes de secours : régénérez-les.",
+      "regenerate": "Régénérer les codes de secours",
+      "regenerateHint": "Les codes actuels ne serviront plus.",
+      "disable": "Désactiver",
+      "disableTitle": "Désactiver la double authentification",
+      "disableDescription": "Saisissez un code de votre application, ou un code de secours, pour confirmer.",
+      "enabledDone": "La double authentification est activée.",
+      "disabledDone": "La double authentification est désactivée.",
+      "regeneratedDone": "Nouveaux codes de secours générés : les anciens ne servent plus.",
+      "devices": "Les appareils de confiance se gèrent depuis le tableau de bord.",
+      "devicesLink": "Ouvrir le tableau de bord"
     }
   }
 }

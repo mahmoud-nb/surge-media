@@ -29,7 +29,7 @@ say() {
 load_file_variables() {
   for name in DATABASE_URL NUXT_SESSION_PASSWORD NUXT_MEDIA_SIGNING_SECRET NUXT_MEDIA_PREVIOUS_SIGNING_SECRET \
     NUXT_MEDIA_STORAGE_S3_ACCESS_KEY_ID NUXT_MEDIA_STORAGE_S3_SECRET_ACCESS_KEY NUXT_SMTP_PASSWORD \
-    NUXT_BOOTSTRAP_ADMIN_PASSWORD; do
+    NUXT_BOOTSTRAP_ADMIN_PASSWORD NUXT_MFA_ENCRYPTION_KEY; do
     eval "file=\${${name}_FILE:-}"
     [ -n "$file" ] || continue
     eval "current=\${${name}:-}"
@@ -146,12 +146,14 @@ case "$command" in
   server)
     ensure_secret NUXT_SESSION_PASSWORD
     ensure_secret NUXT_MEDIA_SIGNING_SECRET
+    ensure_secret NUXT_MFA_ENCRYPTION_KEY
     if [ "${SURGE_MEDIA_MIGRATE:-true}" != false ]; then migrate; fi
     exec node "$SERVER" "$@"
     ;;
   worker)
     ensure_secret NUXT_SESSION_PASSWORD
     ensure_secret NUXT_MEDIA_SIGNING_SECRET
+    ensure_secret NUXT_MFA_ENCRYPTION_KEY
     export NUXT_SERVER_ROLE=worker
     exec node "$SERVER" "$@"
     ;;

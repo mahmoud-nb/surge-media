@@ -21,6 +21,8 @@ export function toUserSummary(user: UserWithInviter) {
     isActive: user.isActive,
     status: userStatus({ isActive: user.isActive, hasPassword: user.passwordHash !== null }),
     lastLoginAt: user.lastLoginAt,
+    /** Double authentification active (jamais le secret). */
+    mfaEnabled: user.mfaSecret !== null,
     createdAt: user.createdAt,
     /** Auteur de l'invitation (null : compte d'amorçage, ou auteur supprimé). */
     invitedBy: user.invitedBy ?? null,

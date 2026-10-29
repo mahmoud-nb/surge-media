@@ -8,9 +8,11 @@ import type { TrustedDevice, User } from '../generated/prisma/client'
  * sensibles pendant `trustedDeviceDays` jours. Le jeton aléatoire vit dans un cookie HTTP-only,
  * Secure, SameSite=Lax et de chemin / comme celui de la session (le rendu serveur d'une page le
  * transmet ainsi à l'API) ; seule son empreinte est en base (TrustedDevice), liée au compte.
- * La confiance ne remplace jamais la connexion : elle survit à la déconnexion (sessions de 12 h), mais
- * tombe à son échéance, au changement de mot de passe, à la désactivation du compte, quand l'option est
- * désactivée (durée 0) ou sur demande (tableau de bord, fiche du compte).
+ * La confiance ne remplace jamais le mot de passe : elle survit à la déconnexion (sessions de 12 h), mais
+ * tombe à son échéance, au changement de mot de passe, à la désactivation du compte, à toute modification
+ * de sa double authentification, quand l'option est désactivée (durée 0) ou sur demande (tableau de bord,
+ * fiche du compte). Accordée à l'étape du code de la connexion (`secondFactorAt`), elle dispense aussi du
+ * code TOTP aux connexions suivantes ; accordée par le mode sudo (mot de passe seul), jamais.
  */
 
 export const TRUSTED_DEVICE_COOKIE = 'surge-media-trusted-device'
@@ -59,9 +61,11 @@ export async function findTrustedDevice(event: H3Event, user: User): Promise<Tru
 /**
  * Fait confiance à ce navigateur pour `user` : nouveau jeton (le précédent cookie de ce navigateur,
  * quel que soit son compte, est remplacé et sa ligne supprimée), échéance fixe, cookie posé.
- * Les appareils expirés du compte sont purgés au passage. Renvoie l'échéance.
+ * Les appareils expirés du compte sont purgés au passage. `secondFactor` : la confiance est accordée juste
+ * après un second facteur (étape du code de la connexion) et dispense donc du code jusqu'à l'échéance.
+ * Renvoie l'échéance.
  */
-export async function trustDevice(event: H3Event, user: User): Promise<Date> {
+export async function trustDevice(event: H3Event, user: User, options: { secondFactor?: boolean } = {}): Promise<Date> {
   const days = configuredTrustedDeviceDays(event)
   const now = new Date()
   const expiresAt = new Date(now.getTime() + days * DAY_MS)
@@ -78,6 +82,7 @@ export async function trustDevice(event: H3Event, user: User): Promise<Date> {
         userId: user.id,
         tokenHash: hashToken(token),
         expiresAt,
+        secondFactorAt: options.secondFactor ? now : null,
         ipAddress: getRequestIP(event)?.slice(0, 191),
         userAgent: getRequestHeader(event, 'user-agent')?.slice(0, 191),
       },

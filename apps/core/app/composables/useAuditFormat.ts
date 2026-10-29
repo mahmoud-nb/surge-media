@@ -115,6 +115,12 @@ export function useAuditFormat() {
       case 'preset.updated':
         return t('audit.details.fields', { fields: Object.keys(change).map(field => t(`audit.fields.${field}`)).join(', ') })
       case 'settings.updated':
+        if (change.mfaPolicy) {
+          return t('audit.details.mfaPolicy', {
+            from: t(`settings.security.policies.${text(change.mfaPolicy.from)}.label`),
+            to: t(`settings.security.policies.${text(change.mfaPolicy.to)}.label`),
+          })
+        }
         return change.libraryPolicy
           ? t('audit.details.libraryPolicy', {
               from: t(`transforms.policy.options.${text(change.libraryPolicy.from)}.label`),
