@@ -63,10 +63,14 @@ const configuration = computed(() => ({
 /**
  * Correctif d'accessibilité (Scalar 1.72) : chaque exemple de code est une région nommée « Code
  * sample » (en anglais, nom répété), donc un repère de page dupliqué. Ce sont des groupes : rôle
- * `group`, libellé traduit. Scalar rend ces blocs au fil du défilement, y compris dans sa fenêtre
- * de requêtes (hors du composant) : observation de <body> tant que la page est affichée.
+ * `group`, libellé traduit. Depuis Scalar 1.75, le bloc simple est déjà un groupe (libellé toujours
+ * en anglais) et le bloc virtualisé reste une région : les deux rôles sont visés. Scalar rend ces
+ * blocs au fil du défilement, y compris dans sa fenêtre de requêtes (hors du composant) :
+ * observation de <body> tant que la page est affichée.
  */
-const CODE_SAMPLE = '.scalar-app [role="region"][aria-label="Code sample"]'
+const CODE_SAMPLE = ['region', 'group']
+  .map(role => `.scalar-app [role="${role}"][aria-label="Code sample"]`)
+  .join(', ')
 function relabelCodeSamples(root: Element) {
   for (const element of [...(root.matches(CODE_SAMPLE) ? [root] : []), ...root.querySelectorAll(CODE_SAMPLE)]) {
     element.setAttribute('role', 'group')
