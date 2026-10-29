@@ -9,7 +9,7 @@ import { Icon } from '@astrojs/starlight/components';
 import type { ComponentProps } from 'astro/types';
 import { getCollection, render } from 'astro:content';
 import { localePath } from '../../lib/paths';
-import { ISSUES_URL, SALES_URL } from '../../lib/site';
+import { CONTACT_URL, ISSUES_URL } from '../../lib/site';
 import { FAQ_DEFAULT_LANG, FAQ_STATUSES, faqQuestions, plainText, searchText, type FaqTheme } from '../../lib/faq';
 
 type IconName = ComponentProps<typeof Icon>['name'];
@@ -149,7 +149,7 @@ const structuredData = JSON.stringify({
     <div class="empty-actions">
       <button type="button" class="ghost-button" data-reset>{t('faq.empty.reset')}</button>
       <a class="ghost-button" href={ISSUES_URL}>{t('faq.empty.ask')}</a>
-      <a class="ghost-button" href={SALES_URL}>{t('faq.empty.contact')}</a>
+      <a class="ghost-button" href={CONTACT_URL}>{t('faq.empty.contact')}</a>
     </div>
   </div>
 

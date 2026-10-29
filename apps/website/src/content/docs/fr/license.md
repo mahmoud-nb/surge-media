@@ -24,7 +24,7 @@ Les paquets front-end **`@surge-media/client`** et **`@surge-media/vue`** sont d
 
 ## Des questions ?
 
-La [FAQ des tarifs](../pricing/#faq) répond aux questions les plus courantes. Pour d’autres arrangements de licence, [contactez-nous](mailto:mahmoud.nb@gmail.com?subject=Licence%20surgeMedia).
+La [FAQ des tarifs](../pricing/#faq) répond aux questions les plus courantes. Pour d’autres arrangements de licence, [contactez-nous](mailto:licensing@surgeup.org?subject=Licence%20surgeMedia).
 
 :::caution
 Cette page est un résumé sans valeur juridique. Seul le texte anglais du fichier [LICENSE](https://github.com/mahmoud-nb/surge-media/blob/main/LICENSE) fait foi.

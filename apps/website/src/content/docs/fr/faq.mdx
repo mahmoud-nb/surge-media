@@ -12,7 +12,7 @@ hero:
 
 import FaqExplorer from '../../../components/faq/FaqExplorer.astro';
 import CtaBand from '../../../components/landing/CtaBand.astro';
-import { ISSUES_URL, SALES_URL } from '../../../lib/site';
+import { CONTACT_URL, ISSUES_URL } from '../../../lib/site';
 
 <FaqExplorer
   themes={[
@@ -72,5 +72,5 @@ import { ISSUES_URL, SALES_URL } from '../../../lib/site';
   title="Vous n’avez pas trouvé votre réponse ?"
   text="Posez-la sur GitHub, ou écrivez à l’équipe pour une évaluation, une licence commerciale ou votre questionnaire de sécurité."
   primary={{ label: 'Poser la question sur GitHub', href: ISSUES_URL }}
-  secondary={{ label: 'Contacter l’équipe', href: SALES_URL }}
+  secondary={{ label: 'Contacter l’équipe', href: CONTACT_URL }}
 />

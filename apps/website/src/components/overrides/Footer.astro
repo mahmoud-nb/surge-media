@@ -7,7 +7,7 @@
 import Default from '@astrojs/starlight/components/Footer.astro';
 import { LOCALES } from '../../lib/locales.mjs';
 import { localePath, switchLocale } from '../../lib/paths';
-import { CHANGELOG_URL, ISSUES_URL, REPOSITORY_URL, SALES_URL } from '../../lib/site';
+import { CHANGELOG_URL, CONTACT_URL, ISSUES_URL, REPOSITORY_URL } from '../../lib/site';
 
 const { t } = Astro.locals;
 const { locale, entry } = Astro.locals.starlightRoute;
@@ -39,7 +39,7 @@ const columns = [
     links: [
       { label: t('footer.license'), href: page('/license/') },
       { label: t('footer.issues'), href: ISSUES_URL },
-      { label: t('footer.contact'), href: SALES_URL },
+      { label: t('footer.contact'), href: CONTACT_URL },
     ],
   },
 ];
