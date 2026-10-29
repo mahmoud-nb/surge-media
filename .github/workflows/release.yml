@@ -98,6 +98,9 @@ jobs:
 
       - name: Build
         run: pnpm --filter @surge-media/core build
+        env:
+          # Même marge de mémoire que dans ci.yml (build Nuxt du core proche du tas par défaut du runner).
+          NODE_OPTIONS: --max-old-space-size=4096
 
       - name: Archive du paquet
         run: cd apps/core && pnpm pack --out "$GITHUB_WORKSPACE/artifacts/surge-media-core.tgz"

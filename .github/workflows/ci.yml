@@ -70,6 +70,10 @@ jobs:
 
       - name: Build
         run: pnpm --filter @surge-media/core build
+        env:
+          # Tas de Node par défaut ≈ 2 Go sur le runner : la build Nuxt du core le frôle (manque de mémoire à
+          # la fin de la build Nitro). 4 Go laissent de la marge sur une machine de 7-8 Go.
+          NODE_OPTIONS: --max-old-space-size=4096
 
       - name: Archive du paquet
         run: cd apps/core && pnpm pack --out "$GITHUB_WORKSPACE/artifacts/surge-media-core.tgz"
