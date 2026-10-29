@@ -61,29 +61,46 @@ const configuration = computed(() => ({
 }) as Configuration)
 
 /**
- * Correctif d'accessibilité (Scalar 1.72) : chaque exemple de code est une région nommée « Code
- * sample » (en anglais, nom répété), donc un repère de page dupliqué. Ce sont des groupes : rôle
- * `group`, libellé traduit. Depuis Scalar 1.75, le bloc simple est déjà un groupe (libellé toujours
- * en anglais) et le bloc virtualisé reste une région : les deux rôles sont visés. Scalar rend ces
- * blocs au fil du défilement, y compris dans sa fenêtre de requêtes (hors du composant) :
- * observation de <body> tant que la page est affichée.
+ * Correctifs d'accessibilité du rendu de Scalar. Scalar rend au fil du défilement, y compris dans
+ * sa fenêtre de requêtes (hors du composant) : observation de <body> tant que la page est affichée.
+ *
+ * - Exemples de code : en 1.72, des régions nommées « Code sample » (en anglais, nom répété), donc
+ *   un repère de page dupliqué ; depuis 1.75, le bloc simple est déjà un groupe (libellé toujours en
+ *   anglais) et le bloc virtualisé reste une région. Les deux rôles deviennent des groupes au libellé
+ *   traduit.
+ * - Blocs de code du Markdown (descriptions de la spécification) : défilants horizontalement mais
+ *   hors de l'ordre de tabulation, donc illisibles au clavier. Focalisables, et groupes au même
+ *   libellé que les exemples.
+ * - En-tête mobile de Scalar (sous 1024 px), hors du repère `main` : second repère `banner` à côté
+ *   de l'en-tête de l'administration. Rôle neutre.
  */
 const CODE_SAMPLE = ['region', 'group']
   .map(role => `.scalar-app [role="${role}"][aria-label="Code sample"]`)
   .join(', ')
-function relabelCodeSamples(root: Element) {
-  for (const element of [...(root.matches(CODE_SAMPLE) ? [root] : []), ...root.querySelectorAll(CODE_SAMPLE)]) {
-    element.setAttribute('role', 'group')
-    element.setAttribute('aria-label', t('apiDocs.reference.codeSample'))
+function labelAsCodeSample(element: Element) {
+  element.setAttribute('role', 'group')
+  element.setAttribute('aria-label', t('apiDocs.reference.codeSample'))
+}
+const SCALAR_FIXES: [selector: string, fix: (element: Element) => void][] = [
+  [CODE_SAMPLE, labelAsCodeSample],
+  ['.scalar-app .markdown pre > code', (element) => {
+    element.setAttribute('tabindex', '0')
+    labelAsCodeSample(element)
+  }],
+  ['.scalar-app .t-doc__header header', element => element.setAttribute('role', 'none')],
+]
+function fixScalar(root: Element) {
+  for (const [selector, fix] of SCALAR_FIXES) {
+    for (const element of [...(root.matches(selector) ? [root] : []), ...root.querySelectorAll(selector)]) fix(element)
   }
 }
 const observer = new MutationObserver((records) => {
   for (const record of records) {
-    for (const node of record.addedNodes) if (node instanceof Element) relabelCodeSamples(node)
+    for (const node of record.addedNodes) if (node instanceof Element) fixScalar(node)
   }
 })
 onMounted(() => {
-  relabelCodeSamples(document.body)
+  fixScalar(document.body)
   observer.observe(document.body, { childList: true, subtree: true })
 })
 

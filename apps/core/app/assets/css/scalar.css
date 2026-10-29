@@ -69,6 +69,16 @@ body.dark-mode {
   --scalar-focus-color: var(--ring);
 }
 
+/*
+ * Blocs de code du Markdown, rendus focalisables par AdminApiReference : Scalar efface leur contour
+ * (`.scalar-app code.hljs { outline: unset }`). Contour à l'intérieur, comme celui du reste de
+ * l'administration.
+ */
+.scalar-app .markdown pre > code:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: -2px;
+}
+
 /* En-tête mobile collant de l'administration (h-14) : décalage des éléments collants de Scalar. */
 .surge-api-reference {
   --scalar-custom-header-height: 3.5rem;
