@@ -4,8 +4,6 @@ Vitrine commerciale et documentation de surgeMedia, construites avec [Astro Star
 anglais par défaut, français sous `/fr/`, thèmes clair et sombre, recherche intégrée. Publiées sur GitHub Pages à
 chaque merge sur `main` (`.github/workflows/website.yml`).
 
-Guide complet (structure, liens et chemin de base, traductions, publication) : [setup.md § 16](../../setup.md#16-site-public-et-documentation-appswebsite).
-
 ## Commandes
 
 Depuis la racine du dépôt :

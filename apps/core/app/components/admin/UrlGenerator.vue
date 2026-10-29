@@ -5,7 +5,6 @@
  * volée par l'administration (jamais enregistré ni compté dans le quota de dérivés), adresse à copier —
  * signée quand l'espace ou la visibilité l'exige — et extraits HTML (<img>, <picture>, srcset 1x/2x/3x).
  * Les requêtes partent après une courte pause de saisie ; une nouvelle demande annule la précédente.
- * Architecture : .claude/architecture-phase-c.md § 10.
  */
 import { LoaderCircle } from '@lucide/vue'
 import {

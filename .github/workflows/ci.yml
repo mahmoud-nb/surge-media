@@ -1,4 +1,4 @@
-# Intégration continue : à chaque push sur main et sur chaque pull request (setup.md § 15).
+# Intégration continue : à chaque push sur main et sur chaque pull request.
 #   - vérifications : messages de commit (pull request), lint, typecheck, tests, traductions, contrastes,
 #     migrations, build des bibliothèques (packages/*) ;
 #   - paquet npm : build, archive, essai d'installation (init, start, /api/health) ;

@@ -63,8 +63,8 @@ Remove the two bootstrap variables once your account exists. `GET /api/health` r
 database, the storage and the image engine. To update: `npm install @surge-media/core@latest`,
 `npx surge-media db migrate`, then restart.
 
-To work on surgeMedia itself, clone the repository and follow the
-[development guide](https://github.com/mahmoud-nb/surge-media/blob/main/setup.md) (pnpm 12, `pnpm dev`).
+To work on surgeMedia itself, clone the repository and see
+[Developing surgeMedia](https://github.com/mahmoud-nb/surge-media/blob/main/setup.md#18-developing-surgemedia) (pnpm 12, `pnpm dev`).
 
 ## Running with Docker
 
@@ -207,8 +207,9 @@ npx surge-media start         # run it under a process manager (systemd, pm2…)
 
 ## Documentation
 
-The complete guide — installation, configuration, API, security and troubleshooting — is
-[`setup.md`](https://github.com/mahmoud-nb/surge-media/blob/main/setup.md) (in French).
+The installation and operations guide — requirements, Docker and npm installation, every environment variable,
+reverse proxy, production checklist, scaling, backups, updates and troubleshooting — is
+[`setup.md`](https://github.com/mahmoud-nb/surge-media/blob/main/setup.md).
 
 ## Releases
 

@@ -1,7 +1,6 @@
 /**
  * Identifiants d'API (jetons personnels, clés secrètes et publiques de projet) et origines
  * autorisées : constantes, formats et codes d'erreur partagés entre l'interface et le serveur.
- * Architecture : .claude/architecture-phase-b.md § 4.
  */
 
 /** Doit rester identique à l'enum `TokenType` de prisma/schema.prisma (vérifié à la compilation). */

@@ -70,7 +70,7 @@ export default defineNuxtConfig({
     // Binaires ffmpeg et ffprobe du système (phase D3) — NUXT_FFMPEG_PATH / NUXT_FFPROBE_PATH
     ffmpegPath: 'ffmpeg',
     ffprobePath: 'ffprobe',
-    // Traitement des vidéos par ffmpeg (phase D3) — variables NUXT_VIDEO_* (voir .env.example et setup.md § 7.7).
+    // Traitement des vidéos par ffmpeg (phase D3) — variables NUXT_VIDEO_* (voir .env.example et setup.md § 7.6).
     // Sans rapport avec NUXT_MEDIA_PROCESSING_* (traitements d'images, sharp).
     video: {
       processing: 'off', // off | embedded | external — NUXT_VIDEO_PROCESSING
@@ -83,7 +83,7 @@ export default defineNuxtConfig({
       maxDuration: 10800, // s : au-delà, pas de conversion (échec TOO_LONG) — NUXT_VIDEO_MAX_DURATION
       memoryLimit: 4096, // Mio par ffmpeg (Linux, prlimit), 0 = sans limite — NUXT_VIDEO_MEMORY_LIMIT
     },
-    // Médias — variables NUXT_MEDIA_* (voir .env.example et setup.md § 7).
+    // Médias — variables NUXT_MEDIA_* (voir .env.example et setup.md § 7.4 et § 7.5).
     media: {
       maxUploadSize: 25 * 1024 * 1024, // images, octets — NUXT_MEDIA_MAX_UPLOAD_SIZE
       maxVideoUploadSize: 512 * 1024 * 1024, // vidéos, octets, 2 147 483 647 au plus — NUXT_MEDIA_MAX_VIDEO_UPLOAD_SIZE
@@ -183,7 +183,7 @@ export default defineNuxtConfig({
   },
 
   // Ajouter une langue : créer i18n/locales/<code>.json (copie de fr.json), l'ajouter
-  // ici, puis lancer `pnpm i18n:check` (voir setup.md).
+  // ici, puis lancer `pnpm i18n:check` (voir setup.md § 18).
   i18n: {
     defaultLocale: 'fr',
     strategy: 'no_prefix',

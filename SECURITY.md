@@ -87,7 +87,7 @@ report confidentially.
 ## Hardening your installation
 
 Production guidance (HTTPS, reverse proxy, trusted proxies, secrets, dedicated media domain, worker container
-hardening) is in [setup.md § 12](setup.md#12-production) and in the security guide of the documentation website
+hardening) is in [setup.md § 10 to § 12](setup.md#12-production-checklist) and in the security guide of the documentation website
 (`apps/website/src/content/docs/guides/security.md`).
 
 ---
@@ -163,5 +163,5 @@ confidentielle.
 ## Durcir votre installation
 
 Recommandations de production (HTTPS, mandataire inverse, mandataires de confiance, secrets, domaine de diffusion
-dédié, conteneur de travail durci) : [setup.md § 12](setup.md#12-production) et le guide de sécurité du site de
+dédié, conteneur de travail durci) : [setup.md § 10 à § 12](setup.md#12-production-checklist) et le guide de sécurité du site de
 documentation (`apps/website/src/content/docs/fr/guides/security.md`).

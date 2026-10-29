@@ -7,7 +7,7 @@ import { createDelegatedToken, DISPLAY_SCOPES, isSurgeApiError, UPLOAD_SCOPES } 
 
 /**
  * Bac à sable des bibliothèques front (port 5173), branché sur un core local. Les paquets sont lus depuis
- * leurs sources (rechargement à chaud). Configuration : `.env.local` (modèle `.env.example`, setup.md § 17).
+ * leurs sources (rechargement à chaud). Configuration : `.env.local` (modèle `.env.example`).
  * La clé secrète n'est lue que par le serveur Vite, qui émet les jetons délégués (`POST /api/token`) avec
  * `createDelegatedToken` de `@surge-media/client/server` : elle n'atteint jamais le navigateur (aucune
  * variable `VITE_`).

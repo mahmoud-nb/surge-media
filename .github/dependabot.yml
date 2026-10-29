@@ -1,9 +1,9 @@
-# Dependabot : mises à jour des dépendances npm et des GitHub Actions (setup.md § 15.1, SECURITY.md).
+# Dependabot : mises à jour des dépendances npm et des GitHub Actions (SECURITY.md).
 #
 # Limite connue : pnpm 12, qui épingle sa propre version (champ `packageManager`), écrit `pnpm-lock.yaml` en deux
 # documents YAML, format que le graphe des dépendances de GitHub ne lit pas. Pour npm, Dependabot ne crée donc ni
 # alerte ni mise à jour de sécurité : seules les mises à jour de versions ci-dessous fonctionnent, et la veille des
-# vulnérabilités passe par `pnpm audit` (setup.md § 15.1). Les GitHub Actions ont alertes et mises à jour.
+# vulnérabilités passe par `pnpm audit`. Les GitHub Actions ont alertes et mises à jour.
 #
 # Messages de commit au format Conventional Commits, vérifiés par commitlint en CI : `build(deps)` et
 # `build(deps-dev)` (rubrique « Build and Distribution » du CHANGELOG), `ci(deps)` pour les actions. Les

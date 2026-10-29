@@ -219,7 +219,7 @@
           "slow": "{count} database operation took more than {ms} ms, blocking the server meanwhile | {count} database operations took more than {ms} ms, blocking the server meanwhile",
           "loaded": "{count} minute spent more than {percent} of the time in the database | {count} minutes spent more than {percent} of the time in the database",
           "peaks": "Peaks: requests {requests}/s, writes {writes}/s, time in the database {share}.",
-          "advice": "With SQLite, every database access blocks the server and writes from several processes wait for each other. For sustained traffic, several processes or several servers, switch to PostgreSQL or MySQL (setup.md, § 12.1 “Scaling”).",
+          "advice": "With SQLite, every database access blocks the server and writes from several processes wait for each other. For sustained traffic, several processes or several servers, switch to PostgreSQL or MySQL (setup.md, § 13 “Scaling”).",
           "seenAt": "Last observed: {date}"
         },
         "expiringTokens": "{count} personal token expires within {days} days | {count} personal tokens expire within {days} days",

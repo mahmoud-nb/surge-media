@@ -1,7 +1,6 @@
 /**
  * Traitement des vidéos par ffmpeg (phase D3) : modes, états, étapes, codes d'erreur, rendus et règles
  * pures partagées par le serveur (file, processus de travail, diffusion) et l'interface (fiche, réglages).
- * Architecture : .claude/architecture-phase-d.md § 28 à § 42 (DD25 à DD36).
  */
 
 /**

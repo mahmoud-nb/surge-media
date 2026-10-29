@@ -22,7 +22,7 @@ pnpm dev
 ```
 
 Avec le paquet npm, dans le dossier qui contiendra la configuration et les données (npm 12 et plus : approuver
-d'abord les scripts d'installation, [setup.md § 15.5](setup.md#155-le-paquet-npm)) :
+d'abord les scripts d'installation, [setup.md § 5](setup.md#5-installing-with-the-npm-package)) :
 
 ```bash
 npm install @surge-media/core
@@ -38,12 +38,12 @@ docker run -d -p 127.0.0.1:3000:3000 -v surge-media-data:/app/data -e NUXT_SITE_
   -e NUXT_BOOTSTRAP_ADMIN_EMAIL=vous@exemple.fr -e NUXT_BOOTSTRAP_ADMIN_PASSWORD=un-mot-de-passe-long surge-media
 ```
 
-Exemples Compose dans [`docker/`](docker), détails dans [setup.md § 12.2](setup.md#122-docker). Images
+Exemples Compose dans [`docker/`](docker), détails dans [setup.md § 4](setup.md#4-installing-with-docker). Images
 publiées à chaque version : `ghcr.io/mahmoud-nb/surge-media` (amd64, arm64).
 
-Guide complet de développement : [setup.md](setup.md) ; versions, releases et publication :
-[§ 15](setup.md#15-qualité-du-code-versions-et-publication) ; historique :
-[CHANGELOG](apps/core/CHANGELOG.md).
+Guide d'installation et d'exploitation, en anglais (prérequis, Docker, npm, variables d'environnement,
+mandataire inverse, sauvegardes, mises à jour, dépannage) : [setup.md](setup.md) ; développer surgeMedia :
+[§ 18](setup.md#18-developing-surgemedia) ; historique : [CHANGELOG](apps/core/CHANGELOG.md).
 
 ## Sécurité
 

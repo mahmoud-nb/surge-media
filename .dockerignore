@@ -17,4 +17,5 @@
 !**/.env.example
 **/tests
 setup.md
+dev-guide.md
 docker/compose*.yaml

@@ -1,5 +1,5 @@
 /**
- * Releases de @surge-media/core avec release-it (`pnpm release`, setup.md § 15) :
+ * Releases de @surge-media/core avec release-it (`pnpm release`) :
  *
  *   1. vérifications : branche main ou release/*, arbre propre et à jour avec le dépôt distant, au moins un
  *      commit qui touche le core depuis la dernière version ; lint, typecheck, tests, traductions, migrations à jour ;

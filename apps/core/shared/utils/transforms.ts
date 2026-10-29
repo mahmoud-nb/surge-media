@@ -1,5 +1,5 @@
 /**
- * Transformations d'images à la demande (phase C, `.claude/architecture-phase-c.md`) : grammaire du
+ * Transformations d'images à la demande (phase C) : grammaire du
  * segment de transformation des URL de diffusion, analyse et forme canonique. Fonctions pures,
  * partagées par le serveur (diffusion, API), l'interface (générateur d'URL) et les tests.
  *

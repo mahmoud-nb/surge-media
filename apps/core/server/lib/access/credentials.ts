@@ -21,7 +21,7 @@ import { hashAccessToken, parseAccessToken } from './tokens'
  *      d'un jeton délégué est retrouvé par son identifiant, avec le même cache ;
  *   3. état : révoqué, expiré, propriétaire désactivé.
  * Les portées effectives dans un espace viennent du moteur pur `credentialScopes`
- * (shared/utils/permissions.ts). Architecture : .claude/architecture-phase-b.md § 3.4, § 4, § 9.6.
+ * (shared/utils/permissions.ts).
  */
 
 export interface CredentialRecord {

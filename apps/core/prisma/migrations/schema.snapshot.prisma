@@ -8,7 +8,7 @@
 //   - sous MySQL, `String` devient VARCHAR(191) : les longueurs maximales sont
 //     validées par la couche API ;
 //   - toute modification doit être suivie de `pnpm db:migration <nom>` pour
-//     générer la migration de CHAQUE fournisseur (voir setup.md).
+//     générer la migration de CHAQUE fournisseur.
 //
 // Prisma 7 : l'URL de connexion n'est plus déclarée ici mais dans
 // `prisma.config.ts` (variable d'environnement DATABASE_URL).

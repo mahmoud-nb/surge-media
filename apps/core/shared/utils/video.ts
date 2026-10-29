@@ -1,7 +1,7 @@
 /**
  * Vidéos (phase D1) : métadonnées techniques extraites des en-têtes du fichier (aucun décodage) et
  * règles de compatibilité de lecture. Partagé par le serveur (gestionnaire vidéo) et l'interface
- * (fiche du média). Fonctions pures, testées. Architecture : .claude/architecture-phase-d.md § 5.
+ * (fiche du média). Fonctions pures, testées.
  */
 
 /** Conteneurs servis tels quels et lus par `<video>` (phase D1). */
@@ -49,7 +49,7 @@ export const VIDEO_MAX_DIMENSION = 16_384
 /**
  * Préparation des MP4/MOV à l'envoi (phase D2, sans réencodage) : `faststart` = index placé avant les
  * données ; `metadata` = métadonnées d'origine retirées (lieu de tournage, appareil). Réglage serveur :
- * NUXT_MEDIA_VIDEO_PREPARE. Architecture : .claude/architecture-phase-d.md § 18.
+ * NUXT_MEDIA_VIDEO_PREPARE.
  */
 export const VIDEO_PREPARATIONS = ['faststart', 'metadata'] as const
 export type VideoPreparation = (typeof VIDEO_PREPARATIONS)[number]

@@ -1,6 +1,6 @@
 /**
  * Pistes de texte des vidéos (phase D2, élément HTML <track>) : constantes et règles partagées par le
- * serveur et l'interface. Architecture : .claude/architecture-phase-d.md § 20.
+ * serveur et l'interface.
  */
 
 /** Sous-titres, sous-titres pour sourds et malentendants, descriptions, chapitres. */

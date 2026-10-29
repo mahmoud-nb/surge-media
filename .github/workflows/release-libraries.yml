@@ -1,4 +1,4 @@
-# Publication des librairies front (setup.md § 17.2), quand une release GitHub de tag libs-vX.Y.Z est publiée —
+# Publication des librairies front, quand une release GitHub de tag libs-vX.Y.Z est publiée —
 # créée par `pnpm release:libs` — ou à la main pour un tag existant (Actions › Release (libraries) › Run
 # workflow), pour relancer une publication interrompue : un paquet déjà publié en cette version est sauté.
 # Les releases du core (tags vX.Y.Z) sont publiées par release.yml.
@@ -118,7 +118,7 @@ jobs:
           # La provenance exige un dépôt public.
           PROVENANCE: ${{ github.event.repository.private && 'false' || 'true' }}
         run: |
-          # Sans NPM_TOKEN : publication de confiance, à déclarer sur npmjs.com pour chaque paquet (setup.md § 17.2).
+          # Sans NPM_TOKEN : publication de confiance, à déclarer sur npmjs.com pour chaque paquet.
           if [ -n "$NPM_TOKEN" ]; then
             echo "//registry.npmjs.org/:_authToken=${NPM_TOKEN}" > "$HOME/.npmrc"
           fi

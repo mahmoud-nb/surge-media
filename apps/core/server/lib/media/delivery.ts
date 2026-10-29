@@ -199,7 +199,8 @@ export function holdApplies(
  *   `audio/*`** : servis avec leur type détecté à l'envoi et `nosniff`, ils ne s'ouvrent que dans le lecteur du
  *   navigateur, jamais comme une page ; `sandbox` n'y protège de rien et empêche des navigateurs de lire le fichier
  *   (requête du lecteur refusée depuis l'origine opaque, constaté dans celui de l'application de bureau).
- * À revoir avant d'accepter un nouveau type de fichier (SVG, PDF, documents) : setup.md § 7.4.
+ * À revoir avant d'accepter un nouveau type de fichier (SVG, PDF, documents) : cet en-tête, la disposition
+ * (`attachment`) et un domaine de diffusion distinct pour les fichiers actifs (`NUXT_MEDIA_PUBLIC_URL`).
  */
 export function deliveryCsp(mimeType: string): string {
   const base = 'default-src \'none\'; img-src \'self\'; media-src \'self\''

@@ -1,4 +1,4 @@
-# Publication d'une version du core (setup.md § 15), quand une release GitHub est publiée — créée par `pnpm release`
+# Publication d'une version du core, quand une release GitHub est publiée — créée par `pnpm release`
 # (tag vX.Y.Z) — ou à la main pour un tag existant (Actions › Release › Run workflow), pour relancer une
 # publication interrompue : chaque étape déjà faite est sautée ou écrasée à l'identique. Les librairies front
 # (tags libs-vX.Y.Z) ont leur propre workflow : release-libraries.yml.
@@ -142,7 +142,7 @@ jobs:
             echo "@surge-media/core@$VERSION est déjà publiée : rien à faire."
             exit 0
           fi
-          # Sans NPM_TOKEN : publication de confiance, à déclarer sur npmjs.com (setup.md § 15).
+          # Sans NPM_TOKEN : publication de confiance, à déclarer sur npmjs.com.
           if [ -n "$NPM_TOKEN" ]; then
             echo "//registry.npmjs.org/:_authToken=${NPM_TOKEN}" > "$HOME/.npmrc"
           fi

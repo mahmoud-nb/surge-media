@@ -1,6 +1,6 @@
 /**
  * API publique v1 (`/api/v1`) : constantes et catalogue des erreurs, partagés avec le serveur, les
- * tests et, plus tard, le client `@surge-media/client`. Architecture : .claude/architecture-phase-b.md § 6.
+ * tests et, plus tard, le client `@surge-media/client`.
  *
  * Les erreurs suivent la RFC 9457 (« Problem Details ») ; `code` est stable et permet aux
  * applications de traduire le message, `title`/`detail` s'adressent aux développeurs (en anglais).

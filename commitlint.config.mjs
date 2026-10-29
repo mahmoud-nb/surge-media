@@ -1,5 +1,5 @@
 /**
- * Messages de commit : Conventional Commits, source du CHANGELOG et du calcul de la version (setup.md § 15).
+ * Messages de commit : Conventional Commits, source du CHANGELOG et du calcul de la version.
  * Vérifiés par le hook git commit-msg (simple-git-hooks, installé par `pnpm install`) et par la CI sur les
  * pull requests.
  *

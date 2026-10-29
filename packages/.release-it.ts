@@ -1,5 +1,5 @@
 /**
- * Releases des librairies front avec release-it (`pnpm release:libs`, setup.md § 17.2) : @surge-media/client et
+ * Releases des librairies front avec release-it (`pnpm release:libs`) : @surge-media/client et
  * @surge-media/vue sont versionnés ensemble (architecture phase E, ED16), sous des tags `libs-vX.Y.Z` — jamais
  * confondus avec les tags `vX.Y.Z` du core (release-it du core ne retient que `v*`).
  *

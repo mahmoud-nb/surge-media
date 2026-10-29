@@ -9,7 +9,7 @@
 # un paquet déjà construit avec --build-context package=<dossier contenant surge-media-core.tgz> (la CI y passe
 # celui qu'elle publie sur npm : même artefact partout, et aucune build Nuxt par architecture).
 # Une seule image pour SQLite, PostgreSQL et MySQL/MariaDB : les trois clients Prisma sont embarqués et le
-# serveur charge celui de DATABASE_PROVIDER (déduit de DATABASE_URL s'il manque). Guide : setup.md, § 12.2.
+# serveur charge celui de DATABASE_PROVIDER (déduit de DATABASE_URL s'il manque). Guide : setup.md, § 4.
 
 ARG NODE_VERSION=24
 # Debian 13 « trixie » : ffmpeg 7.1 (Debian 12 « bookworm » n'a que ffmpeg 5.1, refusé par surgeMedia).

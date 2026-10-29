@@ -3,7 +3,7 @@
  * Transformations d'images d'un niveau : politique des transformations libres, préréglages et
  * bornes du serveur. Projet (`projectId`) : onglet « Transformations » (lecture pour tout membre,
  * modification avec project:settings) ; sans projet : page « Réglages » (bibliothèque et
- * préréglages globaux, settings:manage). Architecture : .claude/architecture-phase-c.md § 5 et § 9.
+ * préréglages globaux, settings:manage).
  */
 import { Pencil, Plus, SlidersHorizontal, Trash2 } from '@lucide/vue'
 import {
