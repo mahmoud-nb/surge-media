@@ -1,6 +1,6 @@
 ---
 question: "Que se passe-t-il si l’éditeur cesse son activité ?"
-order: 5
+order: 6
 keywords: ["pérennité","réversibilité","dépendance","éditeur","risque fournisseur","escrow"]
 ---
 Votre instance continue de fonctionner : elle ne dépend d’aucun service de l’éditeur.

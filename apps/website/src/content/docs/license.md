@@ -8,15 +8,20 @@ surgeMedia is distributed under the **Business Source License 1.1** (SPDX identi
 ## In short
 
 - **Development, testing and evaluation** — free for everyone, whatever your size.
-- **Production use** — free, **except** in two cases that require a [commercial license](../pricing/):
+- **Production use** — free, **except** in three cases that require a [commercial license](../pricing/):
   1. **Revenue threshold** — the entity using surgeMedia (or on whose behalf it is used), together with its affiliates, made more than **USD 500,000** in gross revenue in its last completed fiscal year;
-  2. **Competing hosted service** — surgeMedia, modified or not, is offered to third parties as a hosted media service (media storage “as a service”, headless media CMS…), whatever your revenue.
+  2. **Competing hosted service** — surgeMedia, modified or not, is offered to third parties as a hosted media service (media storage “as a service”, headless media CMS…), whatever your revenue;
+  3. **Licensed features** — a feature that requires a license key (see below) is used in production without a valid key that covers it, whatever your revenue. Removing or bypassing the key check does not change that.
 - **Change license** — each version is released under the **Apache License 2.0** three years after its first publication.
 
 ## What is not a competing hosted service
 
 - Using surgeMedia to store, process or deliver media for **your own** websites, apps, products or services, even when your users upload or view media through them.
 - Hosting a **dedicated instance for one client**, solely for that client's own sites, apps or internal use, as part of other services you provide (design, development, maintenance), and not marketed as a standalone media offering. The revenue threshold then applies to both you and your client.
+
+## Features that require a license key
+
+**None today.** Features reserved for paid plans (single sign-on, audit log export to a SIEM…) will be listed here when they ship. They are enabled by a license key installed in **Settings › License** or in the `NUXT_LICENSE_KEY` variable, verified on your server without any outside call. Everything else — media management, delivery, API, administration — never depends on a key.
 
 ## Front-end libraries
 

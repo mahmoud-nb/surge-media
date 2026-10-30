@@ -1,6 +1,6 @@
 ---
 question: "How is the commercial license billed?"
-order: 3
+order: 4
 keywords: ["price","pricing","cost","quote","billing","usage","subscription","enterprise"]
 related:
   - label: "Pricing"

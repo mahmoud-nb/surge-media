@@ -1,6 +1,6 @@
 ---
 question: "Quel support est proposé ?"
-order: 4
+order: 5
 keywords: ["support","sla","assistance","accompagnement","maintenance","aide"]
 related:
   - label: "Tarifs"

@@ -8,15 +8,20 @@ surgeMedia est distribué sous **Business Source License 1.1** (identifiant SPDX
 ## En résumé
 
 - **Développement, tests et évaluation** — gratuits pour tous, quelle que soit votre taille.
-- **Utilisation en production** — gratuite, **sauf** dans deux cas qui exigent une [licence commerciale](../pricing/) :
+- **Utilisation en production** — gratuite, **sauf** dans trois cas qui exigent une [licence commerciale](../pricing/) :
   1. **Seuil de chiffre d’affaires** — l’entité qui utilise surgeMedia (ou pour le compte de laquelle il est utilisé), avec ses sociétés affiliées, a réalisé plus de **500 000 USD** de chiffre d’affaires brut lors de son dernier exercice clos ;
-  2. **Service hébergé concurrent** — surgeMedia, modifié ou non, est proposé à des tiers comme service de médias hébergé (stockage de médias « as a service », CMS de médias headless…), quel que soit votre chiffre d’affaires.
+  2. **Service hébergé concurrent** — surgeMedia, modifié ou non, est proposé à des tiers comme service de médias hébergé (stockage de médias « as a service », CMS de médias headless…), quel que soit votre chiffre d’affaires ;
+  3. **Fonctions sous licence** — une fonction qui exige une clé de licence (voir plus bas) est utilisée en production sans clé valable qui la couvre, quel que soit votre chiffre d’affaires. Retirer ou contourner la vérification de la clé n’y change rien.
 - **Licence de conversion** — chaque version passe sous **licence Apache 2.0** trois ans après sa première publication.
 
 ## Ce qui n’est pas un service hébergé concurrent
 
 - Utiliser surgeMedia pour stocker, traiter ou diffuser les médias de **vos propres** sites, applications, produits ou services, même lorsque vos utilisateurs y envoient ou y consultent des médias.
 - Héberger une **instance dédiée à un client**, uniquement pour ses propres sites, applications ou usages internes, dans le cadre d’autres prestations que vous lui fournissez (conception, développement, maintenance), et sans la commercialiser comme une offre de médias autonome. Le seuil de chiffre d’affaires s’applique alors à vous comme à votre client.
+
+## Fonctions qui exigent une clé de licence
+
+**Aucune aujourd’hui.** Les fonctions réservées aux offres payantes (authentification unique, export du journal d’audit vers un SIEM…) seront listées ici à leur sortie. Elles s’activent par une clé de licence installée dans **Réglages › Licence** ou dans la variable `NUXT_LICENSE_KEY`, vérifiée sur votre serveur sans aucun appel extérieur. Tout le reste — gestion et diffusion des médias, API, administration — ne dépend jamais d’une clé.
 
 ## Librairies front-end
 

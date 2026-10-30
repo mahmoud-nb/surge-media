@@ -8,9 +8,10 @@ related:
   - label: "Licence"
     href: "/license/"
 ---
-Seulement en production, et seulement dans deux cas :
+Seulement en production, et seulement dans trois cas :
 
 - votre organisation, avec les sociétés de son groupe, a réalisé plus de **500 000 USD** de chiffre d’affaires lors de son dernier exercice clos ;
-- vous proposez surgeMedia à des tiers comme service de médias hébergé.
+- vous proposez surgeMedia à des tiers comme service de médias hébergé ;
+- vous utilisez en production une fonction qui exige une clé de licence (aucune aujourd’hui : elles seront listées sur la page [Licence](../license/)).
 
 Le développement, les tests et l’évaluation sont toujours gratuits.

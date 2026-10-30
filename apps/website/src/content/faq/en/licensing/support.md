@@ -1,6 +1,6 @@
 ---
 question: "What support is available?"
-order: 4
+order: 5
 keywords: ["support","sla","help","onboarding","maintenance"]
 related:
   - label: "Pricing"

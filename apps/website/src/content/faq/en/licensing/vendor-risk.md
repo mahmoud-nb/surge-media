@@ -1,6 +1,6 @@
 ---
 question: "What happens if the vendor goes out of business?"
-order: 5
+order: 6
 keywords: ["continuity","reversibility","lock-in","vendor","supplier risk","escrow"]
 ---
 Your instance keeps running: it depends on no service of the vendor.

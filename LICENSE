@@ -14,7 +14,7 @@ Additional Use Grant: You may make production use of the Licensed Work, free
                       Use. Any Excluded Use requires a commercial license
                       from the Licensor.
 
-                      An “Excluded Use” means either of the following:
+                      An “Excluded Use” means any of the following:
 
                       (a) Revenue Threshold: any production use of the
                           Licensed Work by, or on behalf of, any individual
@@ -29,7 +29,12 @@ Additional Use Grant: You may make production use of the Licensed Work, free
                           Work, or any modified version or derivative work
                           of it, available to third parties as part of a
                           Competing Hosted Service, regardless of the Gross
-                          Revenue of the entity doing so.
+                          Revenue of the entity doing so; or
+
+                      (c) Licensed Features: any production use of a
+                          Licensed Feature without a valid License Key that
+                          covers it, regardless of the Gross Revenue of the
+                          entity doing so.
 
                       For the purposes of this Additional Use Grant:
 
@@ -70,6 +75,20 @@ Additional Use Grant: You may make production use of the Licensed Work, free
                       includes, without limitation, any offering marketed
                       or functioning as “Media Storage as a Service” or as
                       a “Headless Media CMS”.
+
+                      “Licensed Feature” means any feature of the Licensed
+                      Work that its documentation identifies as requiring
+                      a License Key.
+
+                      “License Key” means a license key issued by the
+                      Licensor for the Licensed Work. A License Key is
+                      valid only for the features, number of production
+                      instances and period stated in it, and its period
+                      is assessed against the actual date and time,
+                      regardless of any system clock setting. Removing,
+                      disabling, modifying or circumventing the License
+                      Key verification of the Licensed Work neither
+                      creates a License Key nor makes one valid.
 
                       For the avoidance of doubt, none of the following is
                       a Competing Hosted Service:

@@ -1,6 +1,6 @@
 ---
 question: "Comment la licence commerciale est-elle facturée ?"
-order: 3
+order: 4
 keywords: ["prix","tarif","coût","devis","facturation","volume","abonnement","enterprise"]
 related:
   - label: "Tarifs"
