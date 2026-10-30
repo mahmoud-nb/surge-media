@@ -15,7 +15,7 @@ export interface AuditEntryView {
 }
 
 export function useAuditFormat() {
-  const { t } = useI18n()
+  const { t, te, locale } = useI18n()
   const { environmentLabel } = useCredentialLabels()
 
   function actionLabel(action: string): string {
@@ -50,6 +50,12 @@ export function useAuditFormat() {
 
   function text(value: unknown): string {
     return typeof value === 'string' ? value : ''
+  }
+
+  /** Date ISO enregistrée dans les données → date et heure lisibles (texte brut si illisible). */
+  function dateTime(value: unknown): string {
+    const date = new Date(text(value))
+    return Number.isNaN(date.getTime()) ? text(value) : new Intl.DateTimeFormat(locale.value, { dateStyle: 'medium', timeStyle: 'short' }).format(date)
   }
 
   function spaceName(space: unknown): string {
@@ -127,6 +133,16 @@ export function useAuditFormat() {
               to: t(`transforms.policy.options.${text(change.libraryPolicy.to)}.label`),
             })
           : null
+      case 'settings.license_installed':
+      case 'settings.license_removed':
+        return data.id
+          ? t('audit.details.license', {
+              plan: te(`settings.license.plans.${text(data.plan)}`) ? t(`settings.license.plans.${text(data.plan)}`) : text(data.plan),
+              id: text(data.id),
+            })
+          : null
+      case 'settings.license_clock_reset':
+        return t('audit.details.licenseClock', { from: dateTime(data.from), to: dateTime(data.to) })
       default:
         return null
     }

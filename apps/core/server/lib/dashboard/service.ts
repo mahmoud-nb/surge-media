@@ -1,5 +1,6 @@
 import type { H3Event } from 'h3'
 import { DASHBOARD_ACTIVITY, DASHBOARD_PROJECTS, EXPIRING_SOON_DAYS, hourlyCounts, startOfUtcHour, UPLOAD_WINDOW_HOURS, type DashboardAttention } from '#shared/utils/dashboard'
+import { LICENSE_CLOCK_WARNING_MS } from '#shared/utils/license'
 import type { MediaKind, Prisma, User } from '../../generated/prisma/client'
 import { listAuditEvents } from '../audit/service'
 import { readDatabasePressure } from '../database/pressure'
@@ -145,6 +146,11 @@ export async function dashboardData(event: H3Event, user: User) {
     const pressure = await readDatabasePressure(prisma)
     if (pressure) attention.push({ kind: 'database', ...pressure })
     if (!useRuntimeConfig(event).siteUrl && !import.meta.dev) attention.push({ kind: 'siteUrl' })
+    const license = await licenseStatus(event)
+    if (license.state === 'expiring' || license.state === 'grace' || license.state === 'expired' || license.state === 'invalid') {
+      attention.push({ kind: 'license', state: license.state, expiresAt: license.license?.expiresAt ?? null, graceEndsAt: license.license?.graceEndsAt ?? null })
+    }
+    if (license.clockBehindMs > LICENSE_CLOCK_WARNING_MS) attention.push({ kind: 'clock', behindMs: license.clockBehindMs })
   }
   if (expiringTokens.length) {
     attention.push({ kind: 'expiringTokens', items: expiringTokens.map(token => ({ id: token.id, name: token.name, expiresAt: token.expiresAt! })) })

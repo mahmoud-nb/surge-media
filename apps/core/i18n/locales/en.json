@@ -255,7 +255,19 @@
         "trash": "{count} media item in the trash | {count} media items in the trash",
         "trashSpace": "{space} ({count})",
         "siteUrl": "The public address of the installation (NUXT_SITE_URL) is not set: absolute addresses depend on each request.",
-        "mail": "Email sending is not configured (NUXT_SMTP_HOST, NUXT_SMTP_FROM): invitation links have to be sent by hand."
+        "mail": "Email sending is not configured (NUXT_SMTP_HOST, NUXT_SMTP_FROM): invitation links have to be sent by hand.",
+        "license": {
+          "expiring": "The commercial license expires on {date}: remember to renew it.",
+          "grace": "The commercial license expired on {date}: paid features remain active until {end}, the end of the grace period.",
+          "expired": "The commercial license expired on {date}: paid features are disabled. The rest of surgeMedia works as usual.",
+          "invalid": "The installed commercial license is not valid: paid features are disabled.",
+          "link": "View the license"
+        },
+        "clock": {
+          "days": "This server's clock is about {count} day behind the latest known date. | This server's clock is about {count} days behind the latest known date.",
+          "hours": "This server's clock is about {count} hour behind the latest known date. | This server's clock is about {count} hours behind the latest known date.",
+          "advice": "The license is assessed at that date, and two-factor authentication and signed links may fail. Fix the system time (NTP synchronization)."
+        }
       },
       "projects": {
         "title": "My projects",
@@ -1742,7 +1754,10 @@
         "deleted": "Preset deleted"
       },
       "settings": {
-        "updated": "Settings updated"
+        "updated": "Settings updated",
+        "license_installed": "License installed",
+        "license_removed": "License removed",
+        "license_clock_reset": "License time mark brought back"
       }
     },
     "details": {
@@ -1768,7 +1783,9 @@
       "devicesRevoked": "No device | One device | {count} devices",
       "processingBackfill": "No video queued | One video queued | {count} videos queued",
       "processingBackfillPartial": "Stopped by an error: the remaining videos were not queued",
-      "mfaPolicy": "Two-factor authentication: {from} → {to}"
+      "mfaPolicy": "Two-factor authentication: {from} → {to}",
+      "license": "{plan} · no. {id}",
+      "licenseClock": "Mark: {from} → {to}"
     },
     "fields": {
       "name": "name",
@@ -2080,6 +2097,109 @@
       "pending": "{count} account will set it up at its next sign-in. | {count} accounts will set it up at their next sign-in.",
       "unavailable": "The NUXT_MFA_ENCRYPTION_KEY encryption key is not set: only the “Optional” policy is possible.",
       "saved": "Two-factor authentication policy saved. It applies at each account's next sign-in."
+    },
+    "license": {
+      "title": "License",
+      "description": "This installation's commercial license and the paid features it enables. Without a license, the Community edition remains complete for managing and delivering media.",
+      "loadError": "Could not load the license.",
+      "stateTitle": "Commercial license",
+      "states": {
+        "none": {
+          "badge": "Community",
+          "text": "No commercial license is installed: this installation runs the Community edition."
+        },
+        "invalid": {
+          "badge": "Not valid",
+          "text": "The installed license is not valid, paid features are disabled."
+        },
+        "pending": {
+          "badge": "Not yet valid",
+          "text": "The license takes effect on {date}. Until then, paid features remain disabled."
+        },
+        "valid": {
+          "badge": "Valid",
+          "text": "The license's paid features are active until {date}."
+        },
+        "expiring": {
+          "badge": "Expires soon",
+          "text": "The license expires on {date}, in {days} day: remember to renew it. | The license expires on {date}, in {days} days: remember to renew it."
+        },
+        "grace": {
+          "badge": "Grace period",
+          "text": "The license expired on {date}. Paid features remain active during the grace period, until {end}."
+        },
+        "expired": {
+          "badge": "Expired",
+          "text": "The license expired on {date}: paid features are disabled. The rest of surgeMedia works as usual."
+        }
+      },
+      "community": "Community edition: surgeMedia is free in production for organizations whose annual revenue does not exceed USD 500,000, except to offer a competing media hosting service (BUSL 1.1 license). Above that threshold, or for paid features (single sign-on, SIEM export…), write to {email}.",
+      "clockTitle": "Server clock behind",
+      "clockDays": "This server's clock is about {count} day behind the latest known date: the license is assessed at that date. Fix the system time (NTP synchronization). | This server's clock is about {count} days behind the latest known date: the license is assessed at that date. Fix the system time (NTP synchronization).",
+      "clockHours": "This server's clock is about {count} hour behind the latest known date: the license is assessed at that date. Fix the system time (NTP synchronization). | This server's clock is about {count} hours behind the latest known date: the license is assessed at that date. Fix the system time (NTP synchronization).",
+      "licensee": "Licensee",
+      "plan": "Plan",
+      "featuresLabel": "Paid features",
+      "noFeatures": "None",
+      "featuresOff": "Disabled: the license is not currently valid.",
+      "instances": "Production instances covered",
+      "unlimited": "Unlimited",
+      "validity": "Validity",
+      "validityRange": "From {start} to {end}",
+      "support": "Support and updates",
+      "supportUntil": "Until {date}",
+      "supportEnded": "Ended on {date}",
+      "number": "License number",
+      "source": {
+        "env": "License provided by the NUXT_LICENSE_KEY environment variable.",
+        "database": "License installed from this page."
+      },
+      "instanceId": "This installation's identifier",
+      "instanceIdHint": "Give it to support and in the yearly statement of your production instances. It is never sent anywhere.",
+      "installTitle": "Install a license",
+      "replaceTitle": "Replace the license",
+      "tokenLabel": "License",
+      "tokenHint": "Paste the content of the .lic file received from Surge Up, or choose the file below. The license is verified on this server, without any outside call.",
+      "fileLabel": "License file (.lic)",
+      "fileUnreadable": "This file does not contain a readable license.",
+      "install": "Install the license",
+      "installed": "License installed.",
+      "remove": "Remove the license",
+      "removeTitle": "Remove the license?",
+      "removeDescription": "Paid features will be disabled. The rest of surgeMedia keeps working as usual.",
+      "removeConfirm": "Remove the license",
+      "removed": "License removed: this installation is back to the Community edition.",
+      "envTitle": "License provided by the server configuration",
+      "envText": "The NUXT_LICENSE_KEY variable is set: the license is changed in the server configuration, then on restart.",
+      "plans": {
+        "pro": "Pro",
+        "business": "Business",
+        "enterprise": "Enterprise",
+        "enterprise-global": "Enterprise Global",
+        "agency": "Agency",
+        "oem": "OEM",
+        "trial": "Trial"
+      },
+      "features": {
+        "sso": "Single sign-on (SSO)",
+        "siem": "Audit log export to a SIEM",
+        "scim": "Account provisioning (SCIM)"
+      },
+      "reasons": {
+        "malformed": "This text is not a surgeMedia license: paste the full content of the .lic file.",
+        "algorithm": "This license's format is not recognized.",
+        "unknown-key": "This license is not signed with a key this version of surgeMedia recognizes: update surgeMedia, or write to licensing{'@'}surgeup.org.",
+        "signature": "The signature does not match: the license was altered or copied incorrectly.",
+        "product": "This license is not a surgeMedia license.",
+        "version": "This license uses a newer format: update surgeMedia.",
+        "payload": "This license's content is incomplete or inconsistent."
+      },
+      "errors": {
+        "LICENSE_INVALID": "This license is not valid.",
+        "LICENSE_FROM_ENV": "The license is provided by the NUXT_LICENSE_KEY variable: change it in the server configuration.",
+        "LICENSE_REQUIRED": "This feature requires a commercial license that covers it.",
+        "unexpected": "The license could not be saved. Try again."
+      }
     }
   },
   "transforms": {

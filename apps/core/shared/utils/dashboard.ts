@@ -85,6 +85,10 @@ export type DashboardAttention
     | { kind: 'expiringKeys', items: { id: string, name: string, type: string, environment: string | null, project: { id: string, name: string }, expiresAt: Date | string }[] }
     | { kind: 'invitations', pending: number, expired: number }
     | { kind: 'trash', total: number, spaces: ({ type: 'library', count: number } | { type: 'project', id: string, name: string, count: number })[] }
+    // Licence commerciale qui expire, en grâce, échue ou refusée ; horloge du serveur en retard sur la date de
+    // référence de la licence (au-delà d'une heure). Réservés à `settings:manage`.
+    | { kind: 'license', state: 'expiring' | 'grace' | 'expired' | 'invalid', expiresAt: string | null, graceEndsAt: string | null }
+    | { kind: 'clock', behindMs: number }
 
 /** Gravité d'un point d'attention : `warning` demande d'agir, `info` renseigne. */
 export function attentionSeverity(item: DashboardAttention): 'warning' | 'info' {

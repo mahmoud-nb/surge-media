@@ -5,6 +5,8 @@
  * globaux (utilisables dans tous les projets) et bornes du serveur (variables d'environnement).
  * Section « Traitement des vidéos » (phase D3) : état en lecture seule (variables NUXT_VIDEO_*),
  * processus de travail, tâches, et « Traiter les vidéos existantes ».
+ * Section « Licence » (ancre #license, liens du tableau de bord) : licence commerciale et identifiant
+ * de l'installation.
  */
 definePageMeta({ layout: 'admin', permission: 'settings:manage' })
 
@@ -50,6 +52,18 @@ useSeoMeta({ title: () => t('settings.meta.title') })
         </p>
       </div>
       <AdminVideoProcessingSettings :heading-level="3" />
+    </section>
+
+    <section id="license" aria-labelledby="settings-license-title" class="mt-12 grid scroll-mt-6 gap-4">
+      <div class="grid max-w-3xl gap-1">
+        <h2 id="settings-license-title" class="text-xl font-semibold text-foreground">
+          {{ t('settings.license.title') }}
+        </h2>
+        <p class="text-sm text-muted-foreground">
+          {{ t('settings.license.description') }}
+        </p>
+      </div>
+      <AdminLicenseSettings />
     </section>
   </div>
 </template>

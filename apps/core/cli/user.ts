@@ -1,12 +1,8 @@
 import { randomBytes } from 'node:crypto'
-import { join } from 'node:path'
 import { cancel, confirm, intro, isCancel, log, outro } from '@clack/prompts'
-import { DEFAULT_SQLITE_URL, isDatabaseProvider } from '../shared/database'
 import type { CliContext } from './database'
-import { readEnvFile } from './lib/env-file'
-import { ENV_FILE } from './lib/project'
-import { openSqlClient, type SqlClient } from './lib/sql-client'
-import { SERVER_ENTRY } from './server'
+import { openInstanceSqlClient } from './lib/instance-sql'
+import type { SqlClient } from './lib/sql-client'
 
 /**
  * `surge-media user mfa-reset <e-mail> | --all` : réinitialise la double authentification d'un compte (ou de
@@ -21,17 +17,12 @@ export async function runMfaReset(ctx: CliContext, args: { email?: string, all?:
   const email = args.email?.trim().toLowerCase()
   if (!email === !args.all) fail(t('mfaReset.target'))
 
-  const env = readEnvFile(join(ctx.instanceDir, ENV_FILE))
-  const providerValue = process.env.DATABASE_PROVIDER || env.DATABASE_PROVIDER || 'sqlite'
-  if (!isDatabaseProvider(providerValue)) fail(t('mfaReset.provider', { provider: providerValue }))
-  const url = process.env.DATABASE_URL || env.DATABASE_URL || DEFAULT_SQLITE_URL
-
   let db: SqlClient
   try {
-    db = await openSqlClient({ provider: providerValue, url, packageDir: ctx.packageDir, instanceDir: ctx.instanceDir, serverEntry: SERVER_ENTRY })
+    db = await openInstanceSqlClient(ctx)
   }
   catch (error) {
-    fail(t('mfaReset.connection', { message: error instanceof Error ? error.message : String(error) }))
+    fail((error as Error).message)
   }
 
   try {

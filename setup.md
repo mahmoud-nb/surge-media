@@ -158,7 +158,8 @@ When the database is not reachable yet (database container still starting), migr
 - Sensitive variables can be read from files (Docker or Kubernetes secrets) with the `_FILE` suffix:
   `DATABASE_URL`, `NUXT_SESSION_PASSWORD`, `NUXT_MEDIA_SIGNING_SECRET`, `NUXT_MEDIA_PREVIOUS_SIGNING_SECRET`,
   `NUXT_MEDIA_STORAGE_S3_ACCESS_KEY_ID`, `NUXT_MEDIA_STORAGE_S3_SECRET_ACCESS_KEY`, `NUXT_SMTP_PASSWORD`,
-  `NUXT_BOOTSTRAP_ADMIN_PASSWORD`, `NUXT_MFA_ENCRYPTION_KEY`. Example: `NUXT_SMTP_PASSWORD_FILE=/run/secrets/smtp_password`.
+  `NUXT_BOOTSTRAP_ADMIN_PASSWORD`, `NUXT_MFA_ENCRYPTION_KEY`, `NUXT_LICENSE_KEY`. Example:
+  `NUXT_SMTP_PASSWORD_FILE=/run/secrets/smtp_password`.
 - Allow 30 seconds for shutdown (`--stop-timeout 30`, `stop_grace_period: 30s`) so a running video job is
   handed back to the queue cleanly.
 
@@ -250,6 +251,7 @@ For video processing in `external` mode, add a second unit running `surge-media 
 | `db migrate` | Apply pending migrations (after each update) |
 | `db reset` | Recreate the database schema, **deleting its data** (confirmation required; `--yes` to skip it) |
 | `user mfa-reset <email>` | Reset an account's two-factor authentication (lost phone and recovery codes, including the last administrator); `--all` for every account when `NUXT_MFA_ENCRYPTION_KEY` is lost; `--yes` to skip the confirmation |
+| `license clock-reset` | Bring the license reference-time mark back to this machine's clock, after the server clock ran ahead by mistake (§ 7.10); recorded in the audit log; `--yes` to skip the confirmation |
 
 Every command accepts `--cwd <directory>` (installation directory, default: the current one) and `--lang en`
 (or `SURGE_MEDIA_LANG=en`; French is the default). `npx surge-media --help` lists the options. The CLI refuses an
@@ -399,6 +401,22 @@ Configure SPF, DKIM and DMARC for the sender's domain, or messages may land in s
 | `SURGE_MEDIA_MIGRATE` | `true` | `false`: the `server` command starts without migrating (extra instances; run `migrate` once instead) |
 | `SURGE_MEDIA_SECRETS_DIR` | `/app/data/secrets` | Directory of the generated secrets |
 | `<VARIABLE>_FILE` | — | Read a sensitive variable from a file (§ 4.5) |
+
+### 7.10 Commercial license
+
+| Variable | Default | Role |
+| --- | --- | --- |
+| `NUXT_LICENSE_KEY` | — | Commercial license (content of the `.lic` file). Takes precedence over the license installed in **Settings › License**, which then becomes read-only; a change needs a restart. Optional: without a license (Community edition) or after it ends, only paid features switch off |
+
+The license is verified on your server, offline, against public keys built into surgeMedia: nothing is sent
+anywhere. **Settings › License** shows its state (valid, expiring within 30 days, in its 30-day grace period after
+expiry, expired, not valid), the licensee, plan, enabled features, covered production instances and dates, and
+the **installation identifier** to quote to support and in your yearly statement of production instances.
+
+The license is judged at a reference time that never goes back: the latest of the system clock, a mark kept in
+the database and, with PostgreSQL or MySQL, the database server's clock. Turning the clock back therefore does not
+extend a license; administrators are warned when the system clock is more than an hour behind. If the clock ran
+ahead by mistake and pushed the mark forward, fix the clock, then run `surge-media license clock-reset` (§ 5.3).
 
 ## 8. Database
 
@@ -564,6 +582,8 @@ Traefik also appends `X-Forwarded-For` by default; raise its timeouts and body s
 - [ ] Video processing: ffmpeg up to date, workers supervised and hardened (§ 10).
 - [ ] A retention policy for the audit log: there is no automatic purge yet.
 - [ ] Users invited with the least role they need; API secret keys only on your servers.
+- [ ] System clock synchronized (NTP): two-factor codes, signed links and the commercial license depend on it.
+- [ ] Commercial license installed if a Business Source License exclusion applies to you (§ 19).
 
 Not available yet, to take into account in your security assessment: single sign-on (SSO) for the
 administration, a password recovery command when every administrator has forgotten their password (a lost second
@@ -674,6 +694,8 @@ have run: restore the backup instead.
 | Two-factor code always refused | The phone's clock is off (codes change every 30 s): turn on automatic time; a code cannot be used twice |
 | "Two-factor authentication is unavailable on this server" | `NUXT_MFA_ENCRYPTION_KEY` missing or changed: restore the backed-up key; if it is lost, `surge-media user mfa-reset --all` and every account sets it up again |
 | Phone and recovery codes lost | An administrator resets it from the account's page; for the last administrator, `surge-media user mfa-reset <email>` on the server |
+| License refused: "not signed with a key this version recognizes" | The license needs a newer surgeMedia version: update, or write to the licensing contact |
+| "Server clock behind" (Settings › License, dashboard) | Fix the system time (NTP). If it was the clock that had run ahead by mistake, run `surge-media license clock-reset` once it is right (§ 7.10) |
 | `403 Cross-origin request blocked` | The proxy rewrites the `Host` header, or a modifying request comes from another origin |
 | `NUXT_SESSION_PASSWORD … was not set` | Run `surge-media init`, or set a secret of 32 characters or more |
 | `start` stops at once with exit code 1 | Port already used: another `--port`/`PORT`, or stop the other application; update `NUXT_SITE_URL` if it contains the port |
@@ -728,9 +750,15 @@ license:
 
 - development, testing and evaluation are free for everyone;
 - production use is free, except when the organization using it (with its affiliates) had more than
-  **USD 500,000** of gross revenue in its last completed fiscal year, or when surgeMedia is offered to third
-  parties as a competing hosted service — both cases require a commercial license;
+  **USD 500,000** of gross revenue in its last completed fiscal year, when surgeMedia is offered to third
+  parties as a competing hosted service, or when a feature that requires a license key is used in production
+  without a valid key — these cases require a commercial license;
 - each version becomes available under the Apache License 2.0 three years after its first release.
+
+No feature requires a license key yet. Features reserved for paid plans (single sign-on, audit log export to a
+SIEM…) will be listed on the [license page](https://mahmoud-nb.github.io/surge-media/license/) when they ship.
+A commercial license is installed in **Settings › License** or with `NUXT_LICENSE_KEY` (§ 7.10); media delivery,
+the API and the administration never depend on it.
 
 The [LICENSE](LICENSE) file is the only binding text. Commercial licenses, support with service levels and
 installation assistance: see the [pricing page](https://mahmoud-nb.github.io/surge-media/pricing/) or write to

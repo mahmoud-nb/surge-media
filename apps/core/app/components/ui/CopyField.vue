@@ -12,10 +12,13 @@ const props = defineProps<{
   value: string
   /** Texte du bouton ; « Copier » par défaut. */
   copyLabel?: string
+  /** Aide sous le champ, reliée à lui (aria-describedby). */
+  hint?: string
 }>()
 
 const { t } = useI18n()
 const inputId = useId()
+const hintId = `${inputId}-hint`
 const copied = ref(false)
 let timer: ReturnType<typeof setTimeout> | undefined
 
@@ -46,7 +49,7 @@ onBeforeUnmount(() => clearTimeout(timer))
   <div class="grid gap-1.5">
     <label :for="inputId" class="text-sm font-medium text-foreground">{{ label }}</label>
     <div class="flex flex-col gap-2 sm:flex-row">
-      <UiInput :id="inputId" :model-value="value" readonly class="font-mono text-xs sm:text-xs" @focus="select" />
+      <UiInput :id="inputId" :model-value="value" readonly :aria-describedby="hint ? hintId : undefined" class="font-mono text-xs sm:text-xs" @focus="select" />
       <UiButton variant="outline" class="shrink-0" @click="copy">
         <Check v-if="copied" aria-hidden="true" />
         <Copy v-else aria-hidden="true" />
@@ -54,6 +57,9 @@ onBeforeUnmount(() => clearTimeout(timer))
       </UiButton>
       <slot name="actions" />
     </div>
+    <p v-if="hint" :id="hintId" class="text-sm text-muted-foreground">
+      {{ hint }}
+    </p>
     <p class="min-h-5 text-sm font-medium text-success" role="status">
       {{ copied ? t('common.copied') : '' }}
     </p>

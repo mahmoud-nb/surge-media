@@ -1,7 +1,8 @@
 <script setup lang="ts">
 /**
  * Points d'attention (assemblés par le serveur selon les droits) : base SQLite sous pression, jetons et
- * clés qui expirent, invitations en attente ou expirées, corbeille, configuration incomplète. Chaque point mène à
+ * clés qui expirent, invitations en attente ou expirées, corbeille, configuration incomplète, licence commerciale
+ * qui expire ou n'est plus valable, horloge du serveur en retard. Chaque point mène à
  * l'écran où agir ; une icône et un libellé distinguent ce qui demande d'agir de ce qui renseigne.
  */
 import { CircleCheck, Info, TriangleAlert } from '@lucide/vue'
@@ -117,6 +118,29 @@ const number = (value: number) => new Intl.NumberFormat(locale.value).format(val
                 </NuxtLink>
               </li>
             </ul>
+          </template>
+
+          <template v-else-if="item.kind === 'license'">
+            <i18n-t :keypath="`admin.dashboard.attention.license.${item.state}`" scope="global" tag="p" class="font-medium">
+              <template #date>
+                <NuxtTime v-if="item.expiresAt" :datetime="item.expiresAt" :locale="locale" date-style="long" />
+              </template>
+              <template #end>
+                <NuxtTime v-if="item.graceEndsAt" :datetime="item.graceEndsAt" :locale="locale" date-style="long" />
+              </template>
+            </i18n-t>
+            <NuxtLink to="/admin/settings#license" class="font-medium text-primary underline-offset-4 hover:underline">
+              {{ t('admin.dashboard.attention.license.link') }}
+            </NuxtLink>
+          </template>
+
+          <template v-else-if="item.kind === 'clock'">
+            <p class="font-medium">
+              {{ item.behindMs >= 86_400_000
+                ? t('admin.dashboard.attention.clock.days', { count: Math.round(item.behindMs / 86_400_000) }, Math.round(item.behindMs / 86_400_000))
+                : t('admin.dashboard.attention.clock.hours', { count: Math.round(item.behindMs / 3_600_000) }, Math.round(item.behindMs / 3_600_000)) }}
+            </p>
+            <p>{{ t('admin.dashboard.attention.clock.advice') }}</p>
           </template>
 
           <p v-else-if="item.kind === 'siteUrl'">

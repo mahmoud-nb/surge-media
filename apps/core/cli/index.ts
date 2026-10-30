@@ -8,6 +8,7 @@
  *   surge-media db migrate  appliquer les migrations en attente
  *   surge-media db reset    recréer la base (éventuellement avec un autre fournisseur)
  *   surge-media user mfa-reset <e-mail> | --all   réinitialiser la double authentification (secours de l'exploitant)
+ *   surge-media license clock-reset               ramener le repère de la date de référence des licences à l'horloge
  *
  * Le .env et les données vivent dans le dossier de l'installation : le dossier courant pour le paquet publié,
  * apps/core dans le dépôt des sources (`--cwd` pour un autre dossier ; cli/lib/project.ts).
@@ -17,6 +18,7 @@ import { DATABASE_PROVIDERS } from '../shared/database'
 import { runInit, runMigrate, runReset, type CliContext } from './database'
 import { createTranslator, detectLocale, langFromArgv, LOCALES } from './i18n'
 import { isInsideNodeModules, packageVersion, resolveLocation } from './lib/project'
+import { runLicenseClockReset } from './license'
 import { DEFAULT_WEB_PORT, DEFAULT_WORKER_PORT, runServer } from './server'
 import { runMfaReset } from './user'
 
@@ -95,6 +97,15 @@ const mfaReset = defineCommand({
   run: ({ args }) => runMfaReset(context(args.cwd), args),
 })
 
+const licenseClockReset = defineCommand({
+  meta: { name: 'clock-reset', description: t('command.license.clockReset') },
+  args: {
+    ...commonArgs,
+    yes: { type: 'boolean', alias: 'y', description: t('args.yes') },
+  },
+  run: ({ args }) => runLicenseClockReset(context(args.cwd), args),
+})
+
 const main = defineCommand({
   meta: { name: 'surge-media', version: packageVersion(), description: t('cli.description') },
   subCommands: {
@@ -108,6 +119,10 @@ const main = defineCommand({
     user: defineCommand({
       meta: { name: 'user', description: t('command.user') },
       subCommands: { 'mfa-reset': mfaReset },
+    }),
+    license: defineCommand({
+      meta: { name: 'license', description: t('command.license') },
+      subCommands: { 'clock-reset': licenseClockReset },
     }),
   },
 })

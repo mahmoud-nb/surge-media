@@ -38,6 +38,11 @@ export default defineNuxtConfig({
     mfa: {
       encryptionKey: '',
     },
+    // Licence commerciale (fonctions payantes) : l'emporte sur celle installée depuis Réglages › Licence,
+    // qui passe alors en lecture seule (server/utils/license.ts) — NUXT_LICENSE_KEY
+    license: {
+      key: '',
+    },
     // Compte d'amorçage (première connexion) — NUXT_BOOTSTRAP_ADMIN_EMAIL / _PASSWORD
     bootstrapAdmin: {
       email: '',

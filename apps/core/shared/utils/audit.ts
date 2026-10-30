@@ -45,6 +45,11 @@ export const AUDIT_ACTIONS = [
   'preset.updated',
   'preset.deleted',
   'settings.updated',
+  // Licence commerciale : data.id = numéro de licence, data.label = titulaire, data.plan ; jamais le jeton.
+  // Remise à zéro du repère de la date de référence (CLI) : data.from / data.to (ISO), data.by = cli.
+  'settings.license_installed',
+  'settings.license_removed',
+  'settings.license_clock_reset',
 ] as const
 export type AuditAction = (typeof AUDIT_ACTIONS)[number]
 

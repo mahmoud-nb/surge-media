@@ -255,7 +255,19 @@
         "trash": "{count} média en corbeille | {count} médias en corbeille",
         "trashSpace": "{space} ({count})",
         "siteUrl": "L'adresse publique de l'installation (NUXT_SITE_URL) n'est pas définie : les adresses absolues dépendent de chaque requête.",
-        "mail": "L'envoi d'e-mails n'est pas configuré (NUXT_SMTP_HOST, NUXT_SMTP_FROM) : les liens d'invitation se transmettent à la main."
+        "mail": "L'envoi d'e-mails n'est pas configuré (NUXT_SMTP_HOST, NUXT_SMTP_FROM) : les liens d'invitation se transmettent à la main.",
+        "license": {
+          "expiring": "La licence commerciale expire le {date} : pensez à la renouveler.",
+          "grace": "La licence commerciale a expiré le {date} : les fonctions payantes restent actives jusqu'au {end}, fin de la période de grâce.",
+          "expired": "La licence commerciale a expiré le {date} : les fonctions payantes sont désactivées. Le reste de surgeMedia fonctionne normalement.",
+          "invalid": "La licence commerciale installée n'est pas valable : les fonctions payantes sont désactivées.",
+          "link": "Voir la licence"
+        },
+        "clock": {
+          "days": "L'horloge de ce serveur retarde d'environ {count} jour sur la date la plus récente connue. | L'horloge de ce serveur retarde d'environ {count} jours sur la date la plus récente connue.",
+          "hours": "L'horloge de ce serveur retarde d'environ {count} heure sur la date la plus récente connue. | L'horloge de ce serveur retarde d'environ {count} heures sur la date la plus récente connue.",
+          "advice": "La licence est jugée à cette date, et la double authentification comme les liens signés peuvent échouer. Corrigez l'heure du système (synchronisation NTP)."
+        }
       },
       "projects": {
         "title": "Mes projets",
@@ -1742,7 +1754,10 @@
         "deleted": "Préréglage supprimé"
       },
       "settings": {
-        "updated": "Réglages modifiés"
+        "updated": "Réglages modifiés",
+        "license_installed": "Licence installée",
+        "license_removed": "Licence retirée",
+        "license_clock_reset": "Repère de date de la licence ramené"
       }
     },
     "details": {
@@ -1768,7 +1783,9 @@
       "devicesRevoked": "Aucun appareil | Un appareil | {count} appareils",
       "processingBackfill": "Aucune vidéo ajoutée à la file | Une vidéo ajoutée à la file | {count} vidéos ajoutées à la file",
       "processingBackfillPartial": "Interrompu par une erreur : les vidéos restantes n'ont pas été ajoutées",
-      "mfaPolicy": "Double authentification : {from} → {to}"
+      "mfaPolicy": "Double authentification : {from} → {to}",
+      "license": "{plan} · n° {id}",
+      "licenseClock": "Repère : {from} → {to}"
     },
     "fields": {
       "name": "nom",
@@ -2080,6 +2097,109 @@
       "pending": "{count} compte la configurera à sa prochaine connexion. | {count} comptes la configureront à leur prochaine connexion.",
       "unavailable": "La clé de chiffrement NUXT_MFA_ENCRYPTION_KEY n'est pas configurée : seule la politique « Facultative » est possible.",
       "saved": "Politique de double authentification enregistrée. Elle s'applique à la prochaine connexion de chaque compte."
+    },
+    "license": {
+      "title": "Licence",
+      "description": "Licence commerciale de cette installation et fonctions payantes qu'elle active. Sans licence, l'édition Community reste complète pour gérer et diffuser les médias.",
+      "loadError": "Impossible de charger la licence.",
+      "stateTitle": "Licence commerciale",
+      "states": {
+        "none": {
+          "badge": "Community",
+          "text": "Aucune licence commerciale n'est installée : cette installation fonctionne en édition Community."
+        },
+        "invalid": {
+          "badge": "Non valable",
+          "text": "La licence installée n'est pas valable, les fonctions payantes sont désactivées."
+        },
+        "pending": {
+          "badge": "Pas encore valable",
+          "text": "La licence prend effet le {date}. D'ici là, les fonctions payantes restent désactivées."
+        },
+        "valid": {
+          "badge": "Valable",
+          "text": "Les fonctions payantes de la licence sont actives jusqu'au {date}."
+        },
+        "expiring": {
+          "badge": "Expire bientôt",
+          "text": "La licence expire le {date}, dans {days} jour : pensez à la renouveler. | La licence expire le {date}, dans {days} jours : pensez à la renouveler."
+        },
+        "grace": {
+          "badge": "Période de grâce",
+          "text": "La licence a expiré le {date}. Les fonctions payantes restent actives pendant la période de grâce, jusqu'au {end}."
+        },
+        "expired": {
+          "badge": "Expirée",
+          "text": "La licence a expiré le {date} : les fonctions payantes sont désactivées. Le reste de surgeMedia fonctionne normalement."
+        }
+      },
+      "community": "Édition Community : surgeMedia est gratuit en production pour les organisations dont le chiffre d'affaires annuel ne dépasse pas 500 000 USD, sauf pour proposer un service d'hébergement de médias concurrent (licence BUSL 1.1). Au-delà de ce seuil, ou pour les fonctions payantes (authentification unique, export vers un SIEM…), écrivez à {email}.",
+      "clockTitle": "Horloge du serveur en retard",
+      "clockDays": "L'horloge de ce serveur retarde d'environ {count} jour sur la date la plus récente connue : la licence est jugée à cette date. Corrigez l'heure du système (synchronisation NTP). | L'horloge de ce serveur retarde d'environ {count} jours sur la date la plus récente connue : la licence est jugée à cette date. Corrigez l'heure du système (synchronisation NTP).",
+      "clockHours": "L'horloge de ce serveur retarde d'environ {count} heure sur la date la plus récente connue : la licence est jugée à cette date. Corrigez l'heure du système (synchronisation NTP). | L'horloge de ce serveur retarde d'environ {count} heures sur la date la plus récente connue : la licence est jugée à cette date. Corrigez l'heure du système (synchronisation NTP).",
+      "licensee": "Titulaire",
+      "plan": "Offre",
+      "featuresLabel": "Fonctions payantes",
+      "noFeatures": "Aucune",
+      "featuresOff": "Désactivées : la licence n'est pas en cours de validité.",
+      "instances": "Instances de production couvertes",
+      "unlimited": "Illimitées",
+      "validity": "Validité",
+      "validityRange": "Du {start} au {end}",
+      "support": "Support et mises à jour",
+      "supportUntil": "Jusqu'au {date}",
+      "supportEnded": "Terminés le {date}",
+      "number": "Numéro de licence",
+      "source": {
+        "env": "Licence fournie par la variable d'environnement NUXT_LICENSE_KEY.",
+        "database": "Licence installée depuis cette page."
+      },
+      "instanceId": "Identifiant de cette installation",
+      "instanceIdHint": "À indiquer au support et dans la déclaration annuelle de vos instances de production. Il n'est jamais envoyé nulle part.",
+      "installTitle": "Installer une licence",
+      "replaceTitle": "Remplacer la licence",
+      "tokenLabel": "Licence",
+      "tokenHint": "Collez le contenu du fichier .lic reçu de Surge Up, ou choisissez le fichier ci-dessous. La licence est vérifiée sur ce serveur, sans aucun appel extérieur.",
+      "fileLabel": "Fichier de licence (.lic)",
+      "fileUnreadable": "Ce fichier ne contient pas de licence lisible.",
+      "install": "Installer la licence",
+      "installed": "Licence installée.",
+      "remove": "Retirer la licence",
+      "removeTitle": "Retirer la licence ?",
+      "removeDescription": "Les fonctions payantes seront désactivées. Le reste de surgeMedia continue de fonctionner normalement.",
+      "removeConfirm": "Retirer la licence",
+      "removed": "Licence retirée : cette installation repasse en édition Community.",
+      "envTitle": "Licence fournie par la configuration du serveur",
+      "envText": "La variable NUXT_LICENSE_KEY est définie : la licence se change dans la configuration du serveur, puis au redémarrage.",
+      "plans": {
+        "pro": "Pro",
+        "business": "Business",
+        "enterprise": "Enterprise",
+        "enterprise-global": "Enterprise Global",
+        "agency": "Agence",
+        "oem": "OEM",
+        "trial": "Essai"
+      },
+      "features": {
+        "sso": "Authentification unique (SSO)",
+        "siem": "Export du journal d'audit vers un SIEM",
+        "scim": "Provisionnement des comptes (SCIM)"
+      },
+      "reasons": {
+        "malformed": "Ce texte n'est pas une licence surgeMedia : collez le contenu complet du fichier .lic.",
+        "algorithm": "Le format de cette licence n'est pas reconnu.",
+        "unknown-key": "Cette licence n'est pas signée par une clé que cette version de surgeMedia reconnaît : mettez surgeMedia à jour, ou écrivez à licensing{'@'}surgeup.org.",
+        "signature": "La signature ne correspond pas : la licence a été modifiée ou mal copiée.",
+        "product": "Cette licence n'est pas une licence surgeMedia.",
+        "version": "Cette licence utilise un format plus récent : mettez surgeMedia à jour.",
+        "payload": "Le contenu de cette licence est incomplet ou incohérent."
+      },
+      "errors": {
+        "LICENSE_INVALID": "Cette licence n'est pas valable.",
+        "LICENSE_FROM_ENV": "La licence est fournie par la variable NUXT_LICENSE_KEY : elle se change dans la configuration du serveur.",
+        "LICENSE_REQUIRED": "Cette fonction nécessite une licence commerciale qui la couvre.",
+        "unexpected": "La licence n'a pas pu être enregistrée. Réessayez."
+      }
     }
   },
   "transforms": {

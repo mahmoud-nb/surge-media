@@ -67,7 +67,8 @@
     "release:dry": "release-it --dry-run",
     "changelog:preview": "release-it --changelog",
     "smoke:package": "tsx scripts/smoke-package.ts",
-    "license:check": "tsx scripts/check-license.ts"
+    "license:check": "tsx scripts/check-license.ts",
+    "license:dev": "tsx scripts/dev-license.ts"
   },
   "dependencies": {
     "@clack/prompts": "^1.8.1",
