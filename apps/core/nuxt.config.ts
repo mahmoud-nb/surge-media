@@ -183,6 +183,9 @@ export default defineNuxtConfig({
       meta: { title: 'surgeMedia', version: '1.0.0' },
       ui: { scalar: false, swagger: false },
     },
+    // Cible du serveur alignée sur `engines.node` (≥ 24) : celle de Nitro par défaut (es2019) signale à tort les
+    // littéraux BigInt (`62n`, server/lib/access/tokens.ts) comme non pris en charge.
+    esbuild: { options: { target: 'node24' } },
   },
   vite: {
     plugins: [tailwindcss()],
