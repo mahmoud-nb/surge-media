@@ -3,7 +3,7 @@
  * Réglages › Sécurité : politique de double authentification (facultative, obligatoire pour les
  * administrateurs, obligatoire pour tous). Les comptes concernés qui ne l'ont pas encore activée la
  * configurent à leur prochaine connexion ; leur nombre est indiqué pour chaque choix. Enregistrement en
- * mode sudo. Architecture : .claude/architecture-mfa.md § 7.
+ * mode sudo. Architecture : .claude/architecture-mfa.md § 7. En mode démo : lecture seule.
  */
 import { MFA_POLICIES, type MfaPolicy } from '#shared/utils/mfa'
 
@@ -11,6 +11,7 @@ const { t } = useI18n()
 const { $api } = useNuxtApp()
 const reauth = useReauth()
 const { mfaErrorMessage } = useMfaErrors()
+const demo = useDemoInfo()
 
 const { data, refresh } = await useApiFetch('/api/admin/security')
 const policy = ref<MfaPolicy>(data.value?.mfaPolicy ?? 'optional')
@@ -54,11 +55,17 @@ async function save() {
     <UiAlert v-if="!data.available" variant="warning">
       {{ t('settings.security.unavailable') }}
     </UiAlert>
-    <UiRadioCards v-model="policy" :legend="t('settings.security.legend')" :options="options" />
+    <UiRadioCards
+      v-model="policy"
+      :legend="t('settings.security.legend')"
+      :options="options"
+      :disabled="Boolean(demo)"
+      :hint="demo ? t('demo.readOnly') : undefined"
+    />
     <UiAlert v-if="status" :variant="status.variant" :live="status.variant === 'error' ? 'assertive' : 'polite'">
       {{ status.message }}
     </UiAlert>
-    <div>
+    <div v-if="!demo">
       <UiButton :disabled="!changed" :loading="saving" @click="save">
         {{ t('common.save') }}
       </UiButton>

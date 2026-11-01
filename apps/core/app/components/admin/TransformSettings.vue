@@ -30,6 +30,7 @@ const props = withDefaults(defineProps<{
 }>(), { headingLevel: 2 })
 
 const { t } = useI18n()
+const { errorFallback } = useDemoErrors()
 const { $api } = useNuxtApp()
 const heading = computed(() => `h${props.headingLevel}`)
 const ids = { policy: useId(), presets: useId(), limits: useId() }
@@ -44,12 +45,15 @@ type Preset = TransformsState['presets'][number]
 const level = computed(() => (props.projectId ? 'project' : 'installation'))
 const editableLevel = computed(() => (props.projectId ? 'project' : 'global'))
 const canEdit = computed(() => data.value?.canEdit ?? false)
+// Mode démo : la politique de l'installation (bibliothèque) est en lecture seule ; celle d'un projet suit le projet.
+const demo = useDemoInfo()
+const policyLocked = computed(() => Boolean(demo.value) && !props.projectId)
 const ownPresets = computed(() => data.value?.presets.filter(preset => preset.level === editableLevel.value) ?? [])
 const limitReached = computed(() => ownPresets.value.length >= (data.value?.limits.presetsMax ?? Infinity))
 
 function errorMessage(error: unknown): string {
   const { code } = apiError(error)
-  return code && (TRANSFORM_ERROR_CODES as readonly string[]).includes(code) ? t(`transforms.errors.${code}`) : t('common.unexpectedError')
+  return code && (TRANSFORM_ERROR_CODES as readonly string[]).includes(code) ? t(`transforms.errors.${code}`) : errorFallback(error)
 }
 
 // ─── Politique ───────────────────────────────────────────────────────────────
@@ -239,13 +243,13 @@ function duration(seconds: number): string {
           v-model="policy"
           :legend="t(`transforms.policy.legend.${level}`)"
           :options="policyOptions"
-          :disabled="!canEdit"
-          :hint="canEdit ? undefined : t('transforms.policy.readOnly')"
+          :disabled="!canEdit || policyLocked"
+          :hint="policyLocked ? t('demo.readOnly') : canEdit ? undefined : t('transforms.policy.readOnly')"
         />
         <UiAlert v-if="policyStatus" :variant="policyStatus.variant" :live="policyStatus.variant === 'error' ? 'assertive' : 'polite'">
           {{ policyStatus.message }}
         </UiAlert>
-        <div v-if="canEdit">
+        <div v-if="canEdit && !policyLocked">
           <UiButton type="submit" :loading="savingPolicy">
             {{ t('common.save') }}
           </UiButton>

@@ -1,0 +1,74 @@
+# surgeMedia en mode démo : instance publique remise à zéro à heures fixes (setup.md, § 7.11).
+# SQLite, stockage local, un seul conteneur. À chaque démarrage, l'image restaure l'instantané de référence
+# (docker/snapshot/demo.tar.gz, capturé par « surge-media demo snapshot ») ; à l'heure de la remise à zéro, le
+# serveur s'arrête de lui-même et Docker le relance (restart: unless-stopped).
+#
+# 1. Préparer le contenu de référence (service « prepare », mode démo coupé, son propre volume, port 3001) :
+#      docker compose -f docker/compose.demo.yaml --profile prepare up -d prepare
+#    comptes de démonstration, projets, médias libres de droits, vidéos traitées… puis capturer :
+#      docker compose -f docker/compose.demo.yaml exec prepare \
+#        node node_modules/@surge-media/core/dist/cli/index.mjs demo snapshot --out /snapshot/demo.tar.gz --yes
+# 2. Lancer la démo :
+#      docker compose -f docker/compose.demo.yaml up -d demo
+# Remise à zéro immédiate (contenu signalé) : docker compose -f docker/compose.demo.yaml restart demo
+
+x-image: &image ${SURGE_MEDIA_IMAGE:-ghcr.io/mahmoud-nb/surge-media:latest}
+
+services:
+  demo:
+    image: *image
+    restart: unless-stopped
+    # Joignable depuis cette machine seulement : un mandataire inverse en HTTPS devant (demo.example.com).
+    ports:
+      - "127.0.0.1:${SURGE_MEDIA_PORT:-3000}:3000"
+    environment:
+      NUXT_SITE_URL: ${NUXT_SITE_URL:-http://localhost:${SURGE_MEDIA_PORT:-3000}}
+      NUXT_DEMO_MODE: "true"
+      SURGE_MEDIA_DEMO_SNAPSHOT: /snapshot/demo.tar.gz
+      # Remise à zéro toutes les 2 heures, alignée sur minuit UTC.
+      NUXT_DEMO_RESET_INTERVAL: ${NUXT_DEMO_RESET_INTERVAL:-120}
+      # Comptes affichés sur la page de connexion (ceux du contenu de référence), en JSON :
+      # [{"email":"admin@demo.example.com","password":"…"},{"email":"editor@demo.example.com","password":"…"}]
+      NUXT_DEMO_ACCOUNTS: ${NUXT_DEMO_ACCOUNTS:-}
+      # Liens du bandeau : contact (mailto: ou page de rendez-vous), signalement, conditions de la démo.
+      NUXT_DEMO_CONTACT_URL: ${NUXT_DEMO_CONTACT_URL:-}
+      NUXT_DEMO_ABUSE_URL: ${NUXT_DEMO_ABUSE_URL:-}
+      NUXT_DEMO_TERMS_URL: ${NUXT_DEMO_TERMS_URL:-}
+      # Envois plafonnés : images 5 Mo, vidéos 50 Mo, 1 Gio par cycle (une adresse IP : le quart).
+      NUXT_MEDIA_MAX_UPLOAD_SIZE: "5242880"
+      NUXT_MEDIA_MAX_VIDEO_UPLOAD_SIZE: "52428800"
+      NUXT_DEMO_UPLOAD_QUOTA: "1073741824"
+      # Traitement des vidéos mesuré : une tâche à la fois, 2 minutes au plus, mémoire de ffmpeg limitée.
+      NUXT_VIDEO_PROCESSING: embedded
+      NUXT_VIDEO_CONCURRENCY: "1"
+      NUXT_VIDEO_THREADS: "2"
+      NUXT_VIDEO_MAX_DURATION: "120"
+      NUXT_VIDEO_MEMORY_LIMIT: "1024"
+    volumes:
+      # Base, médias (remplacés à chaque démarrage) et secrets (générés une fois, jamais dans l'instantané).
+      - demo-data:/app/data
+      - ./snapshot:/snapshot:ro
+    cpus: 2
+    mem_limit: 2g
+    pids_limit: 256
+    stop_grace_period: 30s
+
+  # Préparation du contenu de référence : instance ordinaire, sur son propre volume (jamais remis à zéro).
+  prepare:
+    image: *image
+    profiles: [prepare]
+    ports:
+      - "127.0.0.1:${SURGE_MEDIA_PREPARE_PORT:-3001}:3000"
+    environment:
+      NUXT_SITE_URL: ${NUXT_PREPARE_SITE_URL:-http://localhost:${SURGE_MEDIA_PREPARE_PORT:-3001}}
+      NUXT_BOOTSTRAP_ADMIN_EMAIL: ${NUXT_BOOTSTRAP_ADMIN_EMAIL:-}
+      NUXT_BOOTSTRAP_ADMIN_PASSWORD: ${NUXT_BOOTSTRAP_ADMIN_PASSWORD:-}
+      NUXT_VIDEO_PROCESSING: embedded
+    volumes:
+      - prepare-data:/app/data
+      - ./snapshot:/snapshot
+    stop_grace_period: 30s
+
+volumes:
+  demo-data:
+  prepare-data:

@@ -30,6 +30,7 @@ const emit = defineEmits<{
 }>()
 
 const { t, locale } = useI18n()
+const { errorFallback } = useDemoErrors()
 const { $api } = useNuxtApp()
 
 const ROOT = 'root'
@@ -46,7 +47,7 @@ function folderLabel(id: string | null): string {
 
 function errorMessage(error: unknown): string {
   const { code } = apiError(error)
-  return code && (FOLDER_ERROR_CODES as readonly string[]).includes(code) ? t(`folders.errors.${code}`) : t('common.unexpectedError')
+  return code && (FOLDER_ERROR_CODES as readonly string[]).includes(code) ? t(`folders.errors.${code}`) : errorFallback(error)
 }
 
 // ─── Nouveau dossier, renommage ──────────────────────────────────────────────

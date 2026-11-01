@@ -19,3 +19,6 @@ dist
 
 # Archives npm des librairies (packages/scripts/pack-smoke.mjs)
 packages/.artifacts/
+
+# Instantanés de la démo (docker/compose.demo.yaml) : contenu de référence, jamais dans le dépôt
+docker/snapshot/

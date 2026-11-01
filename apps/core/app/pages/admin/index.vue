@@ -21,6 +21,8 @@ const { data: status } = await useFetch('/api/admin/status', {
 const { data, error, refresh } = await useApiFetch('/api/admin/dashboard')
 // Double authentification du compte connecté : rappel tant qu'elle est inactive, codes de secours bas.
 const { data: mfa } = await useApiFetch('/api/auth/mfa')
+// Mode démo : pas de rappel de double authentification (politique en lecture seule, comptes partagés).
+const demo = useDemoInfo()
 
 const displayName = computed(() => user.value?.name || user.value?.email || '')
 const number = computed(() => new Intl.NumberFormat(locale.value))
@@ -128,13 +130,13 @@ const cards = computed<Card[]>(() => {
     <UiAlert v-if="status && !status.mfa.available" variant="warning" :title="t('admin.dashboard.mfa.keyMissingTitle')" class="mb-6">
       {{ t('admin.dashboard.mfa.keyMissing') }}
     </UiAlert>
-    <UiAlert v-else-if="status && status.mfa.adminsWithoutMfa > 0" variant="info" class="mb-6">
+    <UiAlert v-else-if="status && status.mfa.adminsWithoutMfa > 0 && !demo" variant="info" class="mb-6">
       {{ t('admin.dashboard.mfa.adminsWithout', { count: status.mfa.adminsWithoutMfa }, status.mfa.adminsWithoutMfa) }}
       <NuxtLink to="/admin/settings#settings-security-title" class="font-medium underline underline-offset-4">
         {{ t('admin.dashboard.mfa.policyLink') }}
       </NuxtLink>
     </UiAlert>
-    <UiAlert v-if="mfa?.available && !mfa.enabled" variant="info" :title="t('admin.dashboard.mfa.enableTitle')" class="mb-6">
+    <UiAlert v-if="mfa?.available && !mfa.enabled && !demo?.protectedAccount" variant="info" :title="t('admin.dashboard.mfa.enableTitle')" class="mb-6">
       {{ t('admin.dashboard.mfa.enable') }}
       <NuxtLink to="/admin/account" class="font-medium underline underline-offset-4">
         {{ t('admin.dashboard.mfa.accountLink') }}

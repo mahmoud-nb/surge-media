@@ -2,7 +2,8 @@
 # surgeMedia — point d'entrée de l'image Docker (setup.md, § 4.4).
 #
 #   server   (défaut) applique les migrations en attente puis lance le serveur web
-#            (SURGE_MEDIA_MIGRATE=false : sans migration, par exemple pour une instance de plus)
+#            (SURGE_MEDIA_MIGRATE=false : sans migration, par exemple pour une instance de plus) ;
+#            mode démo : restaure d'abord l'instantané SURGE_MEDIA_DEMO_SNAPSHOT (docker/compose.demo.yaml)
 #   worker   processus de travail du traitement des vidéos (NUXT_VIDEO_PROCESSING=external)
 #   migrate  applique les migrations en attente puis s'arrête
 #   …        toute autre commande est exécutée telle quelle (ex. : sh)
@@ -129,6 +130,24 @@ migrate() {
   done
 }
 
+# Mode démo (docker/compose.demo.yaml) : l'instantané de référence est restauré à chaque démarrage, avant les
+# migrations ; le serveur s'arrête de lui-même à l'heure de la remise à zéro et Docker le relance. Exige
+# NUXT_DEMO_MODE=true ; la CLI refuse en plus de remplacer une base qui ne vient pas d'un instantané de démo.
+restore_demo_snapshot() {
+  snapshot="${SURGE_MEDIA_DEMO_SNAPSHOT:-}"
+  [ -n "$snapshot" ] || return 0
+  if [ "${NUXT_DEMO_MODE:-false}" != true ]; then
+    say "SURGE_MEDIA_DEMO_SNAPSHOT exige NUXT_DEMO_MODE=true : rien n'est restauré, le serveur ne démarre pas." \
+      "SURGE_MEDIA_DEMO_SNAPSHOT requires NUXT_DEMO_MODE=true: nothing is restored, the server does not start."
+    exit 1
+  fi
+  case "${SURGE_MEDIA_LANG:-fr}" in
+    en*) lang=en ;;
+    *) lang=fr ;;
+  esac
+  node "$PACKAGE_DIR/dist/cli/index.mjs" demo restore --from "$snapshot" --yes --cwd "$APP_DIR" --lang "$lang" || exit 1
+}
+
 cd "$APP_DIR"
 command="${1:-server}"
 case "$command" in
@@ -147,6 +166,7 @@ case "$command" in
     ensure_secret NUXT_SESSION_PASSWORD
     ensure_secret NUXT_MEDIA_SIGNING_SECRET
     ensure_secret NUXT_MFA_ENCRYPTION_KEY
+    restore_demo_snapshot
     if [ "${SURGE_MEDIA_MIGRATE:-true}" != false ]; then migrate; fi
     exec node "$SERVER" "$@"
     ;;

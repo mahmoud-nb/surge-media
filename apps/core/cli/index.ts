@@ -9,6 +9,8 @@
  *   surge-media db reset    recréer la base (éventuellement avec un autre fournisseur)
  *   surge-media user mfa-reset <e-mail> | --all   réinitialiser la double authentification (secours de l'exploitant)
  *   surge-media license clock-reset               ramener le repère de la date de référence des licences à l'horloge
+ *   surge-media demo snapshot --out <archive>     capturer le contenu de référence de la démo (SQLite, stockage local)
+ *   surge-media demo restore --from <archive>     remettre la démo à zéro depuis l'archive (serveur arrêté)
  *
  * Le .env et les données vivent dans le dossier de l'installation : le dossier courant pour le paquet publié,
  * apps/core dans le dépôt des sources (`--cwd` pour un autre dossier ; cli/lib/project.ts).
@@ -16,6 +18,7 @@
 import { defineCommand, runMain } from 'citty'
 import { DATABASE_PROVIDERS } from '../shared/database'
 import { runInit, runMigrate, runReset, type CliContext } from './database'
+import { runDemoRestore, runDemoSnapshot } from './demo'
 import { createTranslator, detectLocale, langFromArgv, LOCALES } from './i18n'
 import { isInsideNodeModules, packageVersion, resolveLocation } from './lib/project'
 import { runLicenseClockReset } from './license'
@@ -106,6 +109,26 @@ const licenseClockReset = defineCommand({
   run: ({ args }) => runLicenseClockReset(context(args.cwd), args),
 })
 
+const demoSnapshot = defineCommand({
+  meta: { name: 'snapshot', description: t('command.demo.snapshot') },
+  args: {
+    ...commonArgs,
+    out: { type: 'string', description: t('args.out'), valueHint: 'path' },
+    yes: { type: 'boolean', alias: 'y', description: t('args.yes') },
+  },
+  run: ({ args }) => runDemoSnapshot(context(args.cwd), args),
+})
+
+const demoRestore = defineCommand({
+  meta: { name: 'restore', description: t('command.demo.restore') },
+  args: {
+    ...commonArgs,
+    from: { type: 'string', description: t('args.from'), valueHint: 'path' },
+    yes: { type: 'boolean', alias: 'y', description: t('args.yes') },
+  },
+  run: ({ args }) => runDemoRestore(context(args.cwd), args),
+})
+
 const main = defineCommand({
   meta: { name: 'surge-media', version: packageVersion(), description: t('cli.description') },
   subCommands: {
@@ -123,6 +146,10 @@ const main = defineCommand({
     license: defineCommand({
       meta: { name: 'license', description: t('command.license') },
       subCommands: { 'clock-reset': licenseClockReset },
+    }),
+    demo: defineCommand({
+      meta: { name: 'demo', description: t('command.demo') },
+      subCommands: { snapshot: demoSnapshot, restore: demoRestore },
     }),
   },
 })

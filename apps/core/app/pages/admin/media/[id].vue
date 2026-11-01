@@ -17,6 +17,7 @@ interface StatusMessage {
 }
 
 const { t, locale } = useI18n()
+const { errorFallback } = useDemoErrors()
 const route = useRoute()
 const { $api } = useNuxtApp()
 const flash = useFlash()
@@ -285,8 +286,8 @@ async function save() {
     link.value = null
     saveStatus.value = { variant: 'success', message: t('media.detail.saved') }
   }
-  catch {
-    saveStatus.value = { variant: 'error', message: t('common.unexpectedError') }
+  catch (error) {
+    saveStatus.value = { variant: 'error', message: errorFallback(error) }
   }
   finally {
     saving.value = false
@@ -405,7 +406,7 @@ function posterErrorMessage(error: unknown): string {
   if (status === 415) return t('media.poster.errors.unsupported')
   if (status === 413) return t('media.poster.errors.tooLarge', { max: formatBytes(rules.value?.maxUploadSizes.IMAGE ?? 0, locale.value) })
   if (status === 422) return t('media.poster.errors.unreadable')
-  return t('common.unexpectedError')
+  return errorFallback(error)
 }
 
 async function posterAction(kind: 'capture' | 'upload' | 'remove', task: () => Promise<string>) {
@@ -487,8 +488,8 @@ async function prepareVideo() {
     const version = result.media.version
     prepareStatus.value = { variant: 'success', message: version === before ? t('media.video.prepare.unchanged') : t('media.video.prepare.done', { version }) }
   }
-  catch {
-    prepareStatus.value = { variant: 'error', message: t('common.unexpectedError') }
+  catch (error) {
+    prepareStatus.value = { variant: 'error', message: errorFallback(error) }
   }
   finally {
     preparing.value = false
@@ -616,8 +617,8 @@ async function moveToTrash() {
     flash.set({ variant: 'success', message: t('media.trash.moved', { name: displayName.value }) })
     await navigateTo(listPath.value)
   }
-  catch {
-    actionError.value = t('common.unexpectedError')
+  catch (error) {
+    actionError.value = errorFallback(error)
   }
   finally {
     busy.value = false
@@ -631,8 +632,8 @@ async function restore() {
     await $api(`/api/admin/media/${mediaId.value}/restore`, { method: 'POST' })
     await refresh()
   }
-  catch {
-    actionError.value = t('common.unexpectedError')
+  catch (error) {
+    actionError.value = errorFallback(error)
   }
   finally {
     busy.value = false
@@ -651,8 +652,8 @@ async function purge() {
     purgeOpen.value = false
     await navigateTo({ path: listPath.value, query: { status: 'trash' } })
   }
-  catch {
-    purgeError.value = t('common.unexpectedError')
+  catch (error) {
+    purgeError.value = errorFallback(error)
   }
   finally {
     busy.value = false
@@ -735,7 +736,7 @@ async function organize(action: 'duplicate' | 'move') {
     const { code } = apiError(error)
     organizeStatus.value = {
       variant: 'error',
-      message: code && (FOLDER_ERROR_CODES as readonly string[]).includes(code) ? t(`folders.errors.${code}`) : t('common.unexpectedError'),
+      message: code && (FOLDER_ERROR_CODES as readonly string[]).includes(code) ? t(`folders.errors.${code}`) : errorFallback(error),
     }
   }
   finally {

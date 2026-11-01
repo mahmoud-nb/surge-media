@@ -14,6 +14,9 @@ const { $api } = useNuxtApp()
 const { user } = useAuth()
 const reauth = useReauth()
 const { mfaErrorCode, mfaErrorMessage } = useMfaErrors()
+// Mode démo : un compte de démonstration partagé ne peut pas activer la double authentification.
+const demo = useDemoInfo()
+const demoAccount = computed(() => demo.value?.protectedAccount ?? false)
 
 useSeoMeta({ title: () => t('account.meta.title') })
 
@@ -161,7 +164,10 @@ async function onDisable() {
       </UiAlert>
 
       <div v-if="mfa" class="grid gap-4 rounded-xl border border-border bg-surface p-5">
-        <UiAlert v-if="!mfa.available && !mfa.enabled" variant="warning">
+        <UiAlert v-if="demoAccount" variant="info">
+          {{ t('demo.account.mfa') }}
+        </UiAlert>
+        <UiAlert v-else-if="!mfa.available && !mfa.enabled" variant="warning">
           {{ t('account.mfa.unavailable') }}
         </UiAlert>
         <UiAlert v-else-if="mfa.required && !mfa.enabled" variant="warning">
@@ -191,7 +197,7 @@ async function onDisable() {
           </p>
         </template>
 
-        <div v-else-if="mfa.available">
+        <div v-else-if="mfa.available && !demoAccount">
           <UiButton @click="startSetup">
             <ShieldCheck aria-hidden="true" />
             {{ t('account.mfa.enable') }}

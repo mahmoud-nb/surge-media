@@ -15,6 +15,7 @@ const props = withDefaults(defineProps<{
 }>(), { headingLevel: 2 })
 
 const { t, te, locale } = useI18n()
+const { errorFallback } = useDemoErrors()
 const { $api } = useNuxtApp()
 const heading = computed(() => `h${props.headingLevel}`)
 const ids = {
@@ -164,6 +165,8 @@ function roughDuration(seconds: number): string | null {
   return formatDuration(Math.max(step, Math.round(seconds / step) * step), locale.value)
 }
 
+const demo = useDemoInfo()
+
 const backfill = computed(() => {
   const state = data.value
   if (!state) return null
@@ -174,9 +177,11 @@ const backfill = computed(() => {
     /** Estimation (vidéos à traiter seulement) ; `duration` null : moins d'une minute. */
     estimate: count > 0 ? { duration: roughDuration(estimateSeconds(state)) } : null,
     /** Raison pour laquelle le bouton est désactivé, ou null. */
-    disabledReason: !state.active
-      ? t('settings.videoProcessing.backfill.disabledInactive')
-      : count === 0 ? t('settings.videoProcessing.backfill.disabledEmpty') : null,
+    disabledReason: demo.value
+      ? t('demo.readOnly')
+      : !state.active
+          ? t('settings.videoProcessing.backfill.disabledInactive')
+          : count === 0 ? t('settings.videoProcessing.backfill.disabledEmpty') : null,
   }
 })
 
@@ -215,7 +220,7 @@ async function runBackfill() {
       await refresh()
     }
     else {
-      backfillError.value = t('common.unexpectedError')
+      backfillError.value = errorFallback(err)
     }
   }
   finally {

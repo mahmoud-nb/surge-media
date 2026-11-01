@@ -5,6 +5,7 @@
  */
 export function useCredentialLabels() {
   const { t } = useI18n()
+  const { errorFallback } = useDemoErrors()
 
   function environmentLabel(environment: string): string {
     return (KEY_ENVIRONMENTS as readonly string[]).includes(environment)
@@ -33,7 +34,7 @@ export function useCredentialLabels() {
     const { code } = apiError(error)
     if (code && (CREDENTIAL_ERROR_CODES as readonly string[]).includes(code)) return t(`credentials.errors.${code}`)
     if (code && (PROJECT_ERROR_CODES as readonly string[]).includes(code)) return t(`projects.errors.${code}`)
-    return t('common.unexpectedError')
+    return errorFallback(error)
   }
 
   return { environmentLabel, compareEnvironments, scopeOptions, credentialErrorMessage }

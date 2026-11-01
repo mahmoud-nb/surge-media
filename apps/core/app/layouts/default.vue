@@ -1,5 +1,5 @@
 <script setup lang="ts">
-/** Mise en page publique (accueil, connexion, erreurs). */
+/** Mise en page publique (accueil, connexion, erreurs), avec le bandeau du mode démo s'il est actif. */
 const { t } = useI18n()
 const route = useRoute()
 const { loggedIn } = useAuth()
@@ -8,6 +8,7 @@ const { loggedIn } = useAuth()
 <template>
   <div class="flex min-h-dvh flex-col">
     <AppSkipLink />
+    <AppDemoBanner />
     <header class="border-b border-border bg-surface">
       <div class="mx-auto flex h-16 max-w-6xl items-center justify-between gap-4 px-4 sm:px-6">
         <NuxtLink to="/" class="rounded-lg">

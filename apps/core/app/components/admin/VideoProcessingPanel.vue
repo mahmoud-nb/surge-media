@@ -48,6 +48,7 @@ const emit = defineEmits<{
 }>()
 
 const { t, locale } = useI18n()
+const { errorFallback } = useDemoErrors()
 const { $api } = useNuxtApp()
 const titleId = useId()
 const stepId = useId()
@@ -156,7 +157,7 @@ function requestError(error: unknown): { message: string, stale: boolean } {
   if (reason === 'VERSION_CONFLICT') return { message: t('media.processing.requestErrors.VERSION_CONFLICT'), stale: true }
   if (reason === 'IN_TRASH') return { message: t('media.processing.requestErrors.IN_TRASH'), stale: true }
   if (code === 422) return { message: t('media.processing.requestErrors.KIND_MISMATCH'), stale: false }
-  return { message: t('common.unexpectedError'), stale: false }
+  return { message: errorFallback(error), stale: false }
 }
 
 async function run() {

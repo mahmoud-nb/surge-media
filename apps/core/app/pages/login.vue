@@ -3,7 +3,8 @@
  * Connexion en étapes : mot de passe, puis, si le compte a la double authentification, code de
  * l'application ou code de secours ; si la politique l'exige d'un compte qui ne l'a pas, configuration
  * de l'application et codes de secours avant d'entrer (server/utils/mfa.ts). Le focus va au titre de
- * chaque nouvelle étape.
+ * chaque nouvelle étape. En mode démo, les comptes de démonstration sont affichés sous le formulaire, avec un
+ * bouton qui le remplit.
  */
 import { loginSchema, type LoginInput } from '#shared/schemas/auth'
 import { normalizeTotpCode } from '#shared/utils/mfa'
@@ -27,6 +28,17 @@ const form = reactive<LoginInput>({ email: '', password: '' })
 const { validate, message, clear } = useFormValidation(loginSchema, FIELD_IDS)
 const serverError = ref<string>()
 const submitting = ref(false)
+const demo = useDemoInfo()
+
+/** Mode démo : remplit le formulaire avec un compte de démonstration, puis place le focus sur « Se connecter ». */
+function fillDemoAccount(account: { email: string, password: string }) {
+  form.email = account.email
+  form.password = account.password
+  clear('email')
+  clear('password')
+  serverError.value = undefined
+  nextTick(() => document.getElementById('login-submit')?.focus())
+}
 
 /** Information transmise par la page précédente (valeurs connues uniquement). */
 const notice = computed(() => {
@@ -208,7 +220,7 @@ function onEnabled(result: { recoveryCodes: string[] }) {
               />
             </UiFormField>
 
-            <UiButton type="submit" size="lg" class="mt-1 w-full" :loading="submitting">
+            <UiButton id="login-submit" type="submit" size="lg" class="mt-1 w-full" :loading="submitting">
               {{ t('login.submit') }}
             </UiButton>
             <p class="sr-only" role="status">
@@ -308,6 +320,65 @@ function onEnabled(result: { recoveryCodes: string[] }) {
           </UiButton>
         </template>
       </div>
+
+      <!-- Mode démo : comptes partagés par tous les visiteurs -->
+      <section
+        v-if="demo && step === 'password' && (demo.accounts.length || demo.contactUrl)"
+        aria-labelledby="demo-accounts-title"
+        class="mt-6 rounded-2xl border border-border bg-surface p-6 shadow-sm sm:p-8"
+      >
+        <h2 id="demo-accounts-title" class="text-lg font-semibold text-foreground">
+          {{ t('demo.accounts.title') }}
+        </h2>
+        <template v-if="demo.accounts.length">
+          <p class="mt-1 text-sm text-muted-foreground">
+            {{ t('demo.accounts.description') }}
+          </p>
+          <ul class="mt-4 grid gap-3">
+            <li v-for="account in demo.accounts" :key="account.email" class="grid justify-items-start gap-3 rounded-lg border border-border p-4">
+              <dl class="grid w-full min-w-0 grid-cols-[auto_minmax(0,1fr)] gap-x-3 gap-y-1 text-sm">
+                <dt class="text-muted-foreground">
+                  {{ t('demo.accounts.role') }}
+                </dt>
+                <dd class="font-medium text-foreground">
+                  {{ account.role ? t(`roles.${account.role}.label`) : t('demo.accounts.unknownRole') }}
+                </dd>
+                <dt class="text-muted-foreground">
+                  {{ t('login.email.label') }}
+                </dt>
+                <dd class="font-mono wrap-anywhere text-foreground">
+                  {{ account.email }}
+                </dd>
+                <dt class="text-muted-foreground">
+                  {{ t('login.password.label') }}
+                </dt>
+                <dd class="font-mono wrap-anywhere text-foreground">
+                  {{ account.password }}
+                </dd>
+              </dl>
+              <UiButton
+                variant="outline"
+                size="sm"
+                :aria-label="t('demo.accounts.useLabel', { role: account.role ? t(`roles.${account.role}.label`) : account.email })"
+                @click="fillDemoAccount(account)"
+              >
+                {{ t('demo.accounts.use') }}
+              </UiButton>
+            </li>
+          </ul>
+        </template>
+        <i18n-t
+          v-if="demo.contactUrl"
+          keypath="demo.accounts.contact"
+          scope="global"
+          tag="p"
+          :class="demo.accounts.length ? 'mt-5 border-t border-border pt-4 text-sm text-muted-foreground' : 'mt-2 text-sm text-muted-foreground'"
+        >
+          <template #link>
+            <a :href="demo.contactUrl" class="rounded font-medium text-primary underline underline-offset-2 hover:no-underline">{{ t('demo.accounts.contactLink') }}</a>
+          </template>
+        </i18n-t>
+      </section>
     </div>
   </div>
 </template>

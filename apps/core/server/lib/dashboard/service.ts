@@ -180,7 +180,8 @@ export async function dashboardData(event: H3Event, user: User) {
         .sort((a, b) => b.count - a.count),
     })
   }
-  if (manageUsers && !mailEnabled(event)) attention.push({ kind: 'mail' })
+  // En démo, l'e-mail est coupé exprès : rien à signaler.
+  if (manageUsers && !mailEnabled(event) && !useDemo().enabled) attention.push({ kind: 'mail' })
 
   // ─── Journal ─────────────────────────────────────────────────────────────
   const activity = hasPermission(user.role, 'audit:read') ? (await listAuditEvents({ page: 1 }, DASHBOARD_ACTIVITY)).items : null

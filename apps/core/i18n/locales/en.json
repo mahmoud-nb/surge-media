@@ -2490,5 +2490,45 @@
       "devices": "Trusted devices are managed from the dashboard.",
       "devicesLink": "Open the dashboard"
     }
+  },
+  "demo": {
+    "banner": {
+      "label": "Public demo",
+      "title": "Public demo.",
+      "reset": "Reset at {time}: everything you add will be erased.",
+      "notice": "Don't upload any personal data.",
+      "in": {
+        "soon": "in less than a minute",
+        "minutes": "in {minutes} min",
+        "hours": "in {hours} h",
+        "hoursMinutes": "in {hours} h {minutes} min"
+      },
+      "contact": "Contact us",
+      "abuse": "Report content",
+      "terms": "Demo terms"
+    },
+    "accounts": {
+      "title": "Demo accounts",
+      "description": "Sign in with one of these accounts. All visitors share them, and they can't be changed.",
+      "role": "Role",
+      "unknownRole": "Unknown",
+      "use": "Use this account",
+      "useLabel": "Use the {role} account",
+      "contact": "Evaluating surgeMedia for your company? {link}.",
+      "contactLink": "Let's talk"
+    },
+    "account": {
+      "mfa": "Two-factor authentication can't be turned on for a shared demo account. To try it, create your own account in Users."
+    },
+    "readOnly": "In the demo, this setting is read-only.",
+    "errors": {
+      "readOnly": {
+        "media": "This media item is part of the demo's example content: duplicate it to change it.",
+        "user": "Demo accounts can't be changed.",
+        "setting": "In the demo, this setting is read-only.",
+        "item": "This item is part of the demo's example content: create your own to try this action."
+      },
+      "quota": "The demo's upload volume is used up until the next reset, in {minutes} min."
+    }
   }
 }

@@ -47,5 +47,7 @@ export default defineEventHandler(async (event) => {
   }
 
   failuresByEmail.reset(email)
+  // Démo : visites comptées dans le journal du serveur, sans traceur (rôle seulement, ni adresse ni IP).
+  if (useDemo().enabled && await isDemoReferenceItem(user.createdAt)) console.info(`[surge-media] Démo : connexion (${user.role})`)
   return continueLogin(event, user)
 })

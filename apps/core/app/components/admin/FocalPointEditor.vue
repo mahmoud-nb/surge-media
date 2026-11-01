@@ -20,6 +20,7 @@ const props = defineProps<{
 const emit = defineEmits<{ saved: [] }>()
 
 const { t, locale } = useI18n()
+const { errorFallback } = useDemoErrors()
 const { $api } = useNuxtApp()
 const uid = useId()
 
@@ -80,7 +81,7 @@ async function save() {
   }
   catch (error) {
     const { code } = apiError(error)
-    status.value = { variant: 'error', message: code === 'VERSION_CONFLICT' ? t('media.focal.conflict') : t('common.unexpectedError') }
+    status.value = { variant: 'error', message: code === 'VERSION_CONFLICT' ? t('media.focal.conflict') : errorFallback(error) }
   }
   finally {
     saving.value = false

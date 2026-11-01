@@ -48,7 +48,8 @@ const generations = createTokenBucketLimiter()
  * TRANSFORM_QUOTA). Préréglage global ou de projet : cache limité (modifiable), revalidé par l'ETag.
  *
  * Public : mis en cache sans limite (l'URL change à chaque remplacement). Privé : lien signé
- * (?exp=&kid=&sig=) ou identifiant d'API (`Authorization: Bearer`), jamais par cookie. Le chemin
+ * (?exp=&kid=&sig=) ou identifiant d'API (`Authorization: Bearer`), jamais par cookie (seule exception : en
+ * mode démo, un média envoyé par un visiteur exige en plus une session de la démo). Le chemin
  * physique n'est jamais exposé ; le type MIME vient de la base (nosniff). Requêtes partielles
  * (`Range`, une plage) : 206 / 416. Métadonnées lues via le cache de diffusion (60 s), relues pour une
  * version plus récente, un rendu ou une affiche de vidéo inconnus du cache. Fichier ouvert seulement une
@@ -95,6 +96,12 @@ export default defineEventHandler(async (event) => {
   // un processus de travail ou une autre instance (invalidation locale) ; relus avant de décider.
   if (media && deliveryReloadNeeded(target, media)) media = await reloadDeliveryMedia(target.id)
   if (!media) throw createError({ statusCode: 404, statusMessage: 'Not Found' })
+
+  // Mode démo : un média envoyé par un visiteur n'est servi qu'à une session de la démo, jamais à un lien
+  // partagé ou intégré ailleurs (la démo ne doit pas servir d'hébergement gratuit) ; sinon 404, comme un
+  // média inconnu (architecture démo, § 7). Le contenu de référence est servi comme partout ailleurs.
+  const visitorContent = useDemo().enabled && !await isDemoReferenceItem(media.createdAt)
+  if (visitorContent && !await currentSessionUser(event)) throw createError({ statusCode: 404, statusMessage: 'Not Found' })
 
   // Ancienne version (fichier remplacé, réécrit par le traitement, affiche changée) : redirection vers
   // l'URL courante, sans mise en cache ; CORS permis, sans quoi un `<video crossorigin>` ou un fetch()
@@ -157,6 +164,11 @@ export default defineEventHandler(async (event) => {
     'Content-Disposition': dispositionHeader(media, target),
   })
   if (access.mode === 'credential') setResponseHeader(event, 'Vary', 'Authorization')
+  if (visitorContent) {
+    // Réponse propre à la session : jamais en cache partagé, jamais intégrée par un autre site.
+    setResponseHeaders(event, { 'Cache-Control': 'private, no-store', 'Cross-Origin-Resource-Policy': 'same-origin' })
+    appendResponseHeader(event, 'Vary', 'Cookie')
+  }
   if (access.mode !== 'public') setResponseHeader(event, 'X-Robots-Tag', 'noindex')
 
   if (getRequestHeader(event, 'if-none-match') === etag) {

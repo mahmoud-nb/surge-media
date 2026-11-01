@@ -28,6 +28,7 @@ const props = defineProps<{
 const emit = defineEmits<{ changed: [] }>()
 
 const { t, locale } = useI18n()
+const { errorFallback } = useDemoErrors()
 const { $api } = useNuxtApp()
 
 /** Langues proposées (les autres : code BCP 47 saisi). */
@@ -74,7 +75,7 @@ function errorMessage(error: unknown): string {
   if (data?.code === 'TRACK_LIMIT_REACHED') return t('media.tracks.errors.limit', { max: TEXT_TRACKS_MAX })
   if (response?.statusCode === 413) return t('media.tracks.errors.tooLarge')
   if (response?.statusCode === 400) return t('media.tracks.errors.fields')
-  return t('common.unexpectedError')
+  return errorFallback(error)
 }
 
 // ─── Formulaire (ajout, modification) ────────────────────────────────────────

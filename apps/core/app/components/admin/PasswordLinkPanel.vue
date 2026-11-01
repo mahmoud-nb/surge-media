@@ -19,6 +19,7 @@ const props = defineProps<{
 }>()
 
 const { t, locale } = useI18n()
+const { errorFallback } = useDemoErrors()
 const { $api } = useNuxtApp()
 const titleId = useId()
 const title = useTemplateRef<HTMLHeadingElement>('title')
@@ -41,7 +42,7 @@ function sendErrorMessage(error: unknown): string {
   if (code === 'MAIL_NOT_CONFIGURED') return t('users.link.mail.notConfigured')
   if (code === 'MAIL_FAILED') return t('users.link.mail.failed')
   if (code === 'INVITATION_ACCEPTED') return t('users.errors.invitationAccepted')
-  return t('common.unexpectedError')
+  return errorFallback(error)
 }
 
 async function sendByEmail() {

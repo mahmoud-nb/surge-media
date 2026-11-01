@@ -25,8 +25,10 @@ export interface MailMessage {
 
 export function smtpConfig(event: H3Event): SmtpConfig {
   const config = useRuntimeConfig(event).smtp
+  // Mode démo : envoi coupé quel que soit le réglage, sinon la démo publique servirait de relais de spam.
+  const demo = useDemo().enabled
   return {
-    host: String(config.host ?? '').trim(),
+    host: demo ? '' : String(config.host ?? '').trim(),
     port: Number(config.port) || 587,
     secure: config.secure === true || String(config.secure) === 'true',
     user: String(config.user ?? ''),

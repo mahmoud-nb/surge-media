@@ -22,6 +22,7 @@ interface StatusMessage {
 }
 
 const { t, locale } = useI18n()
+const { errorFallback } = useDemoErrors()
 const route = useRoute()
 const { $api } = useNuxtApp()
 const { user: currentUser, refresh: refreshSession, can } = useAuth()
@@ -47,7 +48,7 @@ function userErrorMessage(err: unknown): string {
   if (code === 'SELF_ACTION') return t('users.errors.selfAction')
   if (code === 'LAST_ADMIN') return t('users.errors.lastAdmin')
   if (code === 'INVITATION_ACCEPTED') return t('users.errors.invitationAccepted')
-  return t('common.unexpectedError')
+  return errorFallback(err)
 }
 
 // ─── Profil ──────────────────────────────────────────────────────────────────

@@ -103,7 +103,7 @@ For a quick local trial without HTTPS, use `NUXT_SITE_URL=http://localhost:3000`
 
 ### 4.3 Docker Compose
 
-Two ready-made files are in [`docker/`](docker):
+Ready-made files are in [`docker/`](docker):
 
 ```bash
 # One container, SQLite, data in a named volume
@@ -113,6 +113,8 @@ NUXT_SITE_URL=https://media.example.com docker compose -f docker/compose.sqlite.
 POSTGRES_PASSWORD='change-me' NUXT_SITE_URL=https://media.example.com \
   docker compose -f docker/compose.postgres.yaml up -d
 ```
+
+A third file, `docker/compose.demo.yaml`, runs a public demo instance reset at fixed times (§ 7.11).
 
 Variables can also live in a `docker/.env` file next to the Compose files. Useful ones:
 
@@ -137,7 +139,7 @@ The last argument of `docker run`, or `command:` in Compose, selects what the co
 
 | Command | Effect |
 | --- | --- |
-| `server` (default) | Applies pending migrations, then starts the web server on port 3000 |
+| `server` (default) | Applies pending migrations, then starts the web server on port 3000. In demo mode, first restores the demo snapshot (§ 7.11) |
 | `worker` | Video processing worker (`NUXT_VIDEO_PROCESSING=external`): serves `/api/health` only, never migrates |
 | `migrate` | Applies pending migrations, then exits |
 | anything else | Executed as is (`sh`, `node -v`…) |
@@ -252,6 +254,8 @@ For video processing in `external` mode, add a second unit running `surge-media 
 | `db reset` | Recreate the database schema, **deleting its data** (confirmation required; `--yes` to skip it) |
 | `user mfa-reset <email>` | Reset an account's two-factor authentication (lost phone and recovery codes, including the last administrator); `--all` for every account when `NUXT_MFA_ENCRYPTION_KEY` is lost; `--yes` to skip the confirmation |
 | `license clock-reset` | Bring the license reference-time mark back to this machine's clock, after the server clock ran ahead by mistake (§ 7.10); recorded in the audit log; `--yes` to skip the confirmation |
+| `demo snapshot --out <file.tar.gz>` | Capture the demo's reference content (database and media) into an archive, server running or not (§ 7.11); SQLite and local storage only |
+| `demo restore --from <file.tar.gz>` | Replace the database and media with those of a demo archive, server stopped (§ 7.11). Only with `NUXT_DEMO_MODE=true`, and never over a database that does not come from a demo snapshot |
 
 Every command accepts `--cwd <directory>` (installation directory, default: the current one) and `--lang en`
 (or `SURGE_MEDIA_LANG=en`; French is the default). `npx surge-media --help` lists the options. The CLI refuses an
@@ -401,6 +405,7 @@ Configure SPF, DKIM and DMARC for the sender's domain, or messages may land in s
 | `SURGE_MEDIA_MIGRATE` | `true` | `false`: the `server` command starts without migrating (extra instances; run `migrate` once instead) |
 | `SURGE_MEDIA_SECRETS_DIR` | `/app/data/secrets` | Directory of the generated secrets |
 | `<VARIABLE>_FILE` | — | Read a sensitive variable from a file (§ 4.5) |
+| `SURGE_MEDIA_DEMO_SNAPSHOT` | — | Demo snapshot restored at every start of the `server` command (§ 7.11); requires `NUXT_DEMO_MODE=true` |
 
 ### 7.10 Commercial license
 
@@ -417,6 +422,58 @@ The license is judged at a reference time that never goes back: the latest of th
 the database and, with PostgreSQL or MySQL, the database server's clock. Turning the clock back therefore does not
 extend a license; administrators are warned when the system clock is more than an hour behind. If the clock ran
 ahead by mistake and pushed the mark forward, fix the clock, then run `surge-media license clock-reset` (§ 5.3).
+
+### 7.11 Demo mode
+
+A public instance that anyone can try, reset at fixed times. It is meant for a dedicated server or container:
+never turn it on for an installation that holds real data.
+
+| Variable | Default | Role |
+| --- | --- | --- |
+| `NUXT_DEMO_MODE` | `false` | `true` turns demo mode on |
+| `NUXT_DEMO_RESET_INTERVAL` | `120` | Minutes between two resets (1 to 1440), aligned on midnight UTC; prefer a divisor of 1440 |
+| `NUXT_DEMO_ACCOUNTS` | — | Accounts shown on the sign-in page, as JSON: `[{"email":"…","password":"…"}]` (4 at most); their role is read from the database |
+| `NUXT_DEMO_UPLOAD_QUOTA` | `1073741824` | Bytes uploaded per reset cycle, in total; one IP address gets a quarter of it |
+| `NUXT_DEMO_CONTACT_URL`, `NUXT_DEMO_ABUSE_URL`, `NUXT_DEMO_TERMS_URL` | — | Banner links: contact (`mailto:` or a booking page), content report, demo terms (`https:`, `http:` or `mailto:`) |
+
+In demo mode:
+
+- **Reference content is read-only.** Everything that existed when the snapshot was captured (accounts, projects,
+  media, folders, presets, keys, origins, members) can be viewed but not changed or deleted: `403 DEMO_READ_ONLY`.
+  Visitors can create anything and do anything with what they created; duplicating an example media item gives
+  an editable copy. Global settings (two-factor policy, library transformation policy, license, reprocessing of
+  every video) are read-only, and the shared demo accounts cannot turn on two-factor authentication.
+- **Media uploaded by visitors** are served only to a signed-in session of the demo, never cached: a link shared
+  or embedded elsewhere shows nothing (`404`). Reference media are served as usual. Keep `/m/` on the same site
+  (no `NUXT_MEDIA_PUBLIC_URL` on another domain), or visitors cannot see their own uploads.
+- **Uploads** keep the usual per-file limits (§ 7.5; set them low, for instance 5 MB for images and 50 MB for
+  videos) and stop at `NUXT_DEMO_UPLOAD_QUOTA` until the next reset: `429 DEMO_QUOTA` with `Retry-After`.
+- **Email is off** whatever the SMTP settings, so that the demo cannot relay spam.
+- A **banner** on every page gives the next reset time and the configured links; every response carries
+  `X-Robots-Tag: noindex, nofollow`. Each sign-in to a demo account writes one line to the server log (role only,
+  no email or IP address), to count visits without tracking.
+
+**Reset.** At each slot, the web server stops by itself (graceful shutdown). With `docker/compose.demo.yaml`,
+Docker restarts the container (`restart: unless-stopped`) and the image restores `SURGE_MEDIA_DEMO_SNAPSHOT`
+before migrating and starting: the demo is unavailable for 10 to 20 seconds. Without Docker, a supervisor does the
+same, for instance systemd with `Restart=always` and `ExecStartPre=npx surge-media demo restore --from <file> --yes`.
+To reset at once (reported content), restart the container.
+
+**Preparing the reference content.** `docker/compose.demo.yaml` has a `prepare` service: an ordinary instance on
+its own volume and port 3001.
+
+```bash
+docker compose -f docker/compose.demo.yaml --profile prepare up -d prepare
+# Sign in at http://localhost:3001 (bootstrap administrator), create the demo accounts, projects, media you own
+# the rights to, processed videos, keys… then capture:
+docker compose -f docker/compose.demo.yaml exec prepare \
+  node node_modules/@surge-media/core/dist/cli/index.mjs demo snapshot --out /snapshot/demo.tar.gz --yes
+docker compose -f docker/compose.demo.yaml up -d demo
+```
+
+The archive (`docker/snapshot/demo.tar.gz`) holds the database and the media folder, without sessions, trusted
+devices, password links, audit log or secrets. A snapshot taken with an older version is migrated at each start;
+capture a new one after an update to save that time. Snapshots work with SQLite and local storage only.
 
 ## 8. Database
 
@@ -584,6 +641,7 @@ Traefik also appends `X-Forwarded-For` by default; raise its timeouts and body s
 - [ ] Users invited with the least role they need; API secret keys only on your servers.
 - [ ] System clock synchronized (NTP): two-factor codes, signed links and the commercial license depend on it.
 - [ ] Commercial license installed if a Business Source License exclusion applies to you (§ 19).
+- [ ] `NUXT_DEMO_MODE` not set: demo mode is for a public demo instance only (§ 7.11).
 
 Not available yet, to take into account in your security assessment: single sign-on (SSO) for the
 administration, a password recovery command when every administrator has forgotten their password (a lost second
@@ -696,6 +754,8 @@ have run: restore the backup instead.
 | Phone and recovery codes lost | An administrator resets it from the account's page; for the last administrator, `surge-media user mfa-reset <email>` on the server |
 | License refused: "not signed with a key this version recognizes" | The license needs a newer surgeMedia version: update, or write to the licensing contact |
 | "Server clock behind" (Settings › License, dashboard) | Fix the system time (NTP). If it was the clock that had run ahead by mistake, run `surge-media license clock-reset` once it is right (§ 7.10) |
+| Demo container stops at start: database "doesn't come from a demo snapshot" | The data volume holds a database that was not restored from a snapshot (for instance the `prepare` volume): give the `demo` service its own, empty volume (§ 7.11) |
+| Demo: visitors' uploads don't show in the administration | Media are served on another domain (`NUXT_MEDIA_PUBLIC_URL`), where the session cookie is not sent: serve `/m/` on the demo's own site (§ 7.11) |
 | `403 Cross-origin request blocked` | The proxy rewrites the `Host` header, or a modifying request comes from another origin |
 | `NUXT_SESSION_PASSWORD … was not set` | Run `surge-media init`, or set a secret of 32 characters or more |
 | `start` stops at once with exit code 1 | Port already used: another `--port`/`PORT`, or stop the other application; update `NUXT_SITE_URL` if it contains the port |

@@ -5,6 +5,7 @@
  * bouton « Menu » (aria-expanded) la déplie sous la barre supérieure. Échap la referme.
  * Le contenu est dans `<main id="main">`, sauf pour une page qui fournit son propre `<main>`
  * (`definePageMeta({ providesMain: true })`) : un `<div id="main">` garde la cible du lien d'évitement.
+ * En mode démo, le bandeau occupe toute la largeur au-dessus des deux colonnes.
  */
 import { Menu, X } from '@lucide/vue'
 
@@ -27,6 +28,7 @@ function closeMenu() {
 <template>
   <div class="min-h-dvh lg:grid lg:grid-cols-[17rem_minmax(0,1fr)]">
     <AppSkipLink />
+    <AppDemoBanner />
 
     <header
       class="sticky top-0 z-30 border-b border-border bg-surface lg:h-dvh lg:border-r lg:border-b-0"

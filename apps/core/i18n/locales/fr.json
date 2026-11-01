@@ -2490,5 +2490,45 @@
       "devices": "Les appareils de confiance se gèrent depuis le tableau de bord.",
       "devicesLink": "Ouvrir le tableau de bord"
     }
+  },
+  "demo": {
+    "banner": {
+      "label": "Démo publique",
+      "title": "Démo publique.",
+      "reset": "Remise à zéro à {time} : tout ce que vous ajoutez sera effacé.",
+      "notice": "N'envoyez aucune donnée personnelle.",
+      "in": {
+        "soon": "dans moins d'une minute",
+        "minutes": "dans {minutes} min",
+        "hours": "dans {hours} h",
+        "hoursMinutes": "dans {hours} h {minutes} min"
+      },
+      "contact": "Nous contacter",
+      "abuse": "Signaler un contenu",
+      "terms": "Conditions de la démo"
+    },
+    "accounts": {
+      "title": "Comptes de démonstration",
+      "description": "Connectez-vous avec l'un de ces comptes. Ils sont partagés par tous les visiteurs et ne peuvent pas être modifiés.",
+      "role": "Rôle",
+      "unknownRole": "Inconnu",
+      "use": "Utiliser ce compte",
+      "useLabel": "Utiliser le compte {role}",
+      "contact": "Vous évaluez surgeMedia pour votre entreprise ? {link}.",
+      "contactLink": "Parlons-en"
+    },
+    "account": {
+      "mfa": "La double authentification ne s'active pas sur un compte de démonstration partagé. Pour l'essayer, créez votre propre compte dans Utilisateurs."
+    },
+    "readOnly": "En démo, ce réglage est en lecture seule.",
+    "errors": {
+      "readOnly": {
+        "media": "Ce média fait partie de l'exemple de la démo : dupliquez-le pour le modifier.",
+        "user": "Les comptes de démonstration ne peuvent pas être modifiés.",
+        "setting": "En démo, ce réglage est en lecture seule.",
+        "item": "Cet élément fait partie de l'exemple de la démo : créez le vôtre pour essayer cette action."
+      },
+      "quota": "Le volume d'envoi de la démo est épuisé jusqu'à la prochaine remise à zéro, dans {minutes} min."
+    }
   }
 }

@@ -94,6 +94,10 @@ function problemDetail(code: ApiErrorCode, data: Record<string, unknown>): strin
       return 'A folder cannot be moved into itself or one of its subfolders.'
     case 'FOLDER_LIMIT_REACHED':
       return `A space can hold ${FOLDERS_PER_SPACE_MAX} folders at most.`
+    case 'DEMO_READ_ONLY':
+      return 'This item is part of the demo\'s reference content: duplicate it, or create your own, to try this action.'
+    case 'DEMO_QUOTA':
+      return 'The demo\'s upload volume is used up until its next reset.'
     case 'PRESET_NOT_FOUND':
       return `${typeof data.detail === 'string' ? data.detail : 'No such preset in this project.'} See GET /projects/{projectId}/presets.`
 

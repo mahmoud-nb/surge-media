@@ -10,6 +10,7 @@ interface StatusMessage {
 }
 
 const { t, locale } = useI18n()
+const { errorFallback } = useDemoErrors()
 const route = useRoute()
 const { $api } = useNuxtApp()
 const flash = useFlash()
@@ -31,7 +32,7 @@ const pageFlash = flash.consume()
 
 function errorMessage(error: unknown): string {
   const { code } = apiError(error)
-  return code && (PROJECT_ERROR_CODES as readonly string[]).includes(code) ? t(`projects.errors.${code}`) : t('common.unexpectedError')
+  return code && (PROJECT_ERROR_CODES as readonly string[]).includes(code) ? t(`projects.errors.${code}`) : errorFallback(error)
 }
 
 // ─── Réglages ────────────────────────────────────────────────────────────────

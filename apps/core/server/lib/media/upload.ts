@@ -10,6 +10,7 @@ import busboy from 'busboy'
 import type { H3Event } from 'h3'
 import { mediaKindForMime } from '#shared/utils/media'
 import { mediaError } from './errors'
+import { demoUploadGuard } from '../demo/quota'
 import { largestSize, type UploadRules } from './limits'
 import { detectMimeType, SNIFF_HEADER_BYTES } from './sniff'
 
@@ -135,6 +136,8 @@ export async function receiveUpload(event: H3Event, rules: UploadRules): Promise
   // MKV sans traitement des vidéos actif) : tout fichier serait refusé, 415 d'emblée. Sans ce cas, la
   // plus grande limite vaudrait 0 et le même refus deviendrait un 413 FILE_TOO_LARGE « 0 octet ».
   if (rules.acceptedTypes.length === 0) throw mediaError(415, 'UNSUPPORTED_TYPE', { accepted: [] })
+  // Mode démo : volume du cycle épuisé → 429 DEMO_QUOTA avant de lire quoi que ce soit.
+  demoUploadGuard()?.check(event)
   // Refus immédiat si la taille annoncée dépasse nettement la plus grande limite admise (type encore inconnu).
   const largest = largestSize(rules)
   const declared = Number(headers['content-length'])
@@ -262,6 +265,7 @@ export async function receiveUpload(event: H3Event, rules: UploadRules): Promise
         file.then((received) => {
           if (tooLarge) return reject(mediaError(413, 'FILE_TOO_LARGE', { maxSize: largest }))
           if (received.size === 0) return reject(mediaError(400, 'NO_FILE'))
+          demoUploadGuard()?.record(event, received.size)
           resolve({ ...received, fields, cleanup })
         }, reject)
       })

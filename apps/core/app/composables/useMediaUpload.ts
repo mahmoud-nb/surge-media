@@ -51,6 +51,7 @@ function fileExtension(name: string): string {
  */
 export function useMediaUpload() {
   const { t, locale } = useI18n()
+  const { demoErrorMessage } = useDemoErrors()
   const route = useRoute()
 
   function send(url: string, file: File, fields: Record<string, string>, options: {
@@ -163,6 +164,10 @@ export function useMediaUpload() {
         return t(`media.errors.${data.code}`)
       case 'UPLOAD_TIMEOUT':
         return t('media.errors.UPLOAD_TIMEOUT', { seconds: (data as { timeout?: number }).timeout ?? 60 })
+      case 'DEMO_QUOTA':
+      case 'DEMO_READ_ONLY':
+        // Mode démo : volume du cycle épuisé, ou remplacement du fichier d'un média d'exemple.
+        return demoErrorMessage(data.code, data) ?? t('common.unexpectedError')
       default:
         // Dossier de destination supprimé entre-temps, par exemple.
         return data?.code && (FOLDER_ERROR_CODES as readonly string[]).includes(data.code)

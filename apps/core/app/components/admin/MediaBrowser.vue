@@ -16,6 +16,7 @@ const props = defineProps<{
 }>()
 
 const { t } = useI18n()
+const { errorFallback } = useDemoErrors()
 const route = useRoute()
 const { $api } = useNuxtApp()
 
@@ -211,7 +212,7 @@ async function fileSelected() {
     const { code } = apiError(err)
     bulkStatus.value = {
       variant: 'error',
-      message: code && (FOLDER_ERROR_CODES as readonly string[]).includes(code) ? t(`folders.errors.${code}`) : t('common.unexpectedError'),
+      message: code && (FOLDER_ERROR_CODES as readonly string[]).includes(code) ? t(`folders.errors.${code}`) : errorFallback(err),
     }
   }
   finally {

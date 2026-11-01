@@ -19,6 +19,8 @@ import {
 const { t, te, locale } = useI18n()
 const { $api } = useNuxtApp()
 const reauth = useReauth()
+// Mode démo : la licence ne s'installe ni ne se retire.
+const demo = useDemoInfo()
 const ids = { state: useId(), install: useId() }
 
 const { data, error, refresh } = await useApiFetch('/api/admin/license')
@@ -263,7 +265,10 @@ async function remove() {
     </section>
 
     <!-- Installation -->
-    <section v-if="data.source !== 'env'" :aria-labelledby="ids.install" class="grid gap-4 rounded-xl border border-border bg-surface p-5">
+    <UiAlert v-if="demo" variant="info">
+      {{ t('demo.readOnly') }}
+    </UiAlert>
+    <section v-else-if="data.source !== 'env'" :aria-labelledby="ids.install" class="grid gap-4 rounded-xl border border-border bg-surface p-5">
       <h3 :id="ids.install" class="flex items-center gap-2 text-lg font-semibold text-foreground">
         <KeyRound class="size-5 shrink-0 text-muted-foreground" aria-hidden="true" />
         {{ data.source === 'database' ? t('settings.license.replaceTitle') : t('settings.license.installTitle') }}

@@ -23,6 +23,7 @@ export const API_ERRORS = {
   PROJECT_ARCHIVED: { status: 403, title: 'Project archived' },
   LISTING_DISABLED: { status: 403, title: 'Public listing disabled' },
   UPLOAD_LIMIT_REACHED: { status: 403, title: 'Upload limit reached' },
+  DEMO_READ_ONLY: { status: 403, title: 'Read-only in the demo' },
   TRANSFORM_NOT_ALLOWED: { status: 403, title: 'Transformation not allowed' },
   NOT_FOUND: { status: 404, title: 'Not found' },
   PROJECT_NOT_FOUND: { status: 404, title: 'Project not found' },
@@ -49,6 +50,7 @@ export const API_ERRORS = {
   FOLDER_CYCLE: { status: 422, title: 'Folder cycle' },
   RATE_LIMITED: { status: 429, title: 'Too many requests' },
   TRANSFORM_QUOTA: { status: 429, title: 'Transformation quota reached' },
+  DEMO_QUOTA: { status: 429, title: 'Demo upload quota reached' },
   INTERNAL_ERROR: { status: 500, title: 'Internal server error' },
   SERVER_BUSY: { status: 503, title: 'Server busy' },
 } as const satisfies Record<string, { status: number, title: string }>

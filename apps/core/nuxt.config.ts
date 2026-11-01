@@ -43,6 +43,17 @@ export default defineNuxtConfig({
     license: {
       key: '',
     },
+    // Mode démo : instance publique remise à zéro à heures fixes, contenu de référence en lecture seule,
+    // e-mail coupé (server/utils/demo.ts, .claude/architecture-demo.md) — NUXT_DEMO_*
+    demo: {
+      mode: false, // NUXT_DEMO_MODE
+      resetInterval: 120, // minutes entre deux remises à zéro, créneaux alignés sur minuit UTC — NUXT_DEMO_RESET_INTERVAL
+      accounts: '', // comptes affichés à la connexion, JSON [{ "email", "password" }] — NUXT_DEMO_ACCOUNTS
+      uploadQuota: 1024 * 1024 * 1024, // octets envoyés par cycle (une adresse IP : le quart) — NUXT_DEMO_UPLOAD_QUOTA
+      contactUrl: '', // NUXT_DEMO_CONTACT_URL
+      abuseUrl: '', // NUXT_DEMO_ABUSE_URL
+      termsUrl: '', // NUXT_DEMO_TERMS_URL
+    },
     // Compte d'amorçage (première connexion) — NUXT_BOOTSTRAP_ADMIN_EMAIL / _PASSWORD
     bootstrapAdmin: {
       email: '',

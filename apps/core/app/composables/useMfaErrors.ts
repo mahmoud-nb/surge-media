@@ -6,6 +6,7 @@ import { MFA_ERROR_CODES, type MfaErrorCode } from '#shared/utils/mfa'
  */
 export function useMfaErrors() {
   const { t } = useI18n()
+  const { demoErrorMessage } = useDemoErrors()
 
   function mfaErrorCode(error: unknown): MfaErrorCode | undefined {
     const { code } = apiError(error)
@@ -13,9 +14,11 @@ export function useMfaErrors() {
   }
 
   function mfaErrorMessage(error: unknown): string {
-    const { status, retryAfter } = apiError(error)
+    const { status, retryAfter, code: apiCode, details } = apiError(error)
     const code = mfaErrorCode(error)
     if (code) return t(`mfa.errors.${code}`)
+    const demo = demoErrorMessage(apiCode, details)
+    if (demo) return demo
     if (status === 429) return t('mfa.errors.tooManyAttempts', { minutes: Math.ceil((retryAfter ?? 60) / 60) })
     return t('mfa.errors.unexpected')
   }

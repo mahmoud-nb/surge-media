@@ -9,6 +9,7 @@ interface StatusMessage {
 }
 
 const { t } = useI18n()
+const { errorFallback } = useDemoErrors()
 const route = useRoute()
 const { $api } = useNuxtApp()
 const { user: currentUser } = useAuth()
@@ -38,7 +39,7 @@ function displayName(user: { name: string | null, email: string }): string {
 
 function errorMessage(error: unknown): string {
   const { code } = apiError(error)
-  return code && (PROJECT_ERROR_CODES as readonly string[]).includes(code) ? t(`projects.errors.${code}`) : t('common.unexpectedError')
+  return code && (PROJECT_ERROR_CODES as readonly string[]).includes(code) ? t(`projects.errors.${code}`) : errorFallback(error)
 }
 
 async function reload() {
