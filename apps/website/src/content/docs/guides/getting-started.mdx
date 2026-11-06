@@ -46,7 +46,7 @@ You can start on SQLite and move to PostgreSQL later: the database is selected b
    npm rebuild better-sqlite3 @prisma/engines
    ```
 
-3. Run the interactive setup. It asks for the database (SQLite, PostgreSQL or MySQL / MariaDB), the web server port (3000, or the next free port if another application already uses it) and the public URL, applies the migrations and generates the secrets into `.env`:
+3. Run the interactive setup. It asks for the database (SQLite, PostgreSQL or MySQL / MariaDB), the web server port (3000, or the next free port if another application already uses it) and the public URL, applies the migrations and generates the secrets into `.env`. It then asks how the instance will be used (evaluation, Community production or production under a commercial license): only a statement, nothing is sent, and “Later” skips it.
 
    ```bash
    npx surge-media init
@@ -106,8 +106,9 @@ For MySQL or MariaDB, replace the `postgres` service and set `DATABASE_URL` to `
 
 1. Open the admin at your site URL and sign in with the bootstrap account (`NUXT_BOOTSTRAP_ADMIN_EMAIL` / `NUXT_BOOTSTRAP_ADMIN_PASSWORD`). It becomes the first **Admin**.
 2. Remove the bootstrap variables once the account exists, and invite your team from **Users**.
-3. Create a **project** for your application, add its **allowed origins** (`https://www.acme.com`) and create its **API keys** — a publishable key for the browser, a secret key for your server.
-4. Upload a few media and copy their URLs, or call the API from your application.
+3. Turn on **two-factor authentication** from **My account** (any authenticator app), then require it at least for administrators in **Settings › Security**. In **Settings › License**, check the declared use of the instance (a Docker installation declares it there).
+4. Create a **project** for your application, add its **allowed origins** (`https://www.acme.com`) and create its **API keys** — a publishable key for the browser, a secret key for your server.
+5. Upload a few media and copy their URLs, or call the API from your application.
 
 </Steps>
 

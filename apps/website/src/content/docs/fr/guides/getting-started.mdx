@@ -46,7 +46,7 @@ Vous pouvez commencer avec SQLite et passer à PostgreSQL plus tard : la base d
    npm rebuild better-sqlite3 @prisma/engines
    ```
 
-3. Lancez la configuration interactive. Elle demande la base de données (SQLite, PostgreSQL ou MySQL / MariaDB), le port du serveur web (3000, ou le prochain port libre si une autre application l’utilise déjà) et l’URL publique, applique les migrations et génère les secrets dans `.env` :
+3. Lancez la configuration interactive. Elle demande la base de données (SQLite, PostgreSQL ou MySQL / MariaDB), le port du serveur web (3000, ou le prochain port libre si une autre application l’utilise déjà) et l’URL publique, applique les migrations et génère les secrets dans `.env`. Elle demande ensuite l’usage de l’instance (évaluation, production Community ou production sous licence commerciale) : une simple déclaration, rien n’est envoyé, et « Plus tard » la passe.
 
    ```bash
    npx surge-media init
@@ -106,8 +106,9 @@ Pour MySQL ou MariaDB, remplacez le service `postgres` et donnez à `DATABASE_UR
 
 1. Ouvrez l’administration à l’adresse de votre site et connectez-vous avec le compte d’amorçage (`NUXT_BOOTSTRAP_ADMIN_EMAIL` / `NUXT_BOOTSTRAP_ADMIN_PASSWORD`). Il devient le premier **Administrateur**.
 2. Retirez les variables d’amorçage une fois le compte créé, puis invitez votre équipe depuis **Utilisateurs**.
-3. Créez un **projet** pour votre application, ajoutez ses **origines autorisées** (`https://www.acme.fr`) et créez ses **clés d’API** — une clé publique pour le navigateur, une clé secrète pour votre serveur.
-4. Envoyez quelques médias et copiez leurs URL, ou appelez l’API depuis votre application.
+3. Activez la **double authentification** depuis **Mon compte** (avec n’importe quelle application d’authentification), puis rendez-la obligatoire au moins pour les administrateurs dans **Réglages › Sécurité**. Dans **Réglages › Licence**, vérifiez l’usage déclaré de l’instance (une installation Docker le déclare là).
+4. Créez un **projet** pour votre application, ajoutez ses **origines autorisées** (`https://www.acme.fr`) et créez ses **clés d’API** — une clé publique pour le navigateur, une clé secrète pour votre serveur.
+5. Envoyez quelques médias et copiez leurs URL, ou appelez l’API depuis votre application.
 
 </Steps>
 

@@ -74,6 +74,7 @@ Dans tous les cas, les sorties sont plafonnées (4 096 px par défaut), les imag
 ## Comptes et sessions
 
 - Mots de passe hachés avec **argon2id** ; sessions stockées côté serveur et révocables par un administrateur.
+- **Double authentification (TOTP)** : chaque compte l’active depuis **Mon compte** avec n’importe quelle application d’authentification et reçoit dix codes de secours à usage unique. Les administrateurs peuvent l’exiger des administrateurs ou de tous (**Réglages › Sécurité**). Les secrets sont chiffrés en base ; chaque changement est inscrit au journal d’audit et signalé par e-mail au titulaire du compte. L’exploitant du serveur peut la réinitialiser en ligne de commande (`surge-media user mfa-reset`).
 - **Mode sudo** : créer une clé secrète ou un jeton personnel, ou modifier les membres d’un projet, redemande le mot de passe (valable 10 minutes). Les utilisateurs peuvent déclarer un appareil de confiance.
 - La connexion et la confirmation du mot de passe sont limitées en débit ; les échecs répétés bloquent temporairement les nouvelles tentatives.
 - Les invitations et réinitialisations de mot de passe passent par des liens à usage unique et à durée limitée.
@@ -88,6 +89,12 @@ Les administrateurs disposent d’un **journal d’audit** filtrable des actions
 - Les authentifications échouées sont comptées par adresse IP ; au-delà du seuil, l’adresse est temporairement bloquée sur l’API.
 - Les corps de requête sont limités en taille et en durée ; les envois bloqués sans donnée sont interrompus.
 - Derrière un mandataire inverse, `NUXT_TRUST_PROXY` permet aux limites et aux journaux d’utiliser la vraie adresse IP du client.
+
+## Chaîne d’approvisionnement
+
+- Les dépendances sont auditées à chaque modification, chaque lundi et avant chaque version, et l’image Docker est analysée avant d’être publiée : une faille élevée ou critique dans ce qui est livré bloque la publication, sauf exception écrite et limitée dans le temps qui explique pourquoi elle ne s’applique pas.
+- Les GitHub Actions tierces sont épinglées par empreinte de commit, les nouveaux commits sont examinés à la recherche de secrets, et les workflows de publication ne partagent aucun cache de build avec les autres.
+- Chaque version est accompagnée de SBOM (images et paquet npm) et d’empreintes. Les vérifier : la [politique de sécurité](https://github.com/mahmoud-nb/surge-media/blob/main/SECURITY.md#supply-chain).
 
 ## Voir aussi
 

@@ -74,6 +74,7 @@ In every case, outputs are capped (4,096 px by default), images are never upscal
 ## Accounts and sessions
 
 - Passwords hashed with **argon2id**; sessions stored server-side and revocable by an administrator.
+- **Two-factor authentication (TOTP)**: each account turns it on from **My account** with any authenticator app and receives ten single-use recovery codes. Administrators can require it for administrators or for everyone (**Settings › Security**). Secrets are encrypted in the database; every change is recorded in the audit log and reported to the account holder by email. The server operator can reset it from the command line (`surge-media user mfa-reset`).
 - **Sudo mode**: creating a secret key or a personal token, or changing project members, asks for the password again (valid 10 minutes). Users can mark a device as trusted.
 - Login and password confirmation are rate-limited; repeated failures lock further attempts temporarily.
 - Invitations and password resets use single-use, expiring links.
@@ -88,6 +89,12 @@ Administrators get a searchable **audit log** of sensitive actions — project a
 - Failed authentications are counted per IP; beyond the threshold, the IP is temporarily blocked from the API.
 - Request bodies are size- and time-limited; uploads stalled without data are cut.
 - Behind a reverse proxy, `NUXT_TRUST_PROXY` makes limits and logs use the real client IP.
+
+## Supply chain
+
+- Dependencies are audited on every change, every Monday and before every release, and the Docker image is scanned for known vulnerabilities before it is published: a high or critical issue in what is shipped blocks the release, unless a written, time-limited exception explains why it does not apply.
+- Third-party GitHub Actions are pinned to a commit hash, new commits are scanned for secrets, and the release workflows share no build cache with other workflows.
+- Every release comes with SBOMs (images and npm package) and checksums. How to check them: the [security policy](https://github.com/mahmoud-nb/surge-media/blob/main/SECURITY.md#supply-chain).
 
 ## Related
 
