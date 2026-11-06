@@ -20,6 +20,11 @@ export default defineNitroPlugin((nitroApp) => {
     setResponseHeader(event, 'X-Robots-Tag', 'noindex, nofollow')
   })
 
+  if (demo.legalMissing.length) {
+    const names = demo.legalMissing.map(key => `NUXT_DEMO_LEGAL_${key.replace(/[A-Z]/g, letter => `_${letter}`).toUpperCase()}`)
+    console.warn(`[surge-media] Démo : informations légales incomplètes (${names.join(', ')}) ; ${demo.legal ? 'les pages légales les signalent comme manquantes' : 'pages /legal, /privacy et /terms non servies'}.`)
+  }
+
   const { media, siteUrl } = useRuntimeConfig()
   const publicUrl = String(media?.publicUrl ?? '').trim()
   if (publicUrl && originOf(publicUrl) !== originOf(String(siteUrl ?? ''))) {

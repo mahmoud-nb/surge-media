@@ -2,7 +2,7 @@
 /**
  * Bandeau du mode démo, en tête des deux mises en page : heure de la prochaine remise à zéro (heure locale,
  * temps restant rafraîchi toutes les 30 s après le chargement), consigne, liens configurés (contact,
- * signalement, conditions) ; `noindex` sur toutes les pages. Région nommée, sans annonce live : le décompte
+ * signalement, conditions) et pages légales de la démo ; `noindex` sur toutes les pages. Région nommée, sans annonce live : le décompte
  * n'est pas lu à chaque minute. Hors démo : rien.
  */
 import { TriangleAlert } from '@lucide/vue'
@@ -36,6 +36,9 @@ const links = computed(() => {
     { href: demo.value.contactUrl, label: t('demo.banner.contact') },
     { href: demo.value.abuseUrl, label: t('demo.banner.abuse') },
     { href: demo.value.termsUrl, label: t('demo.banner.terms') },
+    // Pages légales du core (NUXT_DEMO_LEGAL_*), quand l'éditeur est renseigné.
+    { href: demo.value.legal ? '/legal' : '', label: t('demo.banner.legal') },
+    { href: demo.value.legal ? '/privacy' : '', label: t('demo.banner.privacy') },
   ].filter(link => link.href)
 })
 </script>
@@ -64,7 +67,9 @@ const links = computed(() => {
       </p>
       <ul v-if="links.length" class="flex flex-wrap gap-x-4 gap-y-1">
         <li v-for="link in links" :key="link.href">
-          <a :href="link.href" class="rounded font-medium underline underline-offset-2 hover:no-underline">{{ link.label }}</a>
+          <NuxtLink :to="link.href" class="rounded font-medium underline underline-offset-2 hover:no-underline">
+            {{ link.label }}
+          </NuxtLink>
         </li>
       </ul>
     </div>

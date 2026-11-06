@@ -2505,7 +2505,9 @@
       },
       "contact": "Nous contacter",
       "abuse": "Signaler un contenu",
-      "terms": "Conditions de la démo"
+      "terms": "Conditions de la démo",
+      "legal": "Mentions légales",
+      "privacy": "Confidentialité"
     },
     "accounts": {
       "title": "Comptes de démonstration",
@@ -2529,6 +2531,109 @@
         "item": "Cet élément fait partie de l'exemple de la démo : créez le vôtre pour essayer cette action."
       },
       "quota": "Le volume d'envoi de la démo est épuisé jusqu'à la prochaine remise à zéro, dans {minutes} min."
+    }
+  },
+  "legal": {
+    "nav": {
+      "label": "Informations légales",
+      "legal": "Mentions légales",
+      "privacy": "Confidentialité",
+      "terms": "Conditions de la démo"
+    },
+    "missing": "Non renseigné",
+    "interval": {
+      "hours": "{count} heure | {count} heures",
+      "minutes": "{count} minute | {count} minutes"
+    },
+    "notice": {
+      "title": "Mentions légales",
+      "description": "Éditeur et hébergeur de cette démonstration publique de surgeMedia.",
+      "publisher": {
+        "title": "Éditeur",
+        "name": "Nom",
+        "tradeName": "Nom commercial",
+        "registration": "Immatriculation"
+      },
+      "address": "Adresse",
+      "email": "E-mail",
+      "phone": "Téléphone",
+      "director": {
+        "title": "Directeur de la publication"
+      },
+      "host": {
+        "title": "Hébergement",
+        "name": "Hébergeur"
+      },
+      "report": {
+        "title": "Signaler un contenu",
+        "text": "Cette démo accueille les fichiers déposés par ses visiteurs. Pour signaler un contenu illicite, écrivez à {address} en indiquant la page ou le fichier concerné et la raison du signalement. Le contenu est retiré promptement, et dans tous les cas à la remise à zéro suivante."
+      },
+      "software": {
+        "title": "Logiciel et contenus",
+        "text": "surgeMedia est publié sous la Business Source License 1.1. Les contenus d'exemple de la démo appartiennent à leurs auteurs et ne peuvent pas être réutilisés sans leur accord."
+      }
+    },
+    "privacy": {
+      "title": "Politique de confidentialité",
+      "description": "Ce que la démo enregistre, pourquoi, et pendant combien de temps.",
+      "controller": {
+        "title": "Responsable du traitement",
+        "text": "{publisher}, joignable à {email}."
+      },
+      "data": {
+        "title": "Données traitées",
+        "logs": "Journaux du serveur : adresse IP, date et heure, page ou fichier demandé, navigateur. Ils servent à la sécurité de la démo et à la lutte contre les abus (intérêt légitime de l'éditeur) et sont conservés {days} jour. | Journaux du serveur : adresse IP, date et heure, page ou fichier demandé, navigateur. Ils servent à la sécurité de la démo et à la lutte contre les abus (intérêt légitime de l'éditeur) et sont conservés {days} jours.",
+        "cookies": "Cookies : des cookies de session, posés quand vous vous connectez, et des cookies de préférence (langue, thème). Ils sont nécessaires au fonctionnement de la démo ; il n'y a ni mesure d'audience, ni publicité, ni traceur tiers.",
+        "content": "Ce que vous ajoutez (médias, comptes, projets, textes) : effacé à la remise à zéro suivante, toutes les {interval}. N'y mettez aucune donnée personnelle.",
+        "visits": "Comptage des visites : chaque connexion à un compte de démonstration ajoute une ligne au journal du serveur, avec le rôle du compte seulement, sans adresse IP ni e-mail."
+      },
+      "recipients": {
+        "title": "Destinataires",
+        "text": "Ces données ne sont accessibles qu'à l'éditeur et à l'hébergeur du serveur ({host}). Elles ne sont ni vendues, ni cédées, ni utilisées à des fins publicitaires.",
+        "unknownHost": "non renseigné"
+      },
+      "rights": {
+        "title": "Vos droits",
+        "text": "Vous pouvez demander l'accès à vos données, leur rectification ou leur effacement, ou vous opposer à leur traitement, en écrivant à {email}. Vous pouvez aussi adresser une réclamation à l'autorité de protection des données de votre pays (en France, la CNIL)."
+      }
+    },
+    "terms": {
+      "title": "Conditions de la démo",
+      "description": "Les règles d'utilisation de cette démonstration publique.",
+      "purpose": {
+        "title": "Objet",
+        "text": "Cette démo permet d'essayer surgeMedia. Elle est gratuite et fournie en l'état, sans garantie de disponibilité ni de conservation des données. L'utiliser vaut acceptation de ces conditions."
+      },
+      "reset": {
+        "title": "Remise à zéro",
+        "text": "Toutes les {interval}, la démo revient à son contenu d'exemple : tout ce que vous avez ajouté ou modifié (médias, comptes, projets, réglages) est effacé et ne peut pas être récupéré."
+      },
+      "sharing": {
+        "title": "Espace partagé",
+        "text": "Les comptes de démonstration sont partagés : les autres visiteurs connectés voient ce que vous déposez. Vos fichiers ne sont servis qu'aux visiteurs connectés à la démo ; un lien partagé ailleurs ne les montre pas."
+      },
+      "forbidden": {
+        "title": "Contenus interdits",
+        "intro": "N'y déposez jamais :",
+        "items": {
+          "personal": "des données personnelles, les vôtres ou celles d'autrui ;",
+          "illegal": "des contenus illicites, haineux, violents, pornographiques ou portant atteinte aux droits d'autrui (droit d'auteur, droit à l'image) ;",
+          "malware": "des logiciels malveillants, des pages d'hameçonnage ou tout contenu destiné à tromper ;",
+          "hosting": "des fichiers à héberger ou à diffuser : la démo n'est pas un service d'hébergement."
+        }
+      },
+      "report": {
+        "title": "Signalement et retrait",
+        "text": "Pour signaler un contenu, écrivez à {address}. L'éditeur retire promptement un contenu signalé ou manifestement illicite ; il peut remettre la démo à zéro sans attendre et bloquer l'accès d'un visiteur qui ne respecte pas ces conditions."
+      },
+      "liability": {
+        "title": "Responsabilité",
+        "text": "Vous êtes responsable de ce que vous déposez. L'éditeur ne répond ni de l'effacement des données, prévu par la démo, ni de ses interruptions."
+      },
+      "contact": {
+        "title": "Questions",
+        "text": "Pour toute question sur la démo ou sur surgeMedia, écrivez à {email}."
+      }
     }
   }
 }

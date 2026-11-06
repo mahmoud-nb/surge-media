@@ -434,7 +434,13 @@ never turn it on for an installation that holds real data.
 | `NUXT_DEMO_RESET_INTERVAL` | `120` | Minutes between two resets (1 to 1440), aligned on midnight UTC; prefer a divisor of 1440 |
 | `NUXT_DEMO_ACCOUNTS` | — | Accounts shown on the sign-in page, as JSON: `[{"email":"…","password":"…"}]` (4 at most); their role is read from the database |
 | `NUXT_DEMO_UPLOAD_QUOTA` | `1073741824` | Bytes uploaded per reset cycle, in total; one IP address gets a quarter of it |
-| `NUXT_DEMO_CONTACT_URL`, `NUXT_DEMO_ABUSE_URL`, `NUXT_DEMO_TERMS_URL` | — | Banner links: contact (`mailto:` or a booking page), content report, demo terms (`https:`, `http:` or `mailto:`) |
+| `NUXT_DEMO_CONTACT_URL`, `NUXT_DEMO_ABUSE_URL`, `NUXT_DEMO_TERMS_URL` | — | Banner links: contact (`mailto:` or a booking page), content report, demo terms (`https:`, `http:` or `mailto:`). Without `NUXT_DEMO_TERMS_URL`, the terms link opens the built-in `/terms` page when the legal information below is set |
+| `NUXT_DEMO_LEGAL_PUBLISHER_NAME` | — | Publisher of the demo, with its legal form (for instance `Jane Smith EI`). Turns on the `/legal`, `/privacy` and `/terms` pages |
+| `NUXT_DEMO_LEGAL_TRADE_NAME`, `NUXT_DEMO_LEGAL_REGISTRATION` | — | Trade name; registration as it must appear (for instance `SIRET 123 456 789 00012`) |
+| `NUXT_DEMO_LEGAL_ADDRESS`, `NUXT_DEMO_LEGAL_EMAIL`, `NUXT_DEMO_LEGAL_PHONE` | — | Published address (home or registered office), contact email and phone |
+| `NUXT_DEMO_LEGAL_DIRECTOR` | the publisher | Publication director |
+| `NUXT_DEMO_LEGAL_HOST_NAME`, `NUXT_DEMO_LEGAL_HOST_ADDRESS`, `NUXT_DEMO_LEGAL_HOST_PHONE` | — | Hosting provider of the server |
+| `NUXT_DEMO_LEGAL_LOG_RETENTION_DAYS` | `30` | Server log retention stated by the privacy policy (1 to 3650 days): set your log rotation to match |
 
 In demo mode:
 
@@ -452,6 +458,13 @@ In demo mode:
 - A **banner** on every page gives the next reset time and the configured links; every response carries
   `X-Robots-Tag: noindex, nofollow`. Each sign-in to a demo account writes one line to the server log (role only,
   no email or IP address), to count visits without tracking.
+- **Legal pages** (`/legal`, `/privacy`, `/terms`, in English and French), filled from the `NUXT_DEMO_LEGAL_*`
+  variables, are linked from the banner: legal notice (publisher, publication director, host, how to report content),
+  privacy policy (server logs, cookies, content erased at each reset, rights) and demo terms (reset, shared space,
+  forbidden content, reports and removal). They stay out of the repository and out of the snapshot. Missing
+  required values are logged at startup and shown as "Not provided". These texts are a starting point, not legal
+  advice: have them reviewed for your jurisdiction. Write a phone number with spaces or a `+` prefix
+  (`+33 1 23 45 67 89`): a value made of digits only is read as a number and loses its leading zero.
 
 **Reset.** At each slot, the web server stops by itself (graceful shutdown). With `docker/compose.demo.yaml`,
 Docker restarts the container (`restart: unless-stopped`) and the image restores `SURGE_MEDIA_DEMO_SNAPSHOT`

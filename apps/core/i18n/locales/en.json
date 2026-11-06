@@ -2505,7 +2505,9 @@
       },
       "contact": "Contact us",
       "abuse": "Report content",
-      "terms": "Demo terms"
+      "terms": "Demo terms",
+      "legal": "Legal notice",
+      "privacy": "Privacy"
     },
     "accounts": {
       "title": "Demo accounts",
@@ -2529,6 +2531,109 @@
         "item": "This item is part of the demo's example content: create your own to try this action."
       },
       "quota": "The demo's upload volume is used up until the next reset, in {minutes} min."
+    }
+  },
+  "legal": {
+    "nav": {
+      "label": "Legal information",
+      "legal": "Legal notice",
+      "privacy": "Privacy",
+      "terms": "Demo terms"
+    },
+    "missing": "Not provided",
+    "interval": {
+      "hours": "{count} hour | {count} hours",
+      "minutes": "{count} minute | {count} minutes"
+    },
+    "notice": {
+      "title": "Legal notice",
+      "description": "Publisher and host of this public demonstration of surgeMedia.",
+      "publisher": {
+        "title": "Publisher",
+        "name": "Name",
+        "tradeName": "Trade name",
+        "registration": "Registration"
+      },
+      "address": "Address",
+      "email": "Email",
+      "phone": "Phone",
+      "director": {
+        "title": "Publication director"
+      },
+      "host": {
+        "title": "Hosting",
+        "name": "Host"
+      },
+      "report": {
+        "title": "Report content",
+        "text": "This demo holds files uploaded by its visitors. To report illegal content, write to {address}, giving the page or file concerned and the reason for the report. The content is removed promptly, and in any case at the next reset."
+      },
+      "software": {
+        "title": "Software and content",
+        "text": "surgeMedia is published under the Business Source License 1.1. The demo's example content belongs to its authors and cannot be reused without their consent."
+      }
+    },
+    "privacy": {
+      "title": "Privacy policy",
+      "description": "What the demo records, why, and for how long.",
+      "controller": {
+        "title": "Data controller",
+        "text": "{publisher}, reachable at {email}."
+      },
+      "data": {
+        "title": "Data processed",
+        "logs": "Server logs: IP address, date and time, page or file requested, browser. They keep the demo secure and help fight abuse (the publisher's legitimate interest), and are kept for {days} day. | Server logs: IP address, date and time, page or file requested, browser. They keep the demo secure and help fight abuse (the publisher's legitimate interest), and are kept for {days} days.",
+        "cookies": "Cookies: session cookies, set when you sign in, and preference cookies (language, theme). They are needed for the demo to work; there is no audience measurement, advertising or third-party tracker.",
+        "content": "What you add (media, accounts, projects, text): erased at the next reset, every {interval}. Don't put any personal data in it.",
+        "visits": "Visit count: each sign-in to a demo account adds one line to the server log, with the account's role only, without IP address or email."
+      },
+      "recipients": {
+        "title": "Recipients",
+        "text": "This data is only available to the publisher and the server's host ({host}). It is never sold, transferred or used for advertising.",
+        "unknownHost": "not provided"
+      },
+      "rights": {
+        "title": "Your rights",
+        "text": "You can ask to access, correct or erase your data, or object to its processing, by writing to {email}. You can also lodge a complaint with the data protection authority of your country (in France, the CNIL)."
+      }
+    },
+    "terms": {
+      "title": "Demo terms",
+      "description": "The rules for using this public demonstration.",
+      "purpose": {
+        "title": "Purpose",
+        "text": "This demo lets you try surgeMedia. It is free and provided as is, with no guarantee of availability or of keeping data. Using it means accepting these terms."
+      },
+      "reset": {
+        "title": "Reset",
+        "text": "Every {interval}, the demo goes back to its example content: everything you added or changed (media, accounts, projects, settings) is erased and cannot be recovered."
+      },
+      "sharing": {
+        "title": "Shared space",
+        "text": "Demo accounts are shared: other signed-in visitors see what you upload. Your files are only served to visitors signed in to the demo; a link shared elsewhere doesn't show them."
+      },
+      "forbidden": {
+        "title": "Forbidden content",
+        "intro": "Never upload:",
+        "items": {
+          "personal": "personal data, yours or anyone else's;",
+          "illegal": "illegal, hateful, violent or pornographic content, or content that infringes the rights of others (copyright, image rights);",
+          "malware": "malware, phishing pages or any content meant to deceive;",
+          "hosting": "files to host or distribute: the demo is not a hosting service."
+        }
+      },
+      "report": {
+        "title": "Reports and removal",
+        "text": "To report content, write to {address}. The publisher promptly removes reported or obviously illegal content; it may reset the demo at once and block a visitor who does not follow these terms."
+      },
+      "liability": {
+        "title": "Liability",
+        "text": "You are responsible for what you upload. The publisher is not liable for the erasure of data, which is how the demo works, nor for its interruptions."
+      },
+      "contact": {
+        "title": "Questions",
+        "text": "For any question about the demo or surgeMedia, write to {email}."
+      }
     }
   }
 }

@@ -3,10 +3,12 @@ import {
   DEMO_REFERENCE_SETTING_KEY,
   type DemoAccount,
   type DemoErrorCode,
+  type DemoLegal,
   isDemoReference,
   nextDemoReset,
   parseDemoAccounts,
   parseDemoInterval,
+  parseDemoLegal,
   parseDemoQuota,
   parseDemoReference,
   safeDemoLink,
@@ -28,6 +30,10 @@ export interface DemoSettings {
   contactUrl: string
   abuseUrl: string
   termsUrl: string
+  /** Informations légales (pages /legal, /privacy, /terms), null sans éditeur. */
+  legal: DemoLegal | null
+  /** Champs obligatoires des informations légales encore vides. */
+  legalMissing: string[]
 }
 
 /** Démarrage du processus (ms Unix) : sert de référence à défaut d'instantané, et au calcul de la remise à zéro. */
@@ -41,6 +47,7 @@ export function useDemo(): DemoSettings {
   const enabled = config.mode === true || String(config.mode) === 'true'
   const { accounts, problem } = parseDemoAccounts(config.accounts)
   if (enabled && problem) console.warn(`[surge-media] NUXT_DEMO_ACCOUNTS : ${problem}.`)
+  const { legal, missing } = parseDemoLegal(config.legal)
   settings = {
     enabled,
     resetInterval: parseDemoInterval(config.resetInterval),
@@ -49,6 +56,8 @@ export function useDemo(): DemoSettings {
     contactUrl: safeDemoLink(config.contactUrl),
     abuseUrl: safeDemoLink(config.abuseUrl),
     termsUrl: safeDemoLink(config.termsUrl),
+    legal,
+    legalMissing: missing,
   }
   return settings
 }

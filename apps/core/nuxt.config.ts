@@ -53,6 +53,20 @@ export default defineNuxtConfig({
       contactUrl: '', // NUXT_DEMO_CONTACT_URL
       abuseUrl: '', // NUXT_DEMO_ABUSE_URL
       termsUrl: '', // NUXT_DEMO_TERMS_URL
+      // Pages légales de la démo (/legal, /privacy, /terms), servies dès que l'éditeur est renseigné — NUXT_DEMO_LEGAL_*
+      legal: {
+        publisherName: '', // éditeur, avec sa forme (ex. « Jeanne Martin EI ») — NUXT_DEMO_LEGAL_PUBLISHER_NAME
+        tradeName: '', // nom commercial — NUXT_DEMO_LEGAL_TRADE_NAME
+        registration: '', // ex. « SIRET 123 456 789 00012 » — NUXT_DEMO_LEGAL_REGISTRATION
+        address: '', // adresse publiée (domicile ou domiciliation) — NUXT_DEMO_LEGAL_ADDRESS
+        email: '', // NUXT_DEMO_LEGAL_EMAIL
+        phone: '', // NUXT_DEMO_LEGAL_PHONE
+        director: '', // directeur de la publication, l'éditeur à défaut — NUXT_DEMO_LEGAL_DIRECTOR
+        hostName: '', // hébergeur du serveur — NUXT_DEMO_LEGAL_HOST_NAME
+        hostAddress: '', // NUXT_DEMO_LEGAL_HOST_ADDRESS
+        hostPhone: '', // NUXT_DEMO_LEGAL_HOST_PHONE
+        logRetentionDays: 30, // conservation annoncée des journaux du serveur — NUXT_DEMO_LEGAL_LOG_RETENTION_DAYS
+      },
     },
     // Compte d'amorçage (première connexion) — NUXT_BOOTSTRAP_ADMIN_EMAIL / _PASSWORD
     bootstrapAdmin: {

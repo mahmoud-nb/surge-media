@@ -127,6 +127,73 @@ export function isDemoReference(createdAt: Date | number, referenceAt: number): 
   return at <= referenceAt
 }
 
+/**
+ * Informations légales de la démo publique (NUXT_DEMO_LEGAL_*) : pages mentions légales, confidentialité et
+ * conditions de la démo. Valeurs fournies par l'exploitant, jamais écrites dans le dépôt.
+ */
+export interface DemoLegal {
+  /** Éditeur : nom de la personne ou de la société, avec sa forme (ex. « Jeanne Martin EI »). */
+  publisherName: string
+  /** Nom commercial, facultatif. */
+  tradeName: string
+  /** Immatriculation telle qu'elle doit apparaître (ex. « SIRET 123 456 789 00012 »). */
+  registration: string
+  /** Adresse publiée (domicile ou domiciliation). */
+  address: string
+  email: string
+  phone: string
+  /** Directeur de la publication ; l'éditeur à défaut. */
+  director: string
+  hostName: string
+  hostAddress: string
+  hostPhone: string
+  /** Durée de conservation des journaux du serveur annoncée par la politique de confidentialité (jours). */
+  logRetentionDays: number
+}
+
+/** Champs sans lesquels les pages légales sont incomplètes (avertissement au démarrage). */
+export const DEMO_LEGAL_REQUIRED = ['publisherName', 'registration', 'address', 'email', 'hostName', 'hostAddress'] as const
+export const DEMO_LOG_RETENTION_DEFAULT = 30
+const DEMO_LEGAL_TEXT_MAX = 300
+
+/**
+ * Valeurs configurées → informations légales (textes rognés, 300 caractères au plus, durée entière de 1 à
+ * 3 650 jours) ; null sans éditeur : les pages légales ne sont pas servies. `missing` : champs obligatoires vides.
+ */
+export function parseDemoLegal(raw: Record<string, unknown> | undefined): { legal: DemoLegal | null, missing: string[] } {
+  const text = (key: string) => {
+    const value = raw?.[key]
+    return (typeof value === 'string' || typeof value === 'number' ? String(value) : '').trim().slice(0, DEMO_LEGAL_TEXT_MAX)
+  }
+  const days = Number(raw?.logRetentionDays)
+  const legal: DemoLegal = {
+    publisherName: text('publisherName'),
+    tradeName: text('tradeName'),
+    registration: text('registration'),
+    address: text('address'),
+    email: text('email'),
+    phone: text('phone'),
+    director: text('director') || text('publisherName'),
+    hostName: text('hostName'),
+    hostAddress: text('hostAddress'),
+    hostPhone: text('hostPhone'),
+    logRetentionDays: Number.isInteger(days) && days >= 1 && days <= 3650 ? days : DEMO_LOG_RETENTION_DEFAULT,
+  }
+  const missing = DEMO_LEGAL_REQUIRED.filter(key => !legal[key])
+  return { legal: legal.publisherName ? legal : null, missing }
+}
+
+/** Adresse d'un lien `mailto:` (sans le schéma ni les paramètres), ou null pour un autre lien. */
+export function mailtoAddress(link: string): string | null {
+  if (!link.startsWith('mailto:')) return null
+  try {
+    return decodeURIComponent(link.slice('mailto:'.length).split('?')[0]!) || null
+  }
+  catch {
+    return null
+  }
+}
+
 /** Données publiques de la démo (`GET /api/demo`). */
 export type DemoInfo
   = | { enabled: false }
@@ -134,9 +201,14 @@ export type DemoInfo
       enabled: true
       /** Prochaine remise à zéro (ISO 8601). */
       nextResetAt: string
+      /** Minutes entre deux remises à zéro. */
+      resetInterval: number
       contactUrl: string
       abuseUrl: string
+      /** Conditions de la démo : NUXT_DEMO_TERMS_URL, sinon la page `/terms` si les informations légales existent. */
       termsUrl: string
+      /** Informations légales (pages `/legal`, `/privacy`, `/terms`), ou null si l'éditeur n'est pas renseigné. */
+      legal: DemoLegal | null
       accounts: Array<DemoAccount & { role: string | null }>
       /** La session courante est-elle celle d'un compte de référence (non modifiable) ? */
       protectedAccount: boolean

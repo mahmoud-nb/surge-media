@@ -1,13 +1,17 @@
 import { describe, expect, it } from 'vitest'
 import { parseDemoManifest, safeArchiveName, tarExecutable } from '../cli/lib/demo-archive'
 import {
+  DEMO_LEGAL_REQUIRED,
+  DEMO_LOG_RETENTION_DEFAULT,
   DEMO_RESET_INTERVAL_DEFAULT,
   DEMO_UPLOAD_QUOTA_DEFAULT,
   demoQuotaPerAddress,
   isDemoReference,
+  mailtoAddress,
   nextDemoReset,
   parseDemoAccounts,
   parseDemoInterval,
+  parseDemoLegal,
   parseDemoQuota,
   parseDemoReference,
   safeDemoLink,
@@ -136,5 +140,52 @@ describe('archive d\'un instantané de démo', () => {
     expect(tarExecutable('darwin', {})).toBe('tar')
     if (process.platform === 'win32') expect(tarExecutable('win32', process.env).toLowerCase()).toMatch(/system32[/\\]tar\.exe$/)
     else expect(tarExecutable('win32', { SystemRoot: '/nonexistent' })).toBe('tar')
+  })
+})
+
+describe('informations légales de la démo', () => {
+  const complete = {
+    publisherName: ' Jeanne Martin EI ',
+    tradeName: 'Exemple',
+    registration: 'SIRET 123 456 789 00012',
+    address: '1 rue de l\'Exemple, 75000 Paris',
+    email: 'contact@example.com',
+    phone: '+33 1 23 45 67 89',
+    director: '',
+    hostName: 'Hébergeur SAS',
+    hostAddress: '2 avenue de l\'Exemple, 59000 Lille',
+    hostPhone: '',
+    logRetentionDays: 30,
+  }
+
+  it('valeurs rognées, directeur de la publication = éditeur à défaut, rien ne manque', () => {
+    const { legal, missing } = parseDemoLegal(complete)
+    expect(legal?.publisherName).toBe('Jeanne Martin EI')
+    expect(legal?.director).toBe('Jeanne Martin EI')
+    expect(legal?.logRetentionDays).toBe(30)
+    expect(missing).toEqual([])
+    expect(parseDemoLegal({ ...complete, director: 'Jeanne Martin' }).legal?.director).toBe('Jeanne Martin')
+  })
+
+  it('sans éditeur : pas de pages légales ; champs obligatoires vides signalés', () => {
+    expect(parseDemoLegal(undefined)).toEqual({ legal: null, missing: [...DEMO_LEGAL_REQUIRED] })
+    const partial = parseDemoLegal({ publisherName: 'Jeanne Martin EI', email: 'contact@example.com' })
+    expect(partial.legal).not.toBeNull()
+    expect(partial.missing).toEqual(['registration', 'address', 'hostName', 'hostAddress'])
+  })
+
+  it('nombres convertis par Nitro relus comme du texte ; durée de conservation bornée ; textes de 300 caractères au plus', () => {
+    expect(parseDemoLegal({ ...complete, registration: 12345678900012 }).legal?.registration).toBe('12345678900012')
+    for (const days of [0, -3, 1.5, 'trente', 4000]) expect(parseDemoLegal({ ...complete, logRetentionDays: days }).legal?.logRetentionDays).toBe(DEMO_LOG_RETENTION_DEFAULT)
+    expect(parseDemoLegal({ ...complete, logRetentionDays: '90' }).legal?.logRetentionDays).toBe(90)
+    expect(parseDemoLegal({ ...complete, address: 'x'.repeat(400) }).legal?.address).toHaveLength(300)
+  })
+
+  it('adresse d\'un lien mailto', () => {
+    expect(mailtoAddress('mailto:abuse@example.com')).toBe('abuse@example.com')
+    expect(mailtoAddress('mailto:abuse@example.com?subject=Signalement')).toBe('abuse@example.com')
+    expect(mailtoAddress('https://example.com/report')).toBeNull()
+    expect(mailtoAddress('mailto:')).toBeNull()
+    expect(mailtoAddress('mailto:%E0%A4%A')).toBeNull()
   })
 })

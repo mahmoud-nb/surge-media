@@ -17,6 +17,9 @@ dist
 .env.*
 !.env.example
 
+# npm core output
+apps/core/surge-media-core.tgz
+
 # Archives npm des librairies (packages/scripts/pack-smoke.mjs)
 packages/.artifacts/
 

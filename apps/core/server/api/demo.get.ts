@@ -2,8 +2,9 @@ import type { DemoInfo } from '#shared/utils/demo'
 
 /**
  * GET /api/demo — public : `{ enabled: false }` hors du mode démo ; sinon l'heure de la prochaine remise à zéro,
- * les liens du bandeau, les comptes affichés sur la page de connexion (rôle lu en base) et si la session
- * courante est celle d'un compte de référence (non modifiable). Jamais mis en cache.
+ * les liens du bandeau, les informations légales publiques (pages /legal, /privacy, /terms), les comptes affichés
+ * sur la page de connexion (rôle lu en base) et si la session courante est celle d'un compte de référence (non
+ * modifiable). Jamais mis en cache.
  */
 export default defineEventHandler(async (event): Promise<DemoInfo> => {
   setResponseHeader(event, 'Cache-Control', 'no-store')
@@ -20,9 +21,11 @@ export default defineEventHandler(async (event): Promise<DemoInfo> => {
   return {
     enabled: true,
     nextResetAt: new Date(demoNextResetAt()).toISOString(),
+    resetInterval: demo.resetInterval,
     contactUrl: demo.contactUrl,
     abuseUrl: demo.abuseUrl,
-    termsUrl: demo.termsUrl,
+    termsUrl: demo.termsUrl || (demo.legal ? '/terms' : ''),
+    legal: demo.legal,
     accounts: demo.accounts.map(account => ({ ...account, role: roles.get(account.email) ?? null })),
     protectedAccount: user ? await isDemoReferenceItem(user.createdAt) : false,
   }
