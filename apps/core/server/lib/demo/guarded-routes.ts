@@ -80,6 +80,7 @@ export const DEMO_GUARDED_ROUTES: readonly DemoGuardedRoute[] = [
   { method: 'PATCH', path: '/api/admin/transforms', target: { kind: 'project-query' } },
   { method: 'PUT', path: '/api/admin/license', target: SETTING },
   { method: 'DELETE', path: '/api/admin/license', target: SETTING },
+  { method: 'PUT', path: '/api/admin/license/usage', target: SETTING },
   { method: 'POST', path: '/api/admin/video-processing/backfill', target: SETTING },
   // API v1.
   { method: 'DELETE', path: '/api/v1/projects/:projectId/folders/:folderId', target: { kind: 'param', resource: 'folder', param: 'folderId' } },

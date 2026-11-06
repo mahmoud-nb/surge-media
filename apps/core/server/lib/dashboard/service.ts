@@ -1,6 +1,6 @@
 import type { H3Event } from 'h3'
 import { DASHBOARD_ACTIVITY, DASHBOARD_PROJECTS, EXPIRING_SOON_DAYS, hourlyCounts, startOfUtcHour, UPLOAD_WINDOW_HOURS, type DashboardAttention } from '#shared/utils/dashboard'
-import { LICENSE_CLOCK_WARNING_MS } from '#shared/utils/license'
+import { LICENSE_CLOCK_WARNING_MS, licenseUsageReminder, type LicenseUsageReminder } from '#shared/utils/license'
 import type { MediaKind, Prisma, User } from '../../generated/prisma/client'
 import { listAuditEvents } from '../audit/service'
 import { readDatabasePressure } from '../database/pressure'
@@ -141,6 +141,7 @@ export async function dashboardData(event: H3Event, user: User) {
 
   // ─── Points d'attention ──────────────────────────────────────────────────
   const attention: DashboardAttention[] = []
+  let usageReminder: LicenseUsageReminder | null = null
   if (hasPermission(user.role, 'settings:manage')) {
     // Base SQLite sous pression (constat des dernières 24 h, tous processus) : en tête, c'est le plus urgent.
     const pressure = await readDatabasePressure(prisma)
@@ -151,6 +152,8 @@ export async function dashboardData(event: H3Event, user: User) {
       attention.push({ kind: 'license', state: license.state, expiresAt: license.license?.expiresAt ?? null, graceEndsAt: license.license?.graceEndsAt ?? null })
     }
     if (license.clockBehindMs > LICENSE_CLOCK_WARNING_MS) attention.push({ kind: 'clock', behindMs: license.clockBehindMs })
+    // Usage déclaré : une information, placée en fin de liste ; jamais en démo (l'instance est celle de l'éditeur).
+    if (!useDemo().enabled) usageReminder = licenseUsageReminder(await readLicenseUsage(), license.state, now.getTime())
   }
   if (expiringTokens.length) {
     attention.push({ kind: 'expiringTokens', items: expiringTokens.map(token => ({ id: token.id, name: token.name, expiresAt: token.expiresAt! })) })
@@ -182,6 +185,7 @@ export async function dashboardData(event: H3Event, user: User) {
   }
   // En démo, l'e-mail est coupé exprès : rien à signaler.
   if (manageUsers && !mailEnabled(event) && !useDemo().enabled) attention.push({ kind: 'mail' })
+  if (usageReminder) attention.push({ kind: 'licenseUsage', reason: usageReminder })
 
   // ─── Journal ─────────────────────────────────────────────────────────────
   const activity = hasPermission(user.role, 'audit:read') ? (await listAuditEvents({ page: 1 }, DASHBOARD_ACTIVITY)).items : null

@@ -124,3 +124,77 @@ export interface LicenseDetails {
   graceEndsAt: string
   supportEndsAt: string
 }
+
+// ─── Usage déclaré de l'instance (architecture : .claude/architecture-usage.md) ───────────────
+
+/**
+ * Usage de l'instance déclaré par l'exploitant (`surge-media init`, `surge-media license usage`, Réglages › Licence).
+ * Une déclaration, rien de vérifié : elle sert à rappeler les conditions de la BUSL au bon moment.
+ *   - `evaluation` : hors production (essai, développement, préproduction), toujours gratuit ;
+ *   - `community` : production gratuite (chiffre d'affaires du groupe ≤ 500 000 USD, pas de service hébergé concurrent) ;
+ *   - `commercial` : production au-delà du seuil ou service hébergé concurrent, licence commerciale nécessaire.
+ */
+export const LICENSE_USAGES = ['evaluation', 'community', 'commercial'] as const
+export type LicenseUsage = (typeof LICENSE_USAGES)[number]
+
+/** Réglage (`Setting`) de la déclaration : `{ usage, declaredAt }` (serveur et CLI). */
+export const LICENSE_USAGE_SETTING_KEY = 'licenseUsage'
+/** Au-delà de cet âge, le tableau de bord demande de confirmer la déclaration (même rythme que la déclaration annuelle de l'EULA). */
+export const LICENSE_USAGE_CONFIRM_DAYS = 365
+/** Adresse commerciale de Surge Up : licences, enregistrement des instances. */
+export const LICENSING_EMAIL = 'licensing@surgeup.org'
+
+export interface LicenseUsageDeclaration {
+  usage: LicenseUsage
+  /** Date de la déclaration (ISO). */
+  declaredAt: string
+}
+
+/** Rappel du tableau de bord : usage non déclaré, déclaration à confirmer, usage commercial sans licence active. */
+export type LicenseUsageReminder = 'undeclared' | 'stale' | 'commercial'
+
+export function isLicenseUsage(value: unknown): value is LicenseUsage {
+  return typeof value === 'string' && (LICENSE_USAGES as readonly string[]).includes(value)
+}
+
+/** Valeur stockée → déclaration (objet JSON, ou texte JSON selon le pilote qui la lit) ; null si absente ou illisible. */
+export function parseLicenseUsage(value: unknown): LicenseUsageDeclaration | null {
+  let data = value
+  if (typeof data === 'string') {
+    try {
+      data = JSON.parse(data)
+    }
+    catch {
+      return null
+    }
+  }
+  if (!data || typeof data !== 'object') return null
+  const { usage, declaredAt } = data as Record<string, unknown>
+  if (!isLicenseUsage(usage) || typeof declaredAt !== 'string') return null
+  const at = Date.parse(declaredAt)
+  return Number.isFinite(at) ? { usage, declaredAt: new Date(at).toISOString() } : null
+}
+
+/** La déclaration date-t-elle de plus de `LICENSE_USAGE_CONFIRM_DAYS` jours ? */
+export function licenseUsageStale(declaration: LicenseUsageDeclaration, nowMs: number): boolean {
+  return nowMs - Date.parse(declaration.declaredAt) > LICENSE_USAGE_CONFIRM_DAYS * DAY_MS
+}
+
+/**
+ * Rappel à afficher au tableau de bord, ou null : jamais quand une licence est active (elle couvre l'instance) ;
+ * sinon un usage commercial d'abord, puis l'absence de déclaration, puis une déclaration à confirmer.
+ */
+export function licenseUsageReminder(declaration: LicenseUsageDeclaration | null, state: LicenseState, nowMs: number): LicenseUsageReminder | null {
+  if (licenseFeaturesActive(state)) return null
+  if (!declaration) return 'undeclared'
+  if (declaration.usage === 'commercial') return 'commercial'
+  return licenseUsageStale(declaration, nowMs) ? 'stale' : null
+}
+
+/**
+ * Lien `mailto:` de l'enregistrement facultatif de l'instance : l'administrateur relit le message prérempli et
+ * l'envoie lui-même ; le produit n'envoie rien. Lignes jointes par CRLF (RFC 6068).
+ */
+export function licenseRegistrationMailto(subject: string, lines: readonly string[]): string {
+  return `mailto:${LICENSING_EMAIL}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(lines.join('\r\n'))}`
+}

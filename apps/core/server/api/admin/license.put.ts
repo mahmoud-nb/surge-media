@@ -3,7 +3,7 @@ import { licenseInstallSchema } from '#shared/schemas/license'
 /**
  * PUT /api/admin/license — { token } : installe une licence collée (mode sudo), après vérification de sa
  * signature. Une licence échue ou pas encore valable s'installe aussi : son état le dira.
- * 200 LicenseStatus & { instanceId } · 403 REAUTH_REQUIRED · 409 LICENSE_FROM_ENV · 422 LICENSE_INVALID (+ reason).
+ * 200 LicenseStatus & { instanceId, version, usage } · 403 REAUTH_REQUIRED · 409 LICENSE_FROM_ENV · 422 LICENSE_INVALID (+ reason).
  */
 export default defineEventHandler(async (event) => {
   await requireAuth(event, 'settings:manage')
@@ -16,5 +16,5 @@ export default defineEventHandler(async (event) => {
     action: 'settings.license_installed',
     data: { id: license.jti, label: license.licensee.name, plan: license.plan },
   })
-  return { ...await licenseStatus(event), instanceId: await readInstanceId() }
+  return { ...await licenseStatus(event), ...await licenseExtras() }
 })

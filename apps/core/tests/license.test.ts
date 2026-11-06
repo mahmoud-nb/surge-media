@@ -1,14 +1,20 @@
 import { generateKeyPairSync, sign, type KeyObject } from 'node:crypto'
 import { describe, expect, it } from 'vitest'
-import { licenseInstallSchema, type LicensePayload } from '#shared/schemas/license'
+import { licenseInstallSchema, licenseUsageSchema, type LicensePayload } from '#shared/schemas/license'
 import {
   daysUntil,
   LICENSE_STATES,
+  LICENSE_USAGE_CONFIRM_DAYS,
+  LICENSING_EMAIL,
   licenseClockBehindMs,
   licenseFeaturesActive,
   licenseReferenceTime,
+  licenseRegistrationMailto,
   licenseTermState,
+  licenseUsageReminder,
+  licenseUsageStale,
   normalizeLicenseToken,
+  parseLicenseUsage,
 } from '#shared/utils/license'
 import { LICENSE_DEV_PUBLIC_KEY, LICENSE_PUBLIC_KEYS, trustedLicenseKeys } from '../server/lib/license/keys'
 import { licenseDetails, licensePeriod, signLicense, verifyLicense, type LicensePublicKey } from '../server/lib/license/token'
@@ -241,5 +247,57 @@ describe('date de référence', () => {
     const rolledBack = period.expiresAt - 100 * DAY * 1000
     expect(licenseTermState(period, rolledBack)).toBe('valid')
     expect(licenseTermState(period, licenseReferenceTime(rolledBack, realNow))).toBe('expired')
+  })
+})
+
+describe('usage déclaré de l\'instance', () => {
+  const AT = '2026-11-06T10:00:00.000Z'
+  const DAY_MS = DAY * 1000
+  const declaredAt = Date.parse(AT)
+
+  it('lit la déclaration stockée, en objet ou en texte JSON', () => {
+    expect(parseLicenseUsage({ usage: 'community', declaredAt: AT })).toEqual({ usage: 'community', declaredAt: AT })
+    expect(parseLicenseUsage(JSON.stringify({ usage: 'evaluation', declaredAt: '2026-11-06T10:00:00Z' }))).toEqual({ usage: 'evaluation', declaredAt: AT })
+  })
+
+  it('ignore une déclaration absente ou illisible', () => {
+    for (const value of [undefined, null, '', 'community', '{', 42, { usage: 'production', declaredAt: AT }, { usage: 'community' }, { usage: 'community', declaredAt: 'hier' }]) {
+      expect(parseLicenseUsage(value)).toBeNull()
+    }
+  })
+
+  it('demande une confirmation après un an', () => {
+    const declaration = { usage: 'community' as const, declaredAt: AT }
+    expect(licenseUsageStale(declaration, declaredAt + LICENSE_USAGE_CONFIRM_DAYS * DAY_MS)).toBe(false)
+    expect(licenseUsageStale(declaration, declaredAt + LICENSE_USAGE_CONFIRM_DAYS * DAY_MS + 1)).toBe(true)
+  })
+
+  it('rappelle l\'usage seulement sans licence active', () => {
+    const later = declaredAt + 400 * DAY_MS
+    expect(licenseUsageReminder(null, 'none', declaredAt)).toBe('undeclared')
+    expect(licenseUsageReminder({ usage: 'commercial', declaredAt: AT }, 'none', declaredAt)).toBe('commercial')
+    expect(licenseUsageReminder({ usage: 'commercial', declaredAt: AT }, 'expired', later)).toBe('commercial')
+    expect(licenseUsageReminder({ usage: 'commercial', declaredAt: AT }, 'invalid', declaredAt)).toBe('commercial')
+    expect(licenseUsageReminder({ usage: 'community', declaredAt: AT }, 'none', declaredAt)).toBeNull()
+    expect(licenseUsageReminder({ usage: 'evaluation', declaredAt: AT }, 'none', later)).toBe('stale')
+    for (const state of ['valid', 'expiring', 'grace'] as const) {
+      expect(licenseUsageReminder(null, state, declaredAt)).toBeNull()
+      expect(licenseUsageReminder({ usage: 'commercial', declaredAt: AT }, state, later)).toBeNull()
+    }
+  })
+
+  it('valide l\'usage envoyé par l\'administration', () => {
+    expect(licenseUsageSchema.parse({ usage: 'commercial' })).toEqual({ usage: 'commercial' })
+    expect(licenseUsageSchema.safeParse({ usage: 'production' }).success).toBe(false)
+    expect(licenseUsageSchema.safeParse({}).success).toBe(false)
+  })
+
+  it('prépare l\'e-mail d\'enregistrement sans rien envoyer', () => {
+    const link = licenseRegistrationMailto('Enregistrement d\'une instance', ['Bonjour,', '', 'Identifiant : 1234 & co'])
+    expect(link.startsWith(`mailto:${LICENSING_EMAIL}?subject=`)).toBe(true)
+    const url = new URL(link)
+    expect(url.searchParams.get('subject')).toBe('Enregistrement d\'une instance')
+    expect(url.searchParams.get('body')).toBe('Bonjour,\r\n\r\nIdentifiant : 1234 & co')
+    expect(link).not.toContain('+')
   })
 })

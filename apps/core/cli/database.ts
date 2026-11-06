@@ -22,6 +22,7 @@ import { checkPort, findFreePort, listenHost, parsePort } from './lib/port'
 import { ENV_EXAMPLE_FILE, ENV_FILE, SCHEMA_FILE, type CoreLocation } from './lib/project'
 import { writeSchemaProvider } from './lib/schema'
 import { DEFAULT_WEB_PORT } from './server'
+import { initUsageStep, parseUsageArg } from './usage'
 
 /** Paquet (code), installation (.env, données) et mode sources ou paquet publié : cli/lib/project.ts. */
 export interface CliContext extends CoreLocation {
@@ -54,11 +55,15 @@ const GENERATED_SECRETS = ['NUXT_SESSION_PASSWORD', 'NUXT_MEDIA_SIGNING_SECRET',
 /**
  * `surge-media init` : choisit le fournisseur et l'URL de la base, le port du serveur web (PORT, paquet publié ;
  * dans le dépôt, `pnpm dev` garde celui de Nuxt, sauf `--port` explicite), l'URL publique de l'installation
- * (NUXT_SITE_URL), puis applique les migrations.
+ * (NUXT_SITE_URL), puis applique les migrations ; enfin, l'usage de l'instance (cli/usage.ts : question facultative,
+ * `--usage`, jamais bloquante).
  */
-export async function runInit(ctx: CliContext, args: TargetArgs & { skipMigrate?: boolean, siteUrl?: string, port?: string }): Promise<void> {
+export async function runInit(ctx: CliContext, args: TargetArgs & { skipMigrate?: boolean, siteUrl?: string, port?: string, usage?: string }): Promise<void> {
   const { t } = ctx
   intro(t('intro.init'))
+  // Valeur de --usage refusée avant toute modification.
+  const usageArg = parseUsageArg(ctx, args.usage)
+  if (usageArg.error) fail(usageArg.error)
 
   const current = readCurrentTarget(ctx)
   const target = await resolveTarget(ctx, args, current)
@@ -77,6 +82,7 @@ export async function runInit(ctx: CliContext, args: TargetArgs & { skipMigrate?
     NUXT_SITE_URL: siteUrl,
   })
   if (current.provider && current.provider !== target.provider) note(t('note.providerChanged'))
+  await initUsageStep(ctx, { usage: usageArg.usage, yes: args.yes, skipMigrate: args.skipMigrate })
   outro(t(ctx.isSource ? 'outro.init' : 'outro.initPackage'))
 }
 

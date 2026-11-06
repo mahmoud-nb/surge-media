@@ -192,13 +192,15 @@ npx surge-media init
 ```
 
 `init` asks for the database (SQLite by default), the web server port (3000, or the next free port) and the
-public URL, writes `.env`, applies the migrations and generates the session, signing and two-factor encryption secrets. Non-interactive
-form:
+public URL, writes `.env`, applies the migrations and generates the session, signing and two-factor encryption secrets.
+It then recalls the license terms and asks how the instance will be used (evaluation, Community production or
+production under a commercial license, § 7.10): a statement you can skip with "Later", never a blocker, and nothing
+is sent. Non-interactive form:
 
 ```bash
 npx surge-media init --yes --provider postgresql \
   --url 'postgresql://surge:password@db.internal:5432/surge_media' \
-  --port 3000 --site-url https://media.example.com
+  --port 3000 --site-url https://media.example.com --usage community
 ```
 
 Add the first administrator to `.env` (§ 6), then start the server:
@@ -247,13 +249,14 @@ For video processing in `external` mode, add a second unit running `surge-media 
 
 | Command | Purpose |
 | --- | --- |
-| `init` | Choose the database (`--provider sqlite\|postgresql\|mysql`, `--url`), the port (`--port`) and the public URL (`--site-url`); apply migrations; generate missing secrets. `--yes` for non-interactive use, `--skip-migrate` to only write `.env` |
+| `init` | Choose the database (`--provider sqlite\|postgresql\|mysql`, `--url`), the port (`--port`) and the public URL (`--site-url`); apply migrations; generate missing secrets; declare the use of the instance (`--usage evaluation\|community\|commercial`, § 7.10). `--yes` for non-interactive use (no usage question without `--usage`), `--skip-migrate` to only write `.env` |
 | `start` | Start the web server (`--port`, else `PORT`, else 3000) |
 | `worker` | Start a video processing worker (`--port`, else `WORKER_PORT`, else 3001) |
 | `db migrate` | Apply pending migrations (after each update) |
 | `db reset` | Recreate the database schema, **deleting its data** (confirmation required; `--yes` to skip it) |
 | `user mfa-reset <email>` | Reset an account's two-factor authentication (lost phone and recovery codes, including the last administrator); `--all` for every account when `NUXT_MFA_ENCRYPTION_KEY` is lost; `--yes` to skip the confirmation |
 | `license clock-reset` | Bring the license reference-time mark back to this machine's clock, after the server clock ran ahead by mistake (§ 7.10); recorded in the audit log; `--yes` to skip the confirmation |
+| `license usage [evaluation\|community\|commercial]` | Show the declared use of the instance, or declare it (§ 7.10); declaring the same value again confirms it; recorded in the audit log. With Docker: `docker compose exec surge-media node node_modules/@surge-media/core/dist/cli/index.mjs license usage community` |
 | `demo snapshot --out <file.tar.gz>` | Capture the demo's reference content (database and media) into an archive, server running or not (§ 7.11); SQLite and local storage only |
 | `demo restore --from <file.tar.gz>` | Replace the database and media with those of a demo archive, server stopped (§ 7.11). Only with `NUXT_DEMO_MODE=true`, and never over a database that does not come from a demo snapshot |
 
@@ -422,6 +425,17 @@ The license is judged at a reference time that never goes back: the latest of th
 the database and, with PostgreSQL or MySQL, the database server's clock. Turning the clock back therefore does not
 extend a license; administrators are warned when the system clock is more than an hour behind. If the clock ran
 ahead by mistake and pushed the mark forward, fix the clock, then run `surge-media license clock-reset` (§ 5.3).
+
+**Declared use.** In **Settings › License**, with `surge-media init` or with `surge-media license usage`, the
+operator states how the instance is used: **evaluation** (trial, development, staging: always free), **Community
+production** (free: group revenue up to USD 500,000, no competing hosted service) or **production under a
+commercial license** (§ 19). It is only a statement, kept in the database: surgeMedia checks nothing and sends
+nothing. The dashboard shows an information item (never a blocker) while the use is not declared, when the
+statement is more than a year old, or when the declared use needs a commercial license and none is active.
+
+**Registering the instance (optional).** **Settings › License** can prepare an email to Surge Up, the publisher,
+with the instance identifier, the version and the declared use; you review it, complete it if you wish and send
+it from your own mail app. Registered instances are told about security advisories and major releases.
 
 ### 7.11 Demo mode
 
@@ -653,7 +667,8 @@ Traefik also appends `X-Forwarded-For` by default; raise its timeouts and body s
 - [ ] A retention policy for the audit log: there is no automatic purge yet.
 - [ ] Users invited with the least role they need; API secret keys only on your servers.
 - [ ] System clock synchronized (NTP): two-factor codes, signed links and the commercial license depend on it.
-- [ ] Commercial license installed if a Business Source License exclusion applies to you (§ 19).
+- [ ] Use of the instance declared, and a commercial license installed if a Business Source License exclusion
+      applies to you (**Settings › License**, § 7.10 and § 19).
 - [ ] `NUXT_DEMO_MODE` not set: demo mode is for a public demo instance only (§ 7.11).
 
 Not available yet, to take into account in your security assessment: single sign-on (SSO) for the
@@ -831,7 +846,8 @@ license:
 No feature requires a license key yet. Features reserved for paid plans (single sign-on, audit log export to a
 SIEM…) will be listed on the [license page](https://mahmoud-nb.github.io/surge-media/license/) when they ship.
 A commercial license is installed in **Settings › License** or with `NUXT_LICENSE_KEY` (§ 7.10); media delivery,
-the API and the administration never depend on it.
+the API and the administration never depend on it. The same page records the declared use of the instance and
+can prepare an optional registration email (§ 7.10).
 
 The [LICENSE](LICENSE) file is the only binding text. Commercial licenses, support with service levels and
 installation assistance: see the [pricing page](https://mahmoud-nb.github.io/surge-media/pricing/) or write to

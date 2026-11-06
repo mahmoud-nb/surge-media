@@ -267,6 +267,16 @@
           "days": "L'horloge de ce serveur retarde d'environ {count} jour sur la date la plus récente connue. | L'horloge de ce serveur retarde d'environ {count} jours sur la date la plus récente connue.",
           "hours": "L'horloge de ce serveur retarde d'environ {count} heure sur la date la plus récente connue. | L'horloge de ce serveur retarde d'environ {count} heures sur la date la plus récente connue.",
           "advice": "La licence est jugée à cette date, et la double authentification comme les liens signés peuvent échouer. Corrigez l'heure du système (synchronisation NTP)."
+        },
+        "licenseUsage": {
+          "undeclared": "L'usage de cette instance n'est pas déclaré : indiquez s'il s'agit d'une évaluation, d'une production Community ou d'une production sous licence commerciale.",
+          "stale": "L'usage de cette instance a été déclaré il y a plus d'un an : confirmez-le s'il est toujours exact.",
+          "commercial": "L'usage déclaré de cette instance demande une licence commerciale, et aucune n'est installée. Écrivez à {email} pour obtenir une licence, ou une licence d'essai.",
+          "link": {
+            "undeclared": "Déclarer l'usage",
+            "stale": "Confirmer l'usage",
+            "commercial": "Voir l'usage déclaré"
+          }
         }
       },
       "projects": {
@@ -1757,7 +1767,8 @@
         "updated": "Réglages modifiés",
         "license_installed": "Licence installée",
         "license_removed": "Licence retirée",
-        "license_clock_reset": "Repère de date de la licence ramené"
+        "license_clock_reset": "Repère de date de la licence ramené",
+        "license_usage_declared": "Usage de l'instance déclaré"
       }
     },
     "details": {
@@ -1785,7 +1796,9 @@
       "processingBackfillPartial": "Interrompu par une erreur : les vidéos restantes n'ont pas été ajoutées",
       "mfaPolicy": "Double authentification : {from} → {to}",
       "license": "{plan} · n° {id}",
-      "licenseClock": "Repère : {from} → {to}"
+      "licenseClock": "Repère : {from} → {to}",
+      "licenseUsageConfirmed": "Confirmé : {usage}",
+      "licenseUsageNone": "non déclaré"
     },
     "fields": {
       "name": "nom",
@@ -2155,7 +2168,52 @@
         "database": "Licence installée depuis cette page."
       },
       "instanceId": "Identifiant de cette installation",
-      "instanceIdHint": "À indiquer au support et dans la déclaration annuelle de vos instances de production. Il n'est jamais envoyé nulle part.",
+      "instanceIdHint": "À indiquer au support et dans la déclaration annuelle de vos instances de production. surgeMedia ne l'envoie jamais.",
+      "usage": {
+        "title": "Usage de cette instance",
+        "intro": "Indiquez comment cette instance est utilisée. C'est une simple déclaration : surgeMedia ne vérifie rien et n'envoie rien. Elle sert à vous rappeler les conditions de la licence au bon moment.",
+        "legend": "Usage déclaré",
+        "options": {
+          "evaluation": {
+            "label": "Évaluation",
+            "description": "Essai, développement ou préproduction, sans usage en production. Toujours gratuit."
+          },
+          "community": {
+            "label": "Production Community",
+            "description": "Production d'une organisation dont le chiffre d'affaires annuel, avec ses sociétés liées, ne dépasse pas 500 000 USD, hors service d'hébergement de médias concurrent. Gratuit."
+          },
+          "commercial": {
+            "label": "Production sous licence commerciale",
+            "description": "Production au-delà de ce seuil, ou pour proposer un service d'hébergement de médias concurrent. Une licence commerciale est nécessaire."
+          }
+        },
+        "declaredOn": "Déclaré le {date}.",
+        "declaredStale": "Déclaré le {date}, il y a plus d'un an : confirmez cet usage s'il est toujours exact.",
+        "undeclared": "Aucun usage déclaré pour le moment.",
+        "commercialHint": "Cet usage demande une licence commerciale. Écrivez à {email} pour obtenir une licence, ou une licence d'essai pour l'évaluer.",
+        "required": "Choisissez un usage.",
+        "saved": "Usage enregistré.",
+        "confirmed": "Usage confirmé.",
+        "error": "L'usage n'a pas pu être enregistré. Réessayez.",
+        "confirm": "Confirmer cet usage"
+      },
+      "register": {
+        "title": "Enregistrer cette instance (facultatif)",
+        "text": "Faites-vous connaître de Surge Up, l'éditeur de surgeMedia, pour être prévenu des avis de sécurité et des versions importantes. C'est gratuit et sans engagement.",
+        "privacy": "Le bouton ouvre un e-mail prérempli dans votre messagerie : identifiant d'instance, version et usage déclaré. Relisez-le, complétez-le si vous le souhaitez, puis envoyez-le vous-même. surgeMedia n'envoie rien.",
+        "action": "Préparer l'e-mail d'enregistrement",
+        "mail": {
+          "subject": "Enregistrement d'une instance surgeMedia",
+          "greeting": "Bonjour,",
+          "intro": "Je souhaite enregistrer cette instance de surgeMedia et être prévenu des avis de sécurité et des versions importantes.",
+          "instance": "Identifiant d'instance : {id}",
+          "version": "Version : {version}",
+          "usage": "Usage déclaré : {usage}",
+          "undeclared": "non déclaré",
+          "organization": "Organisation : ",
+          "contact": "Contact : "
+        }
+      },
       "installTitle": "Installer une licence",
       "replaceTitle": "Remplacer la licence",
       "tokenLabel": "Licence",

@@ -15,3 +15,5 @@ Seulement en production, et seulement dans trois cas :
 - vous utilisez en production une fonction qui exige une clé de licence (aucune aujourd’hui : elles seront listées sur la page [Licence](../license/)).
 
 Le développement, les tests et l’évaluation sont toujours gratuits.
+
+Dans **Réglages › Licence** (ou à `surge-media init`), vous déclarez l’usage de chaque instance : évaluation, production Community ou production sous licence commerciale. C’est une simple déclaration : surgeMedia ne vérifie rien, n’envoie rien et ne bloque jamais, il vous rappelle ces conditions au bon moment.

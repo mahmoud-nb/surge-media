@@ -9,6 +9,7 @@
  *   surge-media db reset    recréer la base (éventuellement avec un autre fournisseur)
  *   surge-media user mfa-reset <e-mail> | --all   réinitialiser la double authentification (secours de l'exploitant)
  *   surge-media license clock-reset               ramener le repère de la date de référence des licences à l'horloge
+ *   surge-media license usage [usage]             afficher ou déclarer l'usage de l'instance (evaluation, community, commercial)
  *   surge-media demo snapshot --out <archive>     capturer le contenu de référence de la démo (SQLite, stockage local)
  *   surge-media demo restore --from <archive>     remettre la démo à zéro depuis l'archive (serveur arrêté)
  *
@@ -23,6 +24,7 @@ import { createTranslator, detectLocale, langFromArgv, LOCALES } from './i18n'
 import { isInsideNodeModules, packageVersion, resolveLocation } from './lib/project'
 import { runLicenseClockReset } from './license'
 import { DEFAULT_WEB_PORT, DEFAULT_WORKER_PORT, runServer } from './server'
+import { runLicenseUsage } from './usage'
 import { runMfaReset } from './user'
 
 const t = createTranslator(detectLocale(langFromArgv(process.argv)))
@@ -55,6 +57,7 @@ const init = defineCommand({
     skipMigrate: { type: 'boolean', description: t('args.skipMigrate') },
     siteUrl: { type: 'string', description: t('args.siteUrl'), valueHint: 'url' },
     port: { type: 'string', description: t('args.initPort'), valueHint: DEFAULT_WEB_PORT },
+    usage: { type: 'string', description: t('args.usage'), valueHint: 'evaluation|community|commercial' },
   },
   run: ({ args }) => runInit(context(args.cwd), args),
 })
@@ -109,6 +112,15 @@ const licenseClockReset = defineCommand({
   run: ({ args }) => runLicenseClockReset(context(args.cwd), args),
 })
 
+const licenseUsage = defineCommand({
+  meta: { name: 'usage', description: t('command.license.usage') },
+  args: {
+    ...commonArgs,
+    usage: { type: 'positional', required: false, description: t('args.usageValue'), valueHint: 'evaluation|community|commercial' },
+  },
+  run: ({ args }) => runLicenseUsage(context(args.cwd), args),
+})
+
 const demoSnapshot = defineCommand({
   meta: { name: 'snapshot', description: t('command.demo.snapshot') },
   args: {
@@ -145,7 +157,7 @@ const main = defineCommand({
     }),
     license: defineCommand({
       meta: { name: 'license', description: t('command.license') },
-      subCommands: { 'clock-reset': licenseClockReset },
+      subCommands: { 'clock-reset': licenseClockReset, 'usage': licenseUsage },
     }),
     demo: defineCommand({
       meta: { name: 'demo', description: t('command.demo') },

@@ -1,4 +1,5 @@
 import type { DatabasePressureReport } from './database-pressure'
+import type { LicenseUsageReminder } from './license'
 
 /**
  * Tableau de bord : constantes et calculs purs (testés) partagés entre le serveur et l'interface.
@@ -89,10 +90,13 @@ export type DashboardAttention
     // référence de la licence (au-delà d'une heure). Réservés à `settings:manage`.
     | { kind: 'license', state: 'expiring' | 'grace' | 'expired' | 'invalid', expiresAt: string | null, graceEndsAt: string | null }
     | { kind: 'clock', behindMs: number }
+    // Usage de l'instance à déclarer, à confirmer (plus d'un an) ou commercial sans licence active : information
+    // seulement, jamais bloquant (architecture : .claude/architecture-usage.md). Réservé à `settings:manage`, hors démo.
+    | { kind: 'licenseUsage', reason: LicenseUsageReminder }
 
 /** Gravité d'un point d'attention : `warning` demande d'agir, `info` renseigne. */
 export function attentionSeverity(item: DashboardAttention): 'warning' | 'info' {
   if (item.kind === 'database') return item.level
   if (item.kind === 'invitations') return item.expired > 0 ? 'warning' : 'info'
-  return item.kind === 'trash' || item.kind === 'mail' ? 'info' : 'warning'
+  return item.kind === 'trash' || item.kind === 'mail' || item.kind === 'licenseUsage' ? 'info' : 'warning'
 }

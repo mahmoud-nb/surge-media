@@ -5,4 +5,4 @@ keywords: ["confidentialité","télémétrie","accès éditeur","données","rés
 ---
 Non. surgeMedia tourne entièrement sur votre infrastructure et n’envoie rien à l’éditeur ni à un tiers : ni télémétrie, ni vérification de licence en ligne.
 
-Ses seules connexions sortantes vont vers les services que vous configurez (base de données, stockage S3, serveur SMTP). Il fonctionne même dans un réseau isolé d’Internet.
+Ses seules connexions sortantes vont vers les services que vous configurez (base de données, stockage S3, serveur SMTP). Il fonctionne même dans un réseau isolé d’Internet. Enregistrer une instance auprès de nous est facultatif : c’est un e-mail que vous relisez et envoyez vous-même.

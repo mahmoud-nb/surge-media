@@ -5,17 +5,22 @@ import type { LicensePayload } from '#shared/schemas/license'
 import {
   LICENSE_CLOCK_SAVE_MS,
   LICENSE_CLOCK_SETTING_KEY,
+  LICENSE_USAGE_SETTING_KEY,
   licenseClockBehindMs,
   licenseFeaturesActive,
   licenseReferenceTime,
   licenseTermState,
+  licenseUsageStale,
   parseLicenseClock,
+  parseLicenseUsage,
   type LicenseDetails,
   type LicenseErrorCode,
   type LicenseFeature,
   type LicenseInvalidReason,
   type LicenseSource,
   type LicenseState,
+  type LicenseUsage,
+  type LicenseUsageDeclaration,
 } from '#shared/utils/license'
 import { LICENSE_PUBLIC_KEYS, trustedLicenseKeys } from '../lib/license/keys'
 import { licenseDetails, licensePeriod, verifyLicense } from '../lib/license/token'
@@ -199,7 +204,8 @@ export async function removeLicense(event: H3Event): Promise<{ payload: LicenseP
 
 /**
  * Identifiant aléatoire de cette installation, créé à la première lecture et jamais modifié : affiché dans
- * Réglages › Licence (support, déclaration des instances de production), jamais transmis.
+ * Réglages › Licence (support, déclaration des instances de production), jamais transmis par le produit
+ * (l'administrateur peut le joindre à l'e-mail d'enregistrement facultatif).
  */
 export async function readInstanceId(): Promise<string> {
   const prisma = await usePrisma()
@@ -213,4 +219,28 @@ export async function readInstanceId(): Promise<string> {
     if (!isUniqueViolation(error)) throw error
     return String((await prisma.setting.findUniqueOrThrow({ where: { key: INSTANCE_SETTING_KEY } })).value)
   }
+}
+
+// ─── Usage déclaré ────────────────────────────────────────────────────────────
+
+/** Déclaration d'usage de l'instance (architecture : .claude/architecture-usage.md), avec son ancienneté. */
+export async function readLicenseUsage(): Promise<(LicenseUsageDeclaration & { stale: boolean }) | null> {
+  const prisma = await usePrisma()
+  const declaration = parseLicenseUsage((await prisma.setting.findUnique({ where: { key: LICENSE_USAGE_SETTING_KEY } }))?.value)
+  return declaration ? { ...declaration, stale: licenseUsageStale(declaration, Date.now()) } : null
+}
+
+/** Enregistre la déclaration (redéclarer la même valeur la confirme) ; rend la précédente pour le journal d'audit. */
+export async function declareLicenseUsage(usage: LicenseUsage): Promise<{ previous: LicenseUsageDeclaration | null, current: LicenseUsageDeclaration }> {
+  const prisma = await usePrisma()
+  const previous = parseLicenseUsage((await prisma.setting.findUnique({ where: { key: LICENSE_USAGE_SETTING_KEY } }))?.value)
+  const current: LicenseUsageDeclaration = { usage, declaredAt: new Date().toISOString() }
+  const value = { ...current }
+  await prisma.setting.upsert({ where: { key: LICENSE_USAGE_SETTING_KEY }, create: { key: LICENSE_USAGE_SETTING_KEY, value }, update: { value } })
+  return { previous, current }
+}
+
+/** Ce que les routes de Réglages › Licence ajoutent à l'état : identifiant d'instance, version, usage déclaré. */
+export async function licenseExtras() {
+  return { instanceId: await readInstanceId(), version: SURGE_MEDIA_VERSION, usage: await readLicenseUsage() }
 }

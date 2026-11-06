@@ -2,11 +2,13 @@
 /**
  * Points d'attention (assemblés par le serveur selon les droits) : base SQLite sous pression, jetons et
  * clés qui expirent, invitations en attente ou expirées, corbeille, configuration incomplète, licence commerciale
- * qui expire ou n'est plus valable, horloge du serveur en retard. Chaque point mène à
+ * qui expire ou n'est plus valable, horloge du serveur en retard, usage de l'instance à déclarer, à confirmer ou
+ * commercial sans licence (information, jamais bloquant). Chaque point mène à
  * l'écran où agir ; une icône et un libellé distinguent ce qui demande d'agir de ce qui renseigne.
  */
 import { CircleCheck, Info, TriangleAlert } from '@lucide/vue'
 import { PRESSURE_LOADED_SHARE, PRESSURE_SLOW_OPERATION_MS } from '#shared/utils/database-pressure'
+import { LICENSING_EMAIL } from '#shared/utils/license'
 
 defineProps<{ items: DashboardAttention[] }>()
 
@@ -149,6 +151,17 @@ const number = (value: number) => new Intl.NumberFormat(locale.value).format(val
           <p v-else-if="item.kind === 'mail'">
             {{ t('admin.dashboard.attention.mail') }}
           </p>
+
+          <template v-else-if="item.kind === 'licenseUsage'">
+            <i18n-t :keypath="`admin.dashboard.attention.licenseUsage.${item.reason}`" scope="global" tag="p">
+              <template #email>
+                <a :href="`mailto:${LICENSING_EMAIL}`" class="font-medium text-primary underline-offset-4 hover:underline">{{ LICENSING_EMAIL }}</a>
+              </template>
+            </i18n-t>
+            <NuxtLink to="/admin/settings#usage" class="font-medium text-primary underline-offset-4 hover:underline">
+              {{ t(`admin.dashboard.attention.licenseUsage.link.${item.reason}`) }}
+            </NuxtLink>
+          </template>
         </div>
       </li>
     </ul>

@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { LICENSE_USAGES } from '../utils/license'
 
 /**
  * Licence commerciale : contenu signé (charge du jeton, vérifié par le serveur après la signature) et
@@ -47,3 +48,10 @@ export const licenseInstallSchema = z.object({
 })
 
 export type LicenseInstallInput = z.infer<typeof licenseInstallSchema>
+
+/** PUT /api/admin/license/usage : usage déclaré de l'instance (architecture : .claude/architecture-usage.md). */
+export const licenseUsageSchema = z.object({
+  usage: z.enum(LICENSE_USAGES, 'validation.required'),
+})
+
+export type LicenseUsageInput = z.infer<typeof licenseUsageSchema>

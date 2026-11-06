@@ -267,6 +267,16 @@
           "days": "This server's clock is about {count} day behind the latest known date. | This server's clock is about {count} days behind the latest known date.",
           "hours": "This server's clock is about {count} hour behind the latest known date. | This server's clock is about {count} hours behind the latest known date.",
           "advice": "The license is assessed at that date, and two-factor authentication and signed links may fail. Fix the system time (NTP synchronization)."
+        },
+        "licenseUsage": {
+          "undeclared": "The use of this instance is not declared: tell us whether it is an evaluation, a Community production or a production under a commercial license.",
+          "stale": "The use of this instance was declared more than a year ago: confirm it if it is still accurate.",
+          "commercial": "The declared use of this instance requires a commercial license, and none is installed. Write to {email} to get a license, or a trial license.",
+          "link": {
+            "undeclared": "Declare the use",
+            "stale": "Confirm the use",
+            "commercial": "See the declared use"
+          }
         }
       },
       "projects": {
@@ -1757,7 +1767,8 @@
         "updated": "Settings updated",
         "license_installed": "License installed",
         "license_removed": "License removed",
-        "license_clock_reset": "License time mark brought back"
+        "license_clock_reset": "License time mark brought back",
+        "license_usage_declared": "Instance use declared"
       }
     },
     "details": {
@@ -1785,7 +1796,9 @@
       "processingBackfillPartial": "Stopped by an error: the remaining videos were not queued",
       "mfaPolicy": "Two-factor authentication: {from} → {to}",
       "license": "{plan} · no. {id}",
-      "licenseClock": "Mark: {from} → {to}"
+      "licenseClock": "Mark: {from} → {to}",
+      "licenseUsageConfirmed": "Confirmed: {usage}",
+      "licenseUsageNone": "not declared"
     },
     "fields": {
       "name": "name",
@@ -2155,7 +2168,52 @@
         "database": "License installed from this page."
       },
       "instanceId": "This installation's identifier",
-      "instanceIdHint": "Give it to support and in the yearly statement of your production instances. It is never sent anywhere.",
+      "instanceIdHint": "Give it to support and in the yearly statement of your production instances. surgeMedia never sends it anywhere.",
+      "usage": {
+        "title": "Use of this instance",
+        "intro": "Tell us how this instance is used. It is only a statement: surgeMedia checks nothing and sends nothing. It is used to remind you of the license terms at the right time.",
+        "legend": "Declared use",
+        "options": {
+          "evaluation": {
+            "label": "Evaluation",
+            "description": "Trial, development or staging, with no production use. Always free."
+          },
+          "community": {
+            "label": "Community production",
+            "description": "Production use by an organization whose annual revenue, together with its affiliates, does not exceed USD 500,000, except for a competing media hosting service. Free."
+          },
+          "commercial": {
+            "label": "Production under a commercial license",
+            "description": "Production use above that threshold, or to offer a competing media hosting service. A commercial license is required."
+          }
+        },
+        "declaredOn": "Declared on {date}.",
+        "declaredStale": "Declared on {date}, more than a year ago: confirm this use if it is still accurate.",
+        "undeclared": "No use declared yet.",
+        "commercialHint": "This use requires a commercial license. Write to {email} to get a license, or a trial license to evaluate it.",
+        "required": "Choose a use.",
+        "saved": "Use saved.",
+        "confirmed": "Use confirmed.",
+        "error": "The use could not be saved. Try again.",
+        "confirm": "Confirm this use"
+      },
+      "register": {
+        "title": "Register this instance (optional)",
+        "text": "Let Surge Up, the publisher of surgeMedia, know about you to be notified of security advisories and major releases. It is free and without commitment.",
+        "privacy": "The button opens a prefilled email in your mail app: instance ID, version and declared use. Review it, complete it if you wish, then send it yourself. surgeMedia sends nothing.",
+        "action": "Prepare the registration email",
+        "mail": {
+          "subject": "Registration of a surgeMedia instance",
+          "greeting": "Hello,",
+          "intro": "I would like to register this surgeMedia instance and be notified of security advisories and major releases.",
+          "instance": "Instance ID: {id}",
+          "version": "Version: {version}",
+          "usage": "Declared use: {usage}",
+          "undeclared": "not declared",
+          "organization": "Organization: ",
+          "contact": "Contact: "
+        }
+      },
       "installTitle": "Install a license",
       "replaceTitle": "Replace the license",
       "tokenLabel": "License",

@@ -1,7 +1,8 @@
 <script setup lang="ts">
 /**
  * Réglages › Licence : licence commerciale en vigueur (état, titulaire, offre, fonctions payantes, instances
- * couvertes, dates), identifiant de cette installation, et installation / retrait d'une licence (mode sudo).
+ * couvertes, dates), identifiant de cette installation, usage déclaré et enregistrement facultatif
+ * (AdminLicenseUsage, .claude/architecture-usage.md), et installation / retrait d'une licence (mode sudo).
  * Licence fournie par NUXT_LICENSE_KEY : lecture seule. Sans licence : édition Community, avec le rappel des
  * conditions de la BUSL. Les dates et jours restants sont jugés à la date de référence du serveur, pas à
  * l'horloge du navigateur. Architecture : .claude/architecture-licence.md § 8.
@@ -263,6 +264,8 @@ async function remove() {
         <UiCopyField :label="t('settings.license.instanceId')" :value="data.instanceId" :hint="t('settings.license.instanceIdHint')" />
       </div>
     </section>
+
+    <AdminLicenseUsage :state="data.state" :instance-id="data.instanceId" :version="data.version" :usage="data.usage" @declared="refresh()" />
 
     <!-- Installation -->
     <UiAlert v-if="demo" variant="info">

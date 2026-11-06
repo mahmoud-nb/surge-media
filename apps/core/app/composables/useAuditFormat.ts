@@ -143,6 +143,14 @@ export function useAuditFormat() {
           : null
       case 'settings.license_clock_reset':
         return t('audit.details.licenseClock', { from: dateTime(data.from), to: dateTime(data.to) })
+      case 'settings.license_usage_declared': {
+        const usageLabel = (value: unknown) => te(`settings.license.usage.options.${text(value)}.label`)
+          ? t(`settings.license.usage.options.${text(value)}.label`)
+          : t('audit.details.licenseUsageNone')
+        return data.from === data.to
+          ? t('audit.details.licenseUsageConfirmed', { usage: usageLabel(data.to) })
+          : t('audit.details.change', { from: usageLabel(data.from), to: usageLabel(data.to) })
+      }
       default:
         return null
     }
