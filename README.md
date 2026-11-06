@@ -1,70 +1,101 @@
 # surgeMedia
 
-Plateforme **auto-hébergée** et modulaire de gestion et de traitement des médias (un « mini-Cloudinary ») :
-interface d'administration, API sécurisée (jetons d'accès, CORS), transformations d'images à la demande
-(crop, resize, optimisation) et vidéos (diffusion directe, conversion facultative par ffmpeg, hors du chemin des requêtes) —
-avec des composants prêts à l'emploi pour Vue, React et Svelte.
+[![CI](https://github.com/mahmoud-nb/surge-media/actions/workflows/ci.yml/badge.svg)](https://github.com/mahmoud-nb/surge-media/actions/workflows/ci.yml)
+[![License: BUSL-1.1](https://img.shields.io/badge/license-BUSL--1.1-blue)](LICENSE)
 
-| Package | Rôle | État |
+**Self-hosted media platform**: store, transform and deliver your images and videos from your own servers, under
+your own domain, through one secure headless API — an administration interface for your teams, a REST API for your
+applications, on-the-fly image transformations and video processing, with no per-transformation bill and no media
+leaving your infrastructure.
+
+[Website and documentation](https://mahmoud-nb.github.io/surge-media/) ·
+[Live demo](https://demo.usesurgemedia.com) ·
+[Installation and operations guide](setup.md) ·
+[Changelog](apps/core/CHANGELOG.md) ·
+[Documentation en français](https://mahmoud-nb.github.io/surge-media/fr/)
+
+## Features
+
+- **Administration** — media library and folders, projects, users with platform and project roles, two-factor
+  authentication (TOTP), audit log; English and French, light and dark themes, designed for WCAG 2.2 AA.
+- **REST API v1** — publishable and secret project keys, personal and delegated tokens, scopes, expiry and rotation,
+  per-project CORS origins, rate limiting, OpenAPI 3.1 specification and interactive documentation.
+- **Images** — resize, crop, focal point, rotate and convert (JPEG, PNG, WebP, AVIF) by changing the delivery URL,
+  presets, signed URLs for private media, metadata (EXIF, GPS) always removed.
+- **Videos** — direct delivery, posters and subtitles; optional ffmpeg processing (H.264 and AV1 renditions) in
+  workers, outside the request path.
+- **Your infrastructure** — SQLite, PostgreSQL or MySQL/MariaDB; local disk or any S3-compatible storage; npm
+  package or Docker image (amd64, arm64); nothing is ever sent to the publisher.
+- **Operations** — a `surge-media` command line to set up, migrate and diagnose an installation (`surge-media
+  diagnose` prints a support report without secrets).
+
+## Packages
+
+| Package | Content | License |
 | --- | --- | --- |
-| [`@surge-media/core`](apps/core) | admin + API + traitement des images et des vidéos (Nuxt 3, Nitro, Prisma, Flydrive, sharp ; ffmpeg ≥ 6 du système, facultatif) | en cours |
-| `@surge-media/vue` · `react` · `svelte` | composants frontend (images optimisées, galeries, upload…) | à venir |
-| [`website`](apps/website) | site public et documentation (Astro Starlight, anglais et français, GitHub Pages) | en cours |
+| [`@surge-media/core`](apps/core) | The platform: administration, API, image and video processing (npm package and Docker image `ghcr.io/mahmoud-nb/surge-media`) | BUSL-1.1 |
+| [`@surge-media/client`](packages/client) | Framework-free TypeScript client: API, responsive image and video URLs, uploads, shared component logic and theme | MIT |
+| [`@surge-media/vue`](packages/vue) | Vue 3 components: images, `<picture>`, videos, uploads, processing status | MIT |
+| [`apps/website`](apps/website) | Public website and documentation (Astro Starlight, English and French) | — |
+| [`apps/playground`](apps/playground) | Example application built with the libraries | — |
 
-## Démarrer
+Components for React and Svelte are planned, on the same `@surge-media/client` base.
 
-Depuis les sources (développement) :
+## Quick start
+
+With Docker:
 
 ```bash
-pnpm install
-pnpm db:init   # SQLite par défaut, ou PostgreSQL / MySQL / MariaDB
-pnpm dev
+docker run -d --name surge-media -p 127.0.0.1:3000:3000 -v surge-media-data:/app/data \
+  -e NUXT_SITE_URL=http://localhost:3000 \
+  -e NUXT_BOOTSTRAP_ADMIN_EMAIL=you@example.com -e NUXT_BOOTSTRAP_ADMIN_PASSWORD='a-long-unique-password' \
+  ghcr.io/mahmoud-nb/surge-media:latest
 ```
 
-Avec le paquet npm, dans le dossier qui contiendra la configuration et les données (npm 12 et plus : approuver
-d'abord les scripts d'installation, [setup.md § 5](setup.md#5-installing-with-the-npm-package)) :
+Or with the npm package (Node.js 24 or later), in the directory that will hold the configuration and the data:
 
 ```bash
 npm install @surge-media/core
-npx surge-media init
+npx surge-media init     # database, port, public URL, migrations, secrets
 npx surge-media start
 ```
 
-Ou avec Docker (une seule image pour SQLite, PostgreSQL et MySQL/MariaDB ; variante `slim` sans ffmpeg) :
+Then sign in at `http://localhost:3000/login`. With npm 12 or later, approve the native modules' install scripts
+first, and see the [installation guide](setup.md) for production: HTTPS reverse proxy, storage, video processing,
+backups, updates and troubleshooting. Compose examples are in [`docker/`](docker).
+
+## Developing
 
 ```bash
-docker build -t surge-media .
-docker run -d -p 127.0.0.1:3000:3000 -v surge-media-data:/app/data -e NUXT_SITE_URL=http://localhost:3000 \
-  -e NUXT_BOOTSTRAP_ADMIN_EMAIL=vous@exemple.fr -e NUXT_BOOTSTRAP_ADMIN_PASSWORD=un-mot-de-passe-long surge-media
+pnpm install
+pnpm db:init     # SQLite by default, or PostgreSQL / MySQL / MariaDB
+pnpm dev
 ```
 
-Exemples Compose dans [`docker/`](docker), détails dans [setup.md § 4](setup.md#4-installing-with-docker). Images
-publiées à chaque version : `ghcr.io/mahmoud-nb/surge-media` (amd64, arm64).
+Requirements and conventions: [setup.md § 18](setup.md#18-developing-surgemedia). Contributions are welcome: read
+[CONTRIBUTING.md](CONTRIBUTING.md) first.
 
-Guide d'installation et d'exploitation, en anglais (prérequis, Docker, npm, variables d'environnement,
-mandataire inverse, sauvegardes, mises à jour, dépannage) : [setup.md](setup.md) ; développer surgeMedia :
-[§ 18](setup.md#18-developing-surgemedia) ; historique : [CHANGELOG](apps/core/CHANGELOG.md).
+## Security
 
-## Sécurité
+Do not report vulnerabilities in public issues: follow the [security policy](SECURITY.md) (private reporting
+through GitHub, supported versions, response times, and how to verify a release).
 
-Pour signaler une vulnérabilité, n'ouvrez pas d'issue publique : suivez la [politique de sécurité](SECURITY.md)
-(signalement privé par GitHub, versions maintenues, délais de traitement).
+## License
 
-## Licence
+surgeMedia is source-available under the **Business Source License 1.1** (SPDX `BUSL-1.1`): see [LICENSE](LICENSE).
+It is not an open source license. In short:
 
-surgeMedia est distribué sous **Business Source License 1.1** (identifiant SPDX `BUSL-1.1`) : voir [LICENSE](LICENSE).
-Le code source est public, mais il ne s'agit pas d'une licence open source au sens de l'OSI. En résumé :
+- development, testing and evaluation are **free for everyone**;
+- production use is **free**, except in three cases that require a commercial license:
+  - the organization using it, or on whose behalf it is used, together with its affiliates, had a gross revenue
+    above **USD 500,000** in its last completed fiscal year;
+  - surgeMedia is offered to third parties as a **competing hosted service**;
+  - a feature that requires a **license key** is used in production without a valid key (no feature requires one
+    yet);
+- each version becomes available under the **Apache License 2.0** three years after its first public release.
 
-- développement, tests et évaluation : **libres et gratuits pour tous** ;
-- utilisation en production : **gratuite**, sauf dans deux cas qui demandent une licence commerciale :
-  - l'entité qui l'utilise (ou pour le compte de laquelle il est utilisé), avec les sociétés de son groupe, a réalisé
-    un chiffre d'affaires brut supérieur à **500 000 USD** lors de son dernier exercice clos ;
-  - surgeMedia est proposé à des tiers comme **service hébergé concurrent** (stockage de médias « as a service »,
-    CMS de médias headless…) ;
-- chaque version passe sous **licence Apache 2.0** trois ans après sa première publication.
+This summary has no legal value: the [LICENSE](LICENSE) file is the only binding text. Commercial licenses and
+support: Surge Up, [licensing@surgeup.org](mailto:licensing@surgeup.org).
 
-Ce résumé n'a pas de valeur juridique : seul le texte anglais du fichier [LICENSE](LICENSE) fait foi.
-
-Les librairies front **`@surge-media/client`** et **`@surge-media/vue`** (`packages/client`, `packages/vue`) sont
-distribuées sous **licence MIT** (fichier `LICENSE` de chaque paquet) : elles ne font pas partie de l'œuvre couverte
-par la BSL, comme le prévoit le fichier [LICENSE](LICENSE) pour les fichiers sous une autre licence.
+The front-end libraries `@surge-media/client` and `@surge-media/vue` are under the **MIT license** (the `LICENSE`
+file of each package): they are not part of the work covered by the Business Source License.

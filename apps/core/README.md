@@ -1,11 +1,14 @@
 # @surge-media/core
 
-**surgeMedia** is a self-hosted, modular platform for managing, transforming and delivering media — a
-“mini-Cloudinary” that runs on your own infrastructure. This package is its core: the administration
-interface, the REST API for your applications, on-the-fly image transformations and video handling.
+**surgeMedia** is a self-hosted, modular platform for managing, transforming and delivering media, on your own
+infrastructure and under your own domain. This package is its core: the administration interface, the REST API for
+your applications, on-the-fly image transformations and video handling.
 
-- **Admin interface** — media library, projects, folders, users and roles, audit log (English and French,
-  light and dark themes, designed for WCAG 2.2 AA).
+[Website and documentation](https://mahmoud-nb.github.io/surge-media/) · [Live demo](https://demo.usesurgemedia.com) ·
+[Installation and operations guide](https://github.com/mahmoud-nb/surge-media/blob/main/setup.md)
+
+- **Admin interface** — media library, projects, folders, users and roles, two-factor authentication (TOTP) that
+  administrators can require, audit log (English and French, light and dark themes, designed for WCAG 2.2 AA).
 - **REST API v1** — scoped API keys and tokens, per-project CORS origins, rate limiting, OpenAPI 3.1
   specification and interactive documentation.
 - **Images** — resize, crop, rotate and convert (JPEG, PNG, WebP, AVIF) through the delivery URL, with presets,
@@ -15,8 +18,9 @@ interface, the REST API for your applications, on-the-fly image transformations 
 - **Your choice of infrastructure** — SQLite, PostgreSQL or MySQL/MariaDB; local disk or any S3-compatible
   storage (AWS S3, Cloudflare R2, MinIO…).
 
-Ready-made components for Vue, React and Svelte (`@surge-media/vue`, `@surge-media/react`,
-`@surge-media/svelte`) are planned.
+For your front ends: [`@surge-media/client`](https://www.npmjs.com/package/@surge-media/client) (framework-free
+TypeScript client) and [`@surge-media/vue`](https://www.npmjs.com/package/@surge-media/vue) (Vue 3 components), both
+MIT. React and Svelte components are planned.
 
 ## Requirements
 
@@ -33,7 +37,7 @@ Install the package in the directory that will hold your configuration (`.env`) 
 ```bash
 mkdir surge-media && cd surge-media
 npm install @surge-media/core
-npx surge-media init      # choose the database, port and public URL, apply migrations, generate the secrets
+npx surge-media init      # database, port and public URL, migrations, secrets, then the declared use of the instance
 ```
 
 With npm 12 or later, dependency install scripts only run once approved. SQLite needs the one of
@@ -59,7 +63,8 @@ npx surge-media start     # http://localhost:3000 — sign in at /login
 choice to `.env` (`PORT`). If the port is taken when the server starts, `start` stops with a clear message and
 exit code 1 instead of failing silently.
 
-Remove the two bootstrap variables once your account exists. `GET /api/health` reports the state of the
+Remove the two bootstrap variables once your account exists, turn on two-factor authentication from **My account**,
+and require it at least for administrators in **Settings › Security**. `GET /api/health` reports the state of the
 database, the storage and the image engine. To update: `npm install @surge-media/core@latest`,
 `npx surge-media db migrate`, then restart.
 
@@ -88,8 +93,8 @@ docker run -d --name surge-media -p 127.0.0.1:3000:3000 -v surge-media-data:/app
 
 - `/app/data` holds the SQLite database, locally stored media and the generated secrets: keep it on a volume
   and back it up.
-- Pending migrations are applied at startup, and the session and signing secrets are generated on first start
-  when you do not provide them.
+- Pending migrations are applied at startup, and the session, signing and two-factor encryption secrets are
+  generated on first start when you do not provide them.
 - Another database is a matter of `DATABASE_URL` (`postgresql://…` or `mysql://…`): the provider is inferred from it.
 - The image command is `server` (default), `worker` (video processing worker) or `migrate`.
 - Port 3000 already taken on the host? Publish another one, such as `-p 127.0.0.1:8080:3000`, or set
@@ -108,11 +113,16 @@ repository). It works in the current directory, or the one given by `--cwd`:
 
 | Command | Purpose |
 | --- | --- |
-| `init` | choose the database (`--provider sqlite\|postgresql\|mysql`, `--url`), the web server port (`--port`, written to `.env` as `PORT`) and the public URL (`--site-url`), apply migrations and generate the missing secrets; `--yes` for non-interactive use |
+| `init` | choose the database (`--provider sqlite\|postgresql\|mysql`, `--url`), the web server port (`--port`, written to `.env` as `PORT`) and the public URL (`--site-url`), apply migrations, generate the missing secrets and declare the use of the instance (`--usage evaluation\|community\|commercial`); `--yes` for non-interactive use |
 | `start` | start the server (`--port`, default `PORT` or 3000); stops with exit code 1 if the port is taken |
 | `worker` | start a video processing worker (`--port`, default `WORKER_PORT` or 3001) |
 | `db migrate` | apply pending migrations after an update |
 | `db reset` | recreate the database (confirmation required) |
+| `user mfa-reset <email>` | reset an account's two-factor authentication (`--all` when the encryption key is lost) |
+| `license usage [value]` | show or declare the use of the instance: `evaluation`, `community` or `commercial` |
+| `license clock-reset` | bring the license reference-time mark back to the system clock, after the clock ran ahead by mistake |
+| `diagnose` | print a support report without secrets (`--out`, `--json`, `--anonymize`, `--log`) |
+| `demo snapshot` / `demo restore` | capture and restore the reference content of a public demo instance |
 
 The CLI speaks French and English: `--lang en`, or `SURGE_MEDIA_LANG=en`.
 
@@ -130,11 +140,13 @@ Configuration is read from environment variables at startup (restart after any c
 | `NUXT_SITE_URL` | — | public URL of your installation (required in production) |
 | `NUXT_SESSION_PASSWORD` | generated by `init` | session secret, 32 characters minimum; keep it stable |
 | `NUXT_MEDIA_SIGNING_SECRET` | generated by `init` | secret of signed media URLs and delegated tokens |
+| `NUXT_MFA_ENCRYPTION_KEY` | generated by `init` | encrypts the two-factor secrets in the database; keep it stable and back it up |
 | `NUXT_MEDIA_STORAGE_DRIVER` | `local` | `local` (`NUXT_MEDIA_STORAGE_ROOT`) or `s3` (`NUXT_MEDIA_STORAGE_S3_*`) |
 | `NUXT_MEDIA_PUBLIC_URL` | `NUXT_SITE_URL` | base URL of delivered media, for a CDN or a dedicated domain |
 | `NUXT_TRUST_PROXY` | `true` | trusted reverse proxies for `X-Forwarded-For` (`true` = loopback and private networks, `false`, or a list of addresses and CIDR ranges) |
 | `NUXT_VIDEO_PROCESSING` | `off` | `off`, `embedded` (the web server runs ffmpeg jobs) or `external` (separate workers) |
 | `NUXT_SMTP_HOST` / `NUXT_SMTP_FROM` | — | SMTP server and sender, to email invitations and password reset links |
+| `NUXT_LICENSE_KEY` | — | commercial license, verified offline; it can also be installed in **Settings › License** |
 
 Every variable is documented in [`.env.example`](https://github.com/mahmoud-nb/surge-media/blob/main/apps/core/.env.example)
 (comments in French).
@@ -200,8 +212,11 @@ npx surge-media start         # run it under a process manager (systemd, pm2…)
 
 - Serve the application over **HTTPS**, behind a reverse proxy that forwards the original `Host` header and
   appends the client address to `X-Forwarded-For`; do not expose the application port directly.
-- Set `NUXT_SITE_URL`, and keep `NUXT_SESSION_PASSWORD` and `NUXT_MEDIA_SIGNING_SECRET` stable.
-- Back up the database together with the media storage (`NUXT_MEDIA_STORAGE_ROOT` for local storage).
+- Set `NUXT_SITE_URL`, and keep `NUXT_SESSION_PASSWORD`, `NUXT_MEDIA_SIGNING_SECRET` and
+  `NUXT_MFA_ENCRYPTION_KEY` stable.
+- Back up the database together with the media storage (`NUXT_MEDIA_STORAGE_ROOT` for local storage) and the
+  secrets.
+- Require two-factor authentication at least for administrators (**Settings › Security**).
 - Use PostgreSQL or MySQL for sustained traffic or several processes; SQLite is meant for a single server.
 - Raise the upload size limit of your reverse proxy (nginx accepts 1 MB bodies by default).
 
@@ -209,7 +224,9 @@ npx surge-media start         # run it under a process manager (systemd, pm2…)
 
 The installation and operations guide — requirements, Docker and npm installation, every environment variable,
 reverse proxy, production checklist, scaling, backups, updates and troubleshooting — is
-[`setup.md`](https://github.com/mahmoud-nb/surge-media/blob/main/setup.md).
+[`setup.md`](https://github.com/mahmoud-nb/surge-media/blob/main/setup.md). When asking for help, attach the report of
+`npx surge-media diagnose`: it contains no secret and no personal data. Security issues: follow the
+[security policy](https://github.com/mahmoud-nb/surge-media/blob/main/SECURITY.md), never a public issue.
 
 ## Releases
 
@@ -223,12 +240,16 @@ surgeMedia is source-available under the **Business Source License 1.1** (SPDX `
 open source license. In short:
 
 - development, testing and evaluation are **free for everyone**;
-- production use is **free**, except in two cases that require a commercial license:
+- production use is **free**, except in three cases that require a commercial license:
   - the organization using it, or on whose behalf it is used, together with its affiliates, had a gross revenue
     above **USD 500,000** in its last completed fiscal year;
   - surgeMedia is offered to third parties as a **competing hosted service** (media storage as a service,
     headless media CMS, media transformation or delivery service…);
+  - a feature that requires a **license key** is used in production without a valid key (no feature requires
+    one yet);
 - each version becomes available under the **Apache License 2.0** three years after its first public release.
 
 This summary has no legal value: the [LICENSE](https://github.com/mahmoud-nb/surge-media/blob/main/LICENSE) file
-is the only binding text, and it also gives the contact for commercial licenses.
+is the only binding text. **Settings › License** (or `surge-media license usage`) records how each instance is
+used and installs a commercial license; nothing is checked or sent. Commercial licenses and support: Surge Up,
+[licensing@surgeup.org](mailto:licensing@surgeup.org).

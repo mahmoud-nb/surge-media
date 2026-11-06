@@ -860,7 +860,8 @@ pnpm dev              # http://localhost:3000 (add the bootstrap variables to ap
 ```
 
 Before proposing a change: `pnpm lint`, `pnpm typecheck`, `pnpm test` and `pnpm i18n:check` (every text exists in
-French and English). Commit messages follow [Conventional Commits](https://www.conventionalcommits.org).
+French and English). Commit messages follow [Conventional Commits](https://www.conventionalcommits.org). Conventions,
+pull requests and the Contributor License Agreement: [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ## 19. License and support
 
