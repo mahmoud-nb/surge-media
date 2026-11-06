@@ -26,6 +26,8 @@
     "db:studio": "pnpm --filter @surge-media/core db:studio",
     "i18n:check": "pnpm --filter @surge-media/core i18n:check",
     "a11y:contrast": "pnpm -r a11y:contrast",
+    "security:audit": "node security/audit.mjs",
+    "security:test": "node --test security/audit.test.mjs",
     "lint": "pnpm -r lint",
     "lint:fix": "pnpm -r lint:fix",
     "release": "pnpm --filter @surge-media/core release",

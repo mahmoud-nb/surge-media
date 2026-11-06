@@ -1,0 +1,11 @@
+# Exceptions de l'analyse d'image (Trivy, .github/actions/trivy-scan) : format YAML de Trivy.
+# Chaque exception dit pourquoi la vulnérabilité ne s'applique pas, et expire au plus 90 jours après son ajout
+# (`expired_at`) : passé ce délai, l'analyse échoue de nouveau et la décision doit être revue.
+# .claude/architecture-ci-security.md, SC2 et SC3. Exemple :
+#
+#   vulnerabilities:
+#     - id: CVE-2026-12345
+#       paths: ['usr/lib/x86_64-linux-gnu/libexample.so.1']
+#       statement: Bibliothèque présente dans l'image mais jamais chargée par surgeMedia ni par ffmpeg (ajout 2026-11-06).
+#       expired_at: 2027-02-03
+vulnerabilities: []

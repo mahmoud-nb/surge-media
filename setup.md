@@ -78,6 +78,10 @@ Each release publishes multi-architecture images (amd64, arm64) on GitHub Contai
 Both run Debian 13 and Node.js 24 as the non-root user `node` (uid 1000), with `tini` as PID 1 and a built-in
 `HEALTHCHECK` on `/api/health`. Pin a version in production rather than `latest`.
 
+Every image is scanned for known vulnerabilities before it is published and carries an SBOM and its build
+provenance; each GitHub release also lists the `SHA256SUMS` of the npm package and its CycloneDX SBOM. How to
+check them: [`SECURITY.md`](SECURITY.md#supply-chain).
+
 You can also build the image from the repository: `docker build -t surge-media .` (full) or
 `docker build --target slim -t surge-media:slim .`.
 

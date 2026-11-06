@@ -1,0 +1,22 @@
+name: Installer Trivy
+description: >-
+  Télécharge Trivy depuis ses releases GitHub, vérifie l'empreinte SHA-256 épinglée ici et l'ajoute au PATH.
+  Une seule version pour l'analyse des images et le SBOM du paquet. .claude/architecture-ci-security.md, SC3 et SC6.
+
+runs:
+  using: composite
+  steps:
+    - name: Trivy
+      shell: bash
+      env:
+        TRIVY_VERSION: 0.76.1
+        TRIVY_SHA256: c7cbe3137fb8a48a17574bede3dd6beb16742d1e9772929940fc90082c39d9c0
+      run: |
+        set -euo pipefail
+        dir="$RUNNER_TEMP/trivy"
+        mkdir -p "$dir"
+        archive="trivy_${TRIVY_VERSION}_Linux-64bit.tar.gz"
+        curl -fsSL --retry 3 -o "$dir/$archive" "https://github.com/aquasecurity/trivy/releases/download/v${TRIVY_VERSION}/$archive"
+        echo "${TRIVY_SHA256}  $dir/$archive" | sha256sum -c -
+        tar -xzf "$dir/$archive" -C "$dir" trivy
+        echo "$dir" >> "$GITHUB_PATH"

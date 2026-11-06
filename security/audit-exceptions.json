@@ -1,0 +1,37 @@
+[
+  {
+    "id": "GHSA-x6jw-m9v5-85vh",
+    "package": "simple-git",
+    "reason": "Tiré par @nuxt/devtools (serveur de développement seulement) : absent de .output et de l'image. Correctif en version majeure 4, à reprendre quand Nuxt DevTools l'adoptera.",
+    "added": "2026-11-06",
+    "expires": "2027-02-03"
+  },
+  {
+    "id": "GHSA-g4wm-2vf7-vfgr",
+    "package": "simple-git",
+    "reason": "Tiré par @nuxt/devtools (serveur de développement seulement) : absent de .output et de l'image. Correctif en version majeure 4, à reprendre quand Nuxt DevTools l'adoptera.",
+    "added": "2026-11-06",
+    "expires": "2027-02-03"
+  },
+  {
+    "id": "GHSA-858h-whjf-mvg5",
+    "package": "simple-git",
+    "reason": "Tiré par @nuxt/devtools (serveur de développement seulement) : absent de .output et de l'image. Correctif en version majeure 4, à reprendre quand Nuxt DevTools l'adoptera.",
+    "added": "2026-11-06",
+    "expires": "2027-02-03"
+  },
+  {
+    "id": "GHSA-v5rq-49vh-5v5c",
+    "package": "@simple-git/argv-parser",
+    "reason": "Dépendance de simple-git, tiré par @nuxt/devtools (serveur de développement seulement) : absent de .output et de l'image.",
+    "added": "2026-11-06",
+    "expires": "2027-02-03"
+  },
+  {
+    "id": "GHSA-c475-qrg2-pj4r",
+    "package": "basic-ftp",
+    "reason": "Tiré par release-it (proxy-agent › get-uri), outil de publication lancé par le mainteneur : absent de .output et de l'image, aucun serveur FTP contacté. Correctif en version majeure 6.",
+    "added": "2026-11-06",
+    "expires": "2027-02-03"
+  }
+]

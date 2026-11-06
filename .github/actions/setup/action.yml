@@ -1,7 +1,8 @@
 name: Préparer l'environnement
 description: >-
   Node (version de .nvmrc), pnpm (version du champ packageManager, par corepack) et dépendances installées
-  depuis le fichier de verrouillage, avec le magasin pnpm en cache. À utiliser après actions/checkout.
+  depuis le fichier de verrouillage, avec le magasin pnpm en cache (sauf `cache: 'false'`). À utiliser après
+  actions/checkout.
 
 inputs:
   filter:
@@ -10,11 +11,17 @@ inputs:
       Vide : tout le dépôt.
     required: false
     default: ''
+  cache:
+    description: >-
+      'false' : sans cache du magasin pnpm. Pour les workflows de publication, qu'un cache écrit par un autre
+      workflow ne doit pas pouvoir influencer (empoisonnement de cache).
+    required: false
+    default: 'true'
 
 runs:
   using: composite
   steps:
-    - uses: actions/setup-node@v7
+    - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
       with:
         node-version-file: .nvmrc
 
@@ -26,7 +33,8 @@ runs:
         corepack enable
         echo "PNPM_STORE_PATH=$(pnpm store path)" >> "$GITHUB_ENV"
 
-    - uses: actions/cache@v6
+    - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+      if: inputs.cache != 'false'
       with:
         path: ${{ env.PNPM_STORE_PATH }}
         key: pnpm-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml') }}

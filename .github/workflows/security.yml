@@ -1,0 +1,93 @@
+# Veille de sécurité, sans attendre un commit (.claude/architecture-ci-security.md, SC1, SC3, SC4) :
+#   - chaque lundi : audit des dépendances npm (une nouvelle alerte sur une version déjà livrée fait échouer le
+#     workflow, et GitHub prévient par e-mail) et analyse de la dernière image publiée sur GHCR ;
+#   - à la main (Actions › Security › Run workflow) : la même chose, plus, sur demande, la recherche de secrets dans
+#     tout l'historique git (à faire avant de rendre le dépôt public).
+name: Security
+
+on:
+  schedule:
+    - cron: '17 5 * * 1'
+  workflow_dispatch:
+    inputs:
+      full-history:
+        description: Chercher des secrets dans tout l'historique git
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: security
+  cancel-in-progress: false
+
+jobs:
+  audit:
+    name: Audit des dépendances npm
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: .nvmrc
+
+      - name: pnpm (corepack)
+        env:
+          COREPACK_ENABLE_DOWNLOAD_PROMPT: '0'
+        run: corepack enable
+
+      - name: Audit
+        run: node security/audit.mjs
+
+  image:
+    name: Analyse de la dernière image publiée
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+      # Paquet GHCR privé tant que le dépôt l'est.
+      packages: read
+    env:
+      IMAGE: ghcr.io/${{ github.repository }}:latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3.7.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Image publiée ?
+        id: published
+        run: |
+          if docker manifest inspect "$IMAGE" >/dev/null 2>&1; then
+            docker pull --quiet "$IMAGE"
+            echo "found=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "::notice::Aucune image $IMAGE publiée pour l'instant : analyse sautée."
+            echo "found=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Analyse (Trivy)
+        if: steps.published.outputs.found == 'true'
+        uses: ./.github/actions/trivy-scan
+        with:
+          image: ${{ env.IMAGE }}
+
+  secrets:
+    name: Secrets dans tout l'historique
+    if: github.event_name == 'workflow_dispatch' && inputs.full-history
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - uses: ./.github/actions/gitleaks

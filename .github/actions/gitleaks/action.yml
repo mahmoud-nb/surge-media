@@ -1,0 +1,34 @@
+name: Recherche de secrets (gitleaks)
+description: >-
+  Installe gitleaks (version et empreinte SHA-256 épinglées, binaire MIT, aucun service tiers) et cherche des
+  secrets dans l'historique git : une plage de commits (`log-opts`), ou tout l'historique. Échoue si un secret est
+  trouvé ; les valeurs sont masquées dans le journal. Règles : celles de gitleaks, plus .gitleaks.toml s'il existe.
+  À utiliser après actions/checkout avec fetch-depth: 0. .claude/architecture-ci-security.md, SC4.
+
+inputs:
+  log-opts:
+    description: Options de git log, par exemple `abc123..def456` ; vide = tout l'historique
+    required: false
+    default: ''
+
+runs:
+  using: composite
+  steps:
+    - name: gitleaks
+      shell: bash
+      env:
+        GITLEAKS_VERSION: 8.30.1
+        GITLEAKS_SHA256: 551f6fc83ea457d62a0d98237cbad105af8d557003051f41f3e7ca7b3f2470eb
+        LOG_OPTS: ${{ inputs.log-opts }}
+      run: |
+        set -euo pipefail
+        dir="$RUNNER_TEMP/gitleaks"
+        mkdir -p "$dir"
+        archive="gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz"
+        curl -fsSL --retry 3 -o "$dir/$archive" "https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}/$archive"
+        echo "${GITLEAKS_SHA256}  $dir/$archive" | sha256sum -c -
+        tar -xzf "$dir/$archive" -C "$dir" gitleaks
+        args=(git --no-banner --redact --verbose)
+        if [ -f .gitleaks.toml ]; then args+=(--config .gitleaks.toml); fi
+        if [ -n "$LOG_OPTS" ]; then args+=("--log-opts=$LOG_OPTS"); fi
+        "$dir/gitleaks" "${args[@]}" .

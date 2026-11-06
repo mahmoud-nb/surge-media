@@ -70,19 +70,47 @@ Out of scope:
 - headers that the documentation leaves to the reverse proxy, such as `Strict-Transport-Security`;
 - volumetric denial of service and the exhaustion of documented rate limits;
 - attacks that require an administrator account, access to the server or to the database;
-- documented missing features, such as multi-factor authentication or single sign-on: they are feature requests,
-  not vulnerabilities;
+- documented missing features, such as single sign-on: they are feature requests, not vulnerabilities;
 - social engineering and physical attacks.
 
 ## Testing guidelines
 
-surgeMedia is self-hosted: the maintainers operate no shared instance. Test **only on an instance that you
-installed yourself** (the license allows any non-production use), and never on someone else's installation
-without their written permission. Do not access, modify or delete data that is not yours, and do not degrade a
-service used by others.
+surgeMedia is self-hosted. Test **only on an instance that you installed yourself** (the license allows any
+non-production use), and never on someone else's installation without their written permission. The public demo
+is shared with other visitors and reset every two hours: do not test there. Do not access, modify or delete data
+that is not yours, and do not degrade a service used by others.
 
 We will not take legal action against research that follows this policy in good faith, and we will treat your
 report confidentially.
+
+## Supply chain
+
+What every change and every release goes through (`.github/workflows`):
+
+- **Dependencies**: Dependabot every week, never for a version published less than 7 days ago. `pnpm audit` on every
+  pull request, every push, every Monday and before each release: a high or critical advisory in what is shipped
+  (the server and everything its build bundles, the runtime dependencies of the libraries) blocks, unless a written
+  exception explains why it does not apply. Exceptions expire after 90 days at most
+  ([`security/audit-exceptions.json`](security/audit-exceptions.json)).
+- **Docker image**: scanned by Trivy (system packages, ffmpeg, Node packages) in continuous integration, every Monday
+  and before every publication. A high or critical vulnerability with an upstream fix blocks, under the same rules
+  ([`security/trivyignore.yaml`](security/trivyignore.yaml)).
+- **Secrets**: new commits scanned by gitleaks.
+- **Workflows**: third-party actions pinned to a commit hash, least-privilege permissions, checked by zizmor; the
+  release workflows use no build cache that another workflow could have written.
+- **Every release**: SBOMs (SPDX, attached to the images; CycloneDX for the npm package, attached to the GitHub
+  release), `SHA256SUMS`, and the images' build provenance (BuildKit).
+
+Once the repository is public, CodeQL and OpenSSF Scorecard run as well, and the npm package and the images carry
+signed provenance (npm provenance, GitHub artifact attestations).
+
+To check a release before installing it:
+
+```bash
+sha256sum --ignore-missing -c SHA256SUMS                    # files downloaded from the GitHub release
+gh attestation verify surge-media-core-X.Y.Z.tgz --owner mahmoud-nb                  # once the repository is public
+gh attestation verify oci://ghcr.io/mahmoud-nb/surge-media:X.Y.Z --owner mahmoud-nb  # once the repository is public
+```
 
 ## Hardening your installation
 
@@ -147,18 +175,40 @@ démontré sur surgeMedia, à signaler en amont ; les installations contraires a
 port de l'application exposé sans mandataire, mandataires non fiables admis par `NUXT_TRUST_PROXY`) ; les en-têtes
 que la documentation confie au mandataire (`Strict-Transport-Security`) ; le déni de service volumétrique et
 l'épuisement des limites de débit documentées ; les attaques qui exigent un compte administrateur ou un accès au
-serveur ou à la base ; les fonctionnalités absentes et documentées, comme l'authentification à plusieurs facteurs
-ou l'authentification unique (des demandes d'évolution, pas des vulnérabilités) ; l'ingénierie sociale et les
+serveur ou à la base ; les fonctionnalités absentes et documentées, comme l'authentification unique (des demandes
+d'évolution, pas des vulnérabilités) ; l'ingénierie sociale et les
 attaques physiques.
 
 ## Règles de test
 
-surgeMedia est auto-hébergé : les mainteneurs n'exploitent aucune instance partagée. Testez **uniquement sur une
-instance que vous avez installée vous-même** (la licence autorise tout usage hors production), jamais sur
-l'installation d'un tiers sans son accord écrit. N'accédez pas aux données d'autrui, ne les modifiez pas, ne les
+surgeMedia est auto-hébergé. Testez **uniquement sur une instance que vous avez installée vous-même** (la licence
+autorise tout usage hors production), jamais sur l'installation d'un tiers sans son accord écrit. La démo publique
+est partagée avec d'autres visiteurs et remise à zéro toutes les deux heures : n'y testez rien. N'accédez pas aux données d'autrui, ne les modifiez pas, ne les
 supprimez pas, et ne dégradez pas un service utilisé par d'autres. Nous n'engagerons aucune poursuite contre une
 recherche menée de bonne foi dans le respect de cette politique, et nous traitons votre signalement de manière
 confidentielle.
+
+## Chaîne d'approvisionnement
+
+Ce que traverse chaque modification et chaque version (`.github/workflows`) :
+
+- **Dépendances** : Dependabot chaque semaine, jamais pour une version publiée depuis moins de 7 jours. `pnpm audit` à
+  chaque pull request, à chaque push, chaque lundi et avant chaque version : une alerte élevée ou critique dans ce
+  qui est livré (le serveur et tout ce que sa build embarque, les dépendances d'exécution des bibliothèques) bloque,
+  sauf exception écrite qui explique pourquoi elle ne s'applique pas. Une exception expire au bout de 90 jours au plus
+  ([`security/audit-exceptions.json`](security/audit-exceptions.json)).
+- **Image Docker** : analysée par Trivy (paquets du système, ffmpeg, paquets Node) en intégration continue, chaque lundi
+  et avant chaque publication. Une vulnérabilité élevée ou critique corrigée en amont bloque, selon les mêmes règles
+  ([`security/trivyignore.yaml`](security/trivyignore.yaml)).
+- **Secrets** : nouveaux commits examinés par gitleaks.
+- **Workflows** : actions tierces épinglées par empreinte de commit, permissions minimales, vérification par zizmor ;
+  les workflows de publication n'utilisent aucun cache de build qu'un autre workflow aurait pu écrire.
+- **Chaque version** : SBOM (SPDX, attachés aux images ; CycloneDX pour le paquet npm, joint à la release GitHub),
+  `SHA256SUMS` et provenance de build des images (BuildKit).
+
+Une fois le dépôt public, CodeQL et OpenSSF Scorecard s'y ajoutent, et le paquet npm comme les images portent une
+provenance signée (provenance npm, attestations GitHub). Vérifier une version avant de l'installer : voir les
+commandes de la version anglaise ci-dessus.
 
 ## Durcir votre installation
 

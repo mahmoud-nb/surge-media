@@ -1,0 +1,49 @@
+name: Analyse d'image (Trivy)
+description: >-
+  Analyse une image avec Trivy (installé par ./.github/actions/install-trivy) : vulnérabilités élevées ou critiques
+  corrigées en amont (une faille sans correctif ne bloque pas), paquets du système et de Node compris, exceptions de
+  security/trivyignore.yaml. Échoue s'il en reste (sauf `exit-code: 0`) ; tableau dans le résumé du job. À utiliser
+  après actions/checkout (fichier d'exceptions). .claude/architecture-ci-security.md, SC3.
+
+inputs:
+  image:
+    description: Image à analyser (nom:étiquette chargé dans le démon Docker, ou référence de registre)
+    required: true
+  exit-code:
+    description: 1 = bloquant, 0 = signalé seulement
+    required: false
+    default: '1'
+
+runs:
+  using: composite
+  steps:
+    - uses: ./.github/actions/install-trivy
+
+    - name: Analyse
+      shell: bash
+      env:
+        IMAGE: ${{ inputs.image }}
+        EXIT_CODE: ${{ inputs.exit-code }}
+        TRIVY_NO_PROGRESS: 'true'
+      run: |
+        set -euo pipefail
+        report="$RUNNER_TEMP/trivy-report.txt"
+        status=0
+        trivy image --scanners vuln --severity HIGH,CRITICAL --ignore-unfixed \
+          --ignorefile "$GITHUB_WORKSPACE/security/trivyignore.yaml" --exit-code "$EXIT_CODE" \
+          --format table --output "$report" "$IMAGE" || status=$?
+        cat "$report"
+        {
+          echo "## Analyse de l'image \`$IMAGE\`"
+          echo
+          if [ "$status" -eq 0 ]; then
+            echo "**Conforme** : aucune vulnérabilité élevée ou critique corrigée en amont, hors exceptions."
+          else
+            echo "**Échec** : vulnérabilités élevées ou critiques corrigées en amont (exceptions : security/trivyignore.yaml)."
+          fi
+          echo
+          echo '```text'
+          cat "$report"
+          echo '```'
+        } >> "$GITHUB_STEP_SUMMARY"
+        exit "$status"
