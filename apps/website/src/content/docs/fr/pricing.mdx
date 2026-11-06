@@ -1,13 +1,13 @@
 ---
 title: Tarifs
-description: Le code source de SurgeMedia est public sous Business Source License 1.1 — production gratuite pour les organisations sous 500 000 USD de chiffre d’affaires annuel, licences commerciales pour les plus grandes organisations et les offres hébergées.
+description: Le code source de SurgeMedia est public sous Business Source License 1.1 — production gratuite pour les organisations sous 500 000 USD de chiffre d’affaires annuel ; au-delà, une licence annuelle selon la taille de votre organisation, à partir de 1 200 USD.
 template: splash
 editUrl: false
 lastUpdated: false
 eyebrow: Tarifs
 hero:
   title: Une tarification simple et équitable pour vos <span class="sm-gradient">médias auto&#8209;hébergés</span>.
-  tagline: Toutes les offres incluent le même produit — aucune fonctionnalité bridée, aucun décompte par image ou par bande passante. Vous ne payez une licence commerciale que lorsque votre organisation a dépassé l’offre gratuite.
+  tagline: Toutes les fonctions médias dans toutes les offres, sans aucun décompte par image, par transformation ou par bande passante. Gratuit sous 500 000 USD de chiffre d’affaires annuel ; au-delà, une licence annuelle selon la taille de votre organisation.
 ---
 
 import { Aside } from '@astrojs/starlight/components';
@@ -15,119 +15,181 @@ import PricingPlans from '../../../components/landing/PricingPlans.astro';
 import PricingPlan from '../../../components/landing/PricingPlan.astro';
 import Section from '../../../components/landing/Section.astro';
 import CtaBand from '../../../components/landing/CtaBand.astro';
-import { SALES_URL } from '../../../lib/site';
+import { SALES_URL, orderUrl } from '../../../lib/site';
 
 <PricingPlans>
   <PricingPlan
     name="Community"
     price="Gratuit"
     period="pour toujours"
-    audience="Startups, petites entreprises, associations, indépendants et projets personnels — toute organisation sous 500 000 USD de chiffre d’affaires annuel brut."
+    audience="Organisations sous 500 000 USD de chiffre d’affaires annuel brut (groupe compris) : startups, petites entreprises, associations, indépendants."
     cta={{ label: 'Démarrer', href: '/fr/guides/getting-started/' }}
   >
-    - **Toutes les fonctionnalités** du core : API, administration, traitement des images et des vidéos
-    - Projets, utilisateurs, médias et transformations illimités
-    - SQLite, PostgreSQL ou MySQL / MariaDB
+    - **Toutes les fonctions médias** : API, administration, images, vidéos, double authentification
+    - Instances de production, projets, utilisateurs et médias illimités
     - Support communautaire sur GitHub
-    - Gratuit pour le développement, les tests et l’évaluation — quelle que soit votre taille
   </PricingPlan>
   <PricingPlan
-    name="Pro / Agence"
-    price="Licence commerciale"
-    period="annuelle"
-    audience="Organisations au-delà de 500 000 USD de chiffre d’affaires annuel brut (groupe compris), et agences qui exploitent des instances pour leurs clients."
-    cta={{ label: 'Contacter l’équipe commerciale', href: SALES_URL }}
-    badge="Pour les scale-ups"
+    name="Pro"
+    price="1 200 USD"
+    period="par an"
+    audience="Organisations de 0,5 à 5 M USD de chiffre d’affaires annuel brut."
+    cta={{ label: 'Commander Pro', href: orderUrl('Pro') }}
     featured
   >
-    - Tout Community, sous licence pour la production quel que soit le chiffre d’affaires
-    - **Usage agence** : exploitez des instances dédiées pour vos clients
-    - Support prioritaire et accompagnement des mises à jour
-    - Facture, bon de commande et certificat de licence
-    - Influence sur la feuille de route (SDK, intégrations)
+    - Tout Community, sous licence pour la production
+    - **2 instances de production**
+    - Support prioritaire par e-mail
+    - Facture et certificat de licence
+  </PricingPlan>
+  <PricingPlan
+    name="Business"
+    price="4 800 USD"
+    period="par an"
+    audience="Organisations de 5 à 50 M USD de chiffre d’affaires annuel brut."
+    cta={{ label: 'Commander Business', href: orderUrl('Business') }}
+  >
+    - Tout Pro
+    - **5 instances de production**
+    - **Authentification unique** (OpenID Connect, SAML) pour l’administration — prévue, livrée sur demande à une date fixée dans votre commande
+    - Bons de commande acceptés
   </PricingPlan>
   <PricingPlan
     name="Enterprise"
-    price="Sur mesure"
-    audience="Offres de médias hébergées ou infogérées, OEM et marque blanche, ou exigences juridiques, de sécurité et de support spécifiques."
-    cta={{ label: 'Nous contacter', href: SALES_URL }}
+    price="À partir de 18 000 USD"
+    period="par an"
+    audience="Organisations de 50 M à 1 Md USD de chiffre d’affaires annuel brut."
+    cta={{ label: 'Nous contacter', href: orderUrl('Enterprise') }}
   >
-    - Droits pour un **service hébergé concurrent** (stockage de médias ou CMS de médias headless « as a service »)
-    - Conditions OEM, marque blanche et redistribution
-    - SLA, canal de support dédié, accompagnement au démarrage
-    - Questionnaires de sécurité et clauses contractuelles spécifiques
-    - Revue d’architecture pour les installations à fort trafic
+    - Tout Business
+    - **15 instances de production**
+    - Support entreprise avec engagement de service (SLA), version maintenue à long terme (LTS)
+    - Export du journal d’audit vers un SIEM (Datadog, Splunk, syslog) — prévu, livré sur demande
+    - Garantie d’éviction, et droit perpétuel de garder votre version après 12 mois payés
+  </PricingPlan>
+  <PricingPlan
+    name="Enterprise Global"
+    price="À partir de 40 000 USD"
+    period="par an"
+    audience="Organisations de plus de 1 Md USD de chiffre d’affaires annuel brut."
+    cta={{ label: 'Nous contacter', href: orderUrl('Enterprise Global') }}
+  >
+    - Tout Enterprise
+    - **Instances de production illimitées**
+    - Un interlocuteur dédié, revue d’architecture
+    - Conditions contractuelles spécifiques
+  </PricingPlan>
+  <PricingPlan
+    name="Partenaire Agence"
+    price="1 500 USD"
+    period="par an"
+    audience="Agences, ESN et intégrateurs qui déploient SurgeMedia pour leurs clients."
+    cta={{ label: 'Devenir partenaire', href: orderUrl('Agency Partner') }}
+  >
+    - Vos instances internes et de démonstration, avec les droits de l’offre Business
+    - Certification partenaire et enregistrement des affaires
+    - 20 à 30 % de marge sur les licences de vos clients
+    - Possibilité de porter le contrat d’un grand client
   </PricingPlan>
 </PricingPlans>
 
-<Aside type="tip" title="Quelle offre vous concerne ?">
-  Le développement, les tests et l’évaluation sont toujours gratuits. En production, une licence commerciale n’est nécessaire que si votre organisation (avec les sociétés de son groupe) a réalisé plus de **500 000 USD** de chiffre d’affaires brut lors de son dernier exercice clos, ou si vous proposez SurgeMedia à des tiers comme service de médias hébergé. Dans tous les autres cas : Community.
+<Aside type="tip" title="Tarifs de lancement">
+  Les organisations qui signent avant la version 1.0 gardent leur prix pendant trois ans. Prix en dollars américains, hors taxes. Le développement, les tests et l’évaluation restent gratuits, quelle que soit votre taille.
 </Aside>
 
 <Section
-  id="open-core"
+  id="compare"
   eyebrow="Business Source License 1.1"
   title="Code source public aujourd’hui. Open source demain."
-  lead="Tout le code source est public sur GitHub. Chaque version devient automatiquement open source sous licence Apache 2.0 trois ans après sa première publication."
+  lead="Tout le code source est public sur GitHub. Chaque version passe automatiquement sous licence Apache 2.0 trois ans après sa première publication."
 >
 
-| <span class="sr-only">Droits et services</span> | Community | Pro / Agence | Enterprise |
-| --- | :---: | :---: | :---: |
-| Développement, tests, évaluation | ✓ | ✓ | ✓ |
-| Production — organisation sous 500 k USD de CA | ✓ | ✓ | ✓ |
-| Production — organisation au-delà de 500 k USD de CA | — | ✓ | ✓ |
-| Instances dédiées pour vos clients (agence) | Si vous et votre client êtes tous deux sous 500 k | ✓ | ✓ |
-| Service hébergé concurrent (SaaS média, CMS de médias headless) | — | — | ✓ |
-| Support | Communauté | Prioritaire | Dédié + SLA |
-| Accès au code source | ✓ | ✓ | ✓ |
-| Chaque version sous Apache 2.0 après 3 ans | ✓ | ✓ | ✓ |
+| <span class="sr-only">Droits et services</span> | Community | Pro | Business | Enterprise |
+| --- | :---: | :---: | :---: | :---: |
+| Chiffre d’affaires annuel brut du groupe | moins de 0,5 M USD | 0,5 à 5 M USD | 5 à 50 M USD | plus de 50 M USD |
+| Prix par an | Gratuit | 1 200 USD | 4 800 USD | à partir de 18 000 USD |
+| Instances de développement, de test et de préproduction | Illimitées | Illimitées | Illimitées | Illimitées |
+| Instances de production | Illimitées | 2 | 5 | 15 (illimitées au-delà de 1 Md USD) |
+| Toutes les fonctions médias (API, administration, images, vidéos, double authentification) | ✓ | ✓ | ✓ | ✓ |
+| Authentification unique pour l’administration (prévue) | — | — | ✓ | ✓ |
+| Export du journal d’audit vers un SIEM (prévu) | — | — | — | ✓ |
+| Support | Communautaire | Prioritaire | Prioritaire | Entreprise, SLA |
+| Version maintenue à long terme (LTS) | — | — | — | ✓ |
+| Facture et certificat de licence | — | ✓ | ✓ | ✓ |
+| Accès au code source | ✓ | ✓ | ✓ | ✓ |
+| Chaque version sous Apache 2.0 après 3 ans | ✓ | ✓ | ✓ | ✓ |
 
+</Section>
+
+<Section
+  id="specific"
+  eyebrow="Sur demande"
+  title="Accords spécifiques"
+  lead="Pour les usages qu’une offre annuelle ne couvre pas, nous convenons ensemble des conditions."
+>
+
+<div class="sm-prose">
+
+- **OEM** : SurgeMedia intégré à un logiciel que vous vendez, en marque blanche ou en redistribution.
+- **Offres hébergées** : un service de médias proposé à des tiers sur SurgeMedia (un service hébergé concurrent au sens de la licence), pour les hébergeurs partenaires.
+- **Exclusivité** sur un segment de marché ou un territoire.
+- **Pilote pour les grandes organisations** : trois mois à 25 % du prix annuel, déduits de la première année si vous signez.
+
+</div>
 </Section>
 
 <Section id="faq" eyebrow="FAQ" title="Questions fréquentes">
 <div class="sm-prose">
 
+### Quelle offre nous concerne ?
+
+Celle qui correspond au chiffre d’affaires brut de votre organisation **cumulé avec celui de ses sociétés affiliées** (entités qui la contrôlent, qu’elle contrôle ou placées sous un contrôle commun), pour son **dernier exercice clos**, hors TVA — le même critère que la licence. Les autres devises sont converties au taux de la Réserve fédérale du dernier jour ouvré de cet exercice. Sous 500 000 USD, l’usage en production est gratuit.
+
+### Qu’est-ce qu’une instance de production ?
+
+Une base SurgeMedia utilisée en production, avec tous les serveurs web et processus de traitement vidéo qui la partagent. Les instances de développement, de test et de préproduction sont gratuites et illimitées dans toutes les offres. Il vous faut plus d’instances de production que votre offre n’en compte ? Dites-le-nous : nous les ajoutons à votre licence.
+
+### Comment commander et payer ?
+
+Commandez par e-mail : nous répondons par une facture puis, une fois réglée, par un fichier de licence à installer dans **Réglages › Licence** ou avec `NUXT_LICENSE_KEY`. Paiement par virement ; bons de commande acceptés à partir de l’offre Business. Deux ans payés d’avance : 10 % de remise, trois ans : 15 %.
+
 ### SurgeMedia est-il open source ?
 
-Pas au sens de l’OSI, aujourd’hui. Le code source de SurgeMedia est **public** sous Business Source License 1.1 : vous pouvez le lire, le modifier et l’auto-héberger, et l’utiliser gratuitement en production sauf dans l’un des cas d’exclusion (chiffre d’affaires au-delà de 500 000 USD, service hébergé concurrent, ou fonction sous licence utilisée sans clé — il n’en existe aucune aujourd’hui). Chaque version passe sous **licence Apache 2.0** trois ans après sa publication.
+Pas au sens de l’OSI, aujourd’hui. Le code source de SurgeMedia est **public** sous Business Source License 1.1 : vous pouvez le lire, le modifier et l’auto-héberger, et l’utiliser gratuitement en production sauf dans l’un des cas d’exclusion (chiffre d’affaires au-delà de 500 000 USD, service hébergé concurrent, ou fonction sous licence utilisée sans clé — il n’en existe aucune aujourd’hui). Chaque version passe sous **licence Apache 2.0** trois ans après sa publication.
 
 ### Les composants front-end demandent-ils une licence ?
 
 Non. `@surge-media/client` et `@surge-media/vue` sont sous licence MIT : gratuits pour tous, dans n’importe quel projet. Les conditions de la Business Source License ne concernent que le serveur SurgeMedia (`@surge-media/core`) que vous installez.
 
-### Comment le seuil de 500 000 USD est-il calculé ?
-
-C’est le chiffre d’affaires brut de l’organisation qui utilise SurgeMedia — ou pour le compte de laquelle il est utilisé — **cumulé avec celui de ses sociétés affiliées** (entités qui la contrôlent, qu’elle contrôle ou placées sous un contrôle commun), pour son **dernier exercice clos**, hors TVA. Les autres devises sont converties au taux de la Réserve fédérale du dernier jour ouvré de cet exercice.
-
 ### Nous sommes une agence. Pouvons-nous installer SurgeMedia pour nos clients ?
 
-Oui. Exploiter une instance dédiée à un client, uniquement pour ses propres sites et applications, dans le cadre de vos prestations de conception, de développement ou de maintenance, **n’est pas** un service hébergé concurrent. Le seuil de chiffre d’affaires s’applique alors à vous comme à votre client. La licence Pro / Agence couvre les agences ou les clients qui le dépassent.
+Oui. Exploiter une instance dédiée à un client, uniquement pour ses propres sites et applications, dans le cadre de vos prestations de conception, de développement ou de maintenance, **n’est pas** un service hébergé concurrent. Le seuil de chiffre d’affaires s’applique alors à vous comme à votre client. Le programme Partenaire Agence couvre vos propres instances et vous donne une marge sur les licences de vos clients : [écrivez-nous](mailto:licensing@surgeup.org?subject=SurgeMedia%20Agency%20Partner%20license) pour les conditions adaptées à votre cas.
 
 ### Qu’est-ce qu’un « service hébergé concurrent » ?
 
-Proposer SurgeMedia — modifié ou non — à des tiers sous forme de produit hébergé, infogéré ou « as a service », dont l’objet principal est de leur permettre de stocker, gérer, traiter ou diffuser **leurs propres médias** : service de stockage de médias, CMS de médias headless, etc. Utiliser SurgeMedia pour vos propres produits, même lorsque vos utilisateurs y envoient des médias, n’en est pas un.
+Proposer SurgeMedia — modifié ou non — à des tiers sous forme de produit hébergé, infogéré ou « as a service », dont l’objet principal est de leur permettre de stocker, gérer, traiter ou diffuser **leurs propres médias** : service de stockage de médias, CMS de médias headless, etc. Utiliser SurgeMedia pour vos propres produits, même lorsque vos utilisateurs y envoient des médias, n’en est pas un. Il demande un accord spécifique.
 
 ### Facturez-vous les images, la bande passante ou les transformations ?
 
-Non. SurgeMedia s’exécute sur votre infrastructure : le stockage, la bande passante et le processeur sont à vous, tout comme les économies réalisées. Les licences ne dépendent pas des volumes.
+Non. SurgeMedia s’exécute sur votre infrastructure : le stockage, la bande passante et le processeur sont à vous, tout comme les économies réalisées. Les licences dépendent de la taille de votre organisation et de votre nombre d’instances de production, jamais des volumes.
 
 ### Peut-on tout essayer avant d’acheter ?
 
-Oui. Le développement, les tests et l’évaluation sont gratuits pour tout le monde, avec toutes les fonctionnalités — sans période d’essai ni clé de licence.
+Oui. Le développement, les tests et l’évaluation sont gratuits pour tout le monde, avec toutes les fonctionnalités — sans période d’essai ni clé de licence. La [démo en ligne](https://demo.usesurgemedia.com) ne demande même aucune installation.
 
-### Et pour l’architecture, la sécurité ou l’exploitation ?
+### Et pour l’architecture, la sécurité ou l’exploitation ?
 
 La [FAQ complète](../faq/) répond aux questions des DSI, des RSSI, des équipes techniques et des acheteurs, avec l’état réel de chaque fonctionnalité.
 
 <Aside type="caution">
-  Cette page est un résumé. Seul le texte anglais du fichier [LICENSE](https://github.com/mahmoud-nb/surge-media/blob/main/LICENSE) fait foi.
+  Cette page est un résumé. Seul le texte anglais du fichier [LICENSE](https://github.com/mahmoud-nb/surge-media/blob/main/LICENSE) fait foi ; les licences commerciales relèvent de leur propre contrat.
 </Aside>
 
 </div>
 </Section>
 
 <CtaBand
-  title="Besoin d’une licence commerciale ou d’un devis ?"
+  title="Une question sur une offre ou un devis ?"
   text="Présentez-nous votre organisation et votre cas d’usage — nous vous répondrons avec une proposition claire."
   primary={{ label: 'Contacter l’équipe commerciale', href: SALES_URL }}
   secondary={{ label: 'Lire la licence', href: '/fr/license/' }}
