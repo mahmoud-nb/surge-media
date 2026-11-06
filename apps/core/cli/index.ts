@@ -10,6 +10,7 @@
  *   surge-media user mfa-reset <e-mail> | --all   réinitialiser la double authentification (secours de l'exploitant)
  *   surge-media license clock-reset               ramener le repère de la date de référence des licences à l'horloge
  *   surge-media license usage [usage]             afficher ou déclarer l'usage de l'instance (evaluation, community, commercial)
+ *   surge-media diagnose [--out <fichier>]        rapport sans secret pour le support (Markdown, ou JSON avec --json)
  *   surge-media demo snapshot --out <archive>     capturer le contenu de référence de la démo (SQLite, stockage local)
  *   surge-media demo restore --from <archive>     remettre la démo à zéro depuis l'archive (serveur arrêté)
  *
@@ -20,6 +21,7 @@ import { defineCommand, runMain } from 'citty'
 import { DATABASE_PROVIDERS } from '../shared/database'
 import { runInit, runMigrate, runReset, type CliContext } from './database'
 import { runDemoRestore, runDemoSnapshot } from './demo'
+import { runDiagnose } from './diagnose'
 import { createTranslator, detectLocale, langFromArgv, LOCALES } from './i18n'
 import { isInsideNodeModules, packageVersion, resolveLocation } from './lib/project'
 import { runLicenseClockReset } from './license'
@@ -121,6 +123,21 @@ const licenseUsage = defineCommand({
   run: ({ args }) => runLicenseUsage(context(args.cwd), args),
 })
 
+const diagnose = defineCommand({
+  meta: { name: 'diagnose', description: t('command.diagnose') },
+  args: {
+    ...commonArgs,
+    out: { type: 'string', description: t('args.diagnoseOut'), valueHint: 'path' },
+    json: { type: 'boolean', description: t('args.json') },
+    anonymize: { type: 'boolean', description: t('args.anonymize') },
+    log: { type: 'string', description: t('args.log'), valueHint: 'path' },
+    lines: { type: 'string', description: t('args.lines'), valueHint: '200' },
+    url: { type: 'string', description: t('args.healthUrl'), valueHint: 'url' },
+    server: { type: 'boolean', default: true, description: t('args.server') },
+  },
+  run: ({ args }) => runDiagnose(context(args.cwd), args),
+})
+
 const demoSnapshot = defineCommand({
   meta: { name: 'snapshot', description: t('command.demo.snapshot') },
   args: {
@@ -155,6 +172,7 @@ const main = defineCommand({
       meta: { name: 'user', description: t('command.user') },
       subCommands: { 'mfa-reset': mfaReset },
     }),
+    diagnose,
     license: defineCommand({
       meta: { name: 'license', description: t('command.license') },
       subCommands: { 'clock-reset': licenseClockReset, 'usage': licenseUsage },

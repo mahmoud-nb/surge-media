@@ -34,7 +34,7 @@ function sqlitePath(url: string, instanceDir: string): string {
  * version ESM d'un paquet (mariadb : `promise.js`, sans `dist/promise.cjs`) : `require` échoue alors, et
  * l'entrée `import` de son package.json est chargée par `import()`.
  */
-async function loadServerModule<T>(packageDir: string, serverEntry: string, name: string): Promise<T> {
+export async function loadServerModule<T>(packageDir: string, serverEntry: string, name: string): Promise<T> {
   try {
     return createRequire(join(packageDir, serverEntry))(name) as T
   }

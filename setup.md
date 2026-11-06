@@ -257,6 +257,7 @@ For video processing in `external` mode, add a second unit running `surge-media 
 | `user mfa-reset <email>` | Reset an account's two-factor authentication (lost phone and recovery codes, including the last administrator); `--all` for every account when `NUXT_MFA_ENCRYPTION_KEY` is lost; `--yes` to skip the confirmation |
 | `license clock-reset` | Bring the license reference-time mark back to this machine's clock, after the server clock ran ahead by mistake (§ 7.10); recorded in the audit log; `--yes` to skip the confirmation |
 | `license usage [evaluation\|community\|commercial]` | Show the declared use of the instance, or declare it (§ 7.10); declaring the same value again confirms it; recorded in the audit log. With Docker: `docker compose exec surge-media node node_modules/@surge-media/core/dist/cli/index.mjs license usage community` |
+| `diagnose` | Print a support report without secrets (§ 17.1): version, configuration, database and migrations, storage, tools, license, running server, recent failures. `--out <file>` (mode 0600), `--json`, `--anonymize` (hides host names and the licensee), `--log <file>` (appends the redacted end of an exported log, `--lines`), `--url` or `--no-server` for the health probe. Read-only |
 | `demo snapshot --out <file.tar.gz>` | Capture the demo's reference content (database and media) into an archive, server running or not (§ 7.11); SQLite and local storage only |
 | `demo restore --from <file.tar.gz>` | Replace the database and media with those of a demo archive, server stopped (§ 7.11). Only with `NUXT_DEMO_MODE=true`, and never over a database that does not come from a demo snapshot |
 
@@ -773,6 +774,32 @@ have run: restore the backup instead.
 
 ## 17. Troubleshooting
 
+### 17.1 Diagnostic report
+
+Before asking for help, run:
+
+```bash
+npx surge-media diagnose --out surge-media-report.md
+```
+
+With Docker: `docker compose exec surge-media node node_modules/@surge-media/core/dist/cli/index.mjs diagnose`
+(the report goes to the standard output; redirect it to a file).
+
+The report starts with a list of **findings** (errors, warnings, information: missing or too short secrets, pending
+migrations, unreachable database, unknown variables that are probably typos, missing ffmpeg, low disk space, license
+or declared use, a server probe in error…), then describes the system, the configuration, the database, the storage,
+media processing, email, the license, the running server (its `/api/health` probe, queried locally) and the latest
+failed video jobs.
+
+It is built to be sent as is: **no secret** (only their length), **no personal data** (no email address, account,
+project or media name, IP address: only counts) and no content. Host names (public URL, database, S3, SMTP) are shown
+because support needs them; `--anonymize` hides them, as well as the licensee. `--log <file>` appends the last lines
+of a log you exported (`pm2 logs --nostream --lines 500 > app.log`, `docker compose logs surge-media > app.log`), after
+replacing the values of your secrets, email and IP addresses, keys, tokens and credentials found in URLs. The command
+writes nothing (except `--out`) and sends nothing: review the report, then attach it to your request.
+
+### 17.2 Common problems
+
 | Symptom | Cause and solution |
 | --- | --- |
 | Sign-in accepted, then back to `/login` | Session cookie refused over plain HTTP: serve over HTTPS (or `localhost`); `NUXT_SESSION_COOKIE_SECURE=false` for a test only |
@@ -851,4 +878,4 @@ can prepare an optional registration email (§ 7.10).
 
 The [LICENSE](LICENSE) file is the only binding text. Commercial licenses, support with service levels and
 installation assistance: see the [pricing page](https://mahmoud-nb.github.io/surge-media/pricing/) or write to
-the contact given in the LICENSE file.
+the contact given in the LICENSE file. Attach the report of `surge-media diagnose` (§ 17.1) to any support request.
