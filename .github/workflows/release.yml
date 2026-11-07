@@ -128,7 +128,9 @@ jobs:
         env:
           TRIVY_NO_PROGRESS: 'true'
           TRIVY: ${{ steps.trivy.outputs.path }}
-        run: |
+        # Installation ponctuelle voulue : le SBOM décrit ce qu'obtient un utilisateur (`npm install` du paquet publié,
+        # résolution fraîche des dépendances, sans lockfile ni scripts).
+        run: | # zizmor: ignore[adhoc-packages] SBOM d'une installation utilisateur, scripts désactivés
           dir="$RUNNER_TEMP/sbom"
           mkdir -p "$dir"
           (cd "$dir" && npm init -y >/dev/null && npm install --ignore-scripts --no-audit --no-fund "$GITHUB_WORKSPACE/artifacts/surge-media-core.tgz")
