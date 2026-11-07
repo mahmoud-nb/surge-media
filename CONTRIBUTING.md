@@ -71,7 +71,7 @@ Before your first pull request can be merged, you are asked to accept the surgeM
 Agreement** (CLA). A bot comments on the pull request with a link to the agreement; accepting it takes one click
 with your GitHub account, once for all your future contributions.
 
-In short, and without legal value (the agreement is the binding text): you keep the copyright of your
+The agreement is in [CLA.md](CLA.md). In short, and without legal value (the agreement is the binding text): you keep the copyright of your
 contribution, and you grant Surge Up (Mahmoud NBET EI) and its successors a perpetual, worldwide, non-exclusive,
 royalty-free license to use, modify and distribute it, under the Business Source License, the Apache License 2.0
 that each version later becomes available under, and commercial licenses. You confirm that you have the right to
