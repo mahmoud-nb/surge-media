@@ -51,6 +51,20 @@ Keep pull requests focused: one change per pull request is easier to review and 
   secret.
 - **Dependencies**: add one only when it is clearly worth it; `pnpm security:audit` must stay clean.
 
+## Branches, pull requests and releases
+
+- **`main` is protected**: every change reaches it through a pull request, never a direct push. Force pushes and
+  deleting `main` are blocked, and the continuous integration checks must pass on a branch that is up to date
+  with `main`.
+- **Branch names** start with the type of change: `feat/…`, `fix/…`, `docs/…`, `chore/…`, `ci/…`.
+- **Pull requests are squash-merged**: the pull request title becomes the commit message on `main`, so it must
+  follow Conventional Commits, with the package as scope when it applies (`feat(core): …`, `fix(vue): …`,
+  `docs(website): …`). The branch is deleted after the merge.
+- **Releases** are made by the maintainers with release-it: the platform (`v*` tags: npm package and Docker
+  images) and the front-end libraries (`libs-v*` tags) have their own versions and changelogs. A published release
+  tag is never moved or deleted: its date is the start of the three-year period after which that version becomes
+  available under the Apache License 2.0.
+
 ## Contributor License Agreement
 
 Before your first pull request can be merged, you are asked to accept the surgeMedia **Contributor License
