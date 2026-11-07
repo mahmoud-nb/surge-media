@@ -30,7 +30,8 @@
           { "context": "Paquet npm" },
           { "context": "Image Docker" },
           { "context": "CodeQL (javascript-typescript)" },
-          { "context": "CodeQL (actions)" }
+          { "context": "CodeQL (actions)" },
+          { "context": "license/cla" }
         ]
       }
     }
