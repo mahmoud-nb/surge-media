@@ -1,12 +1,19 @@
 name: Installer Trivy
 description: >-
-  Télécharge Trivy depuis ses releases GitHub, vérifie l'empreinte SHA-256 épinglée ici et l'ajoute au PATH.
+  Télécharge Trivy depuis ses releases GitHub et vérifie l'empreinte SHA-256 épinglée ici. Le chemin du binaire est
+  la sortie `path` (pas d'écriture dans GITHUB_PATH : alerte github-env de zizmor) ; l'appelant le passe par `env`.
   Une seule version pour l'analyse des images et le SBOM du paquet. .claude/architecture-ci-security.md, SC3 et SC6.
+
+outputs:
+  path:
+    description: Chemin du binaire trivy
+    value: ${{ steps.trivy.outputs.path }}
 
 runs:
   using: composite
   steps:
     - name: Trivy
+      id: trivy
       shell: bash
       env:
         TRIVY_VERSION: 0.76.1
@@ -19,4 +26,4 @@ runs:
         curl -fsSL --retry 3 -o "$dir/$archive" "https://github.com/aquasecurity/trivy/releases/download/v${TRIVY_VERSION}/$archive"
         echo "${TRIVY_SHA256}  $dir/$archive" | sha256sum -c -
         tar -xzf "$dir/$archive" -C "$dir" trivy
-        echo "$dir" >> "$GITHUB_PATH"
+        echo "path=$dir/trivy" >> "$GITHUB_OUTPUT"

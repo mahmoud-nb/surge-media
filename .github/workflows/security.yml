@@ -76,7 +76,7 @@ jobs:
 
       - name: Analyse (Trivy)
         if: steps.published.outputs.found == 'true'
-        uses: ./.github/actions/trivy-scan
+        uses: $/.github/actions/trivy-scan
         with:
           image: ${{ env.IMAGE }}
 
@@ -90,4 +90,4 @@ jobs:
           fetch-depth: 0
           persist-credentials: false
 
-      - uses: ./.github/actions/gitleaks
+      - uses: $/.github/actions/gitleaks

@@ -17,19 +17,21 @@ inputs:
 runs:
   using: composite
   steps:
-    - uses: ./.github/actions/install-trivy
+    - id: install
+      uses: $/.github/actions/install-trivy
 
     - name: Analyse
       shell: bash
       env:
         IMAGE: ${{ inputs.image }}
         EXIT_CODE: ${{ inputs.exit-code }}
+        TRIVY: ${{ steps.install.outputs.path }}
         TRIVY_NO_PROGRESS: 'true'
       run: |
         set -euo pipefail
         report="$RUNNER_TEMP/trivy-report.txt"
         status=0
-        trivy image --scanners vuln --severity HIGH,CRITICAL --ignore-unfixed \
+        "$TRIVY" image --scanners vuln --severity HIGH,CRITICAL --ignore-unfixed \
           --ignorefile "$GITHUB_WORKSPACE/security/trivyignore.yaml" --exit-code "$EXIT_CODE" \
           --format table --output "$report" "$IMAGE" || status=$?
         cat "$report"

@@ -36,6 +36,10 @@ updates:
     ignore:
       - dependency-name: '*'
         update-types: ['version-update:semver-major']
+      # 0.x : une « mineure » peut tout casser. nuxt-auth-utils 0.6 remplace NUXT_SESSION_PASSWORD par
+      # NUXT_APP_SECRET et déconnecte tout le monde : migration à part, prévue avant la 0.1.0.
+      - dependency-name: nuxt-auth-utils
+        versions: ['>=0.6.0']
     # Une pull request pour les correctifs, une pour les mineures : un échec des mineures ne bloque pas les correctifs.
     groups:
       patch-updates:

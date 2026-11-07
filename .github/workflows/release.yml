@@ -59,7 +59,7 @@ jobs:
           fetch-depth: 0
           persist-credentials: false
 
-      - uses: ./.github/actions/setup
+      - uses: $/.github/actions/setup
         with:
           cache: 'false'
 
@@ -119,18 +119,20 @@ jobs:
       - name: Essai du paquet (installation, init, start)
         run: pnpm --filter @surge-media/core smoke:package "$GITHUB_WORKSPACE/artifacts/surge-media-core.tgz"
 
-      - uses: ./.github/actions/install-trivy
+      - id: trivy
+        uses: $/.github/actions/install-trivy
 
       # Paquet installé comme chez un utilisateur (sans scripts) : ses dépendances et celles que la build
       # embarque (.output/server/node_modules) figurent dans le SBOM.
       - name: SBOM du paquet (CycloneDX)
         env:
           TRIVY_NO_PROGRESS: 'true'
+          TRIVY: ${{ steps.trivy.outputs.path }}
         run: |
           dir="$RUNNER_TEMP/sbom"
           mkdir -p "$dir"
           (cd "$dir" && npm init -y >/dev/null && npm install --ignore-scripts --no-audit --no-fund "$GITHUB_WORKSPACE/artifacts/surge-media-core.tgz")
-          trivy rootfs --format cyclonedx --output "$GITHUB_WORKSPACE/artifacts/surge-media-core.cdx.json" "$dir/node_modules"
+          "$TRIVY" rootfs --format cyclonedx --output "$GITHUB_WORKSPACE/artifacts/surge-media-core.cdx.json" "$dir/node_modules"
 
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
@@ -153,6 +155,7 @@ jobs:
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: 24
+          package-manager-cache: false
 
       - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
@@ -250,7 +253,7 @@ jobs:
             REVISION=${{ needs.package.outputs.revision }}
 
       - name: Analyse de l'image (Trivy)
-        uses: ./.github/actions/trivy-scan
+        uses: $/.github/actions/trivy-scan
         with:
           image: surge-media:scan
 

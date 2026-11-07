@@ -33,7 +33,8 @@ const RFC_VECTORS: Array<[number, string]> = [
   [20_000_000_000, '65353130'],
 ]
 
-const KEY = 'cle-de-chiffrement-de-test-0123456789abcdef'
+// Clé de chiffrement de test, sans valeur réelle (faux positif de gitleaks, voir .gitleaksignore).
+const KEY = 'cle-de-chiffrement-de-test-0123456789abcdef' // gitleaks:allow
 
 describe('TOTP (RFC 6238)', () => {
   it.each(RFC_VECTORS)('t = %i s → %s', (seconds, expected) => {

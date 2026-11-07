@@ -1,0 +1,5 @@
+# Faux positifs de gitleaks, par empreinte (commit:fichier:règle:ligne). Chaque ligne dit pourquoi ce n'est pas un
+# secret. Une valeur de test ajoutée plus tard porte plutôt le commentaire `gitleaks:allow` sur sa ligne.
+
+# Clé de chiffrement des seconds facteurs propre aux tests (apps/core/tests/mfa.test.ts), sans usage réel.
+0bd5a9b5dd159a507d0b506812ce760c00d00a81:apps/core/tests/mfa.test.ts:generic-api-key:36
