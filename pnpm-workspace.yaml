@@ -18,7 +18,7 @@ allowBuilds:
 # est acceptée. Hors de la plage déclarée par Nuxt (^0.143.0) : à retirer dès que possible.
 overrides:
   oxc-transform: 0.141.0
-  # Correctifs de sécurité de dépendances indirectes (audit du 2026-11-06, scripts/audit.mjs) : même version
+  # Correctifs de sécurité de dépendances indirectes (audit du 2026-11-06, security/audit.mjs) : même version
   # majeure que celle qu'attend le paquet parent. Chaque ligne se retire dès que le parent tire lui-même une
   # version corrigée (pnpm why <paquet>).
   # - vue-i18n et @intlify/* (par @nuxtjs/i18n) : embarqués par la build (serveur et navigateur).
