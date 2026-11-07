@@ -7,9 +7,10 @@ export default defineNuxtConfig({
 
   css: ['~/assets/css/main.css'],
 
-  // Pages sensibles à la casse. Par défaut, le routeur des pages l'ignore alors que Nitro compare les règles de
-  // `routeRules` (plus bas) en la respectant : `/Admin` affichait l'administration sans `no-store` ni `noindex`
-  // (GHSA-vjh5-4x84-xrqp, corrigé seulement en Nuxt 4.6.2). Une adresse à la mauvaise casse donne une 404.
+  // Pages sensibles à la casse : une adresse à la mauvaise casse (`/Admin`) donne une 404. Avant Nuxt 4.6.2, le
+  // routeur des pages ignorait la casse alors que Nitro comparait les règles de `routeRules` (plus bas) en la
+  // respectant : `/Admin` s'affichait sans `no-store` ni `noindex` (GHSA-vjh5-4x84-xrqp). Gardé : ces variantes
+  // n'ont aucun usage.
   router: {
     options: { sensitive: true },
   },
@@ -186,10 +187,10 @@ export default defineNuxtConfig({
     // Clé de cache automatique pour le wrapper de useFetch (app/composables/useApiFetch.ts).
     keyedComposables: [{ name: 'useApiFetch', argumentLength: 3 }],
   },
-  // Nuxt 3 avec la structure et les comportements de Nuxt 4 (dossier app/, shared/…) :
-  // la future migration vers Nuxt 4 se limitera à la mise à jour de la dépendance.
-  future: {
-    compatibilityVersion: 4,
+  experimental: {
+    // Typage de $fetch par l'arbre des routes (fetchdts), comportement par défaut de Nuxt 5 : l'ancien typage
+    // dépasse la profondeur de TypeScript (TS2321) sur les appels à `$api` dont la réponse est réutilisée.
+    routeTypedFetch: true,
   },
   compatibilityDate: '2026-09-26',
 

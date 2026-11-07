@@ -850,7 +850,8 @@ Other questions: the [FAQ](https://mahmoud-nb.github.io/surge-media/faq/) or the
 
 ## 18. Developing surgeMedia
 
-To work on surgeMedia itself rather than install it: Node.js 24, pnpm 12 (`corepack enable`) and Git.
+To work on surgeMedia itself rather than install it: Node.js 24.15 or later (required by Nuxt 4 to build; running
+the published package only needs Node.js 24), pnpm 12 (`corepack enable`) and Git.
 
 ```bash
 git clone https://github.com/mahmoud-nb/surge-media.git && cd surge-media

@@ -1,4 +1,13 @@
 {
   // https://nuxt.com/docs/guide/concepts/typescript
-  "extends": "./.nuxt/tsconfig.json"
+  // Références de projets (Nuxt 4) : chaque contexte est vérifié avec ses propres types (application,
+  // serveur Nitro, code partagé, configuration). `nuxt typecheck` les vérifie en mode build (`vue-tsc -b`).
+  // cli/, scripts/ et tests/ n'en font pas partie : exécutés par tsx et Vitest, ils ne sont pas vérifiés ici.
+  "files": [],
+  "references": [
+    { "path": "./.nuxt/tsconfig.app.json" },
+    { "path": "./.nuxt/tsconfig.server.json" },
+    { "path": "./.nuxt/tsconfig.shared.json" },
+    { "path": "./.nuxt/tsconfig.node.json" }
+  ]
 }

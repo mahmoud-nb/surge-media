@@ -13,11 +13,7 @@ allowBuilds:
   unrs-resolver: false
   # simple-git-hooks : son script installe les hooks git déclarés dans package.json (commit-msg → commitlint)
   simple-git-hooks: true
-# Contournement local (2026-09-29) : le module natif de oxc-transform 0.143.0 (dépendance de
-# Nuxt 3.21) est bloqué par le « Contrôle intelligent des applications » de Windows ; la 0.141.0
-# est acceptée. Hors de la plage déclarée par Nuxt (^0.143.0) : à retirer dès que possible.
 overrides:
-  oxc-transform: 0.141.0
   # Correctifs de sécurité de dépendances indirectes (audit du 2026-11-06, security/audit.mjs) : même version
   # majeure que celle qu'attend le paquet parent. Chaque ligne se retire dès que le parent tire lui-même une
   # version corrigée (pnpm why <paquet>).

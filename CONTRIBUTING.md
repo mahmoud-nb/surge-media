@@ -18,7 +18,7 @@ welcome.
 
 1. For anything beyond a small fix, open or comment on an issue first.
 2. Fork the repository and create a branch from `main`.
-3. Set up the project ([setup.md § 18](setup.md#18-developing-surgemedia)): Node.js 24, pnpm 12, then
+3. Set up the project ([setup.md § 18](setup.md#18-developing-surgemedia)): Node.js 24.15 or later, pnpm 12, then
    `pnpm install`, `pnpm db:init` and `pnpm dev`.
 4. Make your change, with tests for any rule or behaviour it introduces.
 5. Run the checks that continuous integration runs:
