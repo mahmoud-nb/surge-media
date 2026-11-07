@@ -76,7 +76,8 @@ Each release publishes multi-architecture images (amd64, arm64) on GitHub Contai
 | The same tags with `-slim` (`0.1.0-slim`, `latest-slim`) | Without ffmpeg: `NUXT_VIDEO_PROCESSING` must stay `off` |
 
 Both run Debian 13 and Node.js 24 as the non-root user `node` (uid 1000), with `tini` as PID 1 and a built-in
-`HEALTHCHECK` on `/api/health`. Pin a version in production rather than `latest`.
+`HEALTHCHECK` on `/api/health`. They contain no package manager (npm, npx, corepack and yarn are removed): run the
+CLI with `node node_modules/@surge-media/core/dist/cli/index.mjs`. Pin a version in production rather than `latest`.
 
 Every image is scanned for known vulnerabilities before it is published and carries an SBOM and its build
 provenance; each GitHub release also lists the `SHA256SUMS` of the npm package and its CycloneDX SBOM. How to

@@ -71,9 +71,15 @@ RUN node -e "const D = require('better-sqlite3'); new D(':memory:').close(); req
 FROM node:${NODE_VERSION}-${DEBIAN_RELEASE}-slim AS slim
 
 # tini : PID 1 qui relaie les signaux (arrêt propre) ; openssl : moteur de migration de Prisma.
+# `upgrade` : correctifs de sécurité de Debian publiés après l'image de base (ex. zlib1g, relevé par Trivy).
+# npm, npx, corepack et yarn retirés : l'image ne lance que `node` (entrypoint, CLI, serveur) et leurs propres
+# dépendances (undici, brace-expansion…) faisaient échouer l'analyse de l'image sans jamais servir.
 RUN apt-get update \
+ && DEBIAN_FRONTEND=noninteractive apt-get upgrade -y --no-install-recommends \
  && apt-get install -y --no-install-recommends ca-certificates openssl tini \
- && rm -rf /var/lib/apt/lists/*
+ && rm -rf /var/lib/apt/lists/* \
+ && rm -rf /usr/local/lib/node_modules/npm /usr/local/lib/node_modules/corepack /opt/yarn-* \
+ && rm -f /usr/local/bin/npm /usr/local/bin/npx /usr/local/bin/corepack /usr/local/bin/yarn /usr/local/bin/yarnpkg
 
 ARG VERSION=dev
 ARG REVISION=unknown
