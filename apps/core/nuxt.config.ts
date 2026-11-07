@@ -7,6 +7,13 @@ export default defineNuxtConfig({
 
   css: ['~/assets/css/main.css'],
 
+  // Pages sensibles à la casse. Par défaut, le routeur des pages l'ignore alors que Nitro compare les règles de
+  // `routeRules` (plus bas) en la respectant : `/Admin` affichait l'administration sans `no-store` ni `noindex`
+  // (GHSA-vjh5-4x84-xrqp, corrigé seulement en Nuxt 4.6.2). Une adresse à la mauvaise casse donne une 404.
+  router: {
+    options: { sensitive: true },
+  },
+
   // Thème clair / sombre / système ; cookie pour un rendu serveur sans flash.
   colorMode: {
     classSuffix: '',
