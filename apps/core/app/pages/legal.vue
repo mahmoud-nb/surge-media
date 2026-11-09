@@ -14,7 +14,8 @@ const telephone = (value: string) => (value ? `tel:${value.replace(/[^\d+]/g, ''
 const publisher = computed(() => [
   { label: t('legal.notice.publisher.name'), value: legal.value.publisherName },
   ...(legal.value.tradeName ? [{ label: t('legal.notice.publisher.tradeName'), value: legal.value.tradeName }] : []),
-  { label: t('legal.notice.publisher.registration'), value: legal.value.registration },
+  // Facultative : un éditeur non immatriculé (particulier) n'en a pas.
+  ...(legal.value.registration ? [{ label: t('legal.notice.publisher.registration'), value: legal.value.registration }] : []),
   { label: t('legal.notice.address'), value: legal.value.address },
   { label: t('legal.notice.email'), value: legal.value.email, href: legal.value.email ? `mailto:${legal.value.email}` : undefined },
   ...(legal.value.phone ? [{ label: t('legal.notice.phone'), value: legal.value.phone, href: telephone(legal.value.phone) }] : []),

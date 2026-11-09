@@ -65,7 +65,7 @@ export default defineNuxtConfig({
       legal: {
         publisherName: '', // éditeur, avec sa forme (ex. « Jeanne Martin EI ») — NUXT_DEMO_LEGAL_PUBLISHER_NAME
         tradeName: '', // nom commercial — NUXT_DEMO_LEGAL_TRADE_NAME
-        registration: '', // ex. « SIRET 123 456 789 00012 » — NUXT_DEMO_LEGAL_REGISTRATION
+        registration: '', // ex. « SIRET 123 456 789 00012 », vide pour un particulier — NUXT_DEMO_LEGAL_REGISTRATION
         address: '', // adresse publiée (domicile ou domiciliation) — NUXT_DEMO_LEGAL_ADDRESS
         email: '', // NUXT_DEMO_LEGAL_EMAIL
         phone: '', // NUXT_DEMO_LEGAL_PHONE

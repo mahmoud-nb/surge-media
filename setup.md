@@ -455,8 +455,8 @@ never turn it on for an installation that holds real data.
 | `NUXT_DEMO_ACCOUNTS` | — | Accounts shown on the sign-in page, as JSON: `[{"email":"…","password":"…"}]` (4 at most); their role is read from the database |
 | `NUXT_DEMO_UPLOAD_QUOTA` | `1073741824` | Bytes uploaded per reset cycle, in total; one IP address gets a quarter of it |
 | `NUXT_DEMO_CONTACT_URL`, `NUXT_DEMO_ABUSE_URL`, `NUXT_DEMO_TERMS_URL` | — | Banner links: contact (`mailto:` or a booking page), content report, demo terms (`https:`, `http:` or `mailto:`). Without `NUXT_DEMO_TERMS_URL`, the terms link opens the built-in `/terms` page when the legal information below is set |
-| `NUXT_DEMO_LEGAL_PUBLISHER_NAME` | — | Publisher of the demo, with its legal form (for instance `Jane Smith EI`). Turns on the `/legal`, `/privacy` and `/terms` pages |
-| `NUXT_DEMO_LEGAL_TRADE_NAME`, `NUXT_DEMO_LEGAL_REGISTRATION` | — | Trade name; registration as it must appear (for instance `SIRET 123 456 789 00012`) |
+| `NUXT_DEMO_LEGAL_PUBLISHER_NAME` | — | Publisher of the demo, with its legal form (for instance `Jane Smith EI`), or just the name of a private individual. Turns on the `/legal`, `/privacy` and `/terms` pages |
+| `NUXT_DEMO_LEGAL_TRADE_NAME`, `NUXT_DEMO_LEGAL_REGISTRATION` | — | Trade name; registration as it must appear (for instance `SIRET 123 456 789 00012`). Both optional: leave them empty for a publisher that is not registered (a private individual), and their lines are not shown |
 | `NUXT_DEMO_LEGAL_ADDRESS`, `NUXT_DEMO_LEGAL_EMAIL`, `NUXT_DEMO_LEGAL_PHONE` | — | Published address (home or registered office), contact email and phone |
 | `NUXT_DEMO_LEGAL_DIRECTOR` | the publisher | Publication director |
 | `NUXT_DEMO_LEGAL_HOST_NAME`, `NUXT_DEMO_LEGAL_HOST_ADDRESS`, `NUXT_DEMO_LEGAL_HOST_PHONE` | — | Hosting provider of the server |
