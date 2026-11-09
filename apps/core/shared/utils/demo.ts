@@ -132,11 +132,14 @@ export function isDemoReference(createdAt: Date | number, referenceAt: number): 
  * conditions de la démo. Valeurs fournies par l'exploitant, jamais écrites dans le dépôt.
  */
 export interface DemoLegal {
-  /** Éditeur : nom de la personne ou de la société, avec sa forme (ex. « Jeanne Martin EI »). */
+  /** Éditeur : nom de la personne ou de la société, avec sa forme (ex. « Jeanne Martin EI ») ; le seul nom d'un particulier. */
   publisherName: string
   /** Nom commercial, facultatif. */
   tradeName: string
-  /** Immatriculation telle qu'elle doit apparaître (ex. « SIRET 123 456 789 00012 »). */
+  /**
+   * Immatriculation telle qu'elle doit apparaître (ex. « SIRET 123 456 789 00012 ») ; facultative : un éditeur non
+   * immatriculé (particulier) n'en a pas, et la ligne n'est alors pas affichée.
+   */
   registration: string
   /** Adresse publiée (domicile ou domiciliation). */
   address: string
@@ -151,8 +154,11 @@ export interface DemoLegal {
   logRetentionDays: number
 }
 
-/** Champs sans lesquels les pages légales sont incomplètes (avertissement au démarrage). */
-export const DEMO_LEGAL_REQUIRED = ['publisherName', 'registration', 'address', 'email', 'hostName', 'hostAddress'] as const
+/**
+ * Champs sans lesquels les pages légales sont incomplètes (avertissement au démarrage). L'immatriculation n'en fait pas
+ * partie : seul un éditeur assujetti à l'immatriculation la doit (LCEN, art. 6, III).
+ */
+export const DEMO_LEGAL_REQUIRED = ['publisherName', 'address', 'email', 'hostName', 'hostAddress'] as const
 export const DEMO_LOG_RETENTION_DEFAULT = 30
 const DEMO_LEGAL_TEXT_MAX = 300
 

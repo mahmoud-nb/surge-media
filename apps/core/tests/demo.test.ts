@@ -171,7 +171,14 @@ describe('informations légales de la démo', () => {
     expect(parseDemoLegal(undefined)).toEqual({ legal: null, missing: [...DEMO_LEGAL_REQUIRED] })
     const partial = parseDemoLegal({ publisherName: 'Jeanne Martin EI', email: 'contact@example.com' })
     expect(partial.legal).not.toBeNull()
-    expect(partial.missing).toEqual(['registration', 'address', 'hostName', 'hostAddress'])
+    expect(partial.missing).toEqual(['address', 'hostName', 'hostAddress'])
+  })
+
+  it('éditeur non immatriculé (particulier) : ni nom commercial ni immatriculation, rien ne manque', () => {
+    const { legal, missing } = parseDemoLegal({ ...complete, publisherName: 'Jeanne Martin', tradeName: '', registration: '' })
+    expect(legal?.registration).toBe('')
+    expect(legal?.director).toBe('Jeanne Martin')
+    expect(missing).toEqual([])
   })
 
   it('nombres convertis par Nitro relus comme du texte ; durée de conservation bornée ; textes de 300 caractères au plus', () => {
