@@ -47,6 +47,8 @@ export const collections = {
         'nav.faq': z.string(),
         'nav.pricing': z.string(),
         'nav.primary': z.string(),
+        // Read by screen readers after a hero button that opens in a new tab (`target: _blank`).
+        'hero.newTab': z.string(),
         // Names of the code blocks that scroll (`{{language}}`: TypeScript, Shell…).
         'code.language': z.string(),
         'code.block': z.string(),

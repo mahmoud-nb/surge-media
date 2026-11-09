@@ -1,7 +1,8 @@
 ---
 /**
  * Hero of the splash pages (landing, pricing). Same data as Starlight's (`hero` frontmatter), plus
- * `eyebrow` and `heroTerminal`; links starting with `/` get the site's base path.
+ * `eyebrow` and `heroTerminal`; links starting with `/` get the site's base path. An action with
+ * `attrs: { target: _blank }` opens in a new tab and says so to screen readers.
  */
 import { Image } from 'astro:assets';
 import { LinkButton } from '@astrojs/starlight/components';
@@ -39,6 +40,7 @@ else if (image && 'dark' in image) {
               {...attrs}
             >
               {text}
+              {attrs.target === '_blank' && <span class="new-tab">{` ${Astro.locals.t('hero.newTab')}`}</span>}
               {icon?.html && <Fragment set:html={icon.html} />}
             </LinkButton>
           ))}
@@ -112,6 +114,19 @@ else if (image && 'dark' in image) {
   .actions :global(.sl-link-button) {
     font-size: var(--sl-text-base);
     padding: 0.625rem 1.25rem;
+  }
+
+  /* Visually hidden, read by screen readers. */
+  .new-tab {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+    border: 0;
   }
 
   .visual {
