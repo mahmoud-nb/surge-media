@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ArchiveRestore, ArrowLeft, Camera, Copy, Download, Film, FolderInput, ImageUp, Link2, Trash2 } from '@lucide/vue'
 import { type ProcessingSnapshot, processingInProgress, useProcessingPoll } from '~/composables/useProcessingPoll'
+import type { TagOption } from '~/composables/useTagLabels'
 import { processingNeedsReload } from '~/utils/processing-view'
 import { MEDIA_TEXT_MAX_LENGTH, mediaMetadataSchema } from '#shared/schemas/media'
 import { videoSnippet } from '#shared/utils/snippets'
@@ -18,6 +19,7 @@ interface StatusMessage {
 
 const { t, locale } = useI18n()
 const { errorFallback } = useDemoErrors()
+const { tagErrorMessage } = useTagLabels()
 const route = useRoute()
 const { $api } = useNuxtApp()
 const flash = useFlash()
@@ -262,14 +264,22 @@ onBeforeUnmount(() => {
 
 // ─── Métadonnées ─────────────────────────────────────────────────────────────
 
-const FIELD_IDS = { title: 'media-title', altText: 'media-alt', visibility: 'media-visibility' } as const
-const form = reactive<{ title: string, altText: string, visibility: MediaVisibility | '' }>({ title: '', altText: '', visibility: '' })
+const FIELD_IDS = { title: 'media-title', altText: 'media-alt', visibility: 'media-visibility', tagIds: 'media-tags' } as const
+const form = reactive<{ title: string, altText: string, visibility: MediaVisibility | '', tagIds: string[] }>({ title: '', altText: '', visibility: '', tagIds: [] })
 // Recopié seulement quand le média ou ces valeurs changent sur le serveur : le suivi du traitement et
 // les rechargements qui ne les touchent pas (affiche, pistes, rendu prêt…) gardent la saisie en cours.
 // Sources séparées : chaque valeur est comparée à la précédente (un nouvel objet `media` ne suffit pas).
-watch([() => media.value?.id, () => media.value?.title, () => media.value?.altText, () => media.value?.visibility], ([id, title, altText, visibility]) => {
-  if (id && visibility) Object.assign(form, { title: title ?? '', altText: altText ?? '', visibility })
+watch([() => media.value?.id, () => media.value?.title, () => media.value?.altText, () => media.value?.visibility, () => media.value?.tags.map(tag => tag.id).join(',')], ([id, title, altText, visibility, tagIds]) => {
+  if (id && visibility) Object.assign(form, { title: title ?? '', altText: altText ?? '', visibility, tagIds: tagIds ? tagIds.split(',') : [] })
 }, { immediate: true })
+
+// Étiquettes utilisables (architecture-tags.md) : globales, et celles du projet du média.
+const { data: tagData } = await useApiFetch('/api/admin/tags', { query: computed(() => ({ project: media.value?.projectId ?? undefined })) })
+const tagOptions = computed(() => (tagData.value?.tags ?? []) as TagOption[])
+const tagsManageLink = computed(() => {
+  if (!tagData.value?.canManage) return null
+  return media.value?.projectId ? `/admin/projects/${media.value.projectId}/tags` : '/admin/tags'
+})
 
 const { validate, message, clear } = useFormValidation(mediaMetadataSchema, FIELD_IDS)
 const saveStatus = ref<StatusMessage | null>(null)
@@ -287,7 +297,7 @@ async function save() {
     saveStatus.value = { variant: 'success', message: t('media.detail.saved') }
   }
   catch (error) {
-    saveStatus.value = { variant: 'error', message: errorFallback(error) }
+    saveStatus.value = { variant: 'error', message: tagErrorMessage(error) }
   }
   finally {
     saving.value = false
@@ -1153,6 +1163,19 @@ const pageFlash = flash.consume()
                   {{ t(`media.visibility.${media.visibility}.label`) }}
                 </dd>
               </div>
+              <div class="grid gap-0.5">
+                <dt class="text-muted-foreground">
+                  {{ t('media.fields.tags') }}
+                </dt>
+                <dd>
+                  <ul v-if="media.tags.length > 0" class="flex flex-wrap gap-1.5">
+                    <li v-for="tag in media.tags" :key="tag.id">
+                      <AdminTagBadge :tag="tag" />
+                    </li>
+                  </ul>
+                  <span v-else class="font-medium text-foreground">—</span>
+                </dd>
+              </div>
             </dl>
             <form v-else class="mt-5 grid gap-5" novalidate @submit.prevent="save">
               <UiAlert v-if="saveStatus" :variant="saveStatus.variant" :live="saveStatus.variant === 'error' ? 'assertive' : 'polite'">
@@ -1178,6 +1201,19 @@ const pageFlash = flash.consume()
                 :columns="2"
                 :error="message('visibility')"
               />
+              <div class="grid gap-1.5">
+                <AdminTagInput
+                  :id="FIELD_IDS.tagIds"
+                  v-model="form.tagIds"
+                  :options="tagOptions"
+                  :label="t('media.fields.tags')"
+                  :hint="t('media.fields.tagsHint')"
+                  :error="message('tagIds')"
+                />
+                <NuxtLink v-if="tagsManageLink" :to="tagsManageLink" class="justify-self-start text-sm text-primary underline-offset-4 hover:underline">
+                  {{ t('tags.manageLink') }}
+                </NuxtLink>
+              </div>
               <div class="flex justify-end">
                 <UiButton type="submit" :loading="saving" :disabled="inTrash">
                   {{ t('common.save') }}

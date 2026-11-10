@@ -157,7 +157,8 @@
       "apiDocs": "Documentation de l'API",
       "settings": "Réglages",
       "invitations": "Mes invitations",
-      "account": "Mon compte"
+      "account": "Mon compte",
+      "tags": "Étiquettes"
     },
     "dashboard": {
       "meta": {
@@ -638,7 +639,15 @@
       "apply": "Filtrer",
       "reset": "Réinitialiser",
       "active": "Médias",
-      "recursive": "Inclure les sous-dossiers"
+      "recursive": "Inclure les sous-dossiers",
+      "tags": "Étiquettes",
+      "tagsHint": "Sans étiquette choisie, tous les médias sont affichés.",
+      "tagMatch": "Avec plusieurs étiquettes",
+      "tagMatches": {
+        "any": "Au moins une",
+        "all": "Toutes"
+      },
+      "untagged": "Seulement les médias sans étiquette"
     },
     "upload": {
       "title": "Téléverser des médias",
@@ -722,7 +731,9 @@
       "altTextHint": "Décrivez ce que montre l'image pour les personnes qui ne la voient pas (125 caractères environ). Laissez vide si l'image est purement décorative.",
       "videoDescription": "Description courte",
       "videoDescriptionHint": "Identifie la vidéo pour les personnes qui ne la voient pas (sujet et contexte, 125 caractères environ). Elle est associée au lecteur vidéo.",
-      "visibility": "Visibilité"
+      "visibility": "Visibilité",
+      "tags": "Étiquettes",
+      "tagsHint": "Choisissez parmi les étiquettes globales et celles de l'espace."
     },
     "video": {
       "fallback": "Votre navigateur ne peut pas lire cette vidéo.",
@@ -863,7 +874,31 @@
       "selectPage": "Tout sélectionner sur la page",
       "target": "Ranger dans",
       "submit": "Ranger",
-      "moved": "Aucun média rangé. | 1 média rangé dans « {folder} ». | {count} médias rangés dans « {folder} »."
+      "moved": "Aucun média rangé. | 1 média rangé dans « {folder} ». | {count} médias rangés dans « {folder} ».",
+      "tags": "Étiquettes…",
+      "tagDialogTitle": "Étiquettes de la sélection | Étiquettes du média sélectionné | Étiquettes des {count} médias sélectionnés",
+      "tagDialogDescription": "Ajoutez ou retirez des étiquettes sur tous les médias sélectionnés.",
+      "tagMode": "Action",
+      "tagModes": {
+        "add": {
+          "label": "Ajouter",
+          "description": "Les étiquettes choisies s'ajoutent à celles des médias."
+        },
+        "remove": {
+          "label": "Retirer",
+          "description": "Les étiquettes choisies sont retirées des médias qui les portent."
+        }
+      },
+      "tagChoice": "Étiquettes",
+      "tagApply": {
+        "add": "Ajouter les étiquettes",
+        "remove": "Retirer les étiquettes"
+      },
+      "tagged": {
+        "add": "Aucun média modifié. | Étiquettes ajoutées à un média. | Étiquettes ajoutées à {count} médias.",
+        "remove": "Aucun média modifié. | Étiquettes retirées d'un média. | Étiquettes retirées de {count} médias."
+      },
+      "taggedSkipped": "Un média ignoré : il dépasserait 50 étiquettes. | {count} médias ignorés : ils dépasseraient 50 étiquettes."
     },
     "focal": {
       "title": "Point d'intérêt",
@@ -1142,6 +1177,10 @@
         "retry": "Échec passager du traitement de la vidéo : un nouvel essai aura lieu automatiquement.",
         "requeued": "Traitement de la vidéo interrompu sur le serveur, sans échec : il reprendra automatiquement."
       }
+    },
+    "card": {
+      "tags": "Étiquettes",
+      "moreTags": "Autres étiquettes : {names}"
     }
   },
   "projectRoles": {
@@ -1223,7 +1262,8 @@
       "members": "Membres",
       "keys": "Clés d'API",
       "origins": "Origines autorisées",
-      "transforms": "Transformations"
+      "transforms": "Transformations",
+      "tags": "Étiquettes"
     },
     "header": {
       "yourRole": "Votre rôle : {role}"
@@ -2724,6 +2764,90 @@
         "title": "Questions",
         "text": "Pour toute question sur la démo ou sur surgeMedia, écrivez à {email}."
       }
+    }
+  },
+  "tags": {
+    "meta": {
+      "globalTitle": "Étiquettes globales",
+      "projectTitle": "Étiquettes — {name}"
+    },
+    "page": {
+      "title": "Étiquettes",
+      "description": "Les étiquettes globales s'appliquent aux médias de la bibliothèque et de tous les projets. Chaque projet peut aussi avoir les siennes."
+    },
+    "manageLink": "Gérer les étiquettes",
+    "confidentialSuffix": "(confidentielle)",
+    "levels": {
+      "global": "Étiquettes globales",
+      "project": "Étiquettes du projet"
+    },
+    "colors": {
+      "gray": "Gris",
+      "red": "Rouge",
+      "orange": "Orange",
+      "amber": "Ambre",
+      "green": "Vert",
+      "teal": "Bleu-vert",
+      "blue": "Bleu",
+      "violet": "Violet"
+    },
+    "fields": {
+      "name": "Nom",
+      "slug": "Identifiant",
+      "slugHint": "Proposé d'après le nom ; sert aux filtres de l'API (minuscules, chiffres et tirets).",
+      "slugEditHint": "Ne change pas quand vous renommez l'étiquette. Le modifier oblige les applications qui filtrent par cet identifiant à suivre.",
+      "color": "Couleur",
+      "confidential": "Confidentielle",
+      "confidentialHint": "Visible seulement par les administrateurs et les gestionnaires, dans l'administration ; jamais par l'API ni par les autres rôles."
+    },
+    "input": {
+      "placeholder": "Rechercher une étiquette…",
+      "listLabel": "Suggestions : {label}",
+      "suggestions": "Aucune suggestion | Une suggestion | {count} suggestions",
+      "selected": "{label} : aucune étiquette | {label} : une étiquette choisie | {label} : {count} étiquettes choisies",
+      "remove": "Retirer l'étiquette « {name} »",
+      "added": "Étiquette « {name} » ajoutée.",
+      "removed": "Étiquette « {name} » retirée.",
+      "noTags": "Aucune étiquette n'existe encore ici.",
+      "noMatch": "Aucune étiquette ne correspond.",
+      "allChosen": "Toutes les étiquettes sont choisies."
+    },
+    "manager": {
+      "loadError": "Impossible de charger les étiquettes.",
+      "globalTitle": "Étiquettes globales",
+      "projectTitle": "Étiquettes du projet",
+      "globalDescription": "Utilisables sur tous les médias : bibliothèque et projets.",
+      "projectDescription": "Utilisables seulement sur les médias de ce projet, en plus des étiquettes globales.",
+      "globalInProject": "Communes à toute l'installation, utilisables aussi dans ce projet.",
+      "manageGlobal": "Gérer les étiquettes globales",
+      "readOnlyGlobal": "Seul un administrateur peut créer, modifier ou supprimer les étiquettes globales.",
+      "readOnlyProject": "Seuls les administrateurs et le gestionnaire du projet peuvent créer, modifier ou supprimer ses étiquettes.",
+      "empty": "Aucune étiquette pour l'instant.",
+      "emptyGlobal": "Aucune étiquette globale.",
+      "mediaCount": "Aucun média | Un média | {count} médias",
+      "createTitle": "Nouvelle étiquette",
+      "create": "Créer l'étiquette",
+      "created": "Étiquette « {name} » créée.",
+      "edit": "Modifier",
+      "editLabel": "Modifier l'étiquette « {name} »",
+      "editTitle": "Modifier l'étiquette « {name} »",
+      "updated": "Étiquette « {name} » modifiée.",
+      "unconfidentialWarning": "Une fois enregistrée, l'étiquette sera visible par tous les rôles et par l'API.",
+      "delete": "Supprimer",
+      "deleteLabel": "Supprimer l'étiquette « {name} »",
+      "deleteTitle": "Supprimer l'étiquette « {name} » ?",
+      "deleteDescription": "Aucun média ne la porte. | Elle sera retirée d'un média. | Elle sera retirée de {count} médias.",
+      "deleteDescriptionUnknown": "Elle sera retirée de tous les médias qui la portent.",
+      "deleted": "Étiquette « {name} » supprimée."
+    },
+    "errors": {
+      "TAG_NOT_FOUND": "Cette étiquette n'existe plus : rechargez la page.",
+      "TAG_NAME_TAKEN": "Une étiquette porte déjà ce nom (sans tenir compte des majuscules ni des accents).",
+      "TAG_SLUG_TAKEN": "Une étiquette utilise déjà cet identifiant.",
+      "TAG_LIMIT_REACHED": "Le nombre maximal d'étiquettes est atteint : supprimez-en avant d'en créer.",
+      "TAG_READ_ONLY": "Seul un administrateur peut modifier une étiquette globale.",
+      "TOO_MANY_TAGS": "Un média porte au plus 50 étiquettes.",
+      "usedInProjects": "Déjà utilisé dans : {names}."
     }
   }
 }

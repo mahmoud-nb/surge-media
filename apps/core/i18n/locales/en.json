@@ -157,7 +157,8 @@
       "apiDocs": "API documentation",
       "settings": "Settings",
       "invitations": "My invitations",
-      "account": "My account"
+      "account": "My account",
+      "tags": "Tags"
     },
     "dashboard": {
       "meta": {
@@ -638,7 +639,15 @@
       "apply": "Filter",
       "reset": "Reset",
       "active": "Media",
-      "recursive": "Include subfolders"
+      "recursive": "Include subfolders",
+      "tags": "Tags",
+      "tagsHint": "With no tag chosen, every media item is shown.",
+      "tagMatch": "With several tags",
+      "tagMatches": {
+        "any": "At least one",
+        "all": "All of them"
+      },
+      "untagged": "Only media without tags"
     },
     "upload": {
       "title": "Upload media",
@@ -722,7 +731,9 @@
       "altTextHint": "Describe what the image shows for people who cannot see it (about 125 characters). Leave empty if the image is purely decorative.",
       "videoDescription": "Short description",
       "videoDescriptionHint": "Identifies the video for people who cannot see it (subject and context, about 125 characters). It is attached to the video player.",
-      "visibility": "Visibility"
+      "visibility": "Visibility",
+      "tags": "Tags",
+      "tagsHint": "Choose among the global tags and those of the space."
     },
     "video": {
       "fallback": "Your browser cannot play this video.",
@@ -863,7 +874,31 @@
       "selectPage": "Select all on this page",
       "target": "File into",
       "submit": "File",
-      "moved": "No media filed. | 1 media item filed into “{folder}”. | {count} media items filed into “{folder}”."
+      "moved": "No media filed. | 1 media item filed into “{folder}”. | {count} media items filed into “{folder}”.",
+      "tags": "Tags…",
+      "tagDialogTitle": "Tags of the selection | Tags of the selected media item | Tags of the {count} selected media items",
+      "tagDialogDescription": "Add or remove tags on every selected media item.",
+      "tagMode": "Action",
+      "tagModes": {
+        "add": {
+          "label": "Add",
+          "description": "The chosen tags are added to those of the media."
+        },
+        "remove": {
+          "label": "Remove",
+          "description": "The chosen tags are removed from the media that carry them."
+        }
+      },
+      "tagChoice": "Tags",
+      "tagApply": {
+        "add": "Add the tags",
+        "remove": "Remove the tags"
+      },
+      "tagged": {
+        "add": "No media changed. | Tags added to one media item. | Tags added to {count} media items.",
+        "remove": "No media changed. | Tags removed from one media item. | Tags removed from {count} media items."
+      },
+      "taggedSkipped": "One media item skipped: it would exceed 50 tags. | {count} media items skipped: they would exceed 50 tags."
     },
     "focal": {
       "title": "Focal point",
@@ -1142,6 +1177,10 @@
         "retry": "Video processing failed temporarily: it will be retried automatically.",
         "requeued": "Video processing was interrupted on the server, without failing: it will resume automatically."
       }
+    },
+    "card": {
+      "tags": "Tags",
+      "moreTags": "Other tags: {names}"
     }
   },
   "projectRoles": {
@@ -1223,7 +1262,8 @@
       "members": "Members",
       "keys": "API keys",
       "origins": "Allowed origins",
-      "transforms": "Transformations"
+      "transforms": "Transformations",
+      "tags": "Tags"
     },
     "header": {
       "yourRole": "Your role: {role}"
@@ -2724,6 +2764,90 @@
         "title": "Questions",
         "text": "For any question about the demo or surgeMedia, write to {email}."
       }
+    }
+  },
+  "tags": {
+    "meta": {
+      "globalTitle": "Global tags",
+      "projectTitle": "Tags — {name}"
+    },
+    "page": {
+      "title": "Tags",
+      "description": "Global tags apply to the media of the library and of every project. Each project can also have its own."
+    },
+    "manageLink": "Manage tags",
+    "confidentialSuffix": "(confidential)",
+    "levels": {
+      "global": "Global tags",
+      "project": "Project tags"
+    },
+    "colors": {
+      "gray": "Gray",
+      "red": "Red",
+      "orange": "Orange",
+      "amber": "Amber",
+      "green": "Green",
+      "teal": "Teal",
+      "blue": "Blue",
+      "violet": "Violet"
+    },
+    "fields": {
+      "name": "Name",
+      "slug": "Identifier",
+      "slugHint": "Suggested from the name; used by API filters (lowercase letters, digits and hyphens).",
+      "slugEditHint": "Does not change when you rename the tag. Changing it means applications that filter by this identifier must follow.",
+      "color": "Color",
+      "confidential": "Confidential",
+      "confidentialHint": "Visible only to administrators and managers, in the administration; never through the API nor to other roles."
+    },
+    "input": {
+      "placeholder": "Search for a tag…",
+      "listLabel": "Suggestions: {label}",
+      "suggestions": "No suggestions | One suggestion | {count} suggestions",
+      "selected": "{label}: no tags | {label}: one tag chosen | {label}: {count} tags chosen",
+      "remove": "Remove the “{name}” tag",
+      "added": "“{name}” tag added.",
+      "removed": "“{name}” tag removed.",
+      "noTags": "No tags exist here yet.",
+      "noMatch": "No tag matches.",
+      "allChosen": "Every tag is chosen."
+    },
+    "manager": {
+      "loadError": "Unable to load the tags.",
+      "globalTitle": "Global tags",
+      "projectTitle": "Project tags",
+      "globalDescription": "Usable on every media item: library and projects.",
+      "projectDescription": "Usable only on the media of this project, in addition to global tags.",
+      "globalInProject": "Shared by the whole installation, also usable in this project.",
+      "manageGlobal": "Manage global tags",
+      "readOnlyGlobal": "Only an administrator can create, edit or delete global tags.",
+      "readOnlyProject": "Only administrators and the manager of the project can create, edit or delete its tags.",
+      "empty": "No tags yet.",
+      "emptyGlobal": "No global tags.",
+      "mediaCount": "No media | One media item | {count} media items",
+      "createTitle": "New tag",
+      "create": "Create the tag",
+      "created": "“{name}” tag created.",
+      "edit": "Edit",
+      "editLabel": "Edit the “{name}” tag",
+      "editTitle": "Edit the “{name}” tag",
+      "updated": "“{name}” tag updated.",
+      "unconfidentialWarning": "Once saved, the tag will be visible to every role and through the API.",
+      "delete": "Delete",
+      "deleteLabel": "Delete the “{name}” tag",
+      "deleteTitle": "Delete the “{name}” tag?",
+      "deleteDescription": "No media item carries it. | It will be removed from one media item. | It will be removed from {count} media items.",
+      "deleteDescriptionUnknown": "It will be removed from every media item that carries it.",
+      "deleted": "“{name}” tag deleted."
+    },
+    "errors": {
+      "TAG_NOT_FOUND": "This tag no longer exists: reload the page.",
+      "TAG_NAME_TAKEN": "A tag already has this name (regardless of case and accents).",
+      "TAG_SLUG_TAKEN": "A tag already uses this identifier.",
+      "TAG_LIMIT_REACHED": "The maximum number of tags has been reached: delete some before creating more.",
+      "TAG_READ_ONLY": "Only an administrator can change a global tag.",
+      "TOO_MANY_TAGS": "A media item carries at most 50 tags.",
+      "usedInProjects": "Already used in: {names}."
     }
   }
 }

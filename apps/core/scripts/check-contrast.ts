@@ -56,6 +56,11 @@ const PAIRS: [string, string, number][] = [
   ...['background', 'surface', 'muted'].flatMap(bg =>
     ['success', 'destructive', 'warning', 'code-blue', 'code-orange', 'code-purple', 'code-teal'].map(fg => [fg, bg, 4.5]),
   ) as [string, string, number][],
+  // Étiquettes des médias : texte sur son fond doux, et sur les fonds de page (pastille de couleur).
+  ...['gray', 'red', 'orange', 'amber', 'green', 'teal', 'blue', 'violet'].flatMap(color => [
+    [`tag-${color}-fg`, `tag-${color}-bg`, 4.5],
+    [`tag-${color}-fg`, 'surface', 3],
+  ] as [string, string, number][]),
   ['input', 'surface', 3],
   ['input', 'background', 3],
   ['input', 'muted', 3],

@@ -21,8 +21,12 @@ export function useCredentialLabels() {
     return rank(a) - rank(b) || a.localeCompare(b)
   }
 
-  function scopeOptions() {
-    return TOKEN_OPTIONAL_SCOPES.map(scope => ({
+  /**
+   * Portées proposées pour un jeton personnel ou une clé secrète. `held` (clé de projet) : seulement celles
+   * que le créateur détient lui-même dans le projet (une clé ne donne jamais plus, ex. tags:manage).
+   */
+  function scopeOptions(held?: readonly string[]) {
+    return TOKEN_OPTIONAL_SCOPES.filter(scope => !held || held.includes(scope)).map(scope => ({
       value: scope,
       label: t(`scopes.${scope.replace(':', '.')}.label`),
       description: t(`scopes.${scope.replace(':', '.')}.description`),

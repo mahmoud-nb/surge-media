@@ -36,6 +36,23 @@
   --code-orange: #b93815;
   --code-purple: #6941c6;
   --code-teal: #0e7090;
+  /* Étiquettes des médias (architecture-tags.md, TG13) : fond doux et texte, palette fixe. */
+  --tag-gray-bg: #eef0f4;
+  --tag-gray-fg: #374151;
+  --tag-red-bg: #fef3f2;
+  --tag-red-fg: #b42318;
+  --tag-orange-bg: #fff4ed;
+  --tag-orange-fg: #b93815;
+  --tag-amber-bg: #fffaeb;
+  --tag-amber-fg: #93370d;
+  --tag-green-bg: #ecfdf3;
+  --tag-green-fg: #067647;
+  --tag-teal-bg: #f0fdf9;
+  --tag-teal-fg: #0e7090;
+  --tag-blue-bg: #eff4ff;
+  --tag-blue-fg: #1849a9;
+  --tag-violet-bg: #f4f3ff;
+  --tag-violet-fg: #5925dc;
 }
 
 .dark {
@@ -64,6 +81,22 @@
   --code-orange: #fd853a;
   --code-purple: #b692f6;
   --code-teal: #5fd4d0;
+  --tag-gray-bg: #1c2432;
+  --tag-gray-fg: #c9d0db;
+  --tag-red-bg: #2d1416;
+  --tag-red-fg: #fda29b;
+  --tag-orange-bg: #2e1a10;
+  --tag-orange-fg: #fdac74;
+  --tag-amber-bg: #2e2410;
+  --tag-amber-fg: #fdb022;
+  --tag-green-bg: #0f2a1d;
+  --tag-green-fg: #75e0a7;
+  --tag-teal-bg: #0b2a2e;
+  --tag-teal-fg: #5fd4d0;
+  --tag-blue-bg: #142246;
+  --tag-blue-fg: #84adff;
+  --tag-violet-bg: #241a45;
+  --tag-violet-fg: #bdb4fe;
 }
 
 @theme inline {

@@ -6,9 +6,12 @@
  * imposé par le serveur ; les filtres ne font que s'y ajouter.
  *
  * URL : `folder` = dossier affiché (absent = racine), `recursive=1` = sous-dossiers compris ;
- * la corbeille montre tout l'espace.
+ * la corbeille montre tout l'espace. Étiquettes (architecture-tags.md) : `tags` = slugs séparés par des
+ * virgules (aucun = pas de filtre), `match=all` = toutes (au moins une sinon), `untagged=1` = sans étiquette ;
+ * affectation en lot depuis la sélection.
  */
-import { ChevronRight, Folder, FolderInput, ImageOff, ListChecks, Search } from '@lucide/vue'
+import { ChevronRight, Folder, FolderInput, ImageOff, ListChecks, Search, Tags } from '@lucide/vue'
+import type { TagOption } from '~/composables/useTagLabels'
 
 const props = defineProps<{
   /** Projet affiché ; absent = bibliothèque de l'organisation. */
@@ -17,6 +20,7 @@ const props = defineProps<{
 
 const { t } = useI18n()
 const { errorFallback } = useDemoErrors()
+const { tagErrorMessage } = useTagLabels()
 const route = useRoute()
 const { $api } = useNuxtApp()
 
@@ -25,7 +29,7 @@ function queryValue(value: unknown): string {
 }
 
 // Formulaire de filtres (appliqués à la soumission) ; la liste suit les paramètres d'URL.
-const filters = reactive({ q: '', kind: '', visibility: '', sort: '', status: '', recursive: false })
+const filters = reactive({ q: '', kind: '', visibility: '', sort: '', status: '', recursive: false, tags: [] as string[], match: 'any' as TagMatch, untagged: false })
 watch(() => route.query, (query) => {
   filters.q = queryValue(query.q)
   filters.kind = queryValue(query.kind)
@@ -33,12 +37,15 @@ watch(() => route.query, (query) => {
   filters.sort = queryValue(query.sort) || 'newest'
   filters.status = queryValue(query.status)
   filters.recursive = query.recursive === '1'
+  filters.tags = queryValue(query.tags).split(',').filter(Boolean)
+  filters.match = query.match === 'all' ? 'all' : 'any'
+  filters.untagged = query.untagged === '1'
 }, { immediate: true })
 
 const inTrash = computed(() => route.query.status === 'trash')
 const folderId = computed(() => (inTrash.value ? undefined : queryValue(route.query.folder) || undefined))
 const recursive = computed(() => !inTrash.value && route.query.recursive === '1')
-const hasFilters = computed(() => Boolean(route.query.q || route.query.kind || route.query.visibility || recursive.value))
+const hasFilters = computed(() => Boolean(route.query.q || route.query.kind || route.query.visibility || recursive.value || route.query.tags || route.query.untagged))
 
 const { data: rules } = await useApiFetch('/api/admin/config/media')
 const { data: folderData, refresh: refreshFolders } = await useApiFetch('/api/admin/folders', {
@@ -55,8 +62,14 @@ const { data, error, refresh } = await useApiFetch('/api/admin/media', {
     sort: route.query.sort,
     status: route.query.status,
     page: route.query.page,
+    tags: route.query.tags,
+    match: route.query.match,
+    untagged: route.query.untagged,
   })),
 })
+// Étiquettes utilisables dans l'espace : globales (bibliothèque), globales + projet (projet).
+const { data: tagData, refresh: refreshTags } = await useApiFetch('/api/admin/tags', { query: computed(() => ({ project: props.projectId })) })
+const tagOptions = computed(() => (tagData.value?.tags ?? []) as TagOption[])
 
 const scopes = computed<readonly string[]>(() => folderData.value?.scopes ?? data.value?.scopes ?? [])
 const canUpload = computed(() => scopes.value.includes('media:upload'))
@@ -79,10 +92,10 @@ const uploadFields = computed(() => {
   return fields
 })
 
-/** Lien vers un dossier : tri, type, visibilité et récursivité conservés, recherche et page réinitialisées. */
+/** Lien vers un dossier : tri, type, visibilité, étiquettes et récursivité conservés, recherche et page réinitialisées. */
 function folderLink(id: string | null) {
-  const { sort, kind, visibility, recursive: withSubfolders } = route.query
-  return { query: { sort, kind, visibility, recursive: withSubfolders, folder: id ?? undefined } }
+  const { sort, kind, visibility, recursive: withSubfolders, tags, match, untagged } = route.query
+  return { query: { sort, kind, visibility, recursive: withSubfolders, tags, match, untagged, folder: id ?? undefined } }
 }
 
 async function onFoldersChanged() {
@@ -111,6 +124,11 @@ function applyFilters() {
   // Valeurs par défaut omises de l'URL (tri « plus récents », médias actifs).
   if (filters.sort && filters.sort !== 'newest') query.sort = filters.sort
   if (filters.status) query.status = filters.status
+  if (filters.tags.length > 0) {
+    query.tags = filters.tags.join(',')
+    if (filters.match === 'all' && filters.tags.length > 1) query.match = 'all'
+  }
+  else if (filters.untagged) query.untagged = '1'
   if (filters.status !== 'trash') {
     if (folderId.value) query.folder = folderId.value
     if (filters.recursive) query.recursive = '1'
@@ -134,6 +152,7 @@ const visibilityOptions = computed(() => [
   ...MEDIA_VISIBILITIES.map(value => ({ value, label: t(`media.visibility.${value}.label`) })),
 ])
 const sortOptions = computed(() => (['newest', 'oldest', 'name', 'size'] as const).map(value => ({ value, label: t(`media.filters.sorts.${value}`) })))
+const matchOptions = computed(() => TAG_MATCHES.map(value => ({ value, label: t(`media.filters.tagMatches.${value}`) })))
 const statusOptions = computed(() => [
   { value: '' as const, label: t('media.filters.active') },
   { value: 'trash' as const, label: t('media.filters.trash') },
@@ -190,6 +209,49 @@ function setSelected(id: string, value: boolean) {
 
 function selectPage() {
   selected.value = (data.value?.items ?? []).map(item => item.id)
+}
+
+// Étiquettes en lot : ajout ou retrait sur les médias sélectionnés.
+const tagDialogOpen = ref(false)
+const tagMode = ref<'add' | 'remove'>('add')
+const tagSelection = ref<string[]>([])
+const tagging = ref(false)
+const tagDialogError = ref<string>()
+const tagModeOptions = computed(() => (['add', 'remove'] as const).map(value => ({
+  value,
+  label: t(`media.selection.tagModes.${value}.label`),
+  description: t(`media.selection.tagModes.${value}.description`),
+})))
+
+function openTagDialog() {
+  tagMode.value = 'add'
+  tagSelection.value = []
+  tagDialogError.value = undefined
+  bulkStatus.value = null
+  tagDialogOpen.value = true
+}
+
+async function applyTags() {
+  if (tagSelection.value.length === 0) {
+    tagDialogError.value = t('validation.tagChangesRequired')
+    return
+  }
+  tagging.value = true
+  tagDialogError.value = undefined
+  try {
+    const body = tagMode.value === 'add' ? { ids: selected.value, add: tagSelection.value } : { ids: selected.value, remove: tagSelection.value }
+    const { updated, skipped } = await $api('/api/admin/media/tags', { method: 'POST', query: { project: props.projectId }, body })
+    tagDialogOpen.value = false
+    const message = t(`media.selection.tagged.${tagMode.value}`, { count: updated }, updated)
+    bulkStatus.value = { variant: 'success', message: skipped > 0 ? `${message} ${t('media.selection.taggedSkipped', { count: skipped }, skipped)}` : message }
+    await Promise.all([refresh(), refreshTags()])
+  }
+  catch (err) {
+    tagDialogError.value = tagErrorMessage(err)
+  }
+  finally {
+    tagging.value = false
+  }
 }
 
 function fileRequest(ids: string[], target: string | null) {
@@ -302,7 +364,7 @@ async function fileSelected() {
       :aria-label="t('media.filters.label')"
       :class="cn(
         'mb-6 grid gap-4 rounded-xl border border-border bg-surface p-4 sm:grid-cols-2 sm:items-end',
-        kindOptions.length > 2 ? 'xl:grid-cols-[minmax(0,1fr)_9rem_9rem_10rem_9rem_auto]' : 'xl:grid-cols-[minmax(0,1fr)_11rem_11rem_11rem_auto]',
+        kindOptions.length > 2 ? 'xl:grid-cols-[minmax(0,1fr)_9rem_9rem_10rem_9rem]' : 'xl:grid-cols-[minmax(0,1fr)_11rem_11rem_11rem]',
       )"
       @submit.prevent="applyFilters"
     >
@@ -321,19 +383,36 @@ async function fileSelected() {
       <UiFormField v-slot="field" :label="t('media.filters.show')">
         <UiSelect v-bind="field" v-model="filters.status" :options="statusOptions" name="status" />
       </UiFormField>
-      <div class="flex gap-2">
-        <UiButton type="submit" variant="secondary">
-          <Search aria-hidden="true" />
-          {{ t('media.filters.apply') }}
-        </UiButton>
-        <UiButton v-if="hasFilters" :to="resetLink" variant="ghost">
-          {{ t('media.filters.reset') }}
-        </UiButton>
+      <div :class="cn('grid gap-4 sm:col-span-2 sm:grid-cols-[minmax(0,1fr)_12rem] sm:items-start', kindOptions.length > 2 ? 'xl:col-span-5' : 'xl:col-span-4')">
+        <div class="grid gap-1">
+          <AdminTagInput v-model="filters.tags" :options="tagOptions" by="slug" :label="t('media.filters.tags')" :hint="t('media.filters.tagsHint')" />
+          <NuxtLink :to="projectId ? `/admin/projects/${projectId}/tags` : '/admin/tags'" class="justify-self-start text-sm text-primary underline-offset-4 hover:underline">
+            {{ t('tags.manageLink') }}
+          </NuxtLink>
+        </div>
+        <UiFormField v-if="filters.tags.length > 1" v-slot="field" :label="t('media.filters.tagMatch')" class="sm:pt-[1.625rem]">
+          <UiSelect v-bind="field" v-model="filters.match" :options="matchOptions" name="match" />
+        </UiFormField>
       </div>
-      <label v-if="filters.status !== 'trash'" :class="cn('flex cursor-pointer items-center gap-2 text-sm text-foreground sm:col-span-2', kindOptions.length > 2 ? 'xl:col-span-6' : 'xl:col-span-5')">
-        <input v-model="filters.recursive" type="checkbox" name="recursive" class="size-4 accent-primary">
-        {{ t('media.filters.recursive') }}
-      </label>
+      <div :class="cn('flex flex-wrap items-center gap-x-6 gap-y-3 sm:col-span-2', kindOptions.length > 2 ? 'xl:col-span-5' : 'xl:col-span-4')">
+        <label v-if="filters.status !== 'trash'" class="flex cursor-pointer items-center gap-2 text-sm text-foreground">
+          <input v-model="filters.recursive" type="checkbox" name="recursive" class="size-4 accent-primary">
+          {{ t('media.filters.recursive') }}
+        </label>
+        <label v-if="filters.tags.length === 0" class="flex cursor-pointer items-center gap-2 text-sm text-foreground">
+          <input v-model="filters.untagged" type="checkbox" name="untagged" class="size-4 accent-primary">
+          {{ t('media.filters.untagged') }}
+        </label>
+        <div class="ml-auto flex gap-2">
+          <UiButton type="submit" variant="secondary">
+            <Search aria-hidden="true" />
+            {{ t('media.filters.apply') }}
+          </UiButton>
+          <UiButton v-if="hasFilters" :to="resetLink" variant="ghost">
+            {{ t('media.filters.reset') }}
+          </UiButton>
+        </div>
+      </div>
     </form>
 
     <UiAlert v-if="error && !folderMissing" variant="error" live="assertive" :title="t('media.list.loadError')">
@@ -373,6 +452,10 @@ async function fileSelected() {
             <FolderInput aria-hidden="true" />
             {{ t('media.selection.submit') }}
           </UiButton>
+          <UiButton variant="outline" :disabled="selected.length === 0" @click="openTagDialog">
+            <Tags aria-hidden="true" />
+            {{ t('media.selection.tags') }}
+          </UiButton>
         </div>
         <UiAlert v-if="bulkStatus" :variant="bulkStatus.variant" :live="bulkStatus.variant === 'error' ? 'assertive' : 'polite'">
           {{ bulkStatus.message }}
@@ -399,5 +482,27 @@ async function fileSelected() {
 
       <UiPagination class="mt-6" :page="data.page" :page-count="pageCount" :to="pageLink" />
     </template>
+
+    <UiDialog
+      v-model:open="tagDialogOpen"
+      :title="t('media.selection.tagDialogTitle', { count: selected.length }, selected.length)"
+      :description="t('media.selection.tagDialogDescription')"
+    >
+      <form id="bulk-tags-form" class="grid gap-4" novalidate @submit.prevent="applyTags">
+        <UiAlert v-if="tagDialogError" variant="error" live="assertive">
+          {{ tagDialogError }}
+        </UiAlert>
+        <UiRadioCards v-model="tagMode" :legend="t('media.selection.tagMode')" :options="tagModeOptions" :columns="2" />
+        <AdminTagInput v-model="tagSelection" :options="tagOptions" :label="t('media.selection.tagChoice')" />
+      </form>
+      <template #actions>
+        <UiButton variant="outline" @click="tagDialogOpen = false">
+          {{ t('common.cancel') }}
+        </UiButton>
+        <UiButton type="submit" form="bulk-tags-form" :loading="tagging">
+          {{ tagMode === 'add' ? t('media.selection.tagApply.add') : t('media.selection.tagApply.remove') }}
+        </UiButton>
+      </template>
+    </UiDialog>
   </div>
 </template>
