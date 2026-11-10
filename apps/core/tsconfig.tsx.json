@@ -1,0 +1,16 @@
+{
+  // Configuration lue par tsx (scripts du package, CLI en développement : `tsx --tsconfig tsconfig.tsx.json …`).
+  // Depuis Nuxt 4, tsconfig.json ne contient que des références de projets, sans alias : tsx n'y trouverait pas
+  // `#shared` (importé par du code serveur que la CLI reprend, ex. server/lib/license/token.ts) et Node
+  // chercherait un import de package (`imports` de package.json) → ERR_PACKAGE_IMPORT_NOT_DEFINED.
+  // Même alias que tsdown.config.ts (CLI construite) et vitest.config.ts (tests). Pas de vérification de types ici.
+  "compilerOptions": {
+    "target": "ESNext",
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
+    "paths": {
+      "#shared": ["./shared"],
+      "#shared/*": ["./shared/*"]
+    }
+  }
+}
