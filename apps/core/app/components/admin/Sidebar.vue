@@ -4,7 +4,7 @@
  * rôle, langue, thème, utilisateur connecté et déconnexion.
  * La page courante est signalée par aria-current="page" (posé par <NuxtLink>).
  */
-import { BookOpenText, FolderKanban, Images, KeyRound, LayoutDashboard, LogOut, ScrollText, Settings, UserRound, Users } from '@lucide/vue'
+import { BookOpenText, FolderKanban, Images, KeyRound, LayoutDashboard, LogOut, ScrollText, Settings, Tags, UserRound, Users } from '@lucide/vue'
 import type { Component } from 'vue'
 
 interface NavItem {
@@ -21,6 +21,7 @@ const items = computed<NavItem[]>(() => [
   { to: '/admin', label: t('admin.nav.dashboard'), icon: LayoutDashboard },
   { to: '/admin/media', label: t('admin.nav.library'), icon: Images, permission: 'library:read' as const },
   { to: '/admin/projects', label: t('admin.nav.projects'), icon: FolderKanban },
+  { to: '/admin/tags', label: t('admin.nav.tags'), icon: Tags, permission: 'library:read' as const },
   { to: '/admin/tokens', label: t('admin.nav.tokens'), icon: KeyRound, permission: 'tokens:personal' as const },
   { to: '/admin/users', label: can('users:manage') ? t('admin.nav.users') : t('admin.nav.invitations'), icon: Users, permission: 'users:invite' as const },
   { to: '/admin/audit', label: t('admin.nav.audit'), icon: ScrollText, permission: 'audit:read' as const },

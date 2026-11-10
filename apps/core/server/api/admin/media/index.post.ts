@@ -23,7 +23,7 @@ export default defineEventHandler(async (event) => {
     if (!fields.success) throw createError({ statusCode: 400, statusMessage: 'Invalid fields', data: fields.error.issues })
     const media = await createMedia(access.space, upload, fields.data, { userId: access.user.id })
     setResponseStatus(event, 201)
-    return { media: toMediaDetail(media) }
+    return { media: toMediaDetail(media, await sessionTagViewer(event)) }
   }
   finally {
     await upload.cleanup()

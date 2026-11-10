@@ -1,8 +1,10 @@
 import { z } from 'zod'
 import { ENABLED_MEDIA_KINDS, MEDIA_VISIBILITIES, SIGNED_URL_MAX_TTL } from '../utils/media'
 import { canonicalLanguage, TEXT_TRACK_KINDS, TEXT_TRACK_LABEL_MAX_LENGTH } from '../utils/text-tracks'
+import { TAG_DEFAULT_MATCH, TAG_FILTER_MAX, TAG_MATCHES, TAG_SLUG_PATTERN } from '../utils/tags'
 import { roundFocalCoordinate } from '../utils/transforms'
 import { folderIdSchema } from './folders'
+import { mediaTagIdsSchema } from './tags'
 
 /** VARCHAR(191) sous MySQL. */
 export const MEDIA_TEXT_MAX_LENGTH = 191
@@ -38,6 +40,8 @@ export const mediaMetadataSchema = z.object({
   visibility: visibilitySchema,
   folderId: folderIdSchema.nullable(),
   focalPoint: focalPointSchema.nullable(),
+  /** Étiquettes du média (identifiants), ensemble remplacé ; les confidentielles cachées au lecteur restent. */
+  tagIds: mediaTagIdsSchema,
 }).partial()
 export type MediaMetadataInput = z.input<typeof mediaMetadataSchema>
 
@@ -60,6 +64,17 @@ export const mediaListQuerySchema = z.object({
   recursive: z.enum(['1', 'true']).transform(() => true).optional().catch(undefined),
   sort: z.enum(MEDIA_SORTS).catch('newest'),
   page: z.coerce.number().int().min(1).max(10_000).catch(1),
+  /**
+   * Étiquettes (slugs séparés par des virgules) : absent = aucun filtre ; slugs mal formés ignorés,
+   * `TAG_FILTER_MAX` au plus.
+   */
+  tags: z.string().max(2000).optional().catch(undefined).transform(value => value
+    ? [...new Set(value.split(',').map(slug => slug.trim().toLowerCase()).filter(slug => TAG_SLUG_PATTERN.test(slug)))].slice(0, TAG_FILTER_MAX)
+    : undefined),
+  /** Plusieurs étiquettes : au moins une (`any`, défaut) ou toutes (`all`). */
+  match: z.enum(TAG_MATCHES).catch(TAG_DEFAULT_MATCH),
+  /** Médias sans étiquette (`untagged=1`) ; ignoré si des étiquettes sont demandées. */
+  untagged: z.enum(['1', 'true']).transform(() => true).optional().catch(undefined),
 })
 export type MediaListQuery = z.infer<typeof mediaListQuerySchema>
 

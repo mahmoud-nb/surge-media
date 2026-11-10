@@ -21,7 +21,7 @@ import {
  * pour chaque rôle de plateforme × rôle de membre dans un projet actif. Toute évolution des
  * règles doit passer par cette table.
  */
-const ALL_PROJECT: Scope[] = ['project:read', 'project:credentials', 'project:members', 'project:settings', ...MEDIA_SCOPES]
+const ALL_PROJECT: Scope[] = ['project:read', 'project:credentials', 'project:members', 'project:settings', ...MEDIA_SCOPES, 'tags:manage']
 const DEVELOPER_PROJECT: Scope[] = ['project:read', 'project:credentials', ...MEDIA_SCOPES]
 const EDITOR_PROJECT: Scope[] = ['project:read', ...MEDIA_SCOPES]
 
@@ -58,13 +58,17 @@ describe('permissions de plateforme', () => {
 
   it('permet au MANAGER de créer des projets et d\'inviter, sans gestion globale', () => {
     expect(PERMISSIONS.filter(permission => hasPermission('MANAGER', permission)))
-      .toEqual(['library:read', 'projects:create', 'tokens:personal', 'api:docs', 'users:invite'])
+      .toEqual(['library:read', 'projects:create', 'tokens:personal', 'api:docs', 'users:invite', 'tags:confidential'])
   })
 
-  it('réserve la gestion de la bibliothèque, des comptes, de l\'audit et des réglages à l\'ADMIN', () => {
-    for (const permission of ['library:manage', 'projects:all', 'users:manage', 'audit:read', 'settings:manage'] as const) {
+  it('réserve la gestion de la bibliothèque, des comptes, de l\'audit, des réglages et des étiquettes globales à l\'ADMIN', () => {
+    for (const permission of ['library:manage', 'projects:all', 'users:manage', 'audit:read', 'settings:manage', 'tags:global'] as const) {
       expect(ROLES.filter(role => hasPermission(role, permission))).toEqual(['ADMIN'])
     }
+  })
+
+  it('réserve les étiquettes confidentielles à l\'ADMIN et au MANAGER', () => {
+    expect(ROLES.filter(role => hasPermission(role, 'tags:confidential'))).toEqual(['ADMIN', 'MANAGER'])
   })
 
   it('limite les rôles qu\'on peut inviter', () => {
@@ -127,12 +131,16 @@ describe('portées par espace', () => {
       it(`${role} / membre ${memberRole ?? 'aucun'} : projet archivé (lecture seule)`, () => {
         const archived = spaceScopes(role, { type: 'project', memberRole, archived: true })
         expect(sorted(archived)).toEqual(sorted(expected.filter(scope => ARCHIVED_ALLOWED.includes(scope))))
-        for (const scope of ['media:upload', 'media:write', 'media:delete', 'project:members', 'project:credentials'] as const) {
+        for (const scope of ['media:upload', 'media:write', 'media:delete', 'project:members', 'project:credentials', 'tags:manage'] as const) {
           expect(hasScope(archived, scope)).toBe(false)
         }
       })
     }
   }
+
+  it('ne donne aucune gestion d\'étiquettes dans la bibliothèque (la liste globale relève de tags:global)', () => {
+    for (const role of ROLES) expect(hasScope(spaceScopes(role, { type: 'library' }), 'tags:manage')).toBe(false)
+  })
 
   it('rend un projet invisible (aucune portée) à un non-membre qui n\'est pas ADMIN', () => {
     expect(spaceScopes('DEVELOPER', { type: 'project', memberRole: null, archived: false })).toEqual([])

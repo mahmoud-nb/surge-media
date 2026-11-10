@@ -79,22 +79,27 @@ describe('spécification OpenAPI générée depuis les routes', () => {
       'POST /projects/{projectId}/media/{mediaId}/tracks',
       'PATCH /projects/{projectId}/media/{mediaId}/tracks/{trackId}',
       'DELETE /projects/{projectId}/media/{mediaId}/tracks/{trackId}',
+      'POST /projects/{projectId}/media/tags',
       'GET /projects/{projectId}/presets',
       'POST /projects/{projectId}/signed-urls',
+      'GET /projects/{projectId}/tags',
+      'POST /projects/{projectId}/tags',
+      'PATCH /projects/{projectId}/tags/{tagId}',
+      'DELETE /projects/{projectId}/tags/{tagId}',
     ])
   })
 
   it('dérive les paramètres et les corps des schémas zod', () => {
     const list = fr.paths['/projects/{projectId}/media'].get
     expect(list.parameters.map((parameter: Doc) => parameter.name ?? parameter.$ref)).toEqual([
-      '#/components/parameters/projectId', 'q', 'kind', 'visibility', 'ids', 'folder', 'recursive', 'sort', 'limit', 'cursor', 'withTotal',
+      '#/components/parameters/projectId', 'q', 'kind', 'visibility', 'ids', 'folder', 'recursive', 'sort', 'limit', 'cursor', 'withTotal', 'tags', 'tagMatch', 'untagged',
     ])
     const upload = fr.components.requestBodies.MediaUpload.content['multipart/form-data'].schema
     expect(upload.required).toEqual(['file'])
-    expect(Object.keys(upload.properties)).toEqual(['file', 'title', 'altText', 'visibility', 'folderId'])
+    expect(Object.keys(upload.properties)).toEqual(['file', 'title', 'altText', 'visibility', 'folderId', 'tags'])
     expect(Object.keys(fr.components.schemas).sort()).toEqual([
-      'DelegatedToken', 'DelegatedTokenClaims', 'ErrorCatalog', 'Folder', 'FolderList', 'Me', 'Media', 'MediaList', 'MediaProcessing', 'MediaSource', 'Preset', 'PresetList', 'Problem',
-      'Project', 'ProjectList', 'SignedUrl', 'SignedUrlError', 'SignedUrlList', 'TextTrack', 'TextTrackList', 'UploadConstraints',
+      'DelegatedToken', 'DelegatedTokenClaims', 'ErrorCatalog', 'Folder', 'FolderList', 'Me', 'Media', 'MediaList', 'MediaProcessing', 'MediaSource', 'MediaTagsBulkResult', 'Preset', 'PresetList', 'Problem',
+      'Project', 'ProjectList', 'SignedUrl', 'SignedUrlError', 'SignedUrlList', 'Tag', 'TagList', 'TagRef', 'TextTrack', 'TextTrackList', 'UploadConstraints',
     ])
   })
 

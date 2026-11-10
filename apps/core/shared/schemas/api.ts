@@ -20,7 +20,8 @@ import { ORIGIN_MAX_LENGTH } from '../utils/credentials'
 import { FOLDER_NAME_MAX_LENGTH } from '../utils/folders'
 import { acceptedMimeTypes, CONVERTED_MIME_TYPES, ENABLED_MEDIA_KINDS, MEDIA_VISIBILITIES, SIGNED_URL_MAX_TTL } from '../utils/media'
 import { isWildcardOrigin, normalizeOrigin } from '../utils/origins'
-import { TOKEN_SCOPES } from '../utils/permissions'
+import { DELEGATED_TOKEN_SCOPES, TOKEN_SCOPES } from '../utils/permissions'
+import { MEDIA_TAG_LIMIT, TAG_BULK_MAX, TAG_COLORS, TAG_DEFAULT_MATCH, TAG_FILTER_MAX, TAG_LEVELS, TAG_MATCHES, TAG_NAME_MAX_LENGTH, TAG_SLUG_MAX_LENGTH, TAG_SLUG_PATTERN } from '../utils/tags'
 import { TEXT_TRACK_LABEL_MAX_LENGTH } from '../utils/text-tracks'
 import { PRESET_NAME_PATTERN, TRANSFORM_FORMATS, TRANSFORM_SEGMENT_MAX_LENGTH } from '../utils/transforms'
 import { API_PROCESSING_STATUSES, RENDITION_NAMES, VIDEO_JOB_ERROR_CODES } from '../utils/video-processing'
@@ -47,6 +48,17 @@ const ID_PATTERN = /^[a-z0-9]{8,64}$/i
 const lower = <T extends readonly string[]>(values: T) => values.map(value => value.toLowerCase()) as [string, ...string[]]
 
 export const API_MEDIA_KINDS = lower(ENABLED_MEDIA_KINDS)
+
+/** Slug d'étiquette (`GET …/tags`) : minuscules ASCII, chiffres, tirets simples. */
+const apiTagSlugSchema = z.string().max(TAG_SLUG_MAX_LENGTH).regex(TAG_SLUG_PATTERN, 'Tag slugs use lowercase letters, digits and single hyphens.')
+
+/** Slugs séparés par des virgules (paramètre de requête ou champ multipart), doublons retirés. */
+function slugListParameter(max: number) {
+  return z
+    .string()
+    .transform(value => [...new Set(value.split(',').map(slug => slug.trim()).filter(Boolean))])
+    .pipe(z.array(apiTagSlugSchema).min(1).max(max))
+}
 export const API_VISIBILITIES = lower(MEDIA_VISIBILITIES)
 
 // ─── Requêtes ────────────────────────────────────────────────────────────────
@@ -70,6 +82,18 @@ export const apiMediaListQuerySchema = z.object({
   cursor: z.string().min(1).max(512).optional().meta(doc('Curseur opaque renvoyé par la page précédente (`nextCursor`).', 'Opaque cursor returned by the previous page (`nextCursor`).')),
   withTotal: z.enum(['true', 'false']).transform(value => value === 'true').optional()
     .meta(doc('Ajoute `total` (nombre de résultats) à la réponse : requête supplémentaire, à ne demander que si nécessaire.', 'Adds `total` (number of results) to the response: an extra query, request it only when needed.')),
+  tags: slugListParameter(TAG_FILTER_MAX).optional().meta(doc(
+    `Étiquettes (slugs séparés par des virgules, ${TAG_FILTER_MAX} au plus) : seulement les médias qui les portent, selon \`tagMatch\`. Absent : tous les médias, étiquetés ou non. Slug inconnu : \`TAG_NOT_FOUND\`.`,
+    `Tags (comma-separated slugs, ${TAG_FILTER_MAX} at most): only the media items that carry them, according to \`tagMatch\`. Absent: every media item, tagged or not. Unknown slug: \`TAG_NOT_FOUND\`.`,
+  )),
+  tagMatch: z.enum(TAG_MATCHES).default(TAG_DEFAULT_MATCH).meta(doc(
+    'Avec plusieurs étiquettes : `any` (défaut) = au moins une, `all` = toutes.',
+    'With several tags: `any` (default) = at least one, `all` = all of them.',
+  )),
+  untagged: z.enum(['true', 'false']).transform(value => value === 'true').optional()
+    .meta(doc('`true` : seulement les médias sans étiquette. Incompatible avec `tags`.', '`true`: only media items without tags. Incompatible with `tags`.')),
+}).superRefine((query, ctx) => {
+  if (query.tags && query.untagged) ctx.addIssue({ code: 'custom', path: ['untagged'], message: 'Use either tags or untagged, not both.' })
 })
 export type ApiMediaListQuery = z.output<typeof apiMediaListQuerySchema>
 
@@ -169,7 +193,13 @@ const writableFields = {
  * Champs texte d'un envoi (multipart/form-data, en plus du fichier `file`). Visibilité `public`
  * par défaut, imposée par un jeton délégué qui la fixe. Champ inconnu → 400.
  */
-export const apiMediaUploadFieldsSchema = z.strictObject(writableFields)
+export const apiMediaUploadFieldsSchema = z.strictObject({
+  ...writableFields,
+  tags: slugListParameter(MEDIA_TAG_LIMIT).optional().meta(doc(
+    `Étiquettes du nouveau média : slugs séparés par des virgules (${MEDIA_TAG_LIMIT} au plus), globales ou du projet.`,
+    `Tags of the new media item: comma-separated slugs (${MEDIA_TAG_LIMIT} at most), global or of the project.`,
+  )),
+})
 
 /**
  * PATCH d'un média : champs absents inchangés, `null` ou texte vide efface le titre / le texte
@@ -177,6 +207,10 @@ export const apiMediaUploadFieldsSchema = z.strictObject(writableFields)
  */
 export const apiMediaUpdateSchema = z.strictObject({
   ...writableFields,
+  tags: z.array(apiTagSlugSchema).max(MEDIA_TAG_LIMIT).transform(slugs => [...new Set(slugs)]).optional().meta(doc(
+    'Étiquettes du média (slugs) : remplacent l\'ensemble ; `[]` les retire toutes.',
+    'Tags of the media item (slugs): replace the whole set; `[]` removes them all.',
+  )),
   focalPoint: focalPointSchema.nullable().optional().meta(doc(
     'Point d\'intérêt d\'une image : `{ x, y }`, fractions (0 à 1) de la largeur et de la hauteur depuis le coin haut gauche, arrondies à 4 décimales ; `null` l\'efface (centre). Le modifier **incrémente la version** : toutes les URL du média changent (les anciennes redirigent vers les nouvelles) et les dérivés sont régénérés à la demande.',
     'Focal point of an image: `{ x, y }`, fractions (0 to 1) of the width and height from the top left corner, rounded to 4 decimals; `null` clears it (center). Changing it **increments the version**: every URL of the media item changes (old ones redirect to the new ones) and derivatives are generated again on demand.',
@@ -219,8 +253,8 @@ export const apiUploadConstraintsSchema = z.strictObject({
 export type ApiUploadConstraints = z.output<typeof apiUploadConstraintsSchema>
 
 export const apiDelegatedTokenBodySchema = z.strictObject({
-  scopes: z.array(z.enum(TOKEN_SCOPES)).min(1).max(TOKEN_SCOPES.length)
-    .meta(doc('Portées demandées, toutes détenues par l\'émetteur dans ce projet (aucune lecture d\'office).', 'Requested scopes, all held by the issuer in this project (no implicit read access).')),
+  scopes: z.array(z.enum(DELEGATED_TOKEN_SCOPES)).min(1).max(DELEGATED_TOKEN_SCOPES.length)
+    .meta(doc('Portées demandées, toutes détenues par l\'émetteur dans ce projet (aucune lecture d\'office ; jamais `tags:manage`).', 'Requested scopes, all held by the issuer in this project (no implicit read access; never `tags:manage`).')),
   expiresIn: z.number().int().min(DELEGATED_TOKEN_TTL.min).max(DELEGATED_TOKEN_TTL.max).default(DELEGATED_TOKEN_TTL.default)
     .meta(doc('Durée de validité en secondes (1 à 60 minutes, 15 par défaut), bornée par l\'échéance de l\'émetteur.', 'Validity in seconds (1 to 60 minutes, 15 by default), capped by the expiry of the issuer.')),
   subject: z.string().trim().min(1).max(DELEGATED_SUBJECT_MAX_LENGTH).regex(/^\P{Cc}+$/u).optional()
@@ -257,7 +291,7 @@ export const delegatedTokenClaimsSchema = z.strictObject({
   jti: z.string().min(8).max(64).meta(doc('Identifiant unique du jeton.', 'Unique token id.')),
   iss: z.string().regex(ID_PATTERN).meta(doc('Identifiant (clé secrète ou jeton personnel) qui a émis le jeton.', 'Credential (secret key or personal token) that issued the token.')),
   project: z.string().regex(ID_PATTERN),
-  scopes: z.array(z.enum(TOKEN_SCOPES)).min(1),
+  scopes: z.array(z.enum(DELEGATED_TOKEN_SCOPES)).min(1),
   sub: z.string().max(DELEGATED_SUBJECT_MAX_LENGTH).optional(),
   origin: z.string().max(ORIGIN_MAX_LENGTH).optional(),
   upload: apiUploadConstraintsSchema.optional(),
@@ -283,6 +317,38 @@ export const apiFolderCreateSchema = z.strictObject({
 export const apiFolderUpdateSchema = z.strictObject({
   name: apiFolderNameSchema.optional(),
   parentId: z.string().regex(ID_PATTERN).nullable().optional().meta(doc('Nouveau parent (`null` : racine ; absent : inchangé).', 'New parent (`null`: root; absent: unchanged).')),
+})
+
+const apiTagNameSchema = z
+  .string()
+  .transform(value => value.normalize('NFC').trim().replace(/\s+/g, ' '))
+  .pipe(z.string().min(1).max(TAG_NAME_MAX_LENGTH).refine(value => !/\p{Cc}/u.test(value), 'Tag names cannot contain control characters.'))
+
+export const apiTagCreateSchema = z.strictObject({
+  name: apiTagNameSchema.meta(doc(`Libellé (${TAG_NAME_MAX_LENGTH} caractères au plus), unique sans tenir compte de la casse ni des accents parmi les étiquettes globales et celles du projet.`, `Label (${TAG_NAME_MAX_LENGTH} characters at most), unique regardless of case and accents among global tags and those of the project.`)),
+  slug: apiTagSlugSchema.optional().meta(doc('Identifiant des filtres (par défaut : déduit du nom) ; ne change pas quand on renomme.', 'Identifier used by filters (default: derived from the name); does not change on rename.')),
+  color: z.enum(TAG_COLORS).optional().meta(doc('Teinte d\'affichage (`gray` par défaut).', 'Display hue (`gray` by default).')),
+})
+
+export const apiTagUpdateSchema = z.strictObject({
+  name: apiTagNameSchema.optional(),
+  slug: apiTagSlugSchema.optional(),
+  color: z.enum(TAG_COLORS).optional(),
+}).refine(body => body.name !== undefined || body.slug !== undefined || body.color !== undefined, 'Provide at least one field.')
+
+export const apiTagListQuerySchema = z.strictObject({
+  withCounts: z.enum(['true', 'false']).transform(value => value === 'true').optional()
+    .meta(doc('Ajoute `mediaCount` (médias actifs du projet qui portent l\'étiquette).', 'Adds `mediaCount` (active media items of the project that carry the tag).')),
+})
+
+export const apiMediaTagsBulkSchema = z.strictObject({
+  ids: z.array(z.string().regex(ID_PATTERN)).min(1).max(TAG_BULK_MAX).transform(ids => [...new Set(ids)])
+    .meta(doc(`Médias du projet (${TAG_BULK_MAX} au plus) ; ceux de la corbeille ou d'un autre projet sont ignorés.`, `Media items of the project (${TAG_BULK_MAX} at most); those in the trash or in another project are ignored.`)),
+  add: z.array(apiTagSlugSchema).max(MEDIA_TAG_LIMIT).default([]).meta(doc('Étiquettes à ajouter (slugs).', 'Tags to add (slugs).')),
+  remove: z.array(apiTagSlugSchema).max(MEDIA_TAG_LIMIT).default([]).meta(doc('Étiquettes à retirer (slugs).', 'Tags to remove (slugs).')),
+}).superRefine((body, ctx) => {
+  if (body.add.length === 0 && body.remove.length === 0) ctx.addIssue({ code: 'custom', path: ['add'], message: 'Provide tags to add or to remove.' })
+  if (body.add.some(slug => body.remove.includes(slug))) ctx.addIssue({ code: 'custom', path: ['remove'], message: 'A tag cannot be both added and removed.' })
 })
 
 export const apiFolderDeleteQuerySchema = z.strictObject({
@@ -390,6 +456,31 @@ export const apiMediaProcessingSchema = z.object({
 })
 export type ApiMediaProcessing = z.input<typeof apiMediaProcessingSchema>
 
+export const apiTagRefSchema = z.object({
+  id: z.string(),
+  slug: z.string().meta(doc('Identifiant des filtres (`tags=`) et des affectations.', 'Identifier used by filters (`tags=`) and assignments.')),
+  name: z.string(),
+  color: z.enum(TAG_COLORS),
+  level: z.enum(TAG_LEVELS).meta(doc('`global` : commune à toute l\'installation (gérée dans l\'administration) ; `project` : propre au projet.', '`global`: shared by the whole installation (managed in the administration); `project`: specific to the project.')),
+})
+export type ApiTagRef = z.input<typeof apiTagRefSchema>
+
+export const apiTagSchema = apiTagRefSchema.extend({
+  mediaCount: z.number().int().optional().meta(doc('Médias actifs du projet qui la portent (avec `withCounts=true`).', 'Active media items of the project that carry it (with `withCounts=true`).')),
+  createdAt: isoDate,
+  updatedAt: isoDate,
+})
+export type ApiTag = z.input<typeof apiTagSchema>
+
+export const apiTagListSchema = z.object({
+  items: z.array(apiTagSchema).meta(doc('Étiquettes utilisables dans le projet : globales puis du projet, par nom.', 'Tags usable in the project: global ones then those of the project, by name.')),
+})
+
+export const apiMediaTagsBulkResultSchema = z.object({
+  updated: z.number().int().meta(doc('Médias modifiés.', 'Media items changed.')),
+  skipped: z.number().int().meta(doc(`Médias laissés tels quels : ils dépasseraient ${MEDIA_TAG_LIMIT} étiquettes.`, `Media items left unchanged: they would exceed ${MEDIA_TAG_LIMIT} tags.`)),
+})
+
 export const apiMediaSchema = z.object({
   id: z.string(),
   projectId: z.string().nullable().meta(doc('Projet du média ; null = bibliothèque de l\'organisation (copie créée par duplication).', 'Project of the media item; null = organization library (copy created by duplication).')),
@@ -406,6 +497,7 @@ export const apiMediaSchema = z.object({
   duration: z.number().nullable().meta(doc('Durée d\'une vidéo en secondes (3 décimales) ; null pour une image, si le fichier ne l\'indique pas, ou pour un format converti tant que le traitement ne l\'a pas analysé.', 'Duration of a video in seconds (3 decimals); null for an image, when the file does not say, or for a converted format until processing has analysed it.')),
   version: z.number().int().meta(doc('Incrémentée à chaque remplacement du fichier, de l\'image d\'affiche ou d\'un rendu vidéo, à chaque réécriture du fichier par le traitement des vidéos, ou changement du point d\'intérêt ; fait partie des URL.', 'Incremented each time the file, the poster image or a video rendition is replaced, each time video processing rewrites the file, or when the focal point changes; part of the URLs.')),
   folderId: z.string().nullable(),
+  tags: z.array(apiTagRefSchema).meta(doc('Étiquettes du média : globales puis du projet, par nom.', 'Tags of the media item: global ones then those of the project, by name.')),
   url: z.url().meta(doc('URL absolue du fichier original ; signée (temporaire) pour un média privé. Vidéo : pour la lecture, préférez `sources` ; l\'original d\'un format converti (MKV, AVI…) est servi en téléchargement (`Content-Disposition: attachment`). Requêtes partielles acceptées.', 'Absolute URL of the original file; signed (temporary) for a private media item. Video: for playback, prefer `sources`; the original of a converted format (MKV, AVI…) is served as a download (`Content-Disposition: attachment`). Partial requests accepted.')),
   sources: z.array(apiMediaSourceSchema).meta(doc(
     'Sources de lecture d\'une vidéo, par ordre de préférence, à reprendre dans cet ordre en éléments `<source src type>` (le navigateur prend la première qu\'il sait lire) : les rendus produits par le serveur quand ils existent (AV1, puis H.264), sinon le fichier original s\'il est lisible par `<video>`. Vide pour une image, et pour un format converti (MKV, AVI…) tant que son rendu H.264 n\'existe pas.',
@@ -604,4 +696,5 @@ export const apiProblemSchema = z.object({
   maxSize: z.number().int().optional().meta(doc('Taille maximale admise, en octets (FILE_TOO_LARGE).', 'Maximum allowed size, in bytes (FILE_TOO_LARGE).')),
   accepted: z.array(z.string()).optional().meta(doc('Types MIME acceptés, reconnus d\'après le contenu (UNSUPPORTED_TYPE).', 'Accepted MIME types, detected from the contents (UNSUPPORTED_TYPE).')),
   timeout: z.number().int().optional().meta(doc('Délai sans donnée reçue, en secondes, après lequel l\'envoi a été arrêté (UPLOAD_TIMEOUT).', 'Time without data received, in seconds, after which the upload was stopped (UPLOAD_TIMEOUT).')),
+  tags: z.array(z.string()).optional().meta(doc('Étiquettes inconnues de ce projet (TAG_NOT_FOUND).', 'Tags unknown in this project (TAG_NOT_FOUND).')),
 })

@@ -2,7 +2,7 @@ import { mediaListQuerySchema } from '#shared/schemas/media'
 import { listMedia } from '../../../lib/media/service'
 
 /**
- * GET /api/admin/media?project=&folder=&recursive=1&q=&kind=&visibility=&status=active|trash&sort=&page=
+ * GET /api/admin/media?project=&folder=&recursive=1&q=&kind=&visibility=&tags=&match=any|all&untagged=1&status=active|trash&sort=&page=
  * Médias d'un espace : `project` = identifiant d'un projet, absent = bibliothèque de
  * l'organisation ; `folder` = dossier affiché (absent = racine), `recursive` = sous-dossiers
  * compris (404 FOLDER_NOT_FOUND pour un dossier d'un autre espace). 24 par page ; filtres invalides ignorés. Renvoie aussi l'espace et les
@@ -11,5 +11,5 @@ import { listMedia } from '../../../lib/media/service'
 export default defineEventHandler(async (event) => {
   const query = await getValidatedQuery(event, value => mediaListQuerySchema.parse(value))
   const access = await requireSpaceAccess(event, spaceFor(query.project), 'media:read')
-  return { ...await listMedia(access.space, query), ...describeAccess(access) }
+  return { ...await listMedia(access.space, query, tagViewerFor(access.user)), ...describeAccess(access) }
 })

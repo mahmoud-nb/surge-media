@@ -18,5 +18,5 @@ export default defineEventHandler(async (event) => {
   if (!options.faststart && !options.metadata) {
     throw createError({ statusCode: 400, statusMessage: 'Video preparation is disabled on this server (NUXT_MEDIA_VIDEO_PREPARE).' })
   }
-  return { media: toMediaDetail(await prepareStoredMedia(media)) }
+  return { media: toMediaDetail(await prepareStoredMedia(media), await sessionTagViewer(event)) }
 })

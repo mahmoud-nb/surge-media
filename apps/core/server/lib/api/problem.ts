@@ -1,6 +1,7 @@
 import type { H3Event } from 'h3'
 import { API_ERRORS, type ApiErrorCode } from '#shared/utils/api'
 import { FOLDER_MAX_DEPTH, FOLDERS_PER_SPACE_MAX } from '#shared/utils/folders'
+import { MEDIA_TAG_LIMIT, TAG_LIMIT } from '#shared/utils/tags'
 import { TEXT_TRACKS_MAX } from '#shared/utils/text-tracks'
 
 /**
@@ -19,6 +20,8 @@ export interface ProblemExtensions {
   accepted?: string[]
   /** Délai d'inactivité, en secondes (UPLOAD_TIMEOUT). */
   timeout?: number
+  /** Étiquettes inconnues de ce projet (TAG_NOT_FOUND). */
+  tags?: string[]
 }
 
 export interface ProblemOptions {
@@ -98,6 +101,18 @@ function problemDetail(code: ApiErrorCode, data: Record<string, unknown>): strin
       return 'This item is part of the demo\'s reference content: duplicate it, or create your own, to try this action.'
     case 'DEMO_QUOTA':
       return 'The demo\'s upload volume is used up until its next reset.'
+    case 'TAG_NOT_FOUND':
+      return 'No such tag among the global tags and those of this project. See GET /projects/{projectId}/tags.'
+    case 'TAG_NAME_TAKEN':
+      return 'Another tag usable in this project already has this name (case and accent insensitive).'
+    case 'TAG_SLUG_TAKEN':
+      return 'Another tag usable in this project already has this slug.'
+    case 'TAG_LIMIT_REACHED':
+      return `A project can hold ${TAG_LIMIT} tags at most.`
+    case 'TAG_READ_ONLY':
+      return 'Global tags are managed by an administrator in the administration interface.'
+    case 'TOO_MANY_TAGS':
+      return `A media item can carry ${MEDIA_TAG_LIMIT} tags at most.`
     case 'PRESET_NOT_FOUND':
       return `${typeof data.detail === 'string' ? data.detail : 'No such preset in this project.'} See GET /projects/{projectId}/presets.`
 
@@ -112,6 +127,7 @@ function problemExtensions(code: ApiErrorCode, data: Record<string, unknown>): P
   if (code === 'FILE_TOO_LARGE' && Number.isInteger(data.maxSize)) return { maxSize: data.maxSize as number }
   if (code === 'UNSUPPORTED_TYPE' && Array.isArray(data.accepted)) return { accepted: data.accepted.filter(type => typeof type === 'string') }
   if (code === 'UPLOAD_TIMEOUT' && Number.isInteger(data.timeout)) return { timeout: data.timeout as number }
+  if (code === 'TAG_NOT_FOUND' && Array.isArray(data.tags)) return { tags: data.tags.filter(tag => typeof tag === 'string') }
   return undefined
 }
 

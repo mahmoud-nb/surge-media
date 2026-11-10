@@ -20,6 +20,7 @@ export const imageMedia: Media = {
   duration: null,
   version: 3,
   folderId: null,
+  tags: [],
   url: `${BASE}/plage-au-crepuscule.jpg`,
   sources: [],
   previewUrl: `${BASE}/preview/plage-au-crepuscule.webp`,

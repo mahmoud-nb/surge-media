@@ -6,6 +6,8 @@ import type {
   apiMediaSourceSchema,
   apiMeSchema,
   apiPosterSchema,
+  apiTagRefSchema,
+  apiTagSchema,
   apiTextTrackSchema,
   apiUploadRulesSchema,
 } from '../../../apps/core/shared/schemas/api'
@@ -13,7 +15,7 @@ import { apiMediaSchema, apiPresetSchema, apiProjectSchema } from '../../../apps
 import { API_ERRORS } from '../../../apps/core/shared/utils/api'
 import { ACCEPTED_MEDIA_TYPES, CONVERTED_VIDEO_TYPES, mediaKindForMime } from '../../../apps/core/shared/utils/media'
 import { CLIENT_MESSAGES } from '../src/i18n'
-import type { Me, Media, MediaList, MediaProcessing, MediaSource, Poster, Preset, Project, TextTrack, UploadRules, UploadTypeRule } from '../src/types'
+import type { Me, Media, MediaList, MediaProcessing, MediaSource, Poster, Preset, Project, Tag, TagRef, TextTrack, UploadRules, UploadTypeRule } from '../src/types'
 import { UPLOAD_FILE_TYPES } from '../src/upload/file-types'
 import { imageMedia, presets, privateImage, project, videoMedia } from './fixtures'
 
@@ -44,6 +46,10 @@ describe('types du client = schémas de l\'API', () => {
     expectTypeOf<keyof Me>().toEqualTypeOf<keyof Input<typeof apiMeSchema>>()
     expectTypeOf<Me>().toExtend<Input<typeof apiMeSchema>>()
     expectTypeOf<keyof MediaList>().toEqualTypeOf<keyof Input<typeof apiMediaListSchema>>()
+    expectTypeOf<keyof TagRef>().toEqualTypeOf<keyof Input<typeof apiTagRefSchema>>()
+    expectTypeOf<TagRef>().toExtend<Input<typeof apiTagRefSchema>>()
+    expectTypeOf<keyof Tag>().toEqualTypeOf<keyof Input<typeof apiTagSchema>>()
+    expectTypeOf<Tag>().toExtend<Input<typeof apiTagSchema>>()
     expectTypeOf<keyof UploadRules>().toEqualTypeOf<keyof Input<typeof apiUploadRulesSchema>>()
     expectTypeOf<UploadRules>().toExtend<Input<typeof apiUploadRulesSchema>>()
     expectTypeOf<keyof UploadTypeRule>().toEqualTypeOf<keyof Input<typeof apiUploadRulesSchema>['types'][number]>()

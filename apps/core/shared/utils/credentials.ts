@@ -68,5 +68,6 @@ export const CREDENTIAL_ERROR_CODES = [
   'PROJECT_UNAVAILABLE', // projet choisi pour un jeton personnel inaccessible ou archivé
   'ORIGIN_EXISTS', // origine déjà autorisée pour ce projet
   'ORIGIN_LIMIT_REACHED', // nombre maximal d'origines atteint
+  'SCOPE_NOT_HELD', // clé de projet demandée avec une portée que son créateur n'a pas dans le projet (ex. tags:manage)
 ] as const
 export type CredentialErrorCode = (typeof CREDENTIAL_ERROR_CODES)[number]

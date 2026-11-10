@@ -3,7 +3,7 @@ import { type Credential, delegatedCredential, NO_CREDENTIAL, publishableCredent
 import { isSurgeApiError } from './errors'
 import { createHttpClient, type HttpClient, type RequestOptions } from './http'
 import { errorMessage } from './i18n'
-import type { Me, Media, MediaList, MediaListQuery, Preset, Project, UploadFields, UploadRules } from './types'
+import type { Me, Media, MediaList, MediaListQuery, Preset, Project, Tag, UploadFields, UploadRules } from './types'
 import type { UploadProgress } from './upload/request'
 
 export interface SurgeClientOptions {
@@ -41,6 +41,13 @@ export interface SurgeClient {
   project: (options?: RequestOptions & { refresh?: boolean }) => Promise<Project>
   /** Préréglages utilisables dans le projet (intégrés, communs, propres au projet). */
   presets: (options?: RequestOptions) => Promise<Preset[]>
+  tags: {
+    /**
+     * Étiquettes utilisables dans le projet (globales puis du projet) ; leurs `slug` servent au filtre
+     * `tags` de `media.list`. Clé publique : seulement si le projet autorise la liste publique.
+     */
+    list: (options?: RequestOptions & { withCounts?: boolean }) => Promise<Tag[]>
+  }
   /**
    * Règles d'envoi effectives de l'identifiant (types acceptés et leur taille maximale, envois restants,
    * choix imposés) ; null sans la portée `media:upload`. Toujours relues (envois restants).
@@ -101,7 +108,8 @@ export function createSurgeClient(options: SurgeClientOptions): SurgeClient {
   let projectCache: { value: Promise<Project>, at: number } | null = null
 
   async function list(query: MediaListQuery = {}, requestOptions?: RequestOptions): Promise<MediaList> {
-    return http.get<MediaList>(`${project}/media`, { ...query }, requestOptions)
+    const { tags, ...rest } = query
+    return http.get<MediaList>(`${project}/media`, { ...rest, tags: tags?.length ? tags.join(',') : undefined }, requestOptions)
   }
 
   return {
@@ -121,6 +129,12 @@ export function createSurgeClient(options: SurgeClientOptions): SurgeClient {
       return value
     },
     presets: async requestOptions => (await http.get<{ items: Preset[] }>(`${project}/presets`, undefined, requestOptions)).items,
+    tags: {
+      async list(listOptions = {}) {
+        const { withCounts, ...requestOptions } = listOptions
+        return (await http.get<{ items: Tag[] }>(`${project}/tags`, { withCounts: withCounts || undefined }, requestOptions)).items
+      },
+    },
     uploadRules: async requestOptions => (await http.get<Me>('/me', undefined, requestOptions)).upload ?? null,
     media: {
       get: (id, requestOptions) => http.get<Media>(`${project}/media/${encodeURIComponent(id)}`, undefined, requestOptions),
@@ -146,7 +160,7 @@ export function createSurgeClient(options: SurgeClientOptions): SurgeClient {
       upload(file, fields = {}, uploadOptions = {}) {
         return http.upload<Media>(`${project}/media`, {
           method: 'POST',
-          fields: { title: fields.title, altText: fields.altText, visibility: fields.visibility, folderId: fields.folderId },
+          fields: { title: fields.title, altText: fields.altText, visibility: fields.visibility, folderId: fields.folderId, tags: fields.tags?.length ? fields.tags.join(',') : undefined },
           file,
           filename: uploadOptions.filename,
           signal: uploadOptions.signal,

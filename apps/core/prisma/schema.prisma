@@ -191,6 +191,8 @@ model Project {
   allowedOrigins   AllowedOrigin[]
   /// Préréglages de transformation propres au projet
   transformPresets TransformPreset[]
+  /// Étiquettes propres au projet (les globales ont projectId null)
+  tags             Tag[]
 }
 
 /// Politique des transformations libres (paramètres dans l'URL) d'un espace ; les préréglages sont
@@ -465,6 +467,7 @@ model Media {
   textTracks      MediaTextTrack[]
   jobs            MediaJob[]
   renditions      MediaRendition[]
+  tags            MediaTag[]
 
   @@index([projectId, deletedAt, createdAt])
   @@index([projectId, checksum])
@@ -472,6 +475,47 @@ model Media {
   @@index([deletedAt])
   @@index([duplicatedFromId])
   @@index([uploadedByTokenId])
+}
+
+/// Étiquette des médias (architecture-tags.md) : globale (projectId null : bibliothèque et tous les
+/// projets, gérée par un administrateur) ou propre à un projet (gérée par son propriétaire)
+model Tag {
+  id           String     @id @default(cuid())
+  /// Projet de l'étiquette ; null = étiquette globale
+  projectId    String?
+  /// Libellé (1 à 64 caractères) ; unique sans casse ni accents parmi les étiquettes utilisables sur
+  /// un même média (globales + projet) : vérifié par l'application
+  name         String
+  /// Clé d'unicité du nom (tagNameKey : minuscules, sans accents, espaces réduits), écrite avec le nom
+  nameKey      String
+  /// Identifiant lisible des filtres de l'API (TAG_SLUG_PATTERN), même unicité ; inchangé par un renommage
+  slug         String
+  /// Teinte de la palette (TAG_COLORS), validée par l'application
+  color        String     @default("gray")
+  /// Confidentielle : interface connectée seulement, comptes ayant `tags:confidential` ; jamais dans l'API v1
+  confidential Boolean    @default(false)
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
+
+  project Project?   @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  media   MediaTag[]
+
+  @@index([projectId])
+  @@index([nameKey])
+  @@index([slug])
+}
+
+/// Étiquette affectée à un média (globale, ou du projet du média : vérifié par l'application)
+model MediaTag {
+  mediaId   String
+  tagId     String
+  createdAt DateTime @default(now())
+
+  media Media @relation(fields: [mediaId], references: [id], onDelete: Cascade)
+  tag   Tag   @relation(fields: [tagId], references: [id], onDelete: Cascade)
+
+  @@id([mediaId, tagId])
+  @@index([tagId, mediaId])
 }
 
 /// Dérivé d'un média (crop, resize, optimisation…) généré à la demande puis mis en cache

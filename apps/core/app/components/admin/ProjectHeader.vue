@@ -27,6 +27,7 @@ const sections = computed(() => {
   const items = [
     { to: base, label: t('projects.nav.overview') },
     { to: `${base}/media`, label: t('projects.nav.media') },
+    { to: `${base}/tags`, label: t('projects.nav.tags') },
     { to: `${base}/members`, label: t('projects.nav.members') },
     { to: `${base}/transforms`, label: t('projects.nav.transforms') },
   ]

@@ -10,6 +10,7 @@
  * attente ou en cours, ou en échec ; icône fixe (aucune animation continue, WCAG 2.2.2) ; rien une fois
  * traitée ni pour un média non concerné. Dans la corbeille, la tâche est annulée : « en attente » ou
  * « en cours » y serait faux (la restauration la relance), seul l'échec reste signalé.
+ * Étiquettes (architecture-tags.md) : les 3 premières, puis « +n » dont le texte nomme les autres.
  */
 import { Film, Lock, Play } from '@lucide/vue'
 import { processingInProgress } from '~/composables/useProcessingPoll'
@@ -31,6 +32,8 @@ const props = defineProps<{
     processingState?: ProcessingStateValue | null
     /** Date de mise à la corbeille (null : média actif). */
     deletedAt?: string | null
+    /** Étiquettes visibles par l'utilisateur (globales d'abord). */
+    tags?: { id: string, name: string, color: string, confidential: boolean }[]
   }
   /** Affiche une case de sélection (actions groupées). */
   selectable?: boolean
@@ -50,6 +53,10 @@ const details = computed(() => [
   props.media.width && props.media.height ? t('media.dimensions', { width: props.media.width, height: props.media.height }) : null,
   formatBytes(props.media.size, locale.value),
 ].filter(Boolean) as string[])
+
+const TAG_PREVIEW = 3
+const shownTags = computed(() => (props.media.tags ?? []).slice(0, TAG_PREVIEW))
+const hiddenTags = computed(() => (props.media.tags ?? []).slice(TAG_PREVIEW))
 
 /** État affiché en pastille (même présentation que la fiche) : en attente, en cours ou en échec. */
 const processing = computed<ProcessingStateValue | null>(() => {
@@ -110,6 +117,17 @@ const processing = computed<ProcessingStateValue | null>(() => {
         </UiBadge>
         <AdminProcessingStateBadge v-if="processing" :state="processing" class="whitespace-normal" />
       </p>
+      <ul v-if="shownTags.length > 0" class="flex flex-wrap gap-1" :aria-label="t('media.card.tags')">
+        <li v-for="tag in shownTags" :key="tag.id" class="max-w-full">
+          <AdminTagBadge :tag="tag" />
+        </li>
+        <li v-if="hiddenTags.length > 0">
+          <UiBadge :title="hiddenTags.map(tag => tag.name).join(', ')">
+            <span aria-hidden="true">+{{ hiddenTags.length }}</span>
+            <span class="sr-only">{{ t('media.card.moreTags', { names: hiddenTags.map(tag => tag.name).join(', ') }) }}</span>
+          </UiBadge>
+        </li>
+      </ul>
     </div>
   </article>
 </template>

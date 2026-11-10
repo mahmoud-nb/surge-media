@@ -35,6 +35,7 @@ const SETTING: DemoTarget = { kind: 'setting' }
 export const DEMO_GUARDED_ROUTES: readonly DemoGuardedRoute[] = [
   // Administration : médias et pistes (les pistes suivent leur média).
   { method: 'PATCH', path: '/api/admin/media', target: { kind: 'body-ids', resource: 'media' } },
+  { method: 'POST', path: '/api/admin/media/tags', target: { kind: 'body-ids', resource: 'media' } },
   { method: 'DELETE', path: '/api/admin/media/:id', target: media('id') },
   { method: 'PATCH', path: '/api/admin/media/:id', target: media('id') },
   { method: 'PUT', path: '/api/admin/media/:id/file', target: media('id') },
@@ -53,6 +54,9 @@ export const DEMO_GUARDED_ROUTES: readonly DemoGuardedRoute[] = [
   { method: 'PATCH', path: '/api/admin/folders/:id', target: { kind: 'param', resource: 'folder', param: 'id' } },
   { method: 'DELETE', path: '/api/admin/presets/:id', target: { kind: 'param', resource: 'preset', param: 'id' } },
   { method: 'PATCH', path: '/api/admin/presets/:id', target: { kind: 'param', resource: 'preset', param: 'id' } },
+  // Étiquettes (globales ou d'un projet) : celles de l'exemple restent ; un visiteur crée les siennes.
+  { method: 'DELETE', path: '/api/admin/tags/:id', target: { kind: 'param', resource: 'tag', param: 'id' } },
+  { method: 'PATCH', path: '/api/admin/tags/:id', target: { kind: 'param', resource: 'tag', param: 'id' } },
   { method: 'DELETE', path: '/api/admin/projects/:id', target: { kind: 'param', resource: 'project', param: 'id' } },
   { method: 'PATCH', path: '/api/admin/projects/:id', target: { kind: 'param', resource: 'project', param: 'id' } },
   { method: 'DELETE', path: '/api/admin/projects/:id/keys/:keyId', target: { kind: 'param', resource: 'key', param: 'keyId' } },
@@ -85,6 +89,7 @@ export const DEMO_GUARDED_ROUTES: readonly DemoGuardedRoute[] = [
   // API v1.
   { method: 'DELETE', path: '/api/v1/projects/:projectId/folders/:folderId', target: { kind: 'param', resource: 'folder', param: 'folderId' } },
   { method: 'PATCH', path: '/api/v1/projects/:projectId/folders/:folderId', target: { kind: 'param', resource: 'folder', param: 'folderId' } },
+  { method: 'POST', path: '/api/v1/projects/:projectId/media/tags', target: { kind: 'body-ids', resource: 'media' } },
   { method: 'DELETE', path: '/api/v1/projects/:projectId/media/:mediaId', target: media('mediaId') },
   { method: 'PATCH', path: '/api/v1/projects/:projectId/media/:mediaId', target: media('mediaId') },
   { method: 'PUT', path: '/api/v1/projects/:projectId/media/:mediaId/file', target: media('mediaId') },
@@ -93,6 +98,8 @@ export const DEMO_GUARDED_ROUTES: readonly DemoGuardedRoute[] = [
   { method: 'POST', path: '/api/v1/projects/:projectId/media/:mediaId/tracks', target: media('mediaId') },
   { method: 'DELETE', path: '/api/v1/projects/:projectId/media/:mediaId/tracks/:trackId', target: media('mediaId') },
   { method: 'PATCH', path: '/api/v1/projects/:projectId/media/:mediaId/tracks/:trackId', target: media('mediaId') },
+  { method: 'DELETE', path: '/api/v1/projects/:projectId/tags/:tagId', target: { kind: 'param', resource: 'tag', param: 'tagId' } },
+  { method: 'PATCH', path: '/api/v1/projects/:projectId/tags/:tagId', target: { kind: 'param', resource: 'tag', param: 'tagId' } },
 ]
 
 /** Routes d'écriture permises en démo : elles créent, lisent ou n'agissent que sur la session. */
@@ -107,6 +114,7 @@ export const DEMO_ALLOWED_WRITES: readonly string[] = [
   'POST /api/admin/projects/:id/keys',
   'POST /api/admin/projects/:id/members',
   'POST /api/admin/projects/:id/origins',
+  'POST /api/admin/tags',
   'POST /api/admin/tokens',
   'POST /api/admin/users',
   'POST /api/auth/confirm-password',
@@ -121,6 +129,7 @@ export const DEMO_ALLOWED_WRITES: readonly string[] = [
   'POST /api/v1/projects/:projectId/media/:mediaId/duplicate',
   'POST /api/v1/projects/:projectId/media/:mediaId/signed-url',
   'POST /api/v1/projects/:projectId/signed-urls',
+  'POST /api/v1/projects/:projectId/tags',
 ]
 
 interface CompiledRoute {

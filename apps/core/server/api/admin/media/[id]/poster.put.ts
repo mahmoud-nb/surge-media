@@ -17,7 +17,7 @@ export default defineEventHandler(async (event) => {
   const upload = await receiveUpload(event, uploadRules(POSTER_TYPES))
   try {
     const time = posterTimeField(upload.fields.time, media.duration)
-    return { media: toMediaDetail(await setMediaPoster(media, upload, time)) }
+    return { media: toMediaDetail(await setMediaPoster(media, upload, time), await sessionTagViewer(event)) }
   }
   finally {
     await upload.cleanup()

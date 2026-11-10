@@ -174,7 +174,7 @@ async function onSubmit() {
               v-model="form.scopes"
               :legend="t('credentials.scopes.legend')"
               :hint="t('credentials.scopes.hint')"
-              :options="scopeOptions()"
+              :options="scopeOptions(data?.scopes ?? [])"
               :error="message('scopes')"
             />
             <UiRadioCards

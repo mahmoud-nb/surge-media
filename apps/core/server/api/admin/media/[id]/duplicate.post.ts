@@ -14,5 +14,5 @@ export default defineEventHandler(async (event) => {
   const target = await requireSpaceAccess(event, spaceFor(projectId), 'media:upload')
   const copy = await duplicateMedia(media, target.space, { userId: target.user.id }, folderId ?? null)
   setResponseStatus(event, 201)
-  return { media: toMediaDetail(copy) }
+  return { media: toMediaDetail(copy, await sessionTagViewer(event)) }
 })

@@ -87,6 +87,8 @@ async function createdAtOf(resource: Exclude<DemoResource, 'member' | 'setting'>
       return (await prisma.accessToken.findUnique({ where, select }))?.createdAt ?? null
     case 'preset':
       return (await prisma.transformPreset.findUnique({ where, select }))?.createdAt ?? null
+    case 'tag':
+      return (await prisma.tag.findUnique({ where, select }))?.createdAt ?? null
     case 'origin':
       return (await prisma.allowedOrigin.findUnique({ where, select }))?.createdAt ?? null
     case 'user':

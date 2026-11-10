@@ -17,6 +17,8 @@ surgeMedia has two levels of roles: a **platform role** for each user, and a **p
 | Manage all user accounts | ✓ | | | |
 | Personal access tokens | ✓ | ✓ | ✓ | |
 | Interactive API documentation | ✓ | ✓ | ✓ | |
+| Global tags (library and every project) | ✓ | | | |
+| Confidential tags | ✓ | ✓ | | |
 | Audit log | ✓ | | | |
 | Installation settings (transformations, video) | ✓ | | | |
 
@@ -31,6 +33,8 @@ surgeMedia has two levels of roles: a **platform role** for each user, and a **p
 | --- | :---: | :---: | :---: |
 | Read, upload, edit and delete media | ✓ | ✓ | ✓ |
 | API keys and allowed origins | ✓ | ✓ | |
+| Assign tags to media | ✓ | ✓ | ✓ |
+| Project tags (create, rename, delete) | ✓ | | |
 | Members | ✓ | | |
 | Project settings, transformation policy and presets, archiving | ✓ | | |
 

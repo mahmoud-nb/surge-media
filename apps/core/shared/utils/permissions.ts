@@ -32,12 +32,14 @@ export const PERMISSIONS = [
   'users:manage', // tous les comptes et rôles de plateforme
   'audit:read', // journal d'audit de toute l'installation
   'settings:manage', // réglages de l'installation : politique de la bibliothèque, préréglages globaux
+  'tags:global', // liste des étiquettes globales (bibliothèque et tous les projets) : créer, modifier, supprimer
+  'tags:confidential', // voir, filtrer et affecter les étiquettes confidentielles (interface connectée seulement)
 ] as const
 export type Permission = (typeof PERMISSIONS)[number]
 
 export const ROLE_PERMISSIONS: Record<Role, readonly Permission[]> = {
   ADMIN: PERMISSIONS,
-  MANAGER: ['library:read', 'projects:create', 'tokens:personal', 'api:docs', 'users:invite'],
+  MANAGER: ['library:read', 'projects:create', 'tokens:personal', 'api:docs', 'users:invite', 'tags:confidential'],
   DEVELOPER: ['library:read', 'tokens:personal', 'api:docs'],
   EDITOR: ['library:read'],
 }
@@ -68,14 +70,21 @@ export type MediaScope = (typeof MEDIA_SCOPES)[number]
 export const PROJECT_SCOPES = ['project:read', 'project:credentials', 'project:members', 'project:settings'] as const
 export type ProjectScope = (typeof PROJECT_SCOPES)[number]
 
-export type Scope = MediaScope | ProjectScope
+/**
+ * Portée sur la liste des étiquettes d'un projet (créer, modifier, supprimer) ; l'affectation à un
+ * média relève de `media:write`. La liste globale relève de la permission `tags:global`.
+ */
+export const TAG_SCOPES = ['tags:manage'] as const
+export type TagScope = (typeof TAG_SCOPES)[number]
+
+export type Scope = MediaScope | ProjectScope | TagScope
 
 /** Doit rester identique à l'enum `ProjectRole` de prisma/schema.prisma ; du plus au moins privilégié. */
 export const PROJECT_ROLES = ['OWNER', 'DEVELOPER', 'EDITOR'] as const
 export type ProjectRole = (typeof PROJECT_ROLES)[number]
 
 export const PROJECT_ROLE_SCOPES: Record<ProjectRole, readonly Scope[]> = {
-  OWNER: [...PROJECT_SCOPES, ...MEDIA_SCOPES],
+  OWNER: [...PROJECT_SCOPES, ...MEDIA_SCOPES, ...TAG_SCOPES],
   DEVELOPER: ['project:read', 'project:credentials', ...MEDIA_SCOPES],
   EDITOR: ['project:read', ...MEDIA_SCOPES],
 }
@@ -157,16 +166,30 @@ export function hasScope(scopes: readonly string[], scope: Scope): boolean {
 /**
  * Portées qu'un identifiant d'API (jeton personnel, clé) peut porter : jamais de gestion des accès
  * (membres, clés, origines, réglages). `project:read` et `media:read` sont toujours inclus.
+ * `tags:manage` : liste des étiquettes du projet (jamais les étiquettes globales ni confidentielles).
  */
-export const TOKEN_SCOPES = ['project:read', ...MEDIA_SCOPES] as const satisfies readonly Scope[]
+export const TOKEN_SCOPES = ['project:read', ...MEDIA_SCOPES, ...TAG_SCOPES] as const satisfies readonly Scope[]
 export type TokenScope = (typeof TOKEN_SCOPES)[number]
 
 /** Portées incluses d'office dans tout identifiant. */
 export const TOKEN_BASE_SCOPES = ['project:read', 'media:read'] as const satisfies readonly TokenScope[]
 
 /** Portées que l'on peut ajouter à un jeton personnel ou à une clé secrète. */
-export const TOKEN_OPTIONAL_SCOPES = ['media:upload', 'media:write', 'media:delete'] as const satisfies readonly TokenScope[]
+export const TOKEN_OPTIONAL_SCOPES = ['media:upload', 'media:write', 'media:delete', 'tags:manage'] as const satisfies readonly TokenScope[]
 export type TokenOptionalScope = (typeof TOKEN_OPTIONAL_SCOPES)[number]
+
+/** Portées qu'un jeton délégué peut demander : celles des médias, jamais la gestion des étiquettes. */
+export const DELEGATED_TOKEN_SCOPES = ['project:read', ...MEDIA_SCOPES] as const satisfies readonly TokenScope[]
+export type DelegatedTokenScope = (typeof DELEGATED_TOKEN_SCOPES)[number]
+
+/**
+ * Portées demandées pour une clé de projet que son créateur ne détient pas lui-même dans le projet
+ * (TG6) : une clé ne donne jamais plus que les droits de qui la crée (un développeur, qui crée des
+ * clés, n'obtient pas ainsi `tags:manage`). Liste vide = création permise.
+ */
+export function unheldScopes(requested: readonly string[], creatorScopes: readonly Scope[]): string[] {
+  return requested.filter(scope => !(creatorScopes as readonly string[]).includes(scope))
+}
 
 /** Portées complètes d'un identifiant : portées de base + portées choisies, dans l'ordre canonique. */
 export function tokenScopes(optional: readonly string[]): TokenScope[] {
@@ -206,6 +229,7 @@ export function credentialScopes(credential: CredentialContext): TokenScope[] {
       return credential.ownProject ? [...TOKEN_BASE_SCOPES] : []
     case 'DELEGATED':
       if (!credential.ownProject) return []
-      return TOKEN_SCOPES.filter(scope => credential.scopes.includes(scope) && credential.issuerScopes.includes(scope))
+      // Jamais tags:manage, même si la charge le portait (le schéma de la charge le refuse déjà).
+      return DELEGATED_TOKEN_SCOPES.filter(scope => credential.scopes.includes(scope) && credential.issuerScopes.includes(scope))
   }
 }

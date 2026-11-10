@@ -19,5 +19,5 @@ export default defineEventHandler(async (event) => {
     throw createError({ statusCode: 400, statusMessage: 'Invalid text track fields', data: { issues: input.error.issues.map(issue => ({ path: issue.path.join('.'), message: issue.message })) } })
   }
   await addTextTrack(media, file, input.data)
-  return { media: toMediaDetail((await findMedia(media.id))!) }
+  return { media: toMediaDetail((await findMedia(media.id))!, await sessionTagViewer(event)) }
 })

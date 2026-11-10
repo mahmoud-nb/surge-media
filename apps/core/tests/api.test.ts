@@ -284,7 +284,7 @@ describe('contrat Project v1', () => {
 
 describe('paramètres de l\'API', () => {
   it('liste : valeurs par défaut, ids dédoublonnés, validation stricte', () => {
-    expect(apiMediaListQuerySchema.parse({})).toEqual({ sort: 'newest', limit: 24 })
+    expect(apiMediaListQuerySchema.parse({})).toEqual({ sort: 'newest', limit: 24, tagMatch: 'any' })
     expect(apiMediaListQuerySchema.parse({ ids: 'abcdefgh1, abcdefgh2,abcdefgh1', withTotal: 'true', limit: '100' }))
       .toMatchObject({ ids: ['abcdefgh1', 'abcdefgh2'], withTotal: true, limit: 100 })
     for (const query of [{ limit: '0' }, { limit: '101' }, { sort: 'random' }, { kind: 'IMAGE' }, { visibility: 'secret' }, { ids: '../x' }, { withTotal: 'yes' }]) {

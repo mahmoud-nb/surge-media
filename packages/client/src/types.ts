@@ -8,7 +8,7 @@ export type MediaKind = 'image' | 'video'
 export type MediaVisibility = 'public' | 'private'
 export type TransformFormat = 'jpg' | 'png' | 'webp' | 'avif'
 export type TransformPolicy = 'open' | 'signed' | 'presets'
-export type TokenScope = 'project:read' | 'media:read' | 'media:upload' | 'media:write' | 'media:delete'
+export type TokenScope = 'project:read' | 'media:read' | 'media:upload' | 'media:write' | 'media:delete' | 'tags:manage'
 export type TextTrackKind = 'subtitles' | 'captions' | 'descriptions' | 'chapters'
 export type RenditionName = 'av1' | 'h264'
 export type ProcessingStatus = 'pending' | 'processing' | 'ready' | 'failed'
@@ -23,6 +23,30 @@ export type ProcessingError
 export type MediaSort = 'newest' | 'oldest' | 'name' | 'size'
 export type PresetLevel = 'builtin' | 'global' | 'project'
 export type CredentialType = 'personal' | 'secret' | 'publishable' | 'delegated'
+/** Teinte d'affichage d'une étiquette (palette fixe du serveur). */
+export type TagColor = 'gray' | 'red' | 'orange' | 'amber' | 'green' | 'teal' | 'blue' | 'violet'
+/** `global` : commune à l'installation ; `project` : propre au projet. */
+export type TagLevel = 'global' | 'project'
+/** Filtre à plusieurs étiquettes : au moins une (`any`, défaut) ou toutes (`all`). */
+export type TagMatch = 'any' | 'all'
+
+/** Étiquette telle que la porte un média. */
+export interface TagRef {
+  id: string
+  /** Identifiant des filtres (`tags`) et des affectations. */
+  slug: string
+  name: string
+  color: TagColor
+  level: TagLevel
+}
+
+/** Étiquette utilisable dans le projet (`client.tags.list()`). */
+export interface Tag extends TagRef {
+  /** Médias actifs du projet qui la portent (avec `withCounts`). */
+  mediaCount?: number
+  createdAt: string
+  updatedAt: string
+}
 
 /** Point d'intérêt : fractions (0 à 1) de la largeur et de la hauteur, depuis le coin haut gauche. */
 export interface FocalPoint {
@@ -94,6 +118,8 @@ export interface Media {
   duration: number | null
   version: number
   folderId: string | null
+  /** Étiquettes du média : globales puis du projet, par nom. */
+  tags: TagRef[]
   /** Fichier original ; signé (temporaire) pour un média privé. */
   url: string
   sources: MediaSource[]
@@ -123,6 +149,12 @@ export interface MediaListQuery {
   /** Dossier : identifiant, ou `root` pour les médias hors dossier. */
   folder?: string
   recursive?: boolean
+  /** Étiquettes (slugs) : seulement les médias qui les portent, selon `tagMatch` ; absent = tous les médias. */
+  tags?: string[]
+  /** Avec plusieurs étiquettes : au moins une (`any`, défaut) ou toutes (`all`). */
+  tagMatch?: TagMatch
+  /** Seulement les médias sans étiquette (incompatible avec `tags`). */
+  untagged?: boolean
   sort?: MediaSort
   limit?: number
   cursor?: string
@@ -195,6 +227,8 @@ export interface UploadFields {
   visibility?: MediaVisibility
   /** Dossier du projet (hors dossier par défaut). */
   folderId?: string
+  /** Étiquettes du nouveau média (slugs). */
+  tags?: string[]
 }
 
 interface ProjectRef {
