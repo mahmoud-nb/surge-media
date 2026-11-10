@@ -15,8 +15,26 @@ export function revisionScope(space: Space): string {
   return space.type === 'project' ? `project:${space.id}` : 'library'
 }
 
+/**
+ * Révision des étiquettes **globales** (architecture-tags.md, TG10) : elles apparaissent dans les
+ * réponses de tous les espaces ; les ETag les incluent par ce compteur unique plutôt que d'incrémenter
+ * la révision de chaque projet à chaque modification.
+ */
+export const GLOBAL_TAGS_REVISION_SCOPE = 'tags'
+
 export async function getRevision(space: Space): Promise<number> {
-  const scope = revisionScope(space)
+  return getScopeRevision(revisionScope(space))
+}
+
+export async function getGlobalTagsRevision(): Promise<number> {
+  return getScopeRevision(GLOBAL_TAGS_REVISION_SCOPE)
+}
+
+export async function bumpGlobalTagsRevision(): Promise<void> {
+  await bumpScopes([GLOBAL_TAGS_REVISION_SCOPE])
+}
+
+async function getScopeRevision(scope: string): Promise<number> {
   const cached = cache.get(scope)
   if (cached !== undefined) return cached
   const prisma = await usePrisma()
@@ -31,7 +49,10 @@ export async function getRevision(space: Space): Promise<number> {
  * journalisé (les listes resteraient au plus en cache jusqu'à la prochaine écriture).
  */
 export async function bumpRevision(...spaces: Space[]): Promise<void> {
-  const scopes = [...new Set(spaces.map(revisionScope))]
+  await bumpScopes([...new Set(spaces.map(revisionScope))])
+}
+
+async function bumpScopes(scopes: readonly string[]): Promise<void> {
   for (const scope of scopes) {
     cache.delete(scope)
     try {

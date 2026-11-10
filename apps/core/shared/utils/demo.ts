@@ -11,7 +11,7 @@ export const DEMO_ERROR_CODES = ['DEMO_READ_ONLY', 'DEMO_QUOTA'] as const
 export type DemoErrorCode = (typeof DEMO_ERROR_CODES)[number]
 
 /** Ressources protégées citées par `403 DEMO_READ_ONLY` (`details.resource`). */
-export const DEMO_RESOURCES = ['media', 'folder', 'project', 'member', 'origin', 'key', 'token', 'preset', 'user', 'setting'] as const
+export const DEMO_RESOURCES = ['media', 'folder', 'project', 'member', 'origin', 'key', 'token', 'preset', 'tag', 'user', 'setting'] as const
 export type DemoResource = (typeof DEMO_RESOURCES)[number]
 
 /** Réglage (`Setting`) qui date le contenu de référence : millisecondes Unix, écrit par `surge-media demo snapshot`. */

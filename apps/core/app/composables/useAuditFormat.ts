@@ -120,6 +120,21 @@ export function useAuditFormat() {
         return data.transformation ? t('audit.details.transformation', { value: text(data.transformation) }) : null
       case 'preset.updated':
         return t('audit.details.fields', { fields: Object.keys(change).map(field => t(`audit.fields.${field}`)).join(', ') })
+      case 'tag.created':
+        return [
+          t(`audit.details.tagLevel.${data.level === 'project' ? 'project' : 'global'}`),
+          data.confidential === true ? t('audit.details.tagConfidential') : null,
+        ].filter(Boolean).join(' · ')
+      case 'tag.updated':
+        return [
+          t(`audit.details.tagLevel.${data.level === 'project' ? 'project' : 'global'}`),
+          t('audit.details.fields', { fields: Object.keys(change).map(field => t(`audit.fields.${field}`)).join(', ') }),
+        ].join(' · ')
+      case 'tag.deleted':
+        return [
+          t(`audit.details.tagLevel.${data.level === 'project' ? 'project' : 'global'}`),
+          t('audit.details.tagMedia', { count: Number(data.mediaCount ?? 0) }, Number(data.mediaCount ?? 0)),
+        ].join(' · ')
       case 'settings.updated':
         if (change.mfaPolicy) {
           return t('audit.details.mfaPolicy', {

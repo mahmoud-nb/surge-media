@@ -23,5 +23,5 @@ export default defineEventHandler(async (event) => {
   const publicTrackUrls = isPublic ? media.textTracks.map(track => ({ id: track.id, url: `${base}${trackPath(media, track.id)}` })) : []
   const publicSources = isPublic ? videoSources(media, media.renditions, name => `${base}${name ? renditionPath(media, name) : mediaPath(media)}`) : []
   const transforms = hasDerivedFiles(media) ? await spaceTransformOptions(media.projectId) : null
-  return { media: toMediaDetail(media), publicUrl, publicPosterUrl, publicTrackUrls, publicSources, transforms, ...describeAccess(access) }
+  return { media: toMediaDetail(media, await sessionTagViewer(event)), publicUrl, publicPosterUrl, publicTrackUrls, publicSources, transforms, ...describeAccess(access) }
 })

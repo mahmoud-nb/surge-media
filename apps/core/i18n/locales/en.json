@@ -1710,6 +1710,7 @@
       "media": "Media",
       "user": "Accounts",
       "preset": "Presets",
+      "tag": "Tags",
       "settings": "Settings"
     },
     "loadError": "Unable to load the audit log.",
@@ -1787,6 +1788,11 @@
         "license_removed": "License removed",
         "license_clock_reset": "License time mark brought back",
         "license_usage_declared": "Instance use declared"
+      },
+      "tag": {
+        "created": "Tag created",
+        "updated": "Tag updated",
+        "deleted": "Tag deleted"
       }
     },
     "details": {
@@ -1816,7 +1822,13 @@
       "license": "{plan} · no. {id}",
       "licenseClock": "Mark: {from} → {to}",
       "licenseUsageConfirmed": "Confirmed: {usage}",
-      "licenseUsageNone": "not declared"
+      "licenseUsageNone": "not declared",
+      "tagLevel": {
+        "global": "Global tag",
+        "project": "Project tag"
+      },
+      "tagConfidential": "Confidential",
+      "tagMedia": "No media affected | Removed from one media item | Removed from {count} media items"
     },
     "fields": {
       "name": "name",
@@ -1824,7 +1836,9 @@
       "description": "description",
       "publicListing": "public listing",
       "transformPolicy": "transformation policy",
-      "transformation": "parameters"
+      "transformation": "parameters",
+      "color": "color",
+      "confidential": "confidentiality"
     },
     "via": "Through the API — {credential}",
     "deletedCredential": "Deleted API credential",

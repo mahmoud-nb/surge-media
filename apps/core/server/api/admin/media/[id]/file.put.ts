@@ -15,7 +15,7 @@ export default defineEventHandler(async (event) => {
   const rules = uploadRules(undefined, undefined, acceptedMimeTypes(await videoProcessingActive()))
   const upload = await receiveUpload(event, { ...rules, expectedKind: media.kind })
   try {
-    return { media: toMediaDetail(await replaceMediaFile(media, upload)) }
+    return { media: toMediaDetail(await replaceMediaFile(media, upload), await sessionTagViewer(event)) }
   }
   finally {
     await upload.cleanup()

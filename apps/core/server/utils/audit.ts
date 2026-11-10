@@ -12,7 +12,7 @@ import type { Prisma, User } from '../generated/prisma/client'
 export interface AuditEntry {
   action: AuditAction
   projectId?: string | null
-  targetType?: 'project' | 'member' | 'token' | 'origin' | 'media' | 'user' | 'preset'
+  targetType?: 'project' | 'member' | 'token' | 'origin' | 'media' | 'user' | 'preset' | 'tag'
   targetId?: string
   data?: { label?: string } & Record<string, unknown>
 }

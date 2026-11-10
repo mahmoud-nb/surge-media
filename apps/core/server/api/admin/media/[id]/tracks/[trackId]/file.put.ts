@@ -13,5 +13,5 @@ export default defineEventHandler(async (event) => {
   const { media } = await requireMediaAccess(event, () => findMedia(getRouterParam(event, 'id') ?? ''), 'media:write')
   const file = await receiveSmallUpload(event, TEXT_TRACK_MAX_SIZE)
   await replaceTextTrackFile(media, getRouterParam(event, 'trackId') ?? '', file)
-  return { media: toMediaDetail((await findMedia(media.id))!) }
+  return { media: toMediaDetail((await findMedia(media.id))!, await sessionTagViewer(event)) }
 })

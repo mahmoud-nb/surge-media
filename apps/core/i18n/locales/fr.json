@@ -1710,6 +1710,7 @@
       "media": "Médias",
       "user": "Comptes",
       "preset": "Préréglages",
+      "tag": "Étiquettes",
       "settings": "Réglages"
     },
     "loadError": "Impossible de charger le journal d'audit.",
@@ -1787,6 +1788,11 @@
         "license_removed": "Licence retirée",
         "license_clock_reset": "Repère de date de la licence ramené",
         "license_usage_declared": "Usage de l'instance déclaré"
+      },
+      "tag": {
+        "created": "Étiquette créée",
+        "updated": "Étiquette modifiée",
+        "deleted": "Étiquette supprimée"
       }
     },
     "details": {
@@ -1816,7 +1822,13 @@
       "license": "{plan} · n° {id}",
       "licenseClock": "Repère : {from} → {to}",
       "licenseUsageConfirmed": "Confirmé : {usage}",
-      "licenseUsageNone": "non déclaré"
+      "licenseUsageNone": "non déclaré",
+      "tagLevel": {
+        "global": "Étiquette globale",
+        "project": "Étiquette du projet"
+      },
+      "tagConfidential": "Confidentielle",
+      "tagMedia": "Aucun média concerné | Retirée d'un média | Retirée de {count} médias"
     },
     "fields": {
       "name": "nom",
@@ -1824,7 +1836,9 @@
       "description": "description",
       "publicListing": "liste publique",
       "transformPolicy": "politique des transformations",
-      "transformation": "paramètres"
+      "transformation": "paramètres",
+      "color": "couleur",
+      "confidential": "confidentialité"
     },
     "via": "Par l'API — {credential}",
     "deletedCredential": "Identifiant d'API supprimé",

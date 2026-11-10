@@ -5,5 +5,5 @@ import { deleteTextTrack } from '../../../../../lib/media/tracks'
 export default defineEventHandler(async (event) => {
   const { media } = await requireMediaAccess(event, () => findMedia(getRouterParam(event, 'id') ?? ''), 'media:write')
   await deleteTextTrack(media, getRouterParam(event, 'trackId') ?? '')
-  return { media: toMediaDetail((await findMedia(media.id))!) }
+  return { media: toMediaDetail((await findMedia(media.id))!, await sessionTagViewer(event)) }
 })

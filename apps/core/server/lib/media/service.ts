@@ -7,11 +7,13 @@ import { ACCEPTED_MEDIA_TYPES, acceptedMimeTypes, CONVERTED_MIME_TYPES, extensio
 import { mediaSearchColumns, normalizeSearchText } from '#shared/utils/search'
 import { sameFocalPoint } from '#shared/utils/transforms'
 import { isConvertedContainer, type VideoHdrTransfer, type VideoMetadata, videoMetadata, type VideoRewrite, VIDEO_REWRITES } from '#shared/utils/video'
+import type { TagViewer } from '#shared/utils/tags'
 import { BACKFILL_PRIORITY, type ProcessingStateValue, RENDITION_FORMATS, RENDITION_NAMES, type RenditionName } from '#shared/utils/video-processing'
 import type { AccessToken, Media, MediaJob, MediaRendition, MediaTextTrack, Prisma } from '../../generated/prisma/client'
 import type { Space } from '../../utils/access'
 import { folderWhere, requireFolderInSpace } from '../folders/service'
 import { useMediaStorage } from '../storage'
+import { carriedTags, type MediaTagLink, mediaTagViews, replaceMediaTagLinks, resolveTagSlugs, TAG_LINK_INCLUDE, tagFilterWhere } from '../tags/service'
 import type { ProbeResult } from '../video-processing/ffprobe'
 import {
   cancelActiveJobs,
@@ -79,10 +81,14 @@ import { hasDerivedFiles, mediaFocalPoint, pregenerateVariants } from './variant
  * jeté.
  */
 
-/** Relations lues pour les listes de l'administration : auteur de l'envoi seulement (requête légère). */
+/**
+ * Relations lues pour les listes de l'administration : auteur de l'envoi et étiquettes (deux lectures
+ * groupées par page, jamais une par média).
+ */
 const MEDIA_LIST_INCLUDE = {
   uploadedBy: { select: { id: true, name: true, email: true } },
   uploadedByToken: { select: { id: true, name: true, type: true, prefix: true } },
+  ...TAG_LINK_INCLUDE,
 } as const
 /**
  * Relations d'un média complet (fiche, réponse de chaque écriture) : en plus, ses pistes de texte, ses
@@ -97,6 +103,8 @@ const MEDIA_INCLUDE = {
 export type MediaListRecord = Media & {
   uploadedBy: { id: string, name: string | null, email: string } | null
   uploadedByToken: { id: string, name: string, type: AccessToken['type'], prefix: string } | null
+  /** Étiquettes du média (architecture-tags.md), confidentielles comprises : filtrées à la sérialisation. */
+  tags: MediaTagLink[]
 }
 /** Média complet (`MEDIA_INCLUDE`). */
 export type MediaWithUploader = MediaListRecord & ProcessingRelations & {
@@ -129,13 +137,16 @@ function provenanceData(provenance: MediaProvenance) {
 
 // ─── Représentation API ──────────────────────────────────────────────────────
 
-/** Représentation pour l'administration (chemins relatifs, signés si privé ou en corbeille). */
-export function toMediaSummary(media: MediaListRecord) {
-  return summaryFields(media, adminMediaPaths(media, hasDerivedFiles(media)))
+/**
+ * Représentation pour l'administration (chemins relatifs, signés si privé ou en corbeille). `viewer` :
+ * qui la lit (les étiquettes confidentielles ne sont montrées qu'à la permission `tags:confidential`).
+ */
+export function toMediaSummary(media: MediaListRecord, viewer: TagViewer) {
+  return summaryFields(media, adminMediaPaths(media, hasDerivedFiles(media)), viewer)
 }
 
 /** Champs de la représentation résumée, chemins déjà calculés (une seule signature par réponse). */
-function summaryFields(media: MediaListRecord, paths: AdminMediaPaths) {
+function summaryFields(media: MediaListRecord, paths: AdminMediaPaths, viewer: TagViewer) {
   return {
     id: media.id,
     projectId: media.projectId,
@@ -163,6 +174,8 @@ function summaryFields(media: MediaListRecord, paths: AdminMediaPaths) {
     poster: media.posterKey && media.posterWidth && media.posterHeight
       ? { url: paths.posterUrl, width: media.posterWidth, height: media.posterHeight, time: media.posterTime }
       : null,
+    /** Étiquettes visibles par le lecteur (globales d'abord, puis par nom). */
+    tags: mediaTagViews(media.tags, viewer),
     uploadedBy: media.uploadedBy,
     /** Identifiant d'API ayant envoyé le média (null : interface, ou identifiant supprimé depuis). */
     uploadedByToken: media.uploadedByToken,
@@ -189,12 +202,12 @@ export function mediaProcessingDetail(media: Pick<Media, 'processingState'> & { 
  * `sources` = liste prête pour `<video><source>` (server/lib/media/sources.ts). Leurs liens sont signés
  * comme l'original (« admin » si privé, en corbeille ou retenu).
  */
-export function toMediaDetail(media: MediaWithUploader) {
+export function toMediaDetail(media: MediaWithUploader, viewer: TagViewer) {
   const renditions = RENDITION_NAMES.flatMap(name => media.renditions.filter(rendition => rendition.name === name).map(rendition => ({ ...rendition, name })))
   const paths = adminMediaPaths(media, hasDerivedFiles(media), media.textTracks.map(track => track.id), renditions.map(rendition => rendition.name))
   const renditionUrl = (name: RenditionName) => paths.renditions[name]!
   return {
-    ...summaryFields(media, paths),
+    ...summaryFields(media, paths, viewer),
     checksum: media.checksum,
     metadata: media.metadata,
     duplicatedFromId: media.duplicatedFromId,
@@ -260,9 +273,11 @@ const SORTS: Record<MediaListQuery['sort'], Prisma.MediaOrderByWithRelationInput
 /**
  * Médias d'un espace ; l'espace est toujours imposé par le serveur, les filtres s'y ajoutent.
  * Médias actifs : ceux du dossier demandé (racine par défaut), sous-dossiers compris si
- * `recursive` ; corbeille : tout l'espace.
+ * `recursive` ; corbeille : tout l'espace. Étiquettes (architecture-tags.md, TG3) : aucune demandée =
+ * aucun filtre ; plusieurs = au moins une (`match=any`, défaut) ou toutes ; slugs inconnus ou
+ * invisibles pour le lecteur ignorés, comme les autres filtres invalides de l'administration.
  */
-export async function listMedia(space: Space, query: MediaListQuery) {
+export async function listMedia(space: Space, query: MediaListQuery, viewer: TagViewer) {
   const where: Prisma.MediaWhereInput = {
     projectId: projectIdOf(space),
     deletedAt: query.status === 'trash' ? { not: null } : null,
@@ -275,6 +290,11 @@ export async function listMedia(space: Space, query: MediaListQuery) {
   }
   if (query.kind) where.kind = query.kind as MediaKind
   if (query.visibility) where.visibility = query.visibility
+  if (query.tags?.length || query.untagged) {
+    const tagIds = await resolveTagSlugs(projectIdOf(space), query.tags ?? [], viewer, false)
+    const tagWhere = await tagFilterWhere(tagIds, { slugs: query.tags, match: query.match, untagged: query.untagged }, viewer)
+    if (tagWhere) where.AND = [tagWhere]
+  }
 
   const prisma = await usePrisma()
   const [total, items] = await Promise.all([
@@ -287,7 +307,7 @@ export async function listMedia(space: Space, query: MediaListQuery) {
       take: MEDIA_PAGE_SIZE,
     }),
   ])
-  return { items: items.map(toMediaSummary), total, page: query.page, pageSize: MEDIA_PAGE_SIZE }
+  return { items: items.map(item => toMediaSummary(item, viewer)), total, page: query.page, pageSize: MEDIA_PAGE_SIZE }
 }
 
 // ─── Écriture ────────────────────────────────────────────────────────────────
@@ -640,7 +660,7 @@ async function deleteVersionVariants(media: Pick<Media, 'id' | 'version'>): Prom
  * URL changent (les anciennes redirigent), les dérivés de l'ancienne version sont supprimés et
  * régénérés à la demande. Mise à jour conditionnée à la version lue (409 si concurrente).
  */
-export async function updateMediaMetadata(media: Media, input: MediaMetadataInput): Promise<MediaWithUploader> {
+export async function updateMediaMetadata(media: Media, input: Omit<MediaMetadataInput, 'tagIds'>): Promise<MediaWithUploader> {
   const { focalPoint, ...fields } = input
   if (fields.folderId) await requireFolderInSpace(spaceOfMedia(media), fields.folderId)
   const data: Prisma.MediaUncheckedUpdateManyInput = { ...fields }
@@ -786,6 +806,9 @@ export async function duplicateMedia(media: Media, target: Space, provenance: Me
       },
       include: MEDIA_INCLUDE,
     })
+    // Étiquettes (architecture-tags.md, TG9) : toutes dans le même espace ; ailleurs, globales et homonymes.
+    const tagIds = await prisma.$transaction(tx => carriedTags(tx, media.id, projectIdOf(target)))
+    if (tagIds.length) await prisma.mediaTag.createMany({ data: tagIds.map(tagId => ({ mediaId: copy.id, tagId })) })
     if (media.kind === 'VIDEO') await copyTextTracks(media, copy.id)
     const withPoster = media.posterKey ? await copyPoster(media, copy) : copy
     // Copie déjà enregistrée : un échec ici ne doit pas supprimer son original (bloc catch ci-dessous).
@@ -793,7 +816,7 @@ export async function duplicateMedia(media: Media, target: Space, provenance: Me
       console.error(`[surge-media] Traitement du média ${media.id} non repris par sa copie ${copy.id} :`, error)
       return false
     })
-    const duplicate = media.kind === 'VIDEO' ? await findMediaOrFail(copy.id) : withPoster
+    const duplicate = media.kind === 'VIDEO' || tagIds.length ? await findMediaOrFail(copy.id) : withPoster
     await mediaChanged([copy.id], target)
     if (queued) notifyJobQueued()
     pregenerateVariants(duplicate)
@@ -808,16 +831,21 @@ export async function duplicateMedia(media: Media, target: Space, provenance: Me
 /**
  * Change l'espace d'un média sans changer son identifiant ni ses URL (fichier et dérivés
  * inchangés). Il quitte son dossier, propre à l'ancien espace, pour `folderId` (dossier de
- * l'espace cible, racine par défaut).
+ * l'espace cible, racine par défaut). Étiquettes (TG9) : globales gardées, celles de l'ancien projet
+ * remplacées par leurs homonymes du projet cible, sinon retirées.
  */
 export async function moveMedia(media: Media, target: Space, folderId: string | null = null): Promise<MediaWithUploader> {
   if (media.deletedAt) throw mediaError(409, 'IN_TRASH')
   if (folderId) await requireFolderInSpace(target, folderId)
   const prisma = await usePrisma()
-  const moved = await prisma.media.update({
-    where: { id: media.id },
-    data: { projectId: projectIdOf(target), folderId },
-    include: MEDIA_INCLUDE,
+  const moved = await prisma.$transaction(async (tx) => {
+    const tagIds = await carriedTags(tx, media.id, projectIdOf(target))
+    await replaceMediaTagLinks(tx, media.id, tagIds)
+    return tx.media.update({
+      where: { id: media.id },
+      data: { projectId: projectIdOf(target), folderId },
+      include: MEDIA_INCLUDE,
+    })
   })
   await mediaChanged([media.id], spaceOfMedia(media), target)
   return moved

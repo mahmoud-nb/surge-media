@@ -78,6 +78,7 @@ beforeEach(() => {
   vi.stubGlobal('describeAccess', () => ({ space: { type: 'library', project: null }, projectRole: null, scopes: [] }))
   vi.stubGlobal('requireAuth', requireAuth)
   vi.stubGlobal('requireMediaAccess', requireMediaAccess)
+  vi.stubGlobal('sessionTagViewer', async () => ({ confidential: true }))
   vi.stubGlobal('recordAudit', audit)
   vi.stubGlobal('getRouterParam', (event: FakeEvent, name: string) => event.params[name])
   vi.stubGlobal('getRequestHeader', (event: FakeEvent, name: string) => event.headers[name])

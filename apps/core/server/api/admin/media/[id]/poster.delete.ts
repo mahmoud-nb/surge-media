@@ -7,5 +7,5 @@ import { findMedia, removeMediaPoster, toMediaDetail } from '../../../../lib/med
  */
 export default defineEventHandler(async (event) => {
   const { media } = await requireMediaAccess(event, () => findMedia(getRouterParam(event, 'id') ?? ''), 'media:write')
-  return { media: toMediaDetail(await removeMediaPoster(media)) }
+  return { media: toMediaDetail(await removeMediaPoster(media), await sessionTagViewer(event)) }
 })

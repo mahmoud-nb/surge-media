@@ -11,5 +11,5 @@ export default defineEventHandler(async (event) => {
   const { media } = await requireMediaAccess(event, () => findMedia(getRouterParam(event, 'id') ?? ''), 'media:write')
   const update = await readValidatedBody(event, body => textTrackUpdateSchema.parse(body))
   await updateTextTrack(media, getRouterParam(event, 'trackId') ?? '', update)
-  return { media: toMediaDetail((await findMedia(media.id))!) }
+  return { media: toMediaDetail((await findMedia(media.id))!, await sessionTagViewer(event)) }
 })

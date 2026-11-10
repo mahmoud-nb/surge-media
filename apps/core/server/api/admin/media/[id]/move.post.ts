@@ -14,7 +14,7 @@ export default defineEventHandler(async (event) => {
   const { media, access } = await requireMediaAccess(event, () => findMedia(getRouterParam(event, 'id') ?? ''), 'media:delete')
   const { projectId, folderId } = await readValidatedBody(event, body => mediaTargetSchema.parse(body))
   const target = await requireSpaceAccess(event, spaceFor(projectId), 'media:upload')
-  if (sameSpace(access.space, target.space)) return { media: toMediaDetail(media) }
+  if (sameSpace(access.space, target.space)) return { media: toMediaDetail(media, await sessionTagViewer(event)) }
 
   const moved = await moveMedia(media, target.space, folderId ?? null)
   await recordAudit(event, {
@@ -28,5 +28,5 @@ export default defineEventHandler(async (event) => {
       to: target.project ? { id: target.project.id, name: target.project.name } : null,
     },
   })
-  return { media: toMediaDetail(moved) }
+  return { media: toMediaDetail(moved, await sessionTagViewer(event)) }
 })

@@ -44,6 +44,11 @@ export const AUDIT_ACTIONS = [
   'preset.created',
   'preset.updated',
   'preset.deleted',
+  // Étiquettes (globales ou d'un projet) : data.level = global | project ; data.changes (nom, slug,
+  // couleur, confidentialité) ; data.mediaCount à la suppression. L'affectation n'est pas journalisée.
+  'tag.created',
+  'tag.updated',
+  'tag.deleted',
   'settings.updated',
   // Licence commerciale : data.id = numéro de licence, data.label = titulaire, data.plan ; jamais le jeton.
   // Remise à zéro du repère de la date de référence (CLI) : data.from / data.to (ISO), data.by = cli.
@@ -56,7 +61,7 @@ export const AUDIT_ACTIONS = [
 ] as const
 export type AuditAction = (typeof AUDIT_ACTIONS)[number]
 
-export const AUDIT_CATEGORIES = ['project', 'member', 'key', 'token', 'origin', 'media', 'user', 'preset', 'settings'] as const
+export const AUDIT_CATEGORIES = ['project', 'member', 'key', 'token', 'origin', 'media', 'user', 'preset', 'tag', 'settings'] as const
 export type AuditCategory = (typeof AUDIT_CATEGORIES)[number]
 
 export function auditCategory(action: string): AuditCategory | null {

@@ -13,6 +13,7 @@ import { processingDetail } from '../server/lib/video-processing/jobs'
 
 const SECRET = 'secret-de-test'
 const id = 'cmvideo0001'
+const VIEWER = { confidential: true }
 
 vi.mock('../server/lib/storage', () => ({ useMediaStorage: async () => ({ healthcheck: async () => {} }) }))
 vi.mock('../server/lib/video-processing/ffmpeg', () => ({
@@ -130,16 +131,16 @@ function signature(url: string): Record<string, string> {
 
 describe('représentation des médias (administration)', () => {
   it('résumé : `processingState`, sans rendus ni tâche lus (requête légère des listes)', () => {
-    const summary = toMediaSummary(listRecord({ processingState: 'PROCESSING' }))
+    const summary = toMediaSummary(listRecord({ processingState: 'PROCESSING' }), VIEWER)
     expect(summary.processingState).toBe('PROCESSING')
     expect(summary).not.toHaveProperty('processing')
     expect(summary).not.toHaveProperty('sources')
-    expect(toMediaSummary(listRecord({ kind: 'IMAGE', mimeType: 'image/jpeg', processingState: null })).processingState).toBeNull()
+    expect(toMediaSummary(listRecord({ kind: 'IMAGE', mimeType: 'image/jpeg', processingState: null }), VIEWER).processingState).toBeNull()
   })
 
   it('fiche d\'une vidéo publique prête : dernière tâche, rendus AV1 puis H.264, sources aux mêmes adresses permanentes', () => {
     const latest = job()
-    const detail = toMediaDetail(detailRecord({}, { renditions: [rendition('h264'), rendition('av1')], jobs: [latest] }))
+    const detail = toMediaDetail(detailRecord({}, { renditions: [rendition('h264'), rendition('av1')], jobs: [latest] }), VIEWER)
     expect(detail.processingState).toBe('READY')
     expect(detail.processing).toEqual(processingDetail(latest))
     expect(detail.processing?.warnings).toEqual(['hdr_converted'])
@@ -167,7 +168,7 @@ describe('représentation des médias (administration)', () => {
 
   it('vidéo privée : rendus et sources signés « admin » comme l\'original, signature valable pour un rendu', () => {
     stubSigning()
-    const detail = toMediaDetail(detailRecord({ visibility: 'PRIVATE' }, { renditions: [rendition('h264')], jobs: [job()] }))
+    const detail = toMediaDetail(detailRecord({ visibility: 'PRIVATE' }, { renditions: [rendition('h264')], jobs: [job()] }), VIEWER)
     const original = signature(detail.url)
     expect(original).toMatchObject({ scope: 'admin', kid: keyId(SECRET) })
     expect(detail.renditions[0]!.url).toBe(`/m/${id}/v3/renditions/h264.mp4?${new URL(detail.url, 'http://localhost').search.slice(1)}`)
@@ -182,7 +183,7 @@ describe('représentation des médias (administration)', () => {
       { processingState: 'PENDING', metadata: { container: 'mp4', videoCodec: 'avc1', audioCodec: 'mp4a', codecs: 'avc1.640028,mp4a.40.2', playback: 'broad', dataTracks: ['gpmd'] } },
       { jobs: [job({ status: 'QUEUED', attempts: 0, startedAt: null, finishedAt: null, result: null, priority: 10 })] },
     )
-    const detail = toMediaDetail(held)
+    const detail = toMediaDetail(held, VIEWER)
     expect(signature(detail.url).scope).toBe('admin')
     expect(detail.sources).toEqual([expect.objectContaining({ rendition: null, url: detail.url, type: 'video/mp4; codecs="avc1.640028, mp4a.40.2"' })])
     expect(detail.processing).toMatchObject({ status: 'QUEUED', attempts: 0, warnings: [] })
@@ -199,7 +200,7 @@ describe('représentation des médias (administration)', () => {
         metadata: { container: 'mkv', videoCodec: null, audioCodec: null, codecs: null, playback: 'none', dataTracks: [] },
       },
       { jobs: [job({ status: 'RUNNING', step: 'transcode', progress: 0.42, finishedAt: null, result: null })] },
-    ))
+    ), VIEWER)
     expect(detail.extension).toBe('mkv')
     expect(detail.sources).toEqual([])
     expect(detail.renditions).toEqual([])
@@ -210,22 +211,22 @@ describe('représentation des médias (administration)', () => {
     const failed = toMediaDetail(detailRecord(
       { processingState: 'FAILED' },
       { renditions: [rendition('hevc')], jobs: [job({ status: 'FAILED', errorCode: 'TIMEOUT', errorDetail: 'Délai dépassé (transcode).' })] },
-    ))
+    ), VIEWER)
     expect(failed.processing).toMatchObject({ status: 'FAILED', errorCode: 'TIMEOUT', errorDetail: 'Délai dépassé (transcode).' })
     expect(failed.renditions).toEqual([])
     expect(failed.sources.map(source => source.rendition)).toEqual([null])
-    const unknown = toMediaDetail(detailRecord({ processingState: 'FAILED' }, { jobs: [job({ status: 'FAILED', errorCode: 'SEGFAULT' })] }))
+    const unknown = toMediaDetail(detailRecord({ processingState: 'FAILED' }, { jobs: [job({ status: 'FAILED', errorCode: 'SEGFAULT' })] }), VIEWER)
     expect(unknown.processing?.errorCode).toBeNull()
   })
 
   it('état null (fichier remplacé pendant que le traitement est inactif) : pas de traitement, même avec la tâche de l\'ancien fichier', () => {
-    const detail = toMediaDetail(detailRecord({ processingState: null }, { jobs: [job({ status: 'FAILED', errorCode: 'TIMEOUT', errorDetail: 'Délai dépassé (transcode).' })] }))
+    const detail = toMediaDetail(detailRecord({ processingState: null }, { jobs: [job({ status: 'FAILED', errorCode: 'TIMEOUT', errorDetail: 'Délai dépassé (transcode).' })] }), VIEWER)
     expect(detail.processingState).toBeNull()
     expect(detail.processing).toBeNull()
   })
 
   it('image : ni traitement, ni rendus, ni sources', () => {
-    const detail = toMediaDetail(detailRecord({ kind: 'IMAGE', mimeType: 'image/jpeg', processingState: null, metadata: null, duration: null }))
+    const detail = toMediaDetail(detailRecord({ kind: 'IMAGE', mimeType: 'image/jpeg', processingState: null, metadata: null, duration: null }), VIEWER)
     expect(detail.processing).toBeNull()
     expect(detail.renditions).toEqual([])
     expect(detail.sources).toEqual([])
@@ -269,6 +270,7 @@ async function callRoute(route: 'health' | 'video-processing', config: Record<st
   vi.stubGlobal('useRuntimeConfig', () => config)
   vi.stubGlobal('usePrisma', async () => prisma)
   vi.stubGlobal('requireAuth', vi.fn(async () => ({ id: 'admin', role: 'ADMIN' })))
+  vi.stubGlobal('sessionTagViewer', async () => VIEWER)
   vi.stubGlobal('setResponseStatus', (_event: H3Event, status: number) => { response.status = status })
   vi.stubGlobal('setResponseHeader', (_event: H3Event, name: string, value: string) => { response.headers[name] = value })
   const module = route === 'health' ? await import('../server/api/health.get') : await import('../server/api/admin/video-processing/index.get')
