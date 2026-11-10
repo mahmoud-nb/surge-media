@@ -1,6 +1,6 @@
 import { apiDelegatedTokenBodySchema } from '#shared/schemas/api'
 import { isOriginAllowed } from '#shared/utils/origins'
-import { TOKEN_SCOPES } from '#shared/utils/permissions'
+import { DELEGATED_TOKEN_SCOPES } from '#shared/utils/permissions'
 import { issueDelegatedToken } from '../../../../lib/access/delegated'
 import { requireFolderInSpace } from '../../../../lib/folders/service'
 import { defineApiHandler, readApiBody, requireApiProject } from '../../../../lib/api/context'
@@ -67,7 +67,7 @@ export default defineApiHandler(async (event, principal) => {
   const { token, claims } = issueDelegatedToken({
     issuerId: principal.credential.id,
     projectId: project.id,
-    scopes: TOKEN_SCOPES.filter(scope => body.scopes.includes(scope)),
+    scopes: DELEGATED_TOKEN_SCOPES.filter(scope => body.scopes.includes(scope)),
     subject: body.subject,
     origin: body.origin,
     upload: body.upload && (body.upload.types ? { ...body.upload, types: [...new Set(body.upload.types)] } : body.upload),

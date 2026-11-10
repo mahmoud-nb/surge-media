@@ -20,7 +20,7 @@ import { ORIGIN_MAX_LENGTH } from '../utils/credentials'
 import { FOLDER_NAME_MAX_LENGTH } from '../utils/folders'
 import { acceptedMimeTypes, CONVERTED_MIME_TYPES, ENABLED_MEDIA_KINDS, MEDIA_VISIBILITIES, SIGNED_URL_MAX_TTL } from '../utils/media'
 import { isWildcardOrigin, normalizeOrigin } from '../utils/origins'
-import { TOKEN_SCOPES } from '../utils/permissions'
+import { DELEGATED_TOKEN_SCOPES, TOKEN_SCOPES } from '../utils/permissions'
 import { TEXT_TRACK_LABEL_MAX_LENGTH } from '../utils/text-tracks'
 import { PRESET_NAME_PATTERN, TRANSFORM_FORMATS, TRANSFORM_SEGMENT_MAX_LENGTH } from '../utils/transforms'
 import { API_PROCESSING_STATUSES, RENDITION_NAMES, VIDEO_JOB_ERROR_CODES } from '../utils/video-processing'
@@ -219,8 +219,8 @@ export const apiUploadConstraintsSchema = z.strictObject({
 export type ApiUploadConstraints = z.output<typeof apiUploadConstraintsSchema>
 
 export const apiDelegatedTokenBodySchema = z.strictObject({
-  scopes: z.array(z.enum(TOKEN_SCOPES)).min(1).max(TOKEN_SCOPES.length)
-    .meta(doc('Portées demandées, toutes détenues par l\'émetteur dans ce projet (aucune lecture d\'office).', 'Requested scopes, all held by the issuer in this project (no implicit read access).')),
+  scopes: z.array(z.enum(DELEGATED_TOKEN_SCOPES)).min(1).max(DELEGATED_TOKEN_SCOPES.length)
+    .meta(doc('Portées demandées, toutes détenues par l\'émetteur dans ce projet (aucune lecture d\'office ; jamais `tags:manage`).', 'Requested scopes, all held by the issuer in this project (no implicit read access; never `tags:manage`).')),
   expiresIn: z.number().int().min(DELEGATED_TOKEN_TTL.min).max(DELEGATED_TOKEN_TTL.max).default(DELEGATED_TOKEN_TTL.default)
     .meta(doc('Durée de validité en secondes (1 à 60 minutes, 15 par défaut), bornée par l\'échéance de l\'émetteur.', 'Validity in seconds (1 to 60 minutes, 15 by default), capped by the expiry of the issuer.')),
   subject: z.string().trim().min(1).max(DELEGATED_SUBJECT_MAX_LENGTH).regex(/^\P{Cc}+$/u).optional()
@@ -257,7 +257,7 @@ export const delegatedTokenClaimsSchema = z.strictObject({
   jti: z.string().min(8).max(64).meta(doc('Identifiant unique du jeton.', 'Unique token id.')),
   iss: z.string().regex(ID_PATTERN).meta(doc('Identifiant (clé secrète ou jeton personnel) qui a émis le jeton.', 'Credential (secret key or personal token) that issued the token.')),
   project: z.string().regex(ID_PATTERN),
-  scopes: z.array(z.enum(TOKEN_SCOPES)).min(1),
+  scopes: z.array(z.enum(DELEGATED_TOKEN_SCOPES)).min(1),
   sub: z.string().max(DELEGATED_SUBJECT_MAX_LENGTH).optional(),
   origin: z.string().max(ORIGIN_MAX_LENGTH).optional(),
   upload: apiUploadConstraintsSchema.optional(),

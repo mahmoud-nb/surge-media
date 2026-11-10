@@ -1,7 +1,7 @@
 import { createHmac, randomBytes, timingSafeEqual } from 'node:crypto'
 import { type ApiUploadConstraints, type DelegatedTokenClaims, delegatedTokenClaimsSchema } from '#shared/schemas/api'
 import { DELEGATED_TOKEN_MAX_LENGTH, DELEGATED_TOKEN_PREFIX } from '#shared/utils/api'
-import type { TokenScope } from '#shared/utils/permissions'
+import type { DelegatedTokenScope, TokenScope } from '#shared/utils/permissions'
 import { acceptedSigningSecrets, currentSigningSecret, keyId } from '../media/signing'
 
 /**
@@ -107,7 +107,7 @@ export function toDelegatedGrant(claims: DelegatedTokenClaims): DelegatedGrant {
 export interface DelegatedTokenInput {
   issuerId: string
   projectId: string
-  scopes: TokenScope[]
+  scopes: DelegatedTokenScope[]
   subject?: string
   origin?: string
   upload?: ApiUploadConstraints

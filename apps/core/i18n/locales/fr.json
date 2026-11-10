@@ -49,7 +49,13 @@
     "projectsRequired": "Choisissez au moins un projet.",
     "roleNotInvitable": "Vous ne pouvez pas attribuer ce rôle.",
     "projectUnavailable": "Un des projets choisis n'est plus disponible : vérifiez la sélection.",
-    "projectRoleNotAssignable": "Ce rôle de projet n'est pas permis par le rôle choisi."
+    "projectRoleNotAssignable": "Ce rôle de projet n'est pas permis par le rôle choisi.",
+    "tagName": "Le nom ne peut pas contenir de caractère de contrôle.",
+    "tagSlug": "Utilisez des lettres minuscules sans accent, des chiffres et des tirets (ex. « ete-2026 »).",
+    "tagSlugRequired": "Saisissez un identifiant : il ne peut pas être déduit de ce nom.",
+    "tooManyTags": "Un média porte au plus {max} étiquettes.",
+    "tagChangesRequired": "Choisissez au moins une étiquette à ajouter ou à retirer.",
+    "tagAddRemoveOverlap": "Une même étiquette ne peut pas être ajoutée et retirée à la fois."
   },
   "auth": {
     "logout": "Se déconnecter"
@@ -346,6 +352,10 @@
     },
     "settings": {
       "manage": "Gérer les réglages de l'installation"
+    },
+    "tags": {
+      "global": "Gérer les étiquettes globales",
+      "confidential": "Voir et utiliser les étiquettes confidentielles"
     }
   },
   "errors": {
@@ -1373,6 +1383,13 @@
         "short": "Suppression",
         "description": "Mise à la corbeille, restauration et suppression définitive."
       }
+    },
+    "tags": {
+      "manage": {
+        "label": "Gérer les étiquettes du projet",
+        "short": "Étiquettes",
+        "description": "Créer, renommer et supprimer les étiquettes du projet (ni les globales, ni les confidentielles)."
+      }
     }
   },
   "credentials": {
@@ -1410,7 +1427,8 @@
       "TOKEN_REPLACED": "Cette clé a déjà été renouvelée.",
       "PROJECT_UNAVAILABLE": "Un des projets choisis n'est plus accessible ou a été archivé. Rechargez la page.",
       "ORIGIN_EXISTS": "Cette origine est déjà autorisée.",
-      "ORIGIN_LIMIT_REACHED": "Le nombre maximal d'origines est atteint : retirez-en une avant d'en ajouter."
+      "ORIGIN_LIMIT_REACHED": "Le nombre maximal d'origines est atteint : retirez-en une avant d'en ajouter.",
+      "SCOPE_NOT_HELD": "Vous ne pouvez pas donner à une clé une portée que vous n'avez pas dans ce projet."
     },
     "named": {
       "PERSONAL": "Jeton personnel « {name} »",

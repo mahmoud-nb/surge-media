@@ -49,7 +49,13 @@
     "projectsRequired": "Choose at least one project.",
     "roleNotInvitable": "You cannot assign this role.",
     "projectUnavailable": "One of the chosen projects is no longer available: check the selection.",
-    "projectRoleNotAssignable": "This project role is not allowed by the chosen role."
+    "projectRoleNotAssignable": "This project role is not allowed by the chosen role.",
+    "tagName": "The name cannot contain control characters.",
+    "tagSlug": "Use lowercase letters without accents, digits and hyphens (e.g. “summer-2026”).",
+    "tagSlugRequired": "Enter an identifier: it cannot be derived from this name.",
+    "tooManyTags": "A media item carries at most {max} tags.",
+    "tagChangesRequired": "Choose at least one tag to add or remove.",
+    "tagAddRemoveOverlap": "The same tag cannot be both added and removed."
   },
   "auth": {
     "logout": "Sign out"
@@ -346,6 +352,10 @@
     },
     "settings": {
       "manage": "Manage installation settings"
+    },
+    "tags": {
+      "global": "Manage global tags",
+      "confidential": "See and use confidential tags"
     }
   },
   "errors": {
@@ -1373,6 +1383,13 @@
         "short": "Delete",
         "description": "Move to trash, restore and permanent deletion."
       }
+    },
+    "tags": {
+      "manage": {
+        "label": "Manage project tags",
+        "short": "Tags",
+        "description": "Create, rename and delete the tags of the project (neither global nor confidential ones)."
+      }
     }
   },
   "credentials": {
@@ -1410,7 +1427,8 @@
       "TOKEN_REPLACED": "This key has already been rotated.",
       "PROJECT_UNAVAILABLE": "One of the selected projects is no longer accessible or has been archived. Reload the page.",
       "ORIGIN_EXISTS": "This origin is already allowed.",
-      "ORIGIN_LIMIT_REACHED": "The maximum number of origins has been reached: remove one before adding another."
+      "ORIGIN_LIMIT_REACHED": "The maximum number of origins has been reached: remove one before adding another.",
+      "SCOPE_NOT_HELD": "You cannot give a key a scope you do not have in this project."
     },
     "named": {
       "PERSONAL": "Personal token “{name}”",

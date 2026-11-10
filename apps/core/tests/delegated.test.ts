@@ -3,7 +3,7 @@ import { decodeDelegatedToken, encodeDelegatedToken, isDelegatedToken, toDelegat
 import { keyId } from '../server/lib/media/signing'
 import { apiDelegatedTokenBodySchema, type DelegatedTokenClaims } from '../shared/schemas/api'
 import { DELEGATED_TOKEN_MAX_LENGTH } from '../shared/utils/api'
-import { credentialScopes, TOKEN_SCOPES } from '../shared/utils/permissions'
+import { credentialScopes, DELEGATED_TOKEN_SCOPES } from '../shared/utils/permissions'
 
 const SECRET = 'secret-de-signature-de-test-assez-long'
 const PREVIOUS = 'ancien-secret-de-signature-de-test'
@@ -47,7 +47,7 @@ describe('jetons délégués : format et signature', () => {
     const token = encodeDelegatedToken(claims(), SECRET)
     const [payload, signature] = token.slice(6).split('.') as [string, string]
     // Portées élargies par le navigateur : la signature ne correspond plus.
-    const forged = Buffer.from(JSON.stringify(claims({ scopes: [...TOKEN_SCOPES] }))).toString('base64url')
+    const forged = Buffer.from(JSON.stringify(claims({ scopes: [...DELEGATED_TOKEN_SCOPES] }))).toString('base64url')
     expect(decodeDelegatedToken(`sm_dt_${forged}.${signature}`, [SECRET], NOW).ok).toBe(false)
     const flipped = `${signature.slice(0, -1)}${signature.endsWith('A') ? 'B' : 'A'}`
     expect(decodeDelegatedToken(`sm_dt_${payload}.${flipped}`, [SECRET], NOW).ok).toBe(false)
@@ -101,6 +101,7 @@ describe('jetons délégués : demande d\'émission', () => {
     const invalid = [
       { scopes: [] },
       { scopes: ['project:members'] },
+      { scopes: ['media:read', 'tags:manage'] },
       { scopes: ['media:read'], expiresIn: 30 },
       { scopes: ['media:read'], expiresIn: 3601 },
       { scopes: ['media:read'], origin: 'https://*.example.com' },
