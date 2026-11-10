@@ -13,7 +13,8 @@ import type { AccessToken, Media, MediaJob, MediaRendition, MediaTextTrack, Pris
 import type { Space } from '../../utils/access'
 import { folderWhere, requireFolderInSpace } from '../folders/service'
 import { useMediaStorage } from '../storage'
-import { carriedTags, type MediaTagLink, mediaTagViews, replaceMediaTagLinks, resolveTagSlugs, TAG_LINK_INCLUDE, tagFilterWhere } from '../tags/service'
+import { type MediaTagLink, TAG_LINK_INCLUDE } from '../tags/include'
+import { carriedTags, mediaTagViews, replaceMediaTagLinks, resolveTagSlugs, tagFilterWhere } from '../tags/service'
 import type { ProbeResult } from '../video-processing/ffprobe'
 import {
   cancelActiveJobs,

@@ -14,6 +14,8 @@ import {
   apiMediaProcessingSchema,
   apiMediaSchema,
   apiMediaSourceSchema,
+  apiMediaTagsBulkResultSchema,
+  apiMediaTagsBulkSchema,
   apiMediaUpdateSchema,
   apiMediaUploadFieldsSchema,
   apiMeSchema,
@@ -29,6 +31,12 @@ import {
   apiSignedUrlListSchema,
   apiSignedUrlSchema,
   apiSignedUrlsBodySchema,
+  apiTagCreateSchema,
+  apiTagListQuerySchema,
+  apiTagListSchema,
+  apiTagRefSchema,
+  apiTagSchema,
+  apiTagUpdateSchema,
   apiTextTrackFieldsSchema,
   apiTextTrackListSchema,
   apiTextTrackSchema,
@@ -119,6 +127,7 @@ const TAGS = [
   texts({ 'name': 'projects', 'x-displayName': 'Projets', 'description': 'Projets accessibles à l\'identifiant.' }, { 'x-displayName': 'Projects', 'description': 'Projects the credential can access.' }),
   texts({ 'name': 'media', 'x-displayName': 'Médias', 'description': 'Liste, recherche, envoi, modification et diffusion des médias d\'un projet.' }, { 'x-displayName': 'Media', 'description': 'List, search, upload, update and deliver the media of a project.' }),
   texts({ 'name': 'folders', 'x-displayName': 'Dossiers', 'description': 'Arborescence des dossiers d\'un projet.' }, { 'x-displayName': 'Folders', 'description': 'Folder tree of a project.' }),
+  texts({ 'name': 'tags', 'x-displayName': 'Étiquettes', 'description': 'Étiquettes des médias : globales (communes à l\'installation) et propres au projet ; filtre `tags` de la liste des médias.' }, { 'x-displayName': 'Tags', 'description': 'Media tags: global ones (shared by the installation) and those of the project; `tags` filter of the media list.' }),
   texts({ 'name': 'transformations', 'x-displayName': 'Transformations', 'description': 'Préréglages et politique des transformations d\'images par URL de diffusion.' }, { 'x-displayName': 'Transformations', 'description': 'Presets and policy of image transformations through delivery URLs.' }),
   texts({ 'name': 'delegated-tokens', 'x-displayName': 'Jetons délégués', 'description': 'Jetons de quelques minutes pour les composants dans le navigateur, émis par votre serveur.' }, { 'x-displayName': 'Delegated tokens', 'description': 'Short-lived tokens for in-browser components, issued by your server.' }),
   texts({ 'name': 'reference', 'x-displayName': 'Référence', 'description': 'Documents publics : catalogue des erreurs et cette spécification.' }, { 'x-displayName': 'Reference', 'description': 'Public documents: error catalog and this specification.' }),
@@ -331,6 +340,7 @@ const QUERY_SCHEMAS: Record<string, z.ZodObject> = {
   MediaListQuery: apiMediaListQuerySchema,
   ProjectListQuery: apiProjectListQuerySchema,
   FolderDeleteQuery: apiFolderDeleteQuerySchema,
+  TagListQuery: apiTagListQuerySchema,
   OpenApiQuery: apiOpenApiQuerySchema,
 }
 
@@ -431,6 +441,10 @@ function buildComponents() {
   registry.add(apiTextTrackListSchema, { id: 'TextTrackList' })
   registry.add(apiFolderSchema, { id: 'Folder' })
   registry.add(apiFolderListSchema, { id: 'FolderList' })
+  registry.add(apiTagRefSchema, { id: 'TagRef' })
+  registry.add(apiTagSchema, { id: 'Tag' })
+  registry.add(apiTagListSchema, { id: 'TagList' })
+  registry.add(apiMediaTagsBulkResultSchema, { id: 'MediaTagsBulkResult' })
   registry.add(apiProjectSchema, { id: 'Project' })
   registry.add(apiProjectListSchema, { id: 'ProjectList' })
   registry.add(apiMeSchema, { id: 'Me' })
@@ -470,6 +484,7 @@ function buildComponents() {
       mediaId: { name: 'mediaId', in: 'path', required: true, ...t('Identifiant du média.', 'Media item id.'), schema: { type: 'string' } },
       folderId: { name: 'folderId', in: 'path', required: true, ...t('Identifiant du dossier.', 'Folder id.'), schema: { type: 'string' } },
       trackId: { name: 'trackId', in: 'path', required: true, ...t('Identifiant de la piste de texte.', 'Text track id.'), schema: { type: 'string' } },
+      tagId: { name: 'tagId', in: 'path', required: true, ...t('Identifiant de l\'étiquette.', 'Tag id.'), schema: { type: 'string' } },
     },
     headers: {
       ETag: { ...t('Étiquette de version (faible), à renvoyer dans `If-None-Match`.', 'Weak version tag, to send back in `If-None-Match`.'), schema: { type: 'string' } },
@@ -490,6 +505,9 @@ function buildComponents() {
       DelegatedTokenRequest: jsonBody(apiDelegatedTokenBodySchema, true, t('Portées, durée et contraintes du jeton.', 'Scopes, lifetime and constraints of the token.')),
       FolderCreate: jsonBody(apiFolderCreateSchema, true, t('Nom et parent du dossier.', 'Name and parent of the folder.')),
       FolderUpdate: jsonBody(apiFolderUpdateSchema, true, t('Nouveau nom et/ou nouveau parent.', 'New name and/or new parent.')),
+      TagCreate: jsonBody(apiTagCreateSchema, true, t('Nom, slug et couleur de l\'étiquette.', 'Name, slug and color of the tag.')),
+      TagUpdate: jsonBody(apiTagUpdateSchema, true, t('Champs de l\'étiquette à modifier.', 'Tag fields to update.')),
+      MediaTagsBulk: jsonBody(apiMediaTagsBulkSchema, true, t('Médias et étiquettes à ajouter ou retirer.', 'Media items and tags to add or remove.')),
     },
     responses: {
       Me: json('Me', t('Identifiant utilisé.', 'Credential in use.')),
@@ -506,6 +524,10 @@ function buildComponents() {
       Folder: json('Folder', t('Dossier.', 'Folder.')),
       PresetList: json('PresetList', t('Préréglages utilisables dans le projet.', 'Presets usable in the project.'), etag),
       FolderCreated: json('Folder', t('Dossier créé.', 'Folder created.')),
+      TagList: json('TagList', t('Étiquettes utilisables dans le projet.', 'Tags usable in the project.'), etag),
+      Tag: json('Tag', t('Étiquette.', 'Tag.')),
+      TagCreated: json('Tag', t('Étiquette créée.', 'Tag created.')),
+      MediaTagsBulkResult: json('MediaTagsBulkResult', t('Médias modifiés et laissés tels quels.', 'Media items changed and left unchanged.')),
       SignedUrl: json('SignedUrl', t('Lien, signé si nécessaire.', 'Link, signed when needed.')),
       SignedUrlList: json('SignedUrlList', t('Un résultat par lien demandé, dans le même ordre.', 'One result per requested link, in the same order.')),
       DelegatedToken: json('DelegatedToken', t('Jeton délégué (à ne pas mettre en cache).', 'Delegated token (do not cache).')),

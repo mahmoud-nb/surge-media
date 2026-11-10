@@ -89,6 +89,7 @@ export const DEMO_GUARDED_ROUTES: readonly DemoGuardedRoute[] = [
   // API v1.
   { method: 'DELETE', path: '/api/v1/projects/:projectId/folders/:folderId', target: { kind: 'param', resource: 'folder', param: 'folderId' } },
   { method: 'PATCH', path: '/api/v1/projects/:projectId/folders/:folderId', target: { kind: 'param', resource: 'folder', param: 'folderId' } },
+  { method: 'POST', path: '/api/v1/projects/:projectId/media/tags', target: { kind: 'body-ids', resource: 'media' } },
   { method: 'DELETE', path: '/api/v1/projects/:projectId/media/:mediaId', target: media('mediaId') },
   { method: 'PATCH', path: '/api/v1/projects/:projectId/media/:mediaId', target: media('mediaId') },
   { method: 'PUT', path: '/api/v1/projects/:projectId/media/:mediaId/file', target: media('mediaId') },
@@ -97,6 +98,8 @@ export const DEMO_GUARDED_ROUTES: readonly DemoGuardedRoute[] = [
   { method: 'POST', path: '/api/v1/projects/:projectId/media/:mediaId/tracks', target: media('mediaId') },
   { method: 'DELETE', path: '/api/v1/projects/:projectId/media/:mediaId/tracks/:trackId', target: media('mediaId') },
   { method: 'PATCH', path: '/api/v1/projects/:projectId/media/:mediaId/tracks/:trackId', target: media('mediaId') },
+  { method: 'DELETE', path: '/api/v1/projects/:projectId/tags/:tagId', target: { kind: 'param', resource: 'tag', param: 'tagId' } },
+  { method: 'PATCH', path: '/api/v1/projects/:projectId/tags/:tagId', target: { kind: 'param', resource: 'tag', param: 'tagId' } },
 ]
 
 /** Routes d'écriture permises en démo : elles créent, lisent ou n'agissent que sur la session. */
@@ -126,6 +129,7 @@ export const DEMO_ALLOWED_WRITES: readonly string[] = [
   'POST /api/v1/projects/:projectId/media/:mediaId/duplicate',
   'POST /api/v1/projects/:projectId/media/:mediaId/signed-url',
   'POST /api/v1/projects/:projectId/signed-urls',
+  'POST /api/v1/projects/:projectId/tags',
 ]
 
 interface CompiledRoute {

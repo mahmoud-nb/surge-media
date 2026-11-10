@@ -1,16 +1,18 @@
 import { createHash } from 'node:crypto'
-import type { ApiFolder, ApiMedia, ApiMediaProcessing, ApiMediaSource, ApiPreset, ApiProject, ApiTextTrack } from '#shared/schemas/api'
+import type { ApiFolder, ApiMedia, ApiMediaProcessing, ApiMediaSource, ApiPreset, ApiProject, ApiTag, ApiTagRef, ApiTextTrack } from '#shared/schemas/api'
 import { API_LINK_BUCKET, API_LINK_TTL } from '#shared/utils/api'
 import { extensionForMime } from '#shared/utils/media'
 import type { TokenScope } from '#shared/utils/permissions'
 import type { TransformFormat, TransformPolicy } from '#shared/utils/transforms'
+import { API_TAG_VIEWER, type TagColor, tagLevel, visibleTags } from '#shared/utils/tags'
 import { apiProcessingStatus, VIDEO_JOB_ERROR_CODES, type VideoJobErrorCode } from '#shared/utils/video-processing'
-import type { Media, MediaJob, MediaTextTrack } from '../../generated/prisma/client'
+import type { Media, MediaJob, MediaTextTrack, Tag } from '../../generated/prisma/client'
 import { alignedExpiry, signMediaAccess, type SignedAccess } from '../media/signing'
 import { PROCESSING_INCLUDE, type ProcessingRelations, type SourceMedia, type SourceRendition, videoSources } from '../media/sources'
 import { TEXT_TRACK_ORDER } from '../media/tracks'
 import { derivedPathTemplate, mediaPath, posterPath, renditionPath, trackPath, type UrlSource } from '../media/urls'
 import { hasDerivedFiles, mediaFocalPoint } from '../media/variants'
+import { compareTags, type MediaTagLink, TAG_LINK_INCLUDE } from '../tags/include'
 import type { PresetSummary } from '../transforms/service'
 
 /**
@@ -24,9 +26,27 @@ import type { PresetSummary } from '../transforms/service'
  * (phase D3 : `sources`, `processing`). Les médias renvoyés par le service (`MediaWithUploader`) ont les
  * mêmes relations.
  */
-export type ApiMediaRecord = Media & { textTracks: MediaTextTrack[] } & ProcessingRelations
+export type ApiMediaRecord = Media & { textTracks: MediaTextTrack[], tags: MediaTagLink[] } & ProcessingRelations
 /** `include` Prisma des médias de l'API : toute lecture d'un média pour l'API v1 passe par lui. */
-export const API_MEDIA_INCLUDE = { textTracks: TEXT_TRACK_ORDER, ...PROCESSING_INCLUDE } as const
+export const API_MEDIA_INCLUDE = { textTracks: TEXT_TRACK_ORDER, ...PROCESSING_INCLUDE, ...TAG_LINK_INCLUDE } as const
+
+/** Étiquettes d'un média pour l'API v1 : jamais les confidentielles (architecture-tags.md, TG4), triées. */
+export function toApiTags(links: readonly MediaTagLink[] | undefined): ApiTagRef[] {
+  return visibleTags((links ?? []).map(link => link.tag), API_TAG_VIEWER).sort(compareTags).map(toApiTagRef)
+}
+
+export function toApiTagRef(tag: Tag): ApiTagRef {
+  return { id: tag.id, slug: tag.slug, name: tag.name, color: tag.color as TagColor, level: tagLevel(tag) }
+}
+
+export function toApiTag(tag: Tag, mediaCount?: number): ApiTag {
+  return {
+    ...toApiTagRef(tag),
+    ...(mediaCount === undefined ? {} : { mediaCount }),
+    createdAt: tag.createdAt.toISOString(),
+    updatedAt: tag.updatedAt.toISOString(),
+  }
+}
 
 /** Échéance des URL signées incluses dans les réponses : ~1 h, alignée sur le quart d'heure. */
 export function apiLinkExpiry(nowMs = Date.now()): number {
@@ -60,6 +80,7 @@ export function toApiMedia(media: ApiMediaRecord, base: string, expires: number)
     duration: media.duration,
     version: media.version,
     folderId: media.folderId,
+    tags: toApiTags(media.tags),
     url: `${base}${mediaPath(media)}${fileQuery}`,
     sources: apiVideoSources(media, media.renditions, base, fileQuery),
     previewUrl: hasPreview ? `${base}${mediaPath(media, 'preview')}${signature({ variant: 'preview' })}` : null,
@@ -183,9 +204,20 @@ export function weakEtag(parts: readonly unknown[]): string {
   return `W/"${createHash('sha256').update(JSON.stringify(parts)).digest('base64url').slice(0, 27)}"`
 }
 
-/** Champs d'un média lus pour son ETag : identité, version, date, visibilité, traitement (état, dernière tâche). */
+/**
+ * Champs d'un média lus pour son ETag : identité, version, date, visibilité, traitement (état, dernière
+ * tâche), étiquettes (renommer une étiquette ne touche pas le média : sa date entre dans l'ETag).
+ */
 export type EtagMedia = Pick<Media, 'id' | 'version' | 'updatedAt' | 'visibility' | 'processingState'>
-  & { jobs: readonly Pick<MediaJob, 'id' | 'updatedAt'>[] }
+  & { jobs: readonly Pick<MediaJob, 'id' | 'updatedAt'>[], tags?: readonly MediaTagLink[] }
+
+/** Part « étiquettes » d'un ETag : empreinte des étiquettes visibles par l'API et de leur date. */
+function tagsTag(media: EtagMedia): string {
+  const tags = visibleTags((media.tags ?? []).map(link => link.tag), API_TAG_VIEWER)
+  if (tags.length === 0) return ''
+  const parts = tags.map(tag => `${tag.id}.${tag.updatedAt.getTime()}`).sort().join(',')
+  return `-t${createHash('sha256').update(parts).digest('base64url').slice(0, 10)}`
+}
 
 /**
  * Part « traitement » d'un ETag (phase D3) : vide pour un média jamais traité, sinon l'état et la dernière
@@ -205,7 +237,7 @@ function processingTag(media: EtagMedia): string {
  */
 export function mediaEtag(media: EtagMedia, expires: number): string {
   const bucket = media.visibility === 'PRIVATE' ? `-${expires}` : ''
-  return `W/"${media.id}-${media.version}-${media.updatedAt.getTime()}${processingTag(media)}${bucket}"`
+  return `W/"${media.id}-${media.version}-${media.updatedAt.getTime()}${processingTag(media)}${tagsTag(media)}${bucket}"`
 }
 
 /**

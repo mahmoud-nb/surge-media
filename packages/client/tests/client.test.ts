@@ -82,6 +82,19 @@ describe('clé publique et cache ETag', () => {
     expect(new URL(calls[1]!.url).searchParams.get('ids')!.split(',')).toHaveLength(50)
   })
 
+  it('étiquettes : liste du projet et filtre de la liste des médias (slugs séparés par des virgules)', async () => {
+    const tag = { id: 'cmtag00001', slug: 'hero', name: 'Hero', color: 'blue', level: 'global', mediaCount: 3, createdAt: '2026-11-10T10:00:00.000Z', updatedAt: '2026-11-10T10:00:00.000Z' }
+    const { fetch, calls } = mockFetch([json({ items: [tag] }), json({ items: [], nextCursor: null })])
+    const client = createSurgeClient({ baseUrl: 'https://media.example.com', projectId: 'cmproject01', publishableKey: 'sm_pk_test', fetch })
+    expect(await client.tags.list({ withCounts: true })).toEqual([tag])
+    expect(new URL(calls[0]!.url).pathname).toBe('/api/v1/projects/cmproject01/tags')
+    expect(new URL(calls[0]!.url).searchParams.get('withCounts')).toBe('true')
+    await client.media.list({ tags: ['hero', 'ete-2026'], tagMatch: 'all' })
+    const params = new URL(calls[1]!.url).searchParams
+    expect(params.get('tags')).toBe('hero,ete-2026')
+    expect(params.get('tagMatch')).toBe('all')
+  })
+
   it('garde le projet en cache, sauf demande explicite', async () => {
     const { fetch, calls } = mockFetch([json(project), json({ ...project, transformPolicy: 'presets' })])
     const client = createSurgeClient({ baseUrl: 'https://media.example.com', projectId: 'cmproject01', publishableKey: 'sm_pk_test', fetch })

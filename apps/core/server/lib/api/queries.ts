@@ -54,8 +54,9 @@ export interface MediaPage {
 }
 
 /** Médias actifs d'un projet (hors corbeille) selon les filtres de l'API v1. */
-export async function listApiMedia(projectId: string, query: ApiMediaListQuery, publicOnly: boolean): Promise<MediaPage> {
-  const base: Prisma.MediaWhereInput = { projectId, deletedAt: null }
+export async function listApiMedia(projectId: string, query: ApiMediaListQuery, publicOnly: boolean, tagWhere: Prisma.MediaWhereInput | null = null): Promise<MediaPage> {
+  // Filtre d'étiquettes déjà résolu par la route (server/lib/tags/service.ts, `tagFilterWhere`).
+  const base: Prisma.MediaWhereInput = { projectId, deletedAt: null, ...(tagWhere ? { AND: [tagWhere] } : {}) }
   if (publicOnly) {
     if (query.visibility === 'private') return { items: [], nextCursor: null, ...(query.withTotal ? { total: 0 } : {}) }
     base.visibility = 'PUBLIC'

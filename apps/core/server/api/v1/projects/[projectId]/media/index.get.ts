@@ -1,17 +1,19 @@
 import { apiMediaListQuerySchema } from '#shared/schemas/api'
-import { getRevision } from '../../../../../lib/cache/revisions'
+import { API_TAG_VIEWER } from '#shared/utils/tags'
+import { getGlobalTagsRevision, getRevision } from '../../../../../lib/cache/revisions'
 import { defineApiHandler, parseApiQuery, requireApiProject } from '../../../../../lib/api/context'
 import { apiProblem } from '../../../../../lib/api/problem'
 import { listApiMedia } from '../../../../../lib/api/queries'
 import { activeProcessingParts, apiLinkExpiry, etagMatches, toApiMedia, weakEtag } from '../../../../../lib/api/serializers'
 import { mediaBaseUrl } from '../../../../../lib/media/urls'
+import { resolveTagSlugs, tagFilterWhere } from '../../../../../lib/tags/service'
 
 defineRouteMeta({
   openAPI: {
     'operationId': 'listMedia',
     'tags': ['media'],
     'summary': 'Liste et recherche des médias',
-    'description': 'Médias actifs du projet (hors corbeille), triés et paginés par curseur ; filtres combinables. Clé publique : médias publics seulement, et liste ou recherche seulement si le projet l\'autorise (sinon `ids` uniquement). URL des médias privés signées pour environ une heure. `ETag` → 304 sans exécuter la requête ; une page qui contient une vidéo en attente ou en cours de traitement est relue à chaque revalidation (son `ETag` suit l\'avancement de `processing`).',
+    'description': 'Médias actifs du projet (hors corbeille), triés et paginés par curseur ; filtres combinables (étiquettes : `tags`, au moins une par défaut, toutes avec `tagMatch=all`). Clé publique : médias publics seulement, et liste ou recherche seulement si le projet l\'autorise (sinon `ids` uniquement). URL des médias privés signées pour environ une heure. `ETag` → 304 sans exécuter la requête ; une page qui contient une vidéo en attente ou en cours de traitement est relue à chaque revalidation (son `ETag` suit l\'avancement de `processing`).',
     'x-scopes': ['media:read'],
     'x-credentials': ['publishable', 'secret', 'personal', 'delegated'],
     'x-query': 'MediaListQuery',
@@ -20,6 +22,7 @@ defineRouteMeta({
       'INVALID_CURSOR',
       'LISTING_DISABLED',
       'FOLDER_NOT_FOUND',
+      'TAG_NOT_FOUND',
       'PROJECT_NOT_FOUND',
       'PROJECT_ARCHIVED',
       'INSUFFICIENT_SCOPE',
@@ -31,14 +34,14 @@ defineRouteMeta({
     'x-i18n': {
       en: {
         summary: 'List and search media',
-        description: 'Active media of the project (outside the trash), sorted and paginated with a cursor; filters can be combined. Publishable key: public media only, and listing or search only when the project allows it (otherwise `ids` only). URLs of private media are signed for about an hour. `ETag` → 304 without running the query; a page that contains a video waiting for or undergoing processing is read again on each revalidation (its `ETag` follows the progress of `processing`).',
+        description: 'Active media of the project (outside the trash), sorted and paginated with a cursor; filters can be combined (tags: `tags`, at least one by default, all of them with `tagMatch=all`). Publishable key: public media only, and listing or search only when the project allows it (otherwise `ids` only). URLs of private media are signed for about an hour. `ETag` → 304 without running the query; a page that contains a video waiting for or undergoing processing is read again on each revalidation (its `ETag` follows the progress of `processing`).',
       },
     },
   },
 })
 
 /**
- * GET /api/v1/projects/:projectId/media — ?q&kind&visibility&folder&recursive&ids&sort&limit&cursor&withTotal
+ * GET /api/v1/projects/:projectId/media — ?q&kind&visibility&folder&recursive&tags&tagMatch&untagged&ids&sort&limit&cursor&withTotal
  * (portée media:read) → { items: Media[], nextCursor, total? }.
  * Clé publique : médias publics seulement, et liste/recherche seulement si le projet a activé la
  * « liste publique » (sinon `ids` uniquement : 403 LISTING_DISABLED).
@@ -59,7 +62,8 @@ export default defineApiHandler(async (event, principal) => {
 
   const expires = apiLinkExpiry()
   const revision = await getRevision({ type: 'project', id: project.id })
-  const parts = ['media-list', project.id, revision, query, publicOnly ? 'public' : 'full', expires]
+  // Révision des étiquettes globales : renommer une globale change `tags` des médias sans toucher l'espace.
+  const parts = ['media-list', project.id, revision, await getGlobalTagsRevision(), query, publicOnly ? 'public' : 'full', expires]
   const etag = weakEtag(parts)
   const ifNoneMatch = getRequestHeader(event, 'if-none-match')
   if (etagMatches(ifNoneMatch, etag)) {
@@ -68,7 +72,9 @@ export default defineApiHandler(async (event, principal) => {
     return null
   }
 
-  const page = await listApiMedia(project.id, query, publicOnly)
+  const tagIds = query.tags ? await resolveTagSlugs(project.id, query.tags, API_TAG_VIEWER, true) : []
+  const tagWhere = await tagFilterWhere(tagIds, { slugs: query.tags, match: query.tagMatch, untagged: query.untagged }, API_TAG_VIEWER)
+  const page = await listApiMedia(project.id, query, publicOnly, tagWhere)
   // Traitement en attente ou en cours dans la page : son avancement entre dans l'ETag (voir l'en-tête).
   const active = activeProcessingParts(page.items)
   const pageEtag = active ? weakEtag([...parts, active]) : etag

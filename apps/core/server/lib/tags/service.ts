@@ -19,6 +19,9 @@ import type { Space } from '../../utils/access'
 import { tagError } from '../../utils/tags'
 import { bumpGlobalTagsRevision, bumpRevision } from '../cache/revisions'
 import { mediaChanged } from '../media/cache'
+import { compareTags, type MediaTagLink } from './include'
+
+export { compareTags, type MediaTagLink, TAG_LINK_INCLUDE } from './include'
 
 /**
  * Étiquettes des médias (architecture : .claude/architecture-tags.md, TG1 à TG15).
@@ -35,24 +38,12 @@ import { mediaChanged } from '../media/cache'
 
 type Transaction = Prisma.TransactionClient
 
-/** Étiquettes d'un média telles que lues avec lui (`TAG_LINK_INCLUDE`). */
-export interface MediaTagLink { tag: Tag }
-
-/** Inclusion Prisma des étiquettes d'un média (sérialisées par `mediaTagViews`). */
-export const TAG_LINK_INCLUDE = { tags: { select: { tag: true } } } as const
-
 function projectIdOf(space: Space): string | null {
   return space.type === 'project' ? space.id : null
 }
 
 function spaceOfProjectId(projectId: string | null): Space {
   return projectId ? { type: 'project', id: projectId } : { type: 'library' }
-}
-
-/** Ordre d'affichage : globales d'abord, puis par nom (sans casse ni accents). */
-function compareTags(a: Pick<Tag, 'projectId' | 'nameKey'>, b: Pick<Tag, 'projectId' | 'nameKey'>): number {
-  const level = Number(a.projectId !== null) - Number(b.projectId !== null)
-  return level || a.nameKey.localeCompare(b.nameKey)
 }
 
 // ─── Représentation ──────────────────────────────────────────────────────────
@@ -106,6 +97,12 @@ export interface ListTagsOptions {
 
 /** Étiquettes utilisables dans un espace (globales + projet), visibles par le lecteur, triées. */
 export async function listTags(options: ListTagsOptions) {
+  const { tags, counts } = await listTagRecords(options)
+  return tags.map(tag => toTagSummary(tag, counts ? counts.get(tag.id) ?? 0 : null))
+}
+
+/** Étiquettes (enregistrements) et, si demandé, nombre de médias actifs par étiquette (null sinon). */
+export async function listTagRecords(options: ListTagsOptions): Promise<{ tags: Tag[], counts: Map<string, number> | null }> {
   const prisma = await usePrisma()
   const tags = await prisma.tag.findMany({
     where: {
@@ -114,7 +111,8 @@ export async function listTags(options: ListTagsOptions) {
     },
   })
   tags.sort(compareTags)
-  if (options.counts === 'none' || tags.length === 0) return tags.map(tag => toTagSummary(tag, null))
+  if (options.counts === 'none') return { tags, counts: null }
+  if (tags.length === 0) return { tags, counts: new Map() }
 
   const media: Prisma.MediaWhereInput = { deletedAt: null, ...(options.counts === 'project' ? { projectId: options.projectId } : {}) }
   const rows = await prisma.mediaTag.groupBy({
@@ -122,8 +120,16 @@ export async function listTags(options: ListTagsOptions) {
     where: { tagId: { in: tags.map(tag => tag.id) }, media },
     _count: { _all: true },
   })
-  const counts = new Map(rows.map(row => [row.tagId, row._count._all]))
-  return tags.map(tag => toTagSummary(tag, counts.get(tag.id) ?? 0))
+  return { tags, counts: new Map(rows.map(row => [row.tagId, row._count._all])) }
+}
+
+/**
+ * Étiquette d'un projet par identifiant, pour l'API v1 : globale ou du projet, jamais confidentielle ;
+ * sinon null (404 TAG_NOT_FOUND pour l'appelant).
+ */
+export async function findApiTag(projectId: string, id: string): Promise<Tag | null> {
+  const tag = await findTag(id)
+  return tag && !tag.confidential && tagUsableIn(tag, projectId) ? tag : null
 }
 
 // ─── Gestion des listes ──────────────────────────────────────────────────────

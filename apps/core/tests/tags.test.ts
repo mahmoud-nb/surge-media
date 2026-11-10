@@ -1,5 +1,8 @@
 import { describe, expect, it } from 'vitest'
-import { delegatedTokenClaimsSchema } from '../shared/schemas/api'
+import type { Tag } from '../server/generated/prisma/client'
+import { mediaEtag, toApiTags } from '../server/lib/api/serializers'
+import { apiMediaListQuerySchema, apiMediaTagsBulkSchema, apiMediaUpdateSchema, apiMediaUploadFieldsSchema, apiTagCreateSchema, apiTagUpdateSchema, delegatedTokenClaimsSchema } from '../shared/schemas/api'
+import { mediaListQuerySchema } from '../shared/schemas/media'
 import { createProjectKeySchema, createPersonalTokenSchema } from '../shared/schemas/credentials'
 import { createTagSchema, mediaTagIdsSchema, mediaTagsBulkSchema, tagNameSchema, tagSlugSchema, updateTagSchema } from '../shared/schemas/tags'
 import {
@@ -175,5 +178,64 @@ describe('portée tags:manage des identifiants', () => {
       .toEqual(['media:read'])
     const claims = { v: 1, jti: 'abcdefgh', iss: 'cm1issuer', project: 'cm1project', scopes: ['tags:manage'], iat: 1, exp: 2 }
     expect(delegatedTokenClaimsSchema.safeParse(claims).success).toBe(false)
+  })
+})
+
+describe('étiquettes : API v1', () => {
+  const tag = (overrides: Partial<Tag>): Tag => ({
+    id: 't', projectId: null, name: 'Hero', nameKey: 'hero', slug: 'hero', color: 'blue', confidential: false,
+    createdAt: new Date('2026-11-10T10:00:00Z'), updatedAt: new Date('2026-11-10T10:00:00Z'), ...overrides,
+  })
+
+  it('filtre de la liste : slugs dédoublonnés, au moins une par défaut, refus des formes invalides', () => {
+    expect(apiMediaListQuerySchema.parse({ tags: 'hero, ete-2026,hero' })).toMatchObject({ tags: ['hero', 'ete-2026'], tagMatch: 'any' })
+    expect(apiMediaListQuerySchema.parse({ tags: 'hero', tagMatch: 'all' }).tagMatch).toBe('all')
+    expect(apiMediaListQuerySchema.parse({ untagged: 'true' }).untagged).toBe(true)
+    for (const query of [{ tags: 'Héro' }, { tags: ',' }, { tags: 'hero', untagged: 'true' }, { tagMatch: 'some' }, { tags: Array.from({ length: 21 }, (_, i) => `t${i}`).join(',') }]) {
+      expect(apiMediaListQuerySchema.safeParse(query).success, JSON.stringify(query)).toBe(false)
+    }
+  })
+
+  it('filtre de l\'administration : valeurs invalides ignorées, au moins une par défaut', () => {
+    expect(mediaListQuerySchema.parse({ tags: 'Hero,ete-2026,mal formé', match: 'nimporte' })).toMatchObject({ tags: ['hero', 'ete-2026'], match: 'any' })
+    expect(mediaListQuerySchema.parse({}).tags).toBeUndefined()
+  })
+
+  it('affectation : PATCH (tableau), envoi (liste à virgules), lot', () => {
+    expect(apiMediaUpdateSchema.parse({ tags: ['hero', 'hero'] }).tags).toEqual(['hero'])
+    expect(apiMediaUpdateSchema.parse({ tags: [] }).tags).toEqual([])
+    expect(apiMediaUploadFieldsSchema.parse({ tags: 'hero,ete-2026' }).tags).toEqual(['hero', 'ete-2026'])
+    expect(apiMediaTagsBulkSchema.parse({ ids: ['cm1media00', 'cm1media00'], add: ['hero'] })).toEqual({ ids: ['cm1media00'], add: ['hero'], remove: [] })
+    expect(apiMediaTagsBulkSchema.safeParse({ ids: ['cm1media00'] }).success).toBe(false)
+    expect(apiMediaTagsBulkSchema.safeParse({ ids: ['cm1media00'], add: ['hero'], remove: ['hero'] }).success).toBe(false)
+  })
+
+  it('création et modification : jamais de confidentialité par l\'API', () => {
+    expect(apiTagCreateSchema.safeParse({ name: 'Hero', confidential: true }).success).toBe(false)
+    expect(apiTagCreateSchema.parse({ name: '  Été  2026 ' }).name).toBe('Été 2026')
+    expect(apiTagUpdateSchema.safeParse({}).success).toBe(false)
+    expect(apiTagUpdateSchema.safeParse({ confidential: false }).success).toBe(false)
+  })
+
+  it('Media.tags : sans les confidentielles, globales d\'abord puis par nom', () => {
+    const links = [
+      { tag: tag({ id: 'p1', projectId: 'p', name: 'Été', nameKey: 'ete', slug: 'ete' }) },
+      { tag: tag({ id: 'c1', projectId: 'p', name: 'Secret', nameKey: 'secret', slug: 'secret', confidential: true }) },
+      { tag: tag({ id: 'g1' }) },
+    ]
+    expect(toApiTags(links)).toEqual([
+      { id: 'g1', slug: 'hero', name: 'Hero', color: 'blue', level: 'global' },
+      { id: 'p1', slug: 'ete', name: 'Été', color: 'blue', level: 'project' },
+    ])
+  })
+
+  it('ETag d\'un média : suit les étiquettes visibles (renommage), ignore les confidentielles', () => {
+    const media = { id: 'm', version: 1, updatedAt: new Date('2026-11-10T10:00:00Z'), visibility: 'PUBLIC' as const, processingState: null, jobs: [] }
+    const bare = mediaEtag(media, 0)
+    const tagged = mediaEtag({ ...media, tags: [{ tag: tag({ id: 'g1' }) }] }, 0)
+    const renamed = mediaEtag({ ...media, tags: [{ tag: tag({ id: 'g1', updatedAt: new Date('2026-11-10T11:00:00Z') }) }] }, 0)
+    const confidential = mediaEtag({ ...media, tags: [{ tag: tag({ id: 'c1', confidential: true }) }] }, 0)
+    expect(new Set([bare, tagged, renamed]).size).toBe(3)
+    expect(confidential).toBe(bare)
   })
 })
