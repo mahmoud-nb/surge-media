@@ -35,6 +35,7 @@ Par défaut, un seul processus sert tout. Quand le trafic vidéo augmente, le tr
 | **Projet** | L’espace de médias d’une application, d’un produit ou d’un client, avec ses membres, ses clés, ses origines autorisées et sa politique de transformation. | Séparation nette entre applications ; l’unité du contrôle d’accès. |
 | **Média** | Une image ou une vidéo, **versionnée** (`v1`, `v2`…). Remplacer le fichier crée une nouvelle version et de nouvelles URL. | Les caches ne servent jamais un fichier périmé, et vous n’avez jamais à purger un CDN. |
 | **Dossiers** | Une arborescence dans un projet ou la bibliothèque. | Les éditeurs rangent ; l’API filtre par dossier. |
+| **Étiquettes** | Étiquettes globales (communes à tous les espaces) et étiquettes par projet ; les confidentielles restent dans l’administration. | Classement transversal ; l’administration et l’API filtrent par étiquettes (au moins une, ou toutes). |
 | **Préréglages** | Des transformations nommées (`card`, `og-image`…) au niveau de l’installation ou du projet. | Changez un format partout en modifiant un seul préréglage. |
 | **Identifiants** | Clés de projet, jetons personnels et jetons délégués, chacun avec ses portées. | Chaque requête est attribuable et limitée au strict nécessaire. |
 
@@ -45,7 +46,7 @@ Par défaut, un seul processus sert tout. Quand le trafic vidéo augmente, le tr
 Une API REST JSON versionnée pour lister, rechercher, envoyer, modifier, ranger et signer les médias.
 
 - **Authentification** par jeton `Bearer` dans l’en-tête `Authorization` — jamais dans l’URL.
-- **Portées** par identifiant : `project:read`, `media:read`, `media:upload`, `media:write`, `media:delete`.
+- **Portées** par identifiant : `project:read`, `media:read`, `media:upload`, `media:write`, `media:delete`, `tags:manage`.
 - **CORS par projet** : seules les origines que vous autorisez (`https://www.acme.fr`, `https://*.acme.fr`) peuvent appeler l’API depuis un navigateur.
 - **Prévisible** : pagination par curseur (`limit`, `cursor` → `nextCursor`), `ETag` / `304 Not Modified`, en-têtes `RateLimit`, et erreurs au format `application/problem+json` avec un `code` stable et un `X-Request-Id`.
 - **Autodescriptive** : le document OpenAPI 3.1 est servi sur `/api/v1/openapi.json` (`?lang=fr` ou `en`) et le catalogue des erreurs sur `/api/v1/errors`. L’administration propose une référence interactive préremplie avec la clé publique de votre projet.

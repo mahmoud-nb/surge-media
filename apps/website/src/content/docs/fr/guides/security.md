@@ -24,10 +24,11 @@ Les jetons sont toujours envoyés dans l’en-tête `Authorization: Bearer …`.
 | --- | --- |
 | `project:read`, `media:read` | Lire le projet et ses médias (toujours incluses). |
 | `media:upload` | Envoyer de nouveaux médias. |
-| `media:write` | Modifier les métadonnées, le point d’intérêt, les dossiers ; remplacer les fichiers. |
+| `media:write` | Modifier les métadonnées, le point d’intérêt, les dossiers et les étiquettes ; remplacer les fichiers. |
 | `media:delete` | Placer des médias à la corbeille. |
+| `tags:manage` | Créer, renommer et supprimer les étiquettes du projet (facultative ; une clé secrète ne la reçoit que si la personne qui la crée la détient). |
 
-Les identifiants n’obtiennent jamais de portées de gestion : membres, clés et réglages ne se gèrent que depuis l’administration, par des personnes.
+Les identifiants n’obtiennent jamais d’autres portées de gestion : membres, clés et réglages ne se gèrent que depuis l’administration, par des personnes. Les étiquettes globales ne se gèrent que depuis l’administration, et les **étiquettes confidentielles** n’apparaissent jamais dans l’API, quel que soit l’identifiant : seuls les administrateurs et les gestionnaires les voient, dans l’administration. Un jeton délégué n’obtient jamais `tags:manage`.
 
 ### Cycle de vie
 

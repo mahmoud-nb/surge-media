@@ -24,10 +24,11 @@ Tokens are always sent in the `Authorization: Bearer …` header. A token in the
 | --- | --- |
 | `project:read`, `media:read` | Reading the project and its media (always included). |
 | `media:upload` | Uploading new media. |
-| `media:write` | Updating metadata, focal point, folders; replacing files. |
+| `media:write` | Updating metadata, focal point, folders and tags; replacing files. |
 | `media:delete` | Moving media to the trash. |
+| `tags:manage` | Creating, renaming and deleting the tags of the project (optional; a secret key only gets it when the person creating it holds it). |
 
-Credentials never get management scopes: members, keys and settings are only managed from the admin, by people.
+Credentials never get other management scopes: members, keys and settings are only managed from the admin, by people. Global tags are managed from the admin only, and **confidential tags** never appear in the API, whatever the credential: they are visible only to administrators and managers, in the admin. A delegated token never gets `tags:manage`.
 
 ### Lifecycle
 

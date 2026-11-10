@@ -35,6 +35,7 @@ One process serves everything by default. When video traffic grows, video proces
 | **Project** | A media space for one application, product or client, with its members, keys, allowed origins and transformation policy. | Clean separation between applications; the unit of access control. |
 | **Media** | An image or a video, **versioned** (`v1`, `v2`…). Replacing the file creates a new version and new URLs. | Caches never serve a stale file, and you never need to purge a CDN. |
 | **Folders** | A tree inside a project or the library. | Editors organize; the API filters by folder. |
+| **Tags** | Global tags (shared by every space) and tags per project; confidential tags stay in the admin. | Cross-cutting classification; the admin and the API filter by tags (at least one, or all). |
 | **Presets** | Named transformations (`card`, `og-image`…) at installation or project level. | Change a format everywhere by editing one preset. |
 | **Credentials** | Project keys, personal tokens and delegated tokens, each with scopes. | Every request is attributable and limited to what it needs. |
 
@@ -45,7 +46,7 @@ One process serves everything by default. When video traffic grows, video proces
 A versioned JSON REST API to list, search, upload, update, organize and sign media.
 
 - **Authentication** with a `Bearer` token in the `Authorization` header — never in the URL.
-- **Scopes** per credential: `project:read`, `media:read`, `media:upload`, `media:write`, `media:delete`.
+- **Scopes** per credential: `project:read`, `media:read`, `media:upload`, `media:write`, `media:delete`, `tags:manage`.
 - **CORS per project**: only the origins you allow (`https://www.acme.com`, `https://*.acme.com`) can call the API from a browser.
 - **Predictable**: cursor pagination (`limit`, `cursor` → `nextCursor`), `ETag` / `304 Not Modified`, `RateLimit` headers, and errors in `application/problem+json` with a stable `code` and an `X-Request-Id`.
 - **Self-describing**: the OpenAPI 3.1 document is served at `/api/v1/openapi.json` (`?lang=en` or `fr`) and the error catalog at `/api/v1/errors`. The admin includes an interactive reference preloaded with your project's publishable key.

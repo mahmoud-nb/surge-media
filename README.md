@@ -16,7 +16,7 @@ leaving your infrastructure.
 
 ## Features
 
-- **Administration** — media library and folders, projects, users with platform and project roles, two-factor
+- **Administration** — media library, folders and tags, projects, users with platform and project roles, two-factor
   authentication (TOTP), audit log; English and French, light and dark themes, designed for WCAG 2.2 AA.
 - **REST API v1** — publishable and secret project keys, personal and delegated tokens, scopes, expiry and rotation,
   per-project CORS origins, rate limiting, OpenAPI 3.1 specification and interactive documentation.

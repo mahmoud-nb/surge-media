@@ -17,6 +17,8 @@ surgeMedia distingue deux niveaux de rôles : un **rôle de plateforme** pour c
 | Gérer tous les comptes | ✓ | | | |
 | Jetons personnels | ✓ | ✓ | ✓ | |
 | Documentation interactive de l’API | ✓ | ✓ | ✓ | |
+| Étiquettes globales (bibliothèque et tous les projets) | ✓ | | | |
+| Étiquettes confidentielles | ✓ | ✓ | | |
 | Journal d’audit | ✓ | | | |
 | Réglages de l’installation (transformations, vidéo) | ✓ | | | |
 
@@ -31,6 +33,8 @@ surgeMedia distingue deux niveaux de rôles : un **rôle de plateforme** pour c
 | --- | :---: | :---: | :---: |
 | Lire, envoyer, modifier et supprimer des médias | ✓ | ✓ | ✓ |
 | Clés d’API et origines autorisées | ✓ | ✓ | |
+| Affecter des étiquettes aux médias | ✓ | ✓ | ✓ |
+| Étiquettes du projet (créer, renommer, supprimer) | ✓ | | |
 | Membres | ✓ | | |
 | Réglages du projet, politique et préréglages de transformation, archivage | ✓ | | |
 
