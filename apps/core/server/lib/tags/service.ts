@@ -362,8 +362,13 @@ export async function resolveTagSlugs(projectId: string | null, slugs: readonly 
  * primaire) ; au-delà, une condition sur la relation (EXISTS corrélé), efficace quand les médias
  * étiquetés sont nombreux (la page se remplit vite). Mesure (architecture-tags.md § 5.1) : sous SQLite,
  * 100 000 médias, une étiquette de 10 médias passait de 170 ms à quelques ms.
+ *
+ * Borne : Prisma n'envoie pas plus de 999 paramètres par requête SQLite (P2029 au-delà, mesuré le
+ * 2026-11-10 : `id IN` de 998 identifiants refusé, même sans autre filtre). 500 laisse la place aux
+ * autres paramètres de la requête (filtres, espaces de la page « Médias », pagination) ; à 1 000, une
+ * étiquette de 997 à 1 000 médias faisait échouer la liste.
  */
-const TAG_PREFETCH_LIMIT = 1000
+export const TAG_PREFETCH_LIMIT = 500
 
 /**
  * Condition Prisma d'un filtre d'étiquettes (TG3) : rien sans étiquette demandée ; `any` = au moins
