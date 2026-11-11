@@ -39,6 +39,8 @@ One process serves everything by default. When video traffic grows, video proces
 | **Presets** | Named transformations (`card`, `og-image`…) at installation or project level. | Change a format everywhere by editing one preset. |
 | **Credentials** | Project keys, personal tokens and delegated tokens, each with scopes. | Every request is attributable and limited to what it needs. |
 
+A media item belongs to exactly one space: the library or a project. In the admin, the **Media** page still brings together the library and every project you can access: you search and filter across all of them at once, and each item shows its space. To file into folders, tag in bulk or see the trash, you open a space; an upload always goes to a specific space that you choose.
+
 ## Two planes: management and delivery
 
 ### The management API — `/api/v1`

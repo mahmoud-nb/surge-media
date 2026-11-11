@@ -39,6 +39,8 @@ Par défaut, un seul processus sert tout. Quand le trafic vidéo augmente, le tr
 | **Préréglages** | Des transformations nommées (`card`, `og-image`…) au niveau de l’installation ou du projet. | Changez un format partout en modifiant un seul préréglage. |
 | **Identifiants** | Clés de projet, jetons personnels et jetons délégués, chacun avec ses portées. | Chaque requête est attribuable et limitée au strict nécessaire. |
 
+Un média appartient à un seul espace : la bibliothèque ou un projet. Dans l’administration, la page **Médias** réunit pourtant la bibliothèque et tous les projets auxquels vous avez accès : vous y cherchez et filtrez partout à la fois, chaque média indiquant son espace. Pour ranger dans des dossiers, étiqueter en lot ou voir la corbeille, vous ouvrez un espace ; un envoi va toujours dans un espace précis, que vous choisissez.
+
 ## Deux plans : gestion et diffusion
 
 ### L’API de gestion — `/api/v1`
