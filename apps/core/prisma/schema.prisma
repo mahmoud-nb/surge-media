@@ -472,7 +472,9 @@ model Media {
   @@index([projectId, deletedAt, createdAt])
   @@index([projectId, checksum])
   @@index([folderId])
-  @@index([deletedAt])
+  /// Corbeille, et liste « Tous les médias » triée par date sur plusieurs espaces (page « Médias » :
+  /// 100 000 médias, 540 → 0 ms pour la première page ; .claude/architecture-media-view.md, MV14)
+  @@index([deletedAt, createdAt])
   @@index([duplicatedFromId])
   @@index([uploadedByTokenId])
 }

@@ -39,6 +39,8 @@ export const tagColorSchema = z.enum(TAG_COLORS, 'validation.required')
 /** Niveau visé par une requête de l'administration : `?project=<id>`, absent = étiquettes globales. */
 export const tagsQuerySchema = z.object({
   project: z.string().trim().min(1).max(64).optional(),
+  /** `all` : étiquettes utilisables sur les médias de tous les espaces lisibles (`project` ignoré). */
+  scope: z.enum(['all']).optional().catch(undefined),
 })
 
 /** Identifiant d'étiquette reçu d'un client (existence, niveau et visibilité vérifiés par le serveur). */

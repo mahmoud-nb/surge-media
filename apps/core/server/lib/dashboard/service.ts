@@ -5,6 +5,7 @@ import type { MediaKind, Prisma, User } from '../../generated/prisma/client'
 import { listAuditEvents } from '../audit/service'
 import { readDatabasePressure } from '../database/pressure'
 import { mailEnabled } from '../mail/transport'
+import { mediaSpacesWhere } from '../media/spaces'
 
 /**
  * Données du tableau de bord, limitées à ce que l'utilisateur peut voir : ses espaces (bibliothèque
@@ -57,11 +58,8 @@ export async function dashboardData(event: H3Event, user: User) {
   const projectNames = new Map(projects.map(project => [project.id, project.name]))
   const libraryReadable = hasScope(spaceScopes(user.role, { type: 'library' }), 'media:read')
   const readableIds = projects.filter(project => hasScope(project.scopes, 'media:read')).map(project => project.id)
-  const spaces: Prisma.MediaWhereInput | null = seesAll
-    ? {}
-    : libraryReadable || readableIds.length
-      ? { OR: [...(libraryReadable ? [{ projectId: null }] : []), ...(readableIds.length ? [{ projectId: { in: readableIds } }] : [])] }
-      : null
+  // Projets archivés compris : leurs médias comptent tant qu'ils existent (règle partagée, media/spaces.ts).
+  const spaces = mediaSpacesWhere(libraryReadable, seesAll ? { all: true, excludedIds: [] } : { member: user.id, includeArchived: true, ids: readableIds })
   const credentialIds = projects.filter(project => hasScope(project.scopes, 'project:credentials')).map(project => project.id)
 
   // ─── Médias, dérivés, envois récents, corbeille ──────────────────────────

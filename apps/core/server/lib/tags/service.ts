@@ -123,6 +123,22 @@ export async function listTagRecords(options: ListTagsOptions): Promise<{ tags: 
   return { tags, counts: new Map(rows.map(row => [row.tagId, row._count._all])) }
 }
 
+/** Étiquettes au plus dans les suggestions de la page « Médias » au niveau « Tous » (comme TG12). */
+export const SCOPED_TAGS_MAX = 1000
+
+/**
+ * Étiquettes utilisables sur les médias de plusieurs espaces (`scope` : `tagSpacesWhere`), visibles par
+ * le lecteur, triées ; `SCOPED_TAGS_MAX` au plus : au-delà, les globales seulement (`truncated`,
+ * architecture-media-view.md, MV10).
+ */
+export async function listScopedTags(scope: Prisma.TagWhereInput, viewer: TagViewer): Promise<{ tags: Tag[], truncated: boolean }> {
+  const prisma = await usePrisma()
+  const tags = await prisma.tag.findMany({ where: { AND: [scope, visibleWhere(viewer)] }, take: SCOPED_TAGS_MAX + 1 })
+  if (tags.length <= SCOPED_TAGS_MAX) return { tags: tags.sort(compareTags), truncated: false }
+  const globals = await prisma.tag.findMany({ where: { projectId: null, ...visibleWhere(viewer) } })
+  return { tags: globals.sort(compareTags), truncated: true }
+}
+
 /**
  * Étiquette d'un projet par identifiant, pour l'API v1 : globale ou du projet, jamais confidentielle ;
  * sinon null (404 TAG_NOT_FOUND pour l'appelant).
@@ -358,6 +374,29 @@ export async function resolveTagSlugs(projectId: string | null, slugs: readonly 
 }
 
 /**
+ * Étiquettes demandées par slug, **groupées par slug**, parmi celles que `scope` désigne et que le
+ * lecteur voit ; slugs inconnus ignorés (administration). Dans un espace, un slug désigne au plus une
+ * étiquette (unicité TG7) ; sur plusieurs espaces (page « Médias », niveau « Tous ») un même slug peut
+ * exister dans plusieurs projets : chacun donne un groupe (architecture-media-view.md, MV10).
+ */
+export async function resolveTagSlugGroups(scope: Prisma.TagWhereInput, slugs: readonly string[], viewer: TagViewer): Promise<string[][]> {
+  if (slugs.length === 0) return []
+  const prisma = await usePrisma()
+  const tags = await prisma.tag.findMany({
+    where: { AND: [scope, { slug: { in: [...slugs] } }, visibleWhere(viewer)] },
+    select: { id: true, slug: true },
+  })
+  const bySlug = new Map<string, string[]>()
+  for (const tag of tags) bySlug.set(tag.slug, [...(bySlug.get(tag.slug) ?? []), tag.id])
+  return slugs.filter(slug => bySlug.has(slug)).map(slug => bySlug.get(slug)!.sort())
+}
+
+/** Condition « porte l'une de ces étiquettes » (une seule : forme la plus simple). */
+function carriesOneOf(group: readonly string[]): Prisma.MediaWhereInput {
+  return { tags: { some: group.length === 1 ? { tagId: group[0]! } : { tagId: { in: [...group] } } } }
+}
+
+/**
  * Médias étiquetés lus d'avance au plus : en deçà, le filtre devient `id IN (…)` (servi par la clé
  * primaire) ; au-delà, une condition sur la relation (EXISTS corrélé), efficace quand les médias
  * étiquetés sont nombreux (la page se remplit vite). Mesure (architecture-tags.md § 5.1) : sous SQLite,
@@ -378,25 +417,36 @@ export const TAG_PREFETCH_LIMIT = 500
  * que des slugs étaient demandés (tous inconnus, mode non strict) : aucun filtre.
  */
 export async function tagFilterWhere(tagIds: readonly string[], filter: TagFilter, viewer: TagViewer): Promise<Prisma.MediaWhereInput | null> {
+  return tagGroupsFilterWhere(tagIds.map(id => [id]), filter, viewer)
+}
+
+/**
+ * Comme `tagFilterWhere`, avec des **groupes** d'étiquettes (un par slug, `resolveTagSlugGroups`) :
+ * `any` = l'une quelconque des étiquettes ; `all` = pour chaque groupe, l'une de ses étiquettes (sinon
+ * « Été » du projet A et « Été » du projet B s'exigeraient mutuellement). Le groupe le moins fourni est
+ * lu d'avance. Des groupes d'une étiquette donnent exactement la condition de `tagFilterWhere`.
+ */
+export async function tagGroupsFilterWhere(groups: readonly (readonly string[])[], filter: TagFilter, viewer: TagViewer): Promise<Prisma.MediaWhereInput | null> {
+  const tagIds = [...new Set(groups.flat())]
   if (tagIds.length > 0) {
     const prisma = await usePrisma()
-    const counts = await prisma.mediaTag.groupBy({ by: ['tagId'], where: { tagId: { in: [...tagIds] } }, _count: { _all: true } })
+    const counts = await prisma.mediaTag.groupBy({ by: ['tagId'], where: { tagId: { in: tagIds } }, _count: { _all: true } })
     const countOf = new Map(counts.map(row => [row.tagId, row._count._all]))
+    const sizeOf = (group: readonly string[]) => group.reduce((sum, id) => sum + (countOf.get(id) ?? 0), 0)
     if (filter.match === 'all') {
-      const rarest = [...tagIds].sort((a, b) => (countOf.get(a) ?? 0) - (countOf.get(b) ?? 0))[0]!
-      const others = tagIds.filter(id => id !== rarest).map(tagId => ({ tags: { some: { tagId } } }))
-      if ((countOf.get(rarest) ?? 0) <= TAG_PREFETCH_LIMIT) {
-        const links = await prisma.mediaTag.findMany({ where: { tagId: rarest }, select: { mediaId: true } })
-        return { id: { in: links.map(link => link.mediaId) }, ...(others.length ? { AND: others } : {}) }
+      const rarest = [...groups].filter(group => group.length > 0).sort((a, b) => sizeOf(a) - sizeOf(b))[0]!
+      const others = groups.filter(group => group !== rarest && group.length > 0).map(carriesOneOf)
+      if (sizeOf(rarest) <= TAG_PREFETCH_LIMIT) {
+        const links = await prisma.mediaTag.findMany({ where: { tagId: rarest.length === 1 ? rarest[0]! : { in: [...rarest] } }, select: { mediaId: true } })
+        return { id: { in: [...new Set(links.map(link => link.mediaId))] }, ...(others.length ? { AND: others } : {}) }
       }
-      return { AND: [{ tags: { some: { tagId: rarest } } }, ...others] }
+      return { AND: [carriesOneOf(rarest), ...others] }
     }
-    const total = tagIds.reduce((sum, id) => sum + (countOf.get(id) ?? 0), 0)
-    if (total <= TAG_PREFETCH_LIMIT) {
-      const links = await prisma.mediaTag.findMany({ where: { tagId: { in: [...tagIds] } }, select: { mediaId: true } })
+    if (sizeOf(tagIds) <= TAG_PREFETCH_LIMIT) {
+      const links = await prisma.mediaTag.findMany({ where: { tagId: { in: tagIds } }, select: { mediaId: true } })
       return { id: { in: [...new Set(links.map(link => link.mediaId))] } }
     }
-    return { tags: { some: { tagId: { in: [...tagIds] } } } }
+    return { tags: { some: { tagId: { in: tagIds } } } }
   }
   if (filter.untagged && !filter.slugs?.length) {
     return viewer.confidential ? { tags: { none: {} } } : { tags: { none: { tag: { confidential: false } } } }

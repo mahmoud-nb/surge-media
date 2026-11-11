@@ -14,7 +14,7 @@ import type { Space } from '../../utils/access'
 import { folderWhere, requireFolderInSpace } from '../folders/service'
 import { useMediaStorage } from '../storage'
 import { type MediaTagLink, TAG_LINK_INCLUDE } from '../tags/include'
-import { carriedTags, mediaTagViews, replaceMediaTagLinks, resolveTagSlugs, tagFilterWhere } from '../tags/service'
+import { carriedTags, mediaTagViews, replaceMediaTagLinks, resolveTagSlugGroups, tagGroupsFilterWhere } from '../tags/service'
 import type { ProbeResult } from '../video-processing/ffprobe'
 import {
   cancelActiveJobs,
@@ -47,6 +47,7 @@ import { imageHandler, normalizePoster } from './handlers/image'
 import type { PreparedMedia } from './handlers/types'
 import { originalKey, posterKey, renditionKey, variantPrefix } from './keys'
 import { sniffMimeType } from './sniff'
+import { mediaSpacesWhere, type ReadableSpaces, spaceMediaCounts, tagSpacesWhere, toSpaceSummaries } from './spaces'
 import { runProcessing } from './processing'
 import { PROCESSING_INCLUDE, type ProcessingRelations, videoSources } from './sources'
 import { type ReceivedUpload, temporaryCopy } from './upload'
@@ -279,27 +280,62 @@ const SORTS: Record<MediaListQuery['sort'], Prisma.MediaOrderByWithRelationInput
  * invisibles pour le lecteur ignorés, comme les autres filtres invalides de l'administration.
  */
 export async function listMedia(space: Space, query: MediaListQuery, viewer: TagViewer) {
+  const projectId = projectIdOf(space)
+  const filters = await listFilters(query, viewer, projectId ? { OR: [{ projectId: null }, { projectId }] } : { projectId: null })
   const where: Prisma.MediaWhereInput = {
-    projectId: projectIdOf(space),
+    projectId,
     deletedAt: query.status === 'trash' ? { not: null } : null,
     ...(query.status === 'trash' ? {} : await folderWhere(space, query.folder ?? null, Boolean(query.recursive))),
+    ...(filters.length ? { AND: filters } : {}),
   }
+  return pageOfMedia(where, query, viewer)
+}
+
+/**
+ * Médias actifs de plusieurs espaces (page « Médias », niveau « Tous les médias » ;
+ * architecture-media-view.md) : la bibliothèque si elle est lisible et les projets actifs lisibles
+ * (`readableSpaces`, calculés depuis la session). Mêmes filtres que `listMedia`, sans dossier ni
+ * corbeille (propres à un espace, MV8 et MV9) ; un slug d'étiquette est cherché dans chaque espace
+ * (MV10). `spaces` : chaque espace avec son nombre de médias actifs et les portées de l'utilisateur.
+ */
+export async function listAllMedia(spaces: ReadableSpaces, query: MediaListQuery, viewer: TagViewer) {
+  const scope = mediaSpacesWhere(spaces.library !== null, spaces.selection)
+  const counts = scope ? await spaceMediaCounts(scope) : new Map<string | null, number>()
+  const summaries = toSpaceSummaries(spaces, counts)
+  if (!scope) return { items: [], total: 0, page: query.page, pageSize: MEDIA_PAGE_SIZE, spaces: summaries }
+  const filters = await listFilters(query, viewer, tagSpacesWhere(spaces.selection))
+  // Sans filtre, le total est la somme des nombres par espace, déjà lus : pas de second comptage.
+  const total = filters.length === 0 ? [...counts.values()].reduce((sum, count) => sum + count, 0) : undefined
+  const page = await pageOfMedia({ AND: [scope, ...filters], deletedAt: null }, query, viewer, total)
+  return { ...page, spaces: summaries }
+}
+
+/**
+ * Conditions des filtres d'une liste (recherche, type, visibilité, étiquettes), communes à un espace
+ * et à plusieurs. `tagScope` : étiquettes utilisables sur les médias listés, où chercher les slugs.
+ */
+async function listFilters(query: MediaListQuery, viewer: TagViewer, tagScope: Prisma.TagWhereInput): Promise<Prisma.MediaWhereInput[]> {
+  const filters: Prisma.MediaWhereInput[] = []
   if (query.q) {
     // Colonnes normalisées : insensible à la casse et aux accents sur les trois bases.
     const term = normalizeSearchText(query.q)
-    where.OR = [{ searchTitle: { contains: term } }, { searchName: { contains: term } }, { searchAlt: { contains: term } }]
+    filters.push({ OR: [{ searchTitle: { contains: term } }, { searchName: { contains: term } }, { searchAlt: { contains: term } }] })
   }
-  if (query.kind) where.kind = query.kind as MediaKind
-  if (query.visibility) where.visibility = query.visibility
+  if (query.kind) filters.push({ kind: query.kind as MediaKind })
+  if (query.visibility) filters.push({ visibility: query.visibility })
   if (query.tags?.length || query.untagged) {
-    const tagIds = await resolveTagSlugs(projectIdOf(space), query.tags ?? [], viewer, false)
-    const tagWhere = await tagFilterWhere(tagIds, { slugs: query.tags, match: query.match, untagged: query.untagged }, viewer)
-    if (tagWhere) where.AND = [tagWhere]
+    const groups = await resolveTagSlugGroups(tagScope, query.tags ?? [], viewer)
+    const tagWhere = await tagGroupsFilterWhere(groups, { slugs: query.tags, match: query.match, untagged: query.untagged }, viewer)
+    if (tagWhere) filters.push(tagWhere)
   }
+  return filters
+}
 
+/** Page de médias (24) selon le tri demandé, avec le total (compté, sauf s'il est déjà connu). */
+async function pageOfMedia(where: Prisma.MediaWhereInput, query: MediaListQuery, viewer: TagViewer, knownTotal?: number) {
   const prisma = await usePrisma()
   const [total, items] = await Promise.all([
-    prisma.media.count({ where }),
+    knownTotal ?? prisma.media.count({ where }),
     prisma.media.findMany({
       where,
       include: MEDIA_LIST_INCLUDE,
