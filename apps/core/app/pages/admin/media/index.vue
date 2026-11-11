@@ -1,26 +1,34 @@
 <script setup lang="ts">
+/**
+ * Page « Médias » (architecture : .claude/architecture-media-view.md) : sans `space`, « Tous les médias »
+ * (bibliothèque et projets actifs de l'utilisateur) ; avec `space` (`library` ou identifiant d'un
+ * projet), cet espace, dossiers compris. L'API décide de ce qui est visible.
+ */
 definePageMeta({ layout: 'admin', permission: 'library:read' })
 
 const { t } = useI18n()
 const route = useRoute()
 
-useSeoMeta({ title: () => (route.query.status === 'trash' ? t('media.list.trashTitle') : t('media.list.meta.title')) })
-
+// Ancienne adresse de la bibliothèque (`?folder=…`, `?status=trash` sans `space`) : la bibliothèque.
+const space = computed(() => {
+  if (typeof route.query.space === 'string' && route.query.space.trim()) return route.query.space.trim()
+  return route.query.folder || route.query.status === 'trash' ? 'library' : ''
+})
 const flash = useFlash().consume()
-const inTrash = computed(() => route.query.status === 'trash')
 </script>
 
 <template>
   <div class="mx-auto max-w-6xl">
-    <AdminPageHeader
-      :title="inTrash ? t('media.list.trashTitle') : t('media.list.title')"
-      :description="inTrash ? t('media.list.trashDescription') : t('media.list.description')"
-    />
+    <AdminMediaSpace v-if="space" :key="space" :space="space" :flash="flash" />
 
-    <UiAlert v-if="flash" :variant="flash.variant" live="polite" class="mb-6">
-      {{ flash.message }}
-    </UiAlert>
+    <template v-else>
+      <AdminPageHeader :title="t('media.overview.title')" :description="t('media.overview.description')" />
 
-    <AdminMediaBrowser />
+      <UiAlert v-if="flash" :variant="flash.variant" live="polite" class="mb-6">
+        {{ flash.message }}
+      </UiAlert>
+
+      <AdminMediaOverview />
+    </template>
   </div>
 </template>

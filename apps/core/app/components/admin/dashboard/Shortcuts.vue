@@ -14,8 +14,8 @@ const { can } = useAuth()
 
 const shortcuts = computed(() => ([
   can('library:manage')
-    ? { to: '/admin/media', label: t('admin.dashboard.shortcuts.upload'), icon: Upload }
-    : can('library:read') ? { to: '/admin/media', label: t('admin.dashboard.shortcuts.library'), icon: Images } : null,
+    ? { to: '/admin/media?space=library', label: t('admin.dashboard.shortcuts.upload'), icon: Upload }
+    : can('library:read') ? { to: '/admin/media', label: t('admin.dashboard.shortcuts.media'), icon: Images } : null,
   can('projects:create')
     ? { to: '/admin/projects/new', label: t('admin.dashboard.shortcuts.newProject'), icon: FolderPlus }
     : { to: '/admin/projects', label: t('admin.dashboard.shortcuts.projects'), icon: FolderKanban },

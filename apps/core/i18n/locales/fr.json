@@ -152,7 +152,7 @@
       "projects": "Projets",
       "tokens": "Jetons personnels",
       "users": "Utilisateurs",
-      "library": "Bibliothèque",
+      "media": "Médias",
       "audit": "Journal d'audit",
       "apiDocs": "Documentation de l'API",
       "settings": "Réglages",
@@ -215,7 +215,7 @@
       "shortcuts": {
         "title": "Raccourcis",
         "upload": "Envoyer dans la bibliothèque",
-        "library": "Parcourir la bibliothèque",
+        "media": "Parcourir les médias",
         "newProject": "Créer un projet",
         "projects": "Voir mes projets",
         "invite": "Inviter un utilisateur",
@@ -613,12 +613,47 @@
       "count": "Aucun média | {count} média | {count} médias",
       "gridLabel": "Médias",
       "empty": "Aucun média pour le moment : téléversez vos premières images ou vidéos ci-dessus.",
+      "emptyReadOnly": "Aucun média pour le moment.",
+      "emptyLibraryReadOnly": "La bibliothèque est vide : seul un administrateur peut y ajouter des médias.",
       "emptyFiltered": "Aucun média ne correspond à ces filtres.",
       "emptyTrash": "La corbeille est vide.",
       "loadError": "Impossible de charger les médias.",
       "results": "Résultats",
       "emptyFolder": "Aucun média dans ce dossier.",
       "emptyFilteredFolder": "Aucun média de ce dossier ne correspond. Cochez « Inclure les sous-dossiers » pour chercher aussi dans les sous-dossiers."
+    },
+    "overview": {
+      "meta": {
+        "title": "Médias"
+      },
+      "title": "Médias",
+      "description": "Tous les médias auxquels vous avez accès : la bibliothèque de l'organisation et vos projets.",
+      "root": "Tous les médias",
+      "library": "Bibliothèque",
+      "projectDescription": "Médias de ce projet, rangés dans ses dossiers.",
+      "spaces": {
+        "title": "Espaces",
+        "showMore": "Afficher l'autre espace | Afficher les {count} autres espaces",
+        "showLess": "Afficher moins d'espaces"
+      },
+      "filters": {
+        "space": "Espace",
+        "allSpaces": "Tous les espaces"
+      },
+      "upload": {
+        "destination": "Envoyer dans",
+        "choose": "Choisir un espace",
+        "hint": "Les fichiers seront ajoutés à la racine de l'espace choisi.",
+        "required": "Choisissez d'abord l'espace où envoyer les fichiers."
+      },
+      "spaceActions": "Pour ranger dans des dossiers, étiqueter en lot ou voir la corbeille, ouvrez un espace.",
+      "empty": "Aucun média pour le moment.",
+      "tagsTruncated": "Trop d'étiquettes pour toutes les proposer : seules les globales le sont ici. Ouvrez un projet pour filtrer par ses étiquettes.",
+      "spaceMissing": {
+        "title": "Espace introuvable",
+        "description": "Ce projet n'existe pas ou ne vous est pas accessible.",
+        "back": "Voir tous les médias"
+      }
     },
     "filters": {
       "label": "Filtrer les médias",
@@ -683,6 +718,7 @@
     },
     "detail": {
       "backToList": "Retour à la bibliothèque",
+      "backToAll": "Retour à tous les médias",
       "backToTrash": "Retour à la corbeille",
       "loadError": "Impossible de charger ce média.",
       "infoTitle": "Informations",
@@ -1180,7 +1216,9 @@
     },
     "card": {
       "tags": "Étiquettes",
-      "moreTags": "Autres étiquettes : {names}"
+      "moreTags": "Autres étiquettes : {names}",
+      "space": "Espace :",
+      "readOnly": "(lecture seule)"
     }
   },
   "projectRoles": {

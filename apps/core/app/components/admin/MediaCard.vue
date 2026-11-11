@@ -12,7 +12,7 @@
  * « en cours » y serait faux (la restauration la relance), seul l'échec reste signalé.
  * Étiquettes (architecture-tags.md) : les 3 premières, puis « +n » dont le texte nomme les autres.
  */
-import { Film, Lock, Play } from '@lucide/vue'
+import { Film, Folders, Lock, PencilOff, Play } from '@lucide/vue'
 import { processingInProgress } from '~/composables/useProcessingPoll'
 
 const props = defineProps<{
@@ -37,6 +37,12 @@ const props = defineProps<{
   }
   /** Affiche une case de sélection (actions groupées). */
   selectable?: boolean
+  /** Nom de l'espace du média (page « Médias », niveau « Tous les médias ») : badge en haut à droite. */
+  spaceLabel?: string
+  /** L'utilisateur ne peut pas modifier les médias de cet espace (ex. bibliothèque hors ADMIN). */
+  spaceReadOnly?: boolean
+  /** Paramètres ajoutés au lien vers la fiche (ex. `from` : liste d'où l'on vient). */
+  linkQuery?: Record<string, string>
 }>()
 
 const selected = defineModel<boolean>('selected', { default: false })
@@ -98,7 +104,7 @@ const processing = computed<ProcessingStateValue | null>(() => {
     </label>
     <div class="grid gap-1.5 p-3">
       <h3 class="truncate text-sm font-medium text-foreground" :title="name">
-        <NuxtLink :to="`/admin/media/${media.id}`" class="after:absolute after:inset-0 focus-visible:outline-none">
+        <NuxtLink :to="{ path: `/admin/media/${media.id}`, query: linkQuery }" class="after:absolute after:inset-0 focus-visible:outline-none">
           {{ name }}
         </NuxtLink>
       </h3>
@@ -108,6 +114,22 @@ const processing = computed<ProcessingStateValue | null>(() => {
           <span>{{ detail }}</span>
         </template>
         <span v-if="duration" class="sr-only">{{ duration.spoken }}</span>
+      </p>
+      <!--
+        Espace : affiché en haut à droite de l'aperçu, mais placé ici dans le document pour être lu après le
+        nom du média. Les clics le traversent (lien de la carte). Espace en lecture seule : icône « pas de
+        modification » (le cadenas désigne déjà un média privé) et texte pour les lecteurs d'écran.
+      -->
+      <p v-if="spaceLabel" class="pointer-events-none absolute top-2 right-2 flex max-w-[calc(100%-1rem)] justify-end">
+        <UiBadge variant="primary" class="max-w-full min-w-0 shadow-xs">
+          <Folders class="size-3 shrink-0" aria-hidden="true" />
+          <span class="sr-only">{{ t('media.card.space') }}</span>
+          <span class="truncate">{{ spaceLabel }}</span>
+          <template v-if="spaceReadOnly">
+            <PencilOff class="size-3 shrink-0" aria-hidden="true" />
+            <span class="sr-only">{{ t('media.card.readOnly') }}</span>
+          </template>
+        </UiBadge>
       </p>
       <!-- Pastilles : retour à la ligne permis (carte de 160 px de large sur un écran de 375 px). -->
       <p v-if="media.visibility === 'PRIVATE' || processing" class="flex flex-wrap gap-1.5">

@@ -152,7 +152,7 @@
       "projects": "Projects",
       "tokens": "Personal tokens",
       "users": "Users",
-      "library": "Library",
+      "media": "Media",
       "audit": "Audit log",
       "apiDocs": "API documentation",
       "settings": "Settings",
@@ -215,7 +215,7 @@
       "shortcuts": {
         "title": "Shortcuts",
         "upload": "Upload to the library",
-        "library": "Browse the library",
+        "media": "Browse media",
         "newProject": "Create a project",
         "projects": "See my projects",
         "invite": "Invite a user",
@@ -613,12 +613,47 @@
       "count": "No media | {count} media item | {count} media items",
       "gridLabel": "Media",
       "empty": "No media yet: upload your first images or videos above.",
+      "emptyReadOnly": "No media yet.",
+      "emptyLibraryReadOnly": "The library is empty: only an administrator can add media to it.",
       "emptyFiltered": "No media match these filters.",
       "emptyTrash": "The trash is empty.",
       "loadError": "Unable to load media.",
       "results": "Results",
       "emptyFolder": "No media in this folder.",
       "emptyFilteredFolder": "No media in this folder matches. Check “Include subfolders” to search subfolders too."
+    },
+    "overview": {
+      "meta": {
+        "title": "Media"
+      },
+      "title": "Media",
+      "description": "Every media item you can access: the organization library and your projects.",
+      "root": "All media",
+      "library": "Library",
+      "projectDescription": "This project's media, organized in its folders.",
+      "spaces": {
+        "title": "Spaces",
+        "showMore": "Show the other space | Show the {count} other spaces",
+        "showLess": "Show fewer spaces"
+      },
+      "filters": {
+        "space": "Space",
+        "allSpaces": "All spaces"
+      },
+      "upload": {
+        "destination": "Upload to",
+        "choose": "Choose a space",
+        "hint": "Files will be added at the root of the chosen space.",
+        "required": "First choose the space to upload the files to."
+      },
+      "spaceActions": "To file into folders, tag in bulk or see the trash, open a space.",
+      "empty": "No media yet.",
+      "tagsTruncated": "Too many tags to suggest them all: only global tags are offered here. Open a project to filter by its tags.",
+      "spaceMissing": {
+        "title": "Space not found",
+        "description": "This project does not exist or is not available to you.",
+        "back": "See all media"
+      }
     },
     "filters": {
       "label": "Filter media",
@@ -683,6 +718,7 @@
     },
     "detail": {
       "backToList": "Back to the library",
+      "backToAll": "Back to all media",
       "backToTrash": "Back to the trash",
       "loadError": "Unable to load this media item.",
       "infoTitle": "Information",
@@ -1180,7 +1216,9 @@
     },
     "card": {
       "tags": "Tags",
-      "moreTags": "Other tags: {names}"
+      "moreTags": "Other tags: {names}",
+      "space": "Space:",
+      "readOnly": "(read-only)"
     }
   },
   "projectRoles": {

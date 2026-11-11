@@ -113,7 +113,7 @@ const number = (value: number) => new Intl.NumberFormat(locale.value).format(val
             <ul class="grid gap-0.5">
               <li v-for="space in item.spaces" :key="space.type === 'library' ? 'library' : space.id">
                 <NuxtLink
-                  :to="space.type === 'library' ? '/admin/media?status=trash' : `/admin/projects/${space.id}/media?status=trash`"
+                  :to="space.type === 'library' ? '/admin/media?space=library&status=trash' : `/admin/projects/${space.id}/media?status=trash`"
                   class="text-primary underline-offset-4 hover:underline"
                 >
                   {{ t('admin.dashboard.attention.trashSpace', { space: space.type === 'library' ? t('space.library') : space.name, count: space.count }, space.count) }}
