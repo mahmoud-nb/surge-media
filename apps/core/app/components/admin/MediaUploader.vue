@@ -34,6 +34,10 @@ const props = withDefaults(defineProps<{
   fields?: Record<string, string>
   /** Genres acceptés (remplacement : celui du média) ; tous par défaut. */
   kinds?: readonly string[]
+  /** Envoi impossible pour l'instant (ex. destination à choisir, page « Médias ») : champ et dépôt inactifs. */
+  disabled?: boolean
+  /** Identifiant d'un texte d'aide extérieur, ajouté à la description du champ (ex. destination). */
+  describedBy?: string
 }>(), {
   endpoint: '/api/admin/media',
   method: 'POST',
@@ -100,7 +104,11 @@ const visibilityOptions = computed(() => MEDIA_VISIBILITIES.map(value => ({ valu
 
 async function enqueue(files: File[]) {
   const selected = props.multiple ? files : files.slice(0, 1)
-  if (selected.length === 0) return
+  if (selected.length === 0 || props.disabled) return
+  // Destination figée à l'ajout dans la file : changer de dossier ou d'espace pendant l'envoi ne
+  // détourne pas les fichiers déjà choisis.
+  const endpoint = props.endpoint
+  const destination = { ...props.fields }
   const items = selected.map(file => ({ file, item: reactive<QueueItem>({ key: nextKey++, name: file.name, progress: 0, status: 'pending' }) }))
   queue.value = [...items.map(({ item }) => item), ...queue.value].slice(0, 20)
 
@@ -115,8 +123,8 @@ async function enqueue(files: File[]) {
     // Capture en parallèle de l'envoi : rien n'est envoyé pour la faire.
     const poster = capturesPoster.value && isVideoFile(file) ? captureVideoFile(file) : null
     try {
-      const fields: Record<string, string> = { ...props.fields, ...(props.withVisibility ? { visibility: visibility.value } : {}) }
-      const result = await send(props.endpoint, file, fields, { method: props.method, onProgress: percent => (item.progress = percent) })
+      const fields: Record<string, string> = { ...destination, ...(props.withVisibility ? { visibility: visibility.value } : {}) }
+      const result = await send(endpoint, file, fields, { method: props.method, onProgress: percent => (item.progress = percent) })
       if (result.status >= 200 && result.status < 300) {
         let media = (result.body as { media: { id: string, originalName: string } }).media
         if (poster) media = await attachPoster(media, poster)
@@ -147,7 +155,12 @@ function onChange(event: Event) {
 
 function onDrop(event: DragEvent) {
   dragging.value = false
+  if (props.disabled) return
   enqueue([...(event.dataTransfer?.files ?? [])])
+}
+
+function onDragOver() {
+  if (!props.disabled) dragging.value = true
 }
 
 // Fermeture ou rechargement de l'onglet pendant un envoi : le navigateur demande confirmation (son
@@ -168,9 +181,10 @@ onBeforeUnmount(() => window.removeEventListener('beforeunload', confirmLeave))
       :class="cn(
         'flex flex-col items-center gap-3 rounded-xl border-2 border-dashed border-input bg-surface px-6 py-8 text-center transition-colors',
         dragging && 'border-primary bg-primary-soft',
+        disabled && 'bg-muted',
       )"
-      @dragenter.prevent="dragging = true"
-      @dragover.prevent="dragging = true"
+      @dragenter.prevent="onDragOver"
+      @dragover.prevent="onDragOver"
       @dragleave.prevent="dragging = false"
       @drop.prevent="onDrop"
     >
@@ -185,8 +199,8 @@ onBeforeUnmount(() => window.removeEventListener('beforeunload', confirmLeave))
           class="peer sr-only"
           :accept="accept"
           :multiple="multiple"
-          :disabled="busy"
-          :aria-describedby="helpId"
+          :disabled="busy || disabled"
+          :aria-describedby="describedBy ? `${describedBy} ${helpId}` : helpId"
           @change="onChange"
         >
         <label

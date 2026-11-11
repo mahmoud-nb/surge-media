@@ -54,6 +54,11 @@ export const spaceQuerySchema = z.object({ project: projectParamSchema })
 /** Filtres de la médiathèque (paramètres d'URL) ; les valeurs invalides sont ignorées. */
 export const mediaListQuerySchema = z.object({
   project: projectParamSchema,
+  /**
+   * `all` : médias actifs de tous les espaces lisibles (page « Médias », architecture-media-view.md) ;
+   * `project`, `folder`, `recursive` et `status` sont alors ignorés. Absent : un seul espace (`project`).
+   */
+  scope: z.enum(['all']).optional().catch(undefined),
   q: z.string().trim().max(MEDIA_TEXT_MAX_LENGTH).optional().catch(undefined),
   kind: z.enum(ENABLED_MEDIA_KINDS as [string, ...string[]]).optional().catch(undefined),
   visibility: visibilitySchema.optional().catch(undefined),

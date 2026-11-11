@@ -16,6 +16,13 @@ import type { TagOption } from '~/composables/useTagLabels'
 const props = defineProps<{
   /** Projet affiché ; absent = bibliothèque de l'organisation. */
   projectId?: string
+  /**
+   * Page « Médias » (architecture-media-view.md) : valeur du paramètre `space` de l'URL (`library` ou
+   * identifiant du projet), gardée dans chaque lien ; le fil d'Ariane part de « Tous les médias ».
+   */
+  spaceParam?: string
+  /** Nom de la racine dans le fil d'Ariane (page « Médias » : nom de l'espace) ; « Racine » par défaut. */
+  rootLabel?: string
 }>()
 
 const { t } = useI18n()
@@ -71,7 +78,7 @@ const { data, error, refresh } = await useApiFetch('/api/admin/media', {
 const { data: tagData, refresh: refreshTags } = await useApiFetch('/api/admin/tags', { query: computed(() => ({ project: props.projectId })) })
 const tagOptions = computed(() => (tagData.value?.tags ?? []) as TagOption[])
 
-const scopes = computed<readonly string[]>(() => folderData.value?.scopes ?? data.value?.scopes ?? [])
+const scopes = computed<readonly string[]>(() => folderData.value?.scopes ?? (data.value && 'scopes' in data.value ? data.value.scopes : null) ?? [])
 const canUpload = computed(() => scopes.value.includes('media:upload'))
 const canWrite = computed(() => scopes.value.includes('media:write'))
 const uploadEndpoint = computed(() => (props.projectId ? `/api/admin/media?project=${encodeURIComponent(props.projectId)}` : '/api/admin/media'))
@@ -95,8 +102,16 @@ const uploadFields = computed(() => {
 /** Lien vers un dossier : tri, type, visibilité, étiquettes et récursivité conservés, recherche et page réinitialisées. */
 function folderLink(id: string | null) {
   const { sort, kind, visibility, recursive: withSubfolders, tags, match, untagged } = route.query
-  return { query: { sort, kind, visibility, recursive: withSubfolders, tags, match, untagged, folder: id ?? undefined } }
+  return { query: { space: props.spaceParam, sort, kind, visibility, recursive: withSubfolders, tags, match, untagged, folder: id ?? undefined } }
 }
+
+/** Page « Médias » : retour au niveau « Tous les médias », mêmes filtres (sauf dossier et récursivité). */
+const allMediaLink = computed(() => {
+  const { sort, kind, visibility, tags, match, untagged } = route.query
+  return { path: '/admin/media', query: { sort, kind, visibility, tags, match, untagged } }
+})
+/** Lien vers la fiche : la page « Médias » y revient (MV12). */
+const cardQuery = computed(() => (props.spaceParam ? { from: 'media' } : undefined))
 
 async function onFoldersChanged() {
   await Promise.all([refreshFolders(), refresh()])
@@ -110,6 +125,9 @@ async function onFolderDeleted(parentId: string | null) {
   document.getElementById('folders-title')?.focus()
 }
 
+/** Section d'envoi ouverte d'emblée seulement dans un espace encore vide (rien d'autre à montrer). */
+const uploadOpenByDefault = data.value?.total === 0 && !hasFilters.value && !inTrash.value
+
 async function onUploaded() {
   await Promise.all([refresh(), refreshFolders()])
 }
@@ -118,6 +136,7 @@ async function onUploaded() {
 
 function applyFilters() {
   const query: Record<string, string> = {}
+  if (props.spaceParam) query.space = props.spaceParam
   if (filters.q) query.q = filters.q
   if (filters.kind) query.kind = filters.kind
   if (filters.visibility) query.visibility = filters.visibility
@@ -140,7 +159,7 @@ function pageLink(page: number) {
   return { query: { ...route.query, page: page > 1 ? String(page) : undefined } }
 }
 
-const resetLink = computed(() => ({ query: inTrash.value ? { status: 'trash' } : { folder: folderId.value } }))
+const resetLink = computed(() => ({ query: { space: props.spaceParam, ...(inTrash.value ? { status: 'trash' } : { folder: folderId.value }) } }))
 
 /** Filtre par type, dès que l'installation accepte plusieurs genres (images, vidéos). */
 const kindOptions = computed(() => [
@@ -162,7 +181,10 @@ const emptyMessage = computed(() => {
   if (inTrash.value) return t('media.list.emptyTrash')
   if (route.query.q && !recursive.value && folders.value.length > 0) return t('media.list.emptyFilteredFolder')
   if (hasFilters.value) return t('media.list.emptyFiltered')
-  return currentFolder.value ? t('media.list.emptyFolder') : t('media.list.empty')
+  if (currentFolder.value) return t('media.list.emptyFolder')
+  // Sans droit d'envoi, pas d'invitation à envoyer (MV13) : la bibliothèque n'est alimentée que par l'ADMIN.
+  if (!canUpload.value) return props.projectId ? t('media.list.emptyReadOnly') : t('media.list.emptyLibraryReadOnly')
+  return t('media.list.empty')
 })
 
 // ─── Sélection et rangement groupé ───────────────────────────────────────────
@@ -302,13 +324,20 @@ async function fileSelected() {
       </div>
       <nav :aria-label="t('folders.breadcrumbLabel')">
         <ol class="flex flex-wrap items-center gap-1 text-sm">
-          <li class="flex items-center gap-1">
+          <li v-if="spaceParam" class="flex items-center gap-1">
+            <!-- Même chemin que la page (seuls les paramètres diffèrent) : jamais « page actuelle ». -->
+            <NuxtLink :to="allMediaLink" :aria-current="undefined" class="rounded font-medium text-primary underline-offset-4 hover:underline">
+              {{ t('media.overview.root') }}
+            </NuxtLink>
+            <ChevronRight class="size-4 shrink-0 text-muted-foreground" aria-hidden="true" />
+          </li>
+          <li class="flex min-w-0 items-center gap-1">
             <NuxtLink
               :to="folderLink(null)"
               :aria-current="currentFolder ? undefined : 'page'"
-              class="rounded font-medium text-primary underline-offset-4 hover:underline aria-[current=page]:text-foreground aria-[current=page]:no-underline"
+              class="truncate rounded font-medium text-primary underline-offset-4 hover:underline aria-[current=page]:text-foreground aria-[current=page]:no-underline"
             >
-              {{ t('folders.root') }}
+              {{ rootLabel ?? t('folders.root') }}
             </NuxtLink>
           </li>
           <li v-for="(folder, index) in breadcrumb" :key="folder.id" class="flex min-w-0 items-center gap-1">
@@ -349,15 +378,13 @@ async function fileSelected() {
       </template>
     </section>
 
-    <section v-if="!inTrash && !folderMissing && rules && canUpload" aria-labelledby="upload-title" class="mb-8">
-      <h2 id="upload-title" class="mb-1 text-lg font-semibold text-foreground">
-        {{ t('media.upload.title') }}
-      </h2>
+    <!-- Section repliée tant que l'espace a des médias à montrer ; un envoi en cours continue une fois replié. -->
+    <AdminUploadPanel v-if="!inTrash && !folderMissing && rules && canUpload" :default-open="uploadOpenByDefault">
       <p class="mb-3 text-sm text-muted-foreground">
         {{ currentFolder ? t('folders.upload.destinationFolder', { name: currentFolder.name }) : t('folders.upload.destinationRoot') }}
       </p>
       <AdminMediaUploader :rules="rules" :endpoint="uploadEndpoint" :fields="uploadFields" @done="onUploaded" />
-    </section>
+    </AdminUploadPanel>
 
     <form
       role="search"
@@ -466,6 +493,7 @@ async function fileSelected() {
         <li v-for="item in data.items" :key="item.id">
           <AdminMediaCard
             :media="item"
+            :link-query="cardQuery"
             :selectable="selecting"
             :selected="isSelected(item.id)"
             @update:selected="setSelected(item.id, $event)"

@@ -7,7 +7,7 @@ your applications, on-the-fly image transformations and video handling.
 [Website and documentation](https://mahmoud-nb.github.io/surge-media/) · [Live demo](https://demo.usesurgemedia.com) ·
 [Installation and operations guide](https://github.com/mahmoud-nb/surge-media/blob/main/setup.md)
 
-- **Admin interface** — media library, projects, folders, tags (global and per project, confidential ones
+- **Admin interface** — one Media page across the library and your projects, folders, tags (global and per project, confidential ones
   included), users and roles, two-factor authentication (TOTP) that administrators can require, audit log
   (English and French, light and dark themes, designed for WCAG 2.2 AA).
 - **REST API v1** — scoped API keys and tokens, per-project CORS origins, rate limiting, OpenAPI 3.1

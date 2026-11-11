@@ -242,21 +242,38 @@ const canPrepare = computed(() => canWrite.value && !inTrash.value && preparable
   && video.value?.prepared === null && !processingRunning.value)
 const spaceLabel = computed(() => (project.value ? t('space.project', { name: project.value.name }) : t('space.library')))
 
-/** Liste d'où l'on vient : médias du projet ou bibliothèque (corbeille le cas échéant). */
-const listPath = computed(() => (project.value ? `/admin/projects/${project.value.id}/media` : '/admin/media'))
-const backLink = computed(() => (inTrash.value
-  ? { path: listPath.value, query: { status: 'trash' } }
-  : { path: listPath.value, query: { folder: media.value?.folderId ?? undefined } }))
+/**
+ * Liste d'où l'on vient (architecture-media-view.md, MV12) : `from=all` = page « Médias », tous les
+ * médias ; `from=media` = page « Médias », espace du média ; sinon la page Médias du projet, ou la
+ * bibliothèque dans la page « Médias ». Toute autre valeur de `from` est ignorée.
+ */
+const from = computed(() => (route.query.from === 'all' || route.query.from === 'media' ? route.query.from : null))
+/** Liste de l'espace du média (dossier ou corbeille dans `query`). */
+function spaceList(query: Record<string, string | undefined>) {
+  if (project.value && !from.value) return { path: `/admin/projects/${project.value.id}/media`, query }
+  return { path: '/admin/media', query: { space: project.value?.id ?? 'library', ...query } }
+}
+const backLink = computed(() => {
+  if (inTrash.value) return spaceList({ status: 'trash' })
+  if (from.value === 'all') return { path: '/admin/media' }
+  return spaceList({ folder: media.value?.folderId ?? undefined })
+})
+const backLabel = computed(() => {
+  if (inTrash.value) return t('media.detail.backToTrash')
+  if (from.value === 'all') return t('media.detail.backToAll')
+  return project.value ? t('media.detail.backToProject') : t('media.detail.backToList')
+})
 
 // Dossiers de l'espace du média (dossier affiché dans les informations, choix de rangement).
 const { data: spaceFolders } = await useApiFetch('/api/admin/folders', { query: computed(() => ({ project: project.value?.id })) })
 const spaceFolderIndex = computed(() => indexFolders(spaceFolders.value?.folders ?? []))
 const folderPath = computed(() => (media.value?.folderId ? folderPathLabel(spaceFolderIndex.value, media.value.folderId) : ''))
 
-// Barre latérale : la fiche d'un média de projet relève de la section Projets.
+// Barre latérale : la fiche d'un média de projet relève de la section Projets, sauf ouverte depuis la
+// page « Médias » (`from`), dont le chemin suffit à signaler la section.
 const section = useAdminSection()
-watch(project, (value) => {
-  section.value = value ? '/admin/projects' : null
+watch([project, from], ([value, origin]) => {
+  section.value = value && !origin ? '/admin/projects' : null
 }, { immediate: true })
 onBeforeUnmount(() => {
   section.value = null
@@ -625,7 +642,7 @@ async function moveToTrash() {
   try {
     await $api(`/api/admin/media/${mediaId.value}`, { method: 'DELETE' })
     flash.set({ variant: 'success', message: t('media.trash.moved', { name: displayName.value }) })
-    await navigateTo(listPath.value)
+    await navigateTo(backLink.value)
   }
   catch (error) {
     actionError.value = errorFallback(error)
@@ -660,7 +677,7 @@ async function purge() {
     await $api(`/api/admin/media/${mediaId.value}?permanent=true`, { method: 'DELETE' })
     flash.set({ variant: 'success', message: t('media.trash.purged', { name: displayName.value }) })
     purgeOpen.value = false
-    await navigateTo({ path: listPath.value, query: { status: 'trash' } })
+    await navigateTo(spaceList({ status: 'trash' }))
   }
   catch (error) {
     purgeError.value = errorFallback(error)
@@ -734,7 +751,7 @@ async function organize(action: 'duplicate' | 'move') {
     if (action === 'duplicate') {
       const result = await spaceRequest('duplicate', { projectId: target.value === LIBRARY_VALUE ? null : target.value, folderId })
       flash.set({ variant: 'success', message: t('media.organize.duplicated', { space: destination }) })
-      await navigateTo(`/admin/media/${result.media.id}`)
+      await navigateTo({ path: `/admin/media/${result.media.id}`, query: from.value ? { from: from.value } : undefined })
       return
     }
     if (sameSpace.value) await folderRequest(folderId)
@@ -762,7 +779,7 @@ const pageFlash = flash.consume()
   <div class="mx-auto max-w-6xl">
     <NuxtLink :to="backLink" class="mb-4 inline-flex items-center gap-1.5 rounded-lg text-sm font-medium text-muted-foreground hover:text-foreground">
       <ArrowLeft class="size-4" aria-hidden="true" />
-      {{ inTrash ? t('media.detail.backToTrash') : project ? t('media.detail.backToProject') : t('media.detail.backToList') }}
+      {{ backLabel }}
     </NuxtLink>
 
     <UiAlert v-if="error" variant="error" live="assertive" :title="t('media.detail.loadError')">
@@ -1000,7 +1017,7 @@ const pageFlash = flash.consume()
                   {{ t('media.detail.folder') }}
                 </dt>
                 <dd class="font-medium break-words text-foreground">
-                  <NuxtLink v-if="media.folderId && folderPath" :to="{ path: listPath, query: { folder: media.folderId } }" class="text-primary underline-offset-4 hover:underline">
+                  <NuxtLink v-if="media.folderId && folderPath" :to="spaceList({ folder: media.folderId })" class="text-primary underline-offset-4 hover:underline">
                     {{ folderPath }}
                   </NuxtLink>
                   <template v-else>
