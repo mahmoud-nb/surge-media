@@ -38,6 +38,7 @@ export default defineConfig({
       lastUpdated: true,
       customCss: ['@fontsource-variable/inter', './src/styles/theme.css'],
       components: {
+        Header: './src/components/overrides/Header.astro',
         Hero: './src/components/overrides/Hero.astro',
         SocialIcons: './src/components/overrides/SocialIcons.astro',
         Footer: './src/components/overrides/Footer.astro',
