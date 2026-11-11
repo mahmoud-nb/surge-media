@@ -189,6 +189,8 @@ const client = createSurgeClient({
 })
 
 const { items } = await client.media.list({ kind: 'image', limit: 12 })
+// Filtre par slugs d'étiquettes : au moins une par défaut, ou toutes avec tagMatch: 'all'
+const heroes = await client.media.list({ tags: ['hero', 'ete'], tagMatch: 'all' })
 // Politique de transformation, formats activés, taille maximale
 const project = await client.project()
 
