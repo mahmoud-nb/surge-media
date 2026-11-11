@@ -188,6 +188,8 @@ const client = createSurgeClient({
 })
 
 const { items } = await client.media.list({ kind: 'image', limit: 12 })
+// Filter by tag slugs: at least one by default, or all of them with tagMatch: 'all'
+const heroes = await client.media.list({ tags: ['hero', 'summer'], tagMatch: 'all' })
 // Transformation policy, enabled formats, maximum size
 const project = await client.project()
 
