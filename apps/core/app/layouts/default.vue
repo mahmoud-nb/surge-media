@@ -12,7 +12,7 @@ const { loggedIn } = useAuth()
     <header class="border-b border-border bg-surface">
       <div class="mx-auto flex h-16 max-w-6xl items-center justify-between gap-4 px-4 sm:px-6">
         <NuxtLink to="/" class="rounded-lg">
-          <AppLogo />
+          <AppLogo collapsible />
           <span class="sr-only">{{ t('nav.homeSuffix') }}</span>
         </NuxtLink>
         <div class="flex items-center gap-2">

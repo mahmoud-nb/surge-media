@@ -25,10 +25,13 @@ export default defineConfig({
       title: 'surgeMedia',
       description:
         'Self-hosted media platform: store, transform and deliver images and videos from your own servers, through one secure headless API.',
+      // Pictogram + drawn wordmark (scripts/brand.mjs). It replaces the text title, which stays in the
+      // page for screen readers, so the images themselves are decorative (empty alt).
       logo: {
         light: './src/assets/logo-light.svg',
         dark: './src/assets/logo-dark.svg',
         alt: '',
+        replacesTitle: true,
       },
       favicon: '/favicon.svg',
       defaultLocale: 'root',

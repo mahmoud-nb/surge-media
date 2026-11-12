@@ -66,6 +66,9 @@ const PAIRS: [string, string, number][] = [
   ['input', 'muted', 3],
   ['ring', 'surface', 3],
   ['ring', 'background', 3],
+  // Logo (AppLogo) : point du i, élément graphique (1.4.11).
+  ['brand-accent', 'surface', 3],
+  ['brand-accent', 'background', 3],
 ]
 
 let failures = 0

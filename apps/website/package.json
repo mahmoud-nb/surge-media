@@ -12,6 +12,7 @@
     "typecheck": "astro check",
     "check:links": "node scripts/check-links.mjs",
     "og-image": "node scripts/og-image.mjs",
+    "brand": "node scripts/brand.mjs",
     "astro": "astro"
   },
   "dependencies": {

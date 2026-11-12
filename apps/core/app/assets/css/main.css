@@ -23,6 +23,7 @@
   --primary-hover: #3140a6;
   --primary-foreground: #ffffff;
   --primary-soft: #eceffd;
+  --brand-accent: #7a5af5; /* point du i du logo (AppLogo) : ≥ 3:1 */
   --destructive: #b42318;
   --destructive-hover: #912018;
   --destructive-foreground: #ffffff;
@@ -69,6 +70,7 @@
   --primary-hover: #a3b1fa;
   --primary-foreground: #0c111b;
   --primary-soft: #1e2748;
+  --brand-accent: #b692f6;
   --destructive: #f97066;
   --destructive-hover: #fb8a82;
   --destructive-foreground: #0c111b;
@@ -113,6 +115,7 @@
   --color-primary-hover: var(--primary-hover);
   --color-primary-foreground: var(--primary-foreground);
   --color-primary-soft: var(--primary-soft);
+  --color-brand-accent: var(--brand-accent);
   --color-destructive: var(--destructive);
   --color-destructive-hover: var(--destructive-hover);
   --color-destructive-foreground: var(--destructive-foreground);

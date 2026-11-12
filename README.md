@@ -1,4 +1,9 @@
-# surgeMedia
+<h1>
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="apps/website/public/brand/surgemedia-logo-dark.svg">
+    <img src="apps/website/public/brand/surgemedia-logo-light.svg" alt="surgeMedia" height="48">
+  </picture>
+</h1>
 
 [![CI](https://github.com/mahmoud-nb/surge-media/actions/workflows/ci.yml/badge.svg)](https://github.com/mahmoud-nb/surge-media/actions/workflows/ci.yml)
 [![License: BUSL-1.1](https://img.shields.io/badge/license-BUSL--1.1-blue)](LICENSE)
