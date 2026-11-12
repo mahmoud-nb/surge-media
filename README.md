@@ -1,4 +1,9 @@
-# surgeMedia
+<h1>
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="apps/website/public/brand/surgemedia-logo-dark.svg">
+    <img src="apps/website/public/brand/surgemedia-logo-light.svg" alt="SurgeMedia" height="48">
+  </picture>
+</h1>
 
 [![CI](https://github.com/mahmoud-nb/surge-media/actions/workflows/ci.yml/badge.svg)](https://github.com/mahmoud-nb/surge-media/actions/workflows/ci.yml)
 [![License: BUSL-1.1](https://img.shields.io/badge/license-BUSL--1.1-blue)](LICENSE)
@@ -83,14 +88,14 @@ through GitHub, supported versions, response times, and how to verify a release)
 
 ## License
 
-surgeMedia is source-available under the **Business Source License 1.1** (SPDX `BUSL-1.1`): see [LICENSE](LICENSE).
+SurgeMedia is source-available under the **Business Source License 1.1** (SPDX `BUSL-1.1`): see [LICENSE](LICENSE).
 It is not an open source license. In short:
 
 - development, testing and evaluation are **free for everyone**;
 - production use is **free**, except in three cases that require a commercial license:
   - the organization using it, or on whose behalf it is used, together with its affiliates, had a gross revenue
     above **USD 500,000** in its last completed fiscal year;
-  - surgeMedia is offered to third parties as a **competing hosted service**;
+  - SurgeMedia is offered to third parties as a **competing hosted service**;
   - a feature that requires a **license key** is used in production without a valid key (no feature requires one
     yet);
 - each version becomes available under the **Apache License 2.0** three years after its first public release.

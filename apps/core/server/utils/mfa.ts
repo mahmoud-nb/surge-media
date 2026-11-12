@@ -61,14 +61,14 @@ export async function mfaRequiredForUser(event: H3Event, user: User): Promise<bo
   return mfaAvailable(event) && mfaRequiredFor(user.role, await readMfaPolicy())
 }
 
-/** Émetteur affiché par l'application d'authentification : « surgeMedia (hôte de l'installation) ». */
+/** Émetteur affiché par l'application d'authentification : « SurgeMedia (hôte de l'installation) ». */
 export function mfaIssuer(event: H3Event): string {
   const site = useRuntimeConfig(event).siteUrl || getRequestURL(event).origin
   try {
-    return `surgeMedia (${new URL(site).host})`
+    return `SurgeMedia (${new URL(site).host})`
   }
   catch {
-    return 'surgeMedia'
+    return 'SurgeMedia'
   }
 }
 

@@ -3,11 +3,11 @@ title: One source of truth for every environment
 description: Use the same media library from development, staging and production, with per-environment keys and origins — and stop copying uploads between stages.
 ---
 
-Most teams end up with one media bucket per environment: editors upload in production, developers copy files to staging by hand, and local environments show broken images. surgeMedia removes the problem at the root: **every environment reads the same media**, each with its own credentials.
+Most teams end up with one media bucket per environment: editors upload in production, developers copy files to staging by hand, and local environments show broken images. SurgeMedia removes the problem at the root: **every environment reads the same media**, each with its own credentials.
 
 ## Before and after
 
-| <span class="sr-only">Aspect</span> | One bucket per environment | surgeMedia |
+| <span class="sr-only">Aspect</span> | One bucket per environment | SurgeMedia |
 | --- | --- | --- |
 | Where media live | Copied into each environment | One project, one library |
 | Staging shows real content | Only after a manual sync | Always — same IDs, same URLs |

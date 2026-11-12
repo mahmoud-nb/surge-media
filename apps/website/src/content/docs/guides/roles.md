@@ -1,9 +1,9 @@
 ---
 title: Roles and responsibilities
-description: Platform roles (Admin, Manager, Developer, Editor) and project roles (Owner, Developer, Editor) — who can do what in surgeMedia.
+description: Platform roles (Admin, Manager, Developer, Editor) and project roles (Owner, Developer, Editor) — who can do what in SurgeMedia.
 ---
 
-surgeMedia has two levels of roles: a **platform role** for each user, and a **project role** for each project they belong to. Together they give everyone exactly the access they need — and nothing more.
+SurgeMedia has two levels of roles: a **platform role** for each user, and a **project role** for each project they belong to. Together they give everyone exactly the access they need — and nothing more.
 
 ## Platform roles
 

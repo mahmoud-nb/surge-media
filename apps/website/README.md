@@ -1,6 +1,6 @@
-# surgeMedia — site public et documentation
+# SurgeMedia — site public et documentation
 
-Vitrine commerciale et documentation de surgeMedia, construites avec [Astro Starlight](https://starlight.astro.build) :
+Vitrine commerciale et documentation de SurgeMedia, construites avec [Astro Starlight](https://starlight.astro.build) :
 anglais par défaut, français sous `/fr/`, thèmes clair et sombre, recherche intégrée. Publiées sur GitHub Pages à
 chaque merge sur `main` (`.github/workflows/website.yml`).
 
@@ -22,6 +22,7 @@ Dans `apps/website` :
 | `pnpm check:links` | liens internes et ancres du build (après `pnpm build`) |
 | `pnpm preview` | sert le build localement |
 | `pnpm og-image` | régénère `public/og.png` depuis `scripts/og-image.svg` |
+| `pnpm brand` | redessine le logo depuis `scripts/brand.mjs` : `public/brand/` (logo, logotype, pictogramme ; clair, sombre, monochrome) et `src/assets/logo-*.svg` (en-tête). Recopier ensuite les tracés dans `scripts/og-image.svg` (puis `pnpm og-image`) et dans `apps/core/app/components/app/Logo.vue` |
 
 ## Ajouter ou modifier une page
 

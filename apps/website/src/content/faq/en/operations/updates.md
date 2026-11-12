@@ -1,5 +1,5 @@
 ---
-question: "How do I update surgeMedia?"
+question: "How do I update SurgeMedia?"
 order: 5
 keywords: ["update","upgrade","migration","version","semver","changelog","rollback"]
 ---

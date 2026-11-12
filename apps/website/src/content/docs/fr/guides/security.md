@@ -1,9 +1,9 @@
 ---
 title: Sécurité et contrôle d’accès
-description: Identifiants, portées, origines autorisées, URL signées, politiques de transformation et journal d’audit — comment surgeMedia garde vos médias et votre API sous contrôle.
+description: Identifiants, portées, origines autorisées, URL signées, politiques de transformation et journal d’audit — comment SurgeMedia garde vos médias et votre API sous contrôle.
 ---
 
-surgeMedia est conçu pour que **chaque requête soit attribuable et limitée au strict nécessaire**. Les responsables de projet gèrent eux-mêmes les accès depuis l’administration, sans toucher à la configuration du serveur.
+SurgeMedia est conçu pour que **chaque requête soit attribuable et limitée au strict nécessaire**. Les responsables de projet gèrent eux-mêmes les accès depuis l’administration, sans toucher à la configuration du serveur.
 
 ## Identifiants
 
@@ -12,7 +12,7 @@ Chaque identifiant appartient à un projet (ou à un utilisateur, pour les jeton
 | Identifiant | Préfixe | À utiliser pour | À ne jamais utiliser pour |
 | --- | --- | --- | --- |
 | **Clé publique** | `sm_pk_` | Navigateurs et applications mobiles qui lisent les médias **publics** d’un projet. | Écrire, lire des médias privés, signer des URL. |
-| **Clé secrète** | `sm_sk_` | Vos serveurs, la CI/CD, les intégrations de back-office. | Les navigateurs : surgeMedia **refuse** une clé secrète envoyée depuis une page web (`SECRET_IN_BROWSER`). |
+| **Clé secrète** | `sm_sk_` | Vos serveurs, la CI/CD, les intégrations de back-office. | Les navigateurs : SurgeMedia **refuse** une clé secrète envoyée depuis une page web (`SECRET_IN_BROWSER`). |
 | **Jeton personnel** | `sm_pat_` | Scripts et migrations au nom d’un utilisateur, sur des projets choisis. | Les services de production durables (utilisez une clé secrète). |
 | **Jeton délégué** | `sm_dt_` | Une tâche dans le navigateur, pour quelques minutes : envoi, sélecteur, médiathèque. | Tout usage durable : il expire au bout d’une heure au plus. |
 
@@ -43,7 +43,7 @@ Chaque projet liste les origines autorisées à appeler son API depuis un naviga
 
 ## Envois directs avec les jetons délégués
 
-Votre serveur authentifie **son** utilisateur, puis demande à surgeMedia un jeton délégué :
+Votre serveur authentifie **son** utilisateur, puis demande à SurgeMedia un jeton délégué :
 
 - des portées incluses dans les portées **actuelles** de la clé émettrice ;
 - une durée de 1 à 60 minutes (15 par défaut), jamais au-delà de l’échéance de la clé émettrice ;

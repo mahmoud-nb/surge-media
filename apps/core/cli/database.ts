@@ -209,7 +209,7 @@ const localSiteUrl = (port: number | string) => `http://localhost:${port}`
 /**
  * Port du serveur web, écrit dans le .env (PORT) : argument, sinon question (--yes : valeur proposée). Proposé :
  * le port déjà configuré, sinon 3000 ou, s'il est pris, le prochain port libre. Un port déjà configuré n'est
- * jamais remplacé d'office : il peut être occupé par surgeMedia lui-même, lancé pendant que l'on change la base.
+ * jamais remplacé d'office : il peut être occupé par SurgeMedia lui-même, lancé pendant que l'on change la base.
  */
 async function resolvePort(ctx: CliContext, args: { port?: string, yes?: boolean }): Promise<number> {
   const { t } = ctx

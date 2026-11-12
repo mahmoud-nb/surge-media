@@ -1,5 +1,5 @@
 /**
- * @surge-media/client — client TypeScript sans framework de surgeMedia : API v1 (lectures en cache ETag,
+ * @surge-media/client — client TypeScript sans framework de SurgeMedia : API v1 (lectures en cache ETag,
  * clé publique ou jetons délégués renouvelés, erreurs traduites), construction des URL d'images et de
  * vidéos (transformations canoniques, srcset, `<picture>`, point d'intérêt) et envoi de fichiers (règles
  * du serveur, file d'envoi avec progression, affiche capturée). Logique des composants commune à toutes les

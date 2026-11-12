@@ -1,5 +1,5 @@
 /**
- * Représentations de l'API v1 de surgeMedia (contrat : apps/core/shared/schemas/api.ts). Écrites à la main
+ * Représentations de l'API v1 de SurgeMedia (contrat : apps/core/shared/schemas/api.ts). Écrites à la main
  * pour rester lisibles et stables ; un test de contrat (tests/contract.test.ts) vérifie qu'elles restent
  * identiques aux schémas du serveur. Valeurs en minuscules, dates ISO 8601, URL absolues.
  */

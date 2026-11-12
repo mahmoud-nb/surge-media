@@ -4,6 +4,6 @@ export const CHANGELOG_URL = `${REPOSITORY_URL}/blob/main/apps/core/CHANGELOG.md
 export const ISSUES_URL = `${REPOSITORY_URL}/issues`;
 export const LICENSE_URL = `${REPOSITORY_URL}/blob/main/LICENSE`;
 /** Commercial licensing contact, as stated in the LICENSE file. */
-export const SALES_URL = 'mailto:licensing@surgeup.org?subject=surgeMedia%20commercial%20license';
+export const SALES_URL = 'mailto:licensing@surgeup.org?subject=SurgeMedia%20commercial%20license';
 /** General contact of Surge Up, the publisher. */
-export const CONTACT_URL = 'mailto:contact@surgeup.org?subject=surgeMedia';
+export const CONTACT_URL = 'mailto:contact@surgeup.org?subject=SurgeMedia';

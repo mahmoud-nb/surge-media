@@ -1,6 +1,6 @@
 ---
 title: Image transformations
-description: URL grammar, parameters, formats, presets, limits and errors of surgeMedia's on-the-fly image transformations (Sharp).
+description: URL grammar, parameters, formats, presets, limits and errors of SurgeMedia's on-the-fly image transformations (Sharp).
 ---
 
 Every image can be transformed by its delivery URL. The variant is generated on the first request, stored, and then served like any static file.

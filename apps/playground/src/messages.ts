@@ -3,7 +3,7 @@ import { computed, type Ref } from 'vue'
 /** Textes du bac à sable (français par défaut, anglais), comme ceux des composants. */
 const MESSAGES = {
   fr: {
-    title: 'Bac à sable surgeMedia',
+    title: 'Bac à sable SurgeMedia',
     intro: 'Composants de @surge-media/vue branchés sur le core local.',
     language: 'Langue',
     theme: 'Thème',
@@ -40,7 +40,7 @@ const MESSAGES = {
     error: 'Erreur : {message}',
   },
   en: {
-    title: 'surgeMedia playground',
+    title: 'SurgeMedia playground',
     intro: '@surge-media/vue components connected to the local core.',
     language: 'Language',
     theme: 'Theme',

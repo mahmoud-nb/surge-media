@@ -1,5 +1,5 @@
 ---
-question: "What does surgeMedia do with videos?"
+question: "What does SurgeMedia do with videos?"
 order: 6
 status: partial
 keywords: ["video","ffmpeg","h264","av1","hls","streaming","subtitles","poster"]

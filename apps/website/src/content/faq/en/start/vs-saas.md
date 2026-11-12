@@ -8,7 +8,7 @@ related:
 ---
 Three main differences:
 
-- **Hosting**: surgeMedia runs on your infrastructure; no media ever leaves it.
+- **Hosting**: SurgeMedia runs on your infrastructure; no media ever leaves it.
 - **Costs**: no usage-based billing, whether per image, per transformation or per gigabyte served. You pay for your infrastructure and, beyond the free tier, a flat license.
 - **Reversibility**: your originals stay in your storage and your metadata in your SQL database.
 

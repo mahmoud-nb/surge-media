@@ -1,5 +1,5 @@
 ---
-question: "Comment mettre à jour surgeMedia ?"
+question: "Comment mettre à jour SurgeMedia ?"
 order: 5
 keywords: ["mise à jour","upgrade","migration","version","semver","changelog","rollback"]
 ---

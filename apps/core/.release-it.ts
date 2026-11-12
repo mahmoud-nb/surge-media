@@ -64,7 +64,7 @@ export default {
     commitsPath: CORE_PATHS.join(' '),
     commitMessage: 'chore(release): v${version}',
     tagName: 'v${version}',
-    tagAnnotation: 'surgeMedia v${version}',
+    tagAnnotation: 'SurgeMedia v${version}',
     push: true,
   },
   // Publié par le workflow de release (provenance, même archive que l'image Docker).
@@ -101,7 +101,7 @@ export default {
       header: [
         '# Changelog',
         '',
-        'All notable changes to surgeMedia — the `@surge-media/core` npm package and the',
+        'All notable changes to SurgeMedia — the `@surge-media/core` npm package and the',
         '`ghcr.io/mahmoud-nb/surge-media` Docker images — are documented in this file. Versions follow',
         '[Semantic Versioning](https://semver.org); entries are generated from',
         '[Conventional Commits](https://www.conventionalcommits.org) by `pnpm release`.',

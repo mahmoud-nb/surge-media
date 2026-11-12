@@ -1,5 +1,5 @@
 /**
- * Fournisseurs de base de données supportés par surgeMedia.
+ * Fournisseurs de base de données supportés par SurgeMedia.
  *
  * Module partagé (sans dépendance) entre le serveur Nitro, `prisma.config.ts`,
  * la CLI `surge-media` et les scripts de maintenance : c'est la source de vérité

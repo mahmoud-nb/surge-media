@@ -1,5 +1,5 @@
 ---
-question: "À qui s’adresse surgeMedia ?"
+question: "À qui s’adresse SurgeMedia ?"
 order: 2
 keywords: ["cible","public","cas d’usage","agence","souveraineté"]
 ---

@@ -45,7 +45,7 @@ async function createStorage(config: MediaStorageConfig): Promise<MediaStorage> 
       const driver = new S3Driver({
         client,
         bucket,
-        // Objets privés : la diffusion passe toujours par surgeMedia (contrôle d'accès, en-têtes).
+        // Objets privés : la diffusion passe toujours par SurgeMedia (contrôle d'accès, en-têtes).
         visibility: 'private',
         // Beaucoup de services compatibles S3 (R2, MinIO…) ne gèrent pas les ACL.
         supportsACL: false,

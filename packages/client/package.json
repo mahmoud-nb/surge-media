@@ -2,7 +2,7 @@
   "name": "@surge-media/client",
   "version": "0.0.0",
   "type": "module",
-  "description": "Framework-free TypeScript client for surgeMedia: API v1, publishable keys and delegated tokens, responsive image and video URLs, shared component logic (texts, icons, inline styles) and an optional theme.",
+  "description": "Framework-free TypeScript client for SurgeMedia: API v1, publishable keys and delegated tokens, responsive image and video URLs, shared component logic (texts, icons, inline styles) and an optional theme.",
   "keywords": [
     "surge-media",
     "media",

@@ -1,5 +1,5 @@
 /**
- * @surge-media/vue — composants Vue 3 de surgeMedia : images responsives (SmImage, SmPicture), vidéos
+ * @surge-media/vue — composants Vue 3 de SurgeMedia : images responsives (SmImage, SmPicture), vidéos
  * (SmVideo), affichage selon le genre (SmMedia), vignettes (SmThumbnail), état du traitement
  * (SmProcessingStatus), envoi de fichiers (SmUploader). Feuille de style facultative :
  * `import '@surge-media/vue/style.css'` (thème de `@surge-media/client`). La logique sans framework (textes,

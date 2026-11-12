@@ -1,5 +1,5 @@
 ---
-question: "surgeMedia envoie-t-il des notifications (webhooks) ?"
+question: "SurgeMedia envoie-t-il des notifications (webhooks) ?"
 order: 8
 status: planned
 keywords: ["webhook","événement","notification","callback","bus"]

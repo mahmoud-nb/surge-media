@@ -1,4 +1,4 @@
-# surgeMedia avec PostgreSQL et un processus de travail pour les vidéos. Guide : setup.md, § 4.3.
+# SurgeMedia avec PostgreSQL et un processus de travail pour les vidéos. Guide : setup.md, § 4.3.
 #
 #   POSTGRES_PASSWORD=… docker compose -f docker/compose.postgres.yaml up -d
 #

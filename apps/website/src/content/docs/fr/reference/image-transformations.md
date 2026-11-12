@@ -1,6 +1,6 @@
 ---
 title: Transformations d’images
-description: Grammaire des URL, paramètres, formats, préréglages, limites et erreurs des transformations d’images à la volée de surgeMedia (Sharp).
+description: Grammaire des URL, paramètres, formats, préréglages, limites et erreurs des transformations d’images à la volée de SurgeMedia (Sharp).
 ---
 
 Toute image se transforme par son URL de diffusion. La variante est générée à la première requête, conservée, puis servie comme n’importe quel fichier statique.

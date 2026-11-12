@@ -3,7 +3,7 @@ title: SDK et composants
 description: '@surge-media/vue et @surge-media/client : images responsives, vidéos et accès à l’API pour Vue 3 et Nuxt, sous licence MIT. L’API REST fonctionne avec tous les langages.'
 ---
 
-surgeMedia est conçu « API d’abord » : tout ce que l’administration fait avec les médias, votre code peut le faire avec l’API REST v1. Les paquets front-end officiels réduisent les intégrations les plus courantes — images responsives, vidéos, envois, sélecteurs — à quelques lignes.
+SurgeMedia est conçu « API d’abord » : tout ce que l’administration fait avec les médias, votre code peut le faire avec l’API REST v1. Les paquets front-end officiels réduisent les intégrations les plus courantes — images responsives, vidéos, envois, sélecteurs — à quelques lignes.
 
 ## Paquets
 
@@ -235,12 +235,12 @@ npm install @surge-media/vue
 export default defineNuxtConfig({
   css: ['@surge-media/vue/style.css'], // thème facultatif
   runtimeConfig: {
-    surgeMedia: {
+    SurgeMedia: {
       // NUXT_SURGE_MEDIA_SECRET_KEY — serveur seulement (étape 3)
       secretKey: '',
     },
     public: {
-      surgeMedia: {
+      SurgeMedia: {
         baseUrl: '', // NUXT_PUBLIC_SURGE_MEDIA_BASE_URL
         projectId: '', // NUXT_PUBLIC_SURGE_MEDIA_PROJECT_ID
         publishableKey: '', // NUXT_PUBLIC_SURGE_MEDIA_PUBLISHABLE_KEY
@@ -250,7 +250,7 @@ export default defineNuxtConfig({
 })
 ```
 
-Renseignez ces variables (`NUXT_PUBLIC_SURGE_MEDIA_BASE_URL` : l’adresse de votre instance, par exemple `https://media.example.com`), puis ajoutez l’origine de votre site (`https://www.example.com`) aux origines autorisées du projet, dans l’administration de surgeMedia.
+Renseignez ces variables (`NUXT_PUBLIC_SURGE_MEDIA_BASE_URL` : l’adresse de votre instance, par exemple `https://media.example.com`), puis ajoutez l’origine de votre site (`https://www.example.com`) aux origines autorisées du projet, dans l’administration de SurgeMedia.
 
 ### 2. Créer `plugins/surge-media.ts`
 
@@ -267,12 +267,12 @@ import {
 } from '@surge-media/vue'
 
 export default defineNuxtPlugin((nuxtApp) => {
-  const { surgeMedia } = useRuntimeConfig().public
+  const { SurgeMedia } = useRuntimeConfig().public
 
   nuxtApp.vueApp.use(createSurgeMedia({
-    baseUrl: surgeMedia.baseUrl,
-    projectId: surgeMedia.projectId,
-    publishableKey: surgeMedia.publishableKey,
+    baseUrl: SurgeMedia.baseUrl,
+    projectId: SurgeMedia.projectId,
+    publishableKey: SurgeMedia.publishableKey,
     // Avec @nuxtjs/i18n : locale: nuxtApp.$i18n.locale
     locale: 'fr',
     // Préréglages seuls, transformations signées ou formats limités ?
@@ -295,7 +295,7 @@ Utilisez ensuite les composants partout, avec des médias lus côté serveur pou
 ```vue
 <!-- pages/index.vue -->
 <script setup lang="ts">
-const config = useRuntimeConfig().public.surgeMedia
+const config = useRuntimeConfig().public.SurgeMedia
 const { data: hero } = await useFetch(
   `${config.baseUrl}/api/v1/projects/${config.projectId}/media/cm…`,
   { headers: { Authorization: `Bearer ${config.publishableKey}` } },
@@ -323,13 +323,13 @@ export default defineEventHandler(async (event) => {
   // reçoivent un jeton (requireUserSession vient de nuxt-auth-utils).
   const { user } = await requireUserSession(event)
   const config = useRuntimeConfig(event)
-  const { baseUrl, projectId } = config.public.surgeMedia
+  const { baseUrl, projectId } = config.public.SurgeMedia
 
   // Renvoie { token, expiresAt, scopes } : accepté tel quel.
   return createDelegatedToken({
     baseUrl,
     projectId,
-    secretKey: config.surgeMedia.secretKey,
+    secretKey: config.SurgeMedia.secretKey,
     // DISPLAY_SCOPES pour les médias privés sans envoi
     scopes: UPLOAD_SCOPES,
     subject: String(user.id),
@@ -345,8 +345,8 @@ Dans le plugin, remplacez `publishableKey` par `getToken` :
 const requestFetch = useRequestFetch()
 
 nuxtApp.vueApp.use(createSurgeMedia({
-  baseUrl: surgeMedia.baseUrl,
-  projectId: surgeMedia.projectId,
+  baseUrl: SurgeMedia.baseUrl,
+  projectId: SurgeMedia.projectId,
   getToken: () =>
     requestFetch('/api/surge-media/token', { method: 'POST' }),
 }))

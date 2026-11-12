@@ -1,9 +1,9 @@
-# surgeMedia Contributor License Agreement
+# SurgeMedia Contributor License Agreement
 
 Version 1.0 — 2026-11-07
 
 This Contributor License Agreement ("Agreement") is between you ("You") and Mahmoud NBET EI, trading as Surge Up
-("Surge Up"), for your Contributions to the surgeMedia project, hosted at https://github.com/mahmoud-nb/surge-media
+("Surge Up"), for your Contributions to the SurgeMedia project, hosted at https://github.com/mahmoud-nb/surge-media
 and its related repositories (the "Project"). Accepting this Agreement once covers all your past and future
 Contributions to the Project. If You do not accept it, Surge Up cannot merge your Contributions.
 

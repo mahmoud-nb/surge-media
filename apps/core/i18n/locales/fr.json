@@ -1,6 +1,6 @@
 {
   "app": {
-    "name": "surgeMedia"
+    "name": "SurgeMedia"
   },
   "a11y": {
     "skipToContent": "Aller au contenu principal"
@@ -11,7 +11,7 @@
     "login": "Se connecter"
   },
   "footer": {
-    "text": "surgeMedia · plateforme open source et auto-hébergée de gestion des médias."
+    "text": "SurgeMedia · plateforme open source et auto-hébergée de gestion des médias."
   },
   "theme": {
     "label": "Thème",
@@ -63,7 +63,7 @@
   "landing": {
     "meta": {
       "title": "Gestion et traitement des médias, auto-hébergés",
-      "description": "surgeMedia centralise vos images et médias, les transforme à la demande et les diffuse à vos applications par une API sécurisée."
+      "description": "SurgeMedia centralise vos images et médias, les transforme à la demande et les diffuse à vos applications par une API sécurisée."
     },
     "hero": {
       "eyebrow": "Open source · auto-hébergé",
@@ -101,7 +101,7 @@
       "title": "Connexion"
     },
     "title": "Connexion",
-    "description": "Connectez-vous pour accéder à l'administration de surgeMedia.",
+    "description": "Connectez-vous pour accéder à l'administration de SurgeMedia.",
     "email": {
       "label": "Adresse e-mail"
     },
@@ -266,7 +266,7 @@
         "license": {
           "expiring": "La licence commerciale expire le {date} : pensez à la renouveler.",
           "grace": "La licence commerciale a expiré le {date} : les fonctions payantes restent actives jusqu'au {end}, fin de la période de grâce.",
-          "expired": "La licence commerciale a expiré le {date} : les fonctions payantes sont désactivées. Le reste de surgeMedia fonctionne normalement.",
+          "expired": "La licence commerciale a expiré le {date} : les fonctions payantes sont désactivées. Le reste de SurgeMedia fonctionne normalement.",
           "invalid": "La licence commerciale installée n'est pas valable : les fonctions payantes sont désactivées.",
           "link": "Voir la licence"
         },
@@ -567,7 +567,7 @@
     "backToLogin": "Aller à la connexion",
     "invitation": {
       "title": "Activez votre compte",
-      "description": "Choisissez le mot de passe de votre compte surgeMedia.",
+      "description": "Choisissez le mot de passe de votre compte SurgeMedia.",
       "submit": "Activer mon compte"
     },
     "reset": {
@@ -2019,8 +2019,8 @@
       "noProject": "Aucun projet actif : créez un projet pour obtenir ses identifiants.",
       "copy": "Copier les variables d'environnement",
       "keysLink": "Gérer les clés d'API de ce projet",
-      "header": "surgeMedia — projet « {project} », environnement {environment}",
-      "headerNoEnvironment": "surgeMedia — projet « {project} »",
+      "header": "SurgeMedia — projet « {project} », environnement {environment}",
+      "headerNoEnvironment": "SurgeMedia — projet « {project} »",
       "noKeys": "Vous ne gérez pas les identifiants de ce projet : demandez ses clés à un propriétaire.",
       "publishable": "Clé publique « {name} » : navigateur, lecture des médias publics.",
       "noPublishable": "Aucune clé publique dans cet environnement.",
@@ -2029,7 +2029,7 @@
     },
     "reference": {
       "title": "Référence",
-      "thirdParty": "Interface fournie par Scalar (logiciel libre), intégrée à surgeMedia : les requêtes d'essai partent de votre navigateur vers cette installation, sans service tiers.",
+      "thirdParty": "Interface fournie par Scalar (logiciel libre), intégrée à SurgeMedia : les requêtes d'essai partent de votre navigateur vers cette installation, sans service tiers.",
       "loading": "Chargement de la référence…",
       "error": "La spécification de l'API n'a pas pu être chargée.",
       "server": "Cette installation",
@@ -2253,10 +2253,10 @@
         },
         "expired": {
           "badge": "Expirée",
-          "text": "La licence a expiré le {date} : les fonctions payantes sont désactivées. Le reste de surgeMedia fonctionne normalement."
+          "text": "La licence a expiré le {date} : les fonctions payantes sont désactivées. Le reste de SurgeMedia fonctionne normalement."
         }
       },
-      "community": "Édition Community : surgeMedia est gratuit en production pour les organisations dont le chiffre d'affaires annuel ne dépasse pas 500 000 USD, sauf pour proposer un service d'hébergement de médias concurrent (licence BUSL 1.1). Au-delà de ce seuil, ou pour les fonctions payantes (authentification unique, export vers un SIEM…), écrivez à {email}.",
+      "community": "Édition Community : SurgeMedia est gratuit en production pour les organisations dont le chiffre d'affaires annuel ne dépasse pas 500 000 USD, sauf pour proposer un service d'hébergement de médias concurrent (licence BUSL 1.1). Au-delà de ce seuil, ou pour les fonctions payantes (authentification unique, export vers un SIEM…), écrivez à {email}.",
       "clockTitle": "Horloge du serveur en retard",
       "clockDays": "L'horloge de ce serveur retarde d'environ {count} jour sur la date la plus récente connue : la licence est jugée à cette date. Corrigez l'heure du système (synchronisation NTP). | L'horloge de ce serveur retarde d'environ {count} jours sur la date la plus récente connue : la licence est jugée à cette date. Corrigez l'heure du système (synchronisation NTP).",
       "clockHours": "L'horloge de ce serveur retarde d'environ {count} heure sur la date la plus récente connue : la licence est jugée à cette date. Corrigez l'heure du système (synchronisation NTP). | L'horloge de ce serveur retarde d'environ {count} heures sur la date la plus récente connue : la licence est jugée à cette date. Corrigez l'heure du système (synchronisation NTP).",
@@ -2278,10 +2278,10 @@
         "database": "Licence installée depuis cette page."
       },
       "instanceId": "Identifiant de cette installation",
-      "instanceIdHint": "À indiquer au support et dans la déclaration annuelle de vos instances de production. surgeMedia ne l'envoie jamais.",
+      "instanceIdHint": "À indiquer au support et dans la déclaration annuelle de vos instances de production. SurgeMedia ne l'envoie jamais.",
       "usage": {
         "title": "Usage de cette instance",
-        "intro": "Indiquez comment cette instance est utilisée. C'est une simple déclaration : surgeMedia ne vérifie rien et n'envoie rien. Elle sert à vous rappeler les conditions de la licence au bon moment.",
+        "intro": "Indiquez comment cette instance est utilisée. C'est une simple déclaration : SurgeMedia ne vérifie rien et n'envoie rien. Elle sert à vous rappeler les conditions de la licence au bon moment.",
         "legend": "Usage déclaré",
         "options": {
           "evaluation": {
@@ -2309,13 +2309,13 @@
       },
       "register": {
         "title": "Enregistrer cette instance (facultatif)",
-        "text": "Faites-vous connaître de Surge Up, l'éditeur de surgeMedia, pour être prévenu des avis de sécurité et des versions importantes. C'est gratuit et sans engagement.",
-        "privacy": "Le bouton ouvre un e-mail prérempli dans votre messagerie : identifiant d'instance, version et usage déclaré. Relisez-le, complétez-le si vous le souhaitez, puis envoyez-le vous-même. surgeMedia n'envoie rien.",
+        "text": "Faites-vous connaître de Surge Up, l'éditeur de SurgeMedia, pour être prévenu des avis de sécurité et des versions importantes. C'est gratuit et sans engagement.",
+        "privacy": "Le bouton ouvre un e-mail prérempli dans votre messagerie : identifiant d'instance, version et usage déclaré. Relisez-le, complétez-le si vous le souhaitez, puis envoyez-le vous-même. SurgeMedia n'envoie rien.",
         "action": "Préparer l'e-mail d'enregistrement",
         "mail": {
-          "subject": "Enregistrement d'une instance surgeMedia",
+          "subject": "Enregistrement d'une instance SurgeMedia",
           "greeting": "Bonjour,",
-          "intro": "Je souhaite enregistrer cette instance de surgeMedia et être prévenu des avis de sécurité et des versions importantes.",
+          "intro": "Je souhaite enregistrer cette instance de SurgeMedia et être prévenu des avis de sécurité et des versions importantes.",
           "instance": "Identifiant d'instance : {id}",
           "version": "Version : {version}",
           "usage": "Usage déclaré : {usage}",
@@ -2334,7 +2334,7 @@
       "installed": "Licence installée.",
       "remove": "Retirer la licence",
       "removeTitle": "Retirer la licence ?",
-      "removeDescription": "Les fonctions payantes seront désactivées. Le reste de surgeMedia continue de fonctionner normalement.",
+      "removeDescription": "Les fonctions payantes seront désactivées. Le reste de SurgeMedia continue de fonctionner normalement.",
       "removeConfirm": "Retirer la licence",
       "removed": "Licence retirée : cette installation repasse en édition Community.",
       "envTitle": "Licence fournie par la configuration du serveur",
@@ -2354,12 +2354,12 @@
         "scim": "Provisionnement des comptes (SCIM)"
       },
       "reasons": {
-        "malformed": "Ce texte n'est pas une licence surgeMedia : collez le contenu complet du fichier .lic.",
+        "malformed": "Ce texte n'est pas une licence SurgeMedia : collez le contenu complet du fichier .lic.",
         "algorithm": "Le format de cette licence n'est pas reconnu.",
-        "unknown-key": "Cette licence n'est pas signée par une clé que cette version de surgeMedia reconnaît : mettez surgeMedia à jour, ou écrivez à licensing{'@'}surgeup.org.",
+        "unknown-key": "Cette licence n'est pas signée par une clé que cette version de SurgeMedia reconnaît : mettez SurgeMedia à jour, ou écrivez à licensing{'@'}surgeup.org.",
         "signature": "La signature ne correspond pas : la licence a été modifiée ou mal copiée.",
-        "product": "Cette licence n'est pas une licence surgeMedia.",
-        "version": "Cette licence utilise un format plus récent : mettez surgeMedia à jour.",
+        "product": "Cette licence n'est pas une licence SurgeMedia.",
+        "version": "Cette licence utilise un format plus récent : mettez SurgeMedia à jour.",
         "payload": "Le contenu de cette licence est incomplet ou incohérent."
       },
       "errors": {
@@ -2609,7 +2609,7 @@
       "copy": "Copier les codes",
       "download": "Télécharger",
       "fileName": "surgemedia-codes-de-secours.txt",
-      "fileHeader": "Codes de secours surgeMedia — {email}",
+      "fileHeader": "Codes de secours SurgeMedia — {email}",
       "confirm": "J'ai enregistré ces codes en lieu sûr",
       "continue": "Continuer"
     },
@@ -2684,7 +2684,7 @@
       "unknownRole": "Inconnu",
       "use": "Utiliser ce compte",
       "useLabel": "Utiliser le compte {role}",
-      "contact": "Vous évaluez surgeMedia pour votre entreprise ? {link}.",
+      "contact": "Vous évaluez SurgeMedia pour votre entreprise ? {link}.",
       "contactLink": "Parlons-en"
     },
     "account": {
@@ -2715,7 +2715,7 @@
     },
     "notice": {
       "title": "Mentions légales",
-      "description": "Éditeur et hébergeur de cette démonstration publique de surgeMedia.",
+      "description": "Éditeur et hébergeur de cette démonstration publique de SurgeMedia.",
       "publisher": {
         "title": "Éditeur",
         "name": "Nom",
@@ -2738,7 +2738,7 @@
       },
       "software": {
         "title": "Logiciel et contenus",
-        "text": "surgeMedia est publié sous la Business Source License 1.1. Les contenus d'exemple de la démo appartiennent à leurs auteurs et ne peuvent pas être réutilisés sans leur accord."
+        "text": "SurgeMedia est publié sous la Business Source License 1.1. Les contenus d'exemple de la démo appartiennent à leurs auteurs et ne peuvent pas être réutilisés sans leur accord."
       }
     },
     "privacy": {
@@ -2770,7 +2770,7 @@
       "description": "Les règles d'utilisation de cette démonstration publique.",
       "purpose": {
         "title": "Objet",
-        "text": "Cette démo permet d'essayer surgeMedia. Elle est gratuite et fournie en l'état, sans garantie de disponibilité ni de conservation des données. L'utiliser vaut acceptation de ces conditions."
+        "text": "Cette démo permet d'essayer SurgeMedia. Elle est gratuite et fournie en l'état, sans garantie de disponibilité ni de conservation des données. L'utiliser vaut acceptation de ces conditions."
       },
       "reset": {
         "title": "Remise à zéro",
@@ -2800,7 +2800,7 @@
       },
       "contact": {
         "title": "Questions",
-        "text": "Pour toute question sur la démo ou sur surgeMedia, écrivez à {email}."
+        "text": "Pour toute question sur la démo ou sur SurgeMedia, écrivez à {email}."
       }
     }
   },

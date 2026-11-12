@@ -94,7 +94,7 @@ export async function runServer(ctx: CliContext, role: ServerRole, args: { port?
 }
 
 /**
- * Port déjà utilisé (autre application, ou surgeMedia déjà lancé) ou interdit : message et code 1, avec le
+ * Port déjà utilisé (autre application, ou SurgeMedia déjà lancé) ou interdit : message et code 1, avec le
  * prochain port libre et, pour le serveur web, un rappel si NUXT_SITE_URL contient ce port.
  */
 async function ensurePortAvailable(

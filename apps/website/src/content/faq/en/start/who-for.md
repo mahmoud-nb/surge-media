@@ -1,5 +1,5 @@
 ---
-question: "Who is surgeMedia for?"
+question: "Who is SurgeMedia for?"
 order: 2
 keywords: ["audience","use cases","agency","sovereignty","who"]
 ---

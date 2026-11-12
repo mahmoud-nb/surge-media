@@ -17,8 +17,8 @@ describe('e-mail d\'un lien de mot de passe', () => {
   it('invitation en français : objet, expéditeur, compte, lien, échéance avec fuseau', () => {
     const mail = passwordLinkMail({ ...base, locale: 'fr', purpose: 'INVITATION' })
     expect(mail.to).toBe('invite@example.com')
-    expect(mail.subject).toBe('Votre invitation à surgeMedia')
-    expect(mail.text).toContain('Alice Martin vous invite à rejoindre l\'administration de surgeMedia avec le compte invite@example.com.')
+    expect(mail.subject).toBe('Votre invitation à SurgeMedia')
+    expect(mail.text).toContain('Alice Martin vous invite à rejoindre l\'administration de SurgeMedia avec le compte invite@example.com.')
     expect(mail.text).toContain(`ouvrez ce lien :\n${base.url}\n`)
     expect(mail.text).toContain('11 octobre 2026')
     expect(mail.text).toContain('10:30')
@@ -30,8 +30,8 @@ describe('e-mail d\'un lien de mot de passe', () => {
 
   it('réinitialisation en anglais', () => {
     const mail = passwordLinkMail({ ...base, locale: 'en', purpose: 'RESET' })
-    expect(mail.subject).toBe('Reset your surgeMedia password')
-    expect(mail.text).toContain('Alice Martin requested a password reset for your surgeMedia account (invite@example.com).')
+    expect(mail.subject).toBe('Reset your SurgeMedia password')
+    expect(mail.text).toContain('Alice Martin requested a password reset for your SurgeMedia account (invite@example.com).')
     expect(mail.text).toContain('October 11, 2026')
     expect(mail.html).toContain('<html lang="en">')
   })

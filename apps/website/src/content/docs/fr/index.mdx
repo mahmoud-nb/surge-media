@@ -1,6 +1,6 @@
 ---
 title: Plateforme de médias auto-hébergée
-description: surgeMedia stocke, transforme et diffuse vos images et vidéos depuis vos propres serveurs, sous votre propre domaine, via une seule API headless sécurisée — pour chaque environnement, du développement à la production.
+description: SurgeMedia stocke, transforme et diffuse vos images et vidéos depuis vos propres serveurs, sous votre propre domaine, via une seule API headless sécurisée — pour chaque environnement, du développement à la production.
 template: splash
 editUrl: false
 lastUpdated: false
@@ -69,9 +69,9 @@ import CtaBand from '../../../components/landing/CtaBand.astro';
 
 <Section
   id="features"
-  eyebrow="Pourquoi surgeMedia"
+  eyebrow="Pourquoi SurgeMedia"
   title="Tout ce qu’une plateforme média doit faire. Rien qui vous enferme."
-  lead="Le confort d’un SaaS média, la maîtrise de votre propre infrastructure. surgeMedia offre à vos équipes un seul endroit pour gérer les médias, et à vos applications une seule API pour les consommer."
+  lead="Le confort d’un SaaS média, la maîtrise de votre propre infrastructure. SurgeMedia offre à vos équipes un seul endroit pour gérer les médias, et à vos applications une seule API pour les consommer."
 >
   <FeatureGrid>
     <Feature icon="rocket" title="En ligne en quelques minutes">
@@ -111,7 +111,7 @@ import CtaBand from '../../../components/landing/CtaBand.astro';
   lead="Arrêtez de copier les fichiers de la production vers la préproduction et de les perdre en route. Chaque environnement de chaque application consomme les mêmes médias, avec ses propres clés."
 >
   <EnvironmentsDiagram
-    caption="Vos applications appellent une seule instance surgeMedia, qui s’exécute — et stocke — sur votre propre infrastructure."
+    caption="Vos applications appellent une seule instance SurgeMedia, qui s’exécute — et stocke — sur votre propre infrastructure."
     appsLabel="Vos applications"
     apps={[
       { name: 'Développement', detail: 'localhost:5173' },
@@ -119,7 +119,7 @@ import CtaBand from '../../../components/landing/CtaBand.astro';
       { name: 'Production', detail: 'www.acme.fr' },
       { name: 'Mobile et back-office', detail: 'iOS · Android · CMS' },
     ]}
-    hubLabel="surgeMedia"
+    hubLabel="SurgeMedia"
     hubItems={[
       'API REST v1 — projets, médias, dossiers, étiquettes',
       'Transformations par URL — /m/…',
@@ -140,7 +140,7 @@ import CtaBand from '../../../components/landing/CtaBand.astro';
   id="transformations"
   eyebrow="Transformations à la volée"
   title="Toutes les tailles, tous les formats. À une URL près."
-  lead="Envoyez l’original une seule fois. surgeMedia génère la variante demandée par votre page à la première requête, la conserve, puis la sert avec un cache immuable."
+  lead="Envoyez l’original une seule fois. SurgeMedia génère la variante demandée par votre page à la première requête, la conserve, puis la sert avec un cache immuable."
 >
 
 <Tabs syncKey="showcase">
@@ -305,7 +305,7 @@ POSTGRES_PASSWORD='a-changer' docker compose -f docker/compose.postgres.yaml up 
 
 <CtaBand
   title="Reprenez la maîtrise de vos médias, dès aujourd’hui."
-  text="Installez surgeMedia sur votre infrastructure en quelques minutes. Gratuit pour le développement, les tests et l’évaluation — pour tout le monde."
+  text="Installez SurgeMedia sur votre infrastructure en quelques minutes. Gratuit pour le développement, les tests et l’évaluation — pour tout le monde."
   primary={{ label: 'Démarrer', href: '/fr/guides/getting-started/' }}
   secondary={{ label: 'Comparer les offres', href: '/fr/pricing/' }}
 />

@@ -167,7 +167,7 @@ export function unknownVariables(inputs: Pick<VariableInputs, 'env' | 'dotenv'>)
 
 /**
  * À ne pas signaler : variables de Nuxt lui-même, et variables des fichiers Docker Compose fournis (lues par
- * Compose sur la machine hôte, jamais par surgeMedia).
+ * Compose sur la machine hôte, jamais par SurgeMedia).
  */
 const IGNORED_UNKNOWN = new Set([
   'NUXT_TELEMETRY_DISABLED',

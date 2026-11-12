@@ -1,5 +1,5 @@
 ---
-question: "Comment surgeMedia fonctionne-t-il ?"
+question: "Comment SurgeMedia fonctionne-t-il ?"
 order: 1
 keywords: ["architecture","fonctionnement","composants","admin","api","diffusion","worker"]
 related:

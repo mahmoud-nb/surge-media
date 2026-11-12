@@ -1,5 +1,5 @@
 /*
- * surgeMedia brand on top of Starlight. Colors come from the administration interface of the core
+ * SurgeMedia brand on top of Starlight. Colors come from the administration interface of the core
  * (apps/core/app/assets/css/main.css): indigo accent, cool grays. Starlight's dark theme is `:root`,
  * its light theme `:root[data-theme='light']`; its own styles live in cascade layers, so these
  * unlayered rules win.

@@ -3,7 +3,7 @@
   "version": "0.0.0",
   "private": true,
   "type": "module",
-  "description": "surgeMedia public website and documentation (Astro Starlight), deployed to GitHub Pages.",
+  "description": "SurgeMedia public website and documentation (Astro Starlight), deployed to GitHub Pages.",
   "license": "BUSL-1.1",
   "scripts": {
     "dev": "astro dev",
@@ -12,6 +12,7 @@
     "typecheck": "astro check",
     "check:links": "node scripts/check-links.mjs",
     "og-image": "node scripts/og-image.mjs",
+    "brand": "node scripts/brand.mjs",
     "astro": "astro"
   },
   "dependencies": {

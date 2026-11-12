@@ -25,7 +25,7 @@ export function packageVersion(): string {
 }
 
 export interface CoreLocation {
-  /** Paquet surgeMedia : serveur construit, migrations, schémas par fournisseur, prisma.config.ts, .env.example. */
+  /** Paquet SurgeMedia : serveur construit, migrations, schémas par fournisseur, prisma.config.ts, .env.example. */
   packageDir: string
   /** Installation : fichier .env et données (base SQLite, médias en stockage local). */
   instanceDir: string

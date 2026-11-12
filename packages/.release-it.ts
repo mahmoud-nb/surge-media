@@ -67,7 +67,7 @@ export default {
     commitMessage: 'chore(release): libs v${version}',
     tagName: 'libs-v${version}',
     tagMatch: 'libs-v[0-9]*',
-    tagAnnotation: 'surgeMedia libraries v${version}',
+    tagAnnotation: 'SurgeMedia libraries v${version}',
     push: true,
   },
   // Versions écrites par le crochet after:bump (deux paquets) ; publication par le workflow.
@@ -105,7 +105,7 @@ export default {
       header: [
         '# Changelog',
         '',
-        'All notable changes to the surgeMedia front-end libraries — `@surge-media/client` and `@surge-media/vue`,',
+        'All notable changes to the SurgeMedia front-end libraries — `@surge-media/client` and `@surge-media/vue`,',
         'released together with the same version — are documented in this file. Versions follow',
         '[Semantic Versioning](https://semver.org); entries are generated from',
         '[Conventional Commits](https://www.conventionalcommits.org) by `pnpm release:libs`.',

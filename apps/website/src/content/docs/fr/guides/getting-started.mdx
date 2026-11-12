@@ -1,11 +1,11 @@
 ---
 title: Démarrage
-description: Installez surgeMedia sur votre propre infrastructure avec npm ou Docker, choisissez votre base de données, connectez-vous et branchez votre première application.
+description: Installez SurgeMedia sur votre propre infrastructure avec npm ou Docker, choisissez votre base de données, connectez-vous et branchez votre première application.
 ---
 
 import { Tabs, TabItem, Steps, Aside, LinkCard, CardGrid } from '@astrojs/starlight/components';
 
-surgeMedia est distribué sous forme d’**un paquet npm** (`@surge-media/core`) et d’**une image Docker** (`ghcr.io/mahmoud-nb/surge-media`, amd64 et arm64). Tous deux contiennent l’interface d’administration, l’API REST, la diffusion des médias et le traitement des images.
+SurgeMedia est distribué sous forme d’**un paquet npm** (`@surge-media/core`) et d’**une image Docker** (`ghcr.io/mahmoud-nb/surge-media`, amd64 et arm64). Tous deux contiennent l’interface d’administration, l’API REST, la diffusion des médias et le traitement des images.
 
 ## Prérequis
 
@@ -128,7 +128,7 @@ La page **Documentation de l’API** de l’administration génère ce fichier `
 
 ## Passer en production
 
-- **Votre domaine et TLS** : placez surgeMedia derrière votre mandataire inverse (Nginx, Caddy, Traefik…) sur un domaine comme `media.votre-entreprise.fr`, et renseignez-le dans `NUXT_SITE_URL`. Derrière un mandataire, réglez `NUXT_TRUST_PROXY` pour que les limites de débit et le journal d’audit voient les vraies adresses IP des clients.
+- **Votre domaine et TLS** : placez SurgeMedia derrière votre mandataire inverse (Nginx, Caddy, Traefik…) sur un domaine comme `media.votre-entreprise.fr`, et renseignez-le dans `NUXT_SITE_URL`. Derrière un mandataire, réglez `NUXT_TRUST_PROXY` pour que les limites de débit et le journal d’audit voient les vraies adresses IP des clients.
 - **Un CDN devant `/m/`** (facultatif) : les médias publics sont servis avec des en-têtes de cache immuables.
 - **Sauvegardes** : sauvegardez ensemble la base de données et le stockage des médias (avec Docker, le volume `/app/data` contient les deux pour SQLite et le stockage local).
 - **Mises à jour** : `npm install @surge-media/core@latest` puis `npx surge-media db migrate`, ou récupérez la nouvelle image Docker — les migrations s’exécutent au démarrage.

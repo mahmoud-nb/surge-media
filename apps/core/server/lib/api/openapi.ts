@@ -133,7 +133,7 @@ const TAGS = [
   texts({ 'name': 'reference', 'x-displayName': 'Référence', 'description': 'Documents publics : catalogue des erreurs et cette spécification.' }, { 'x-displayName': 'Reference', 'description': 'Public documents: error catalog and this specification.' }),
 ]
 
-const INFO_FR = `API publique de surgeMedia : médias, dossiers et projets, pour vos applications.
+const INFO_FR = `API publique de SurgeMedia : médias, dossiers et projets, pour vos applications.
 
 ## Authentification
 Chaque requête porte un identifiant dans l'en-tête \`Authorization: Bearer <identifiant>\` — jamais de cookie, jamais dans l'URL :
@@ -222,7 +222,7 @@ Chaque image se décline par son URL de diffusion, dont \`urlTemplate\` donne le
 
 Une URL non canonique (ordre des paramètres, valeurs par défaut, \`dpr\`, \`jpeg\`) est redirigée (\`301\`) vers sa forme canonique ; une URL valable est mise en cache sans limite (une semaine, puis revalidée, pour un préréglage du projet ou de l'installation, modifiable). Selon la politique du projet (\`transformPolicy\`), les paramètres libres sont acceptés (\`open\`), seulement signés (\`signed\` : \`POST …/signed-url\`, ou signature de \`urlTemplate\` pour un média privé) ou refusés (\`presets\`) ; les préréglages sont toujours servis. Les erreurs de \`/m/\` sont en JSON avec un code dans \`data.code\` : \`INVALID_TRANSFORM\` (400), \`TRANSFORM_NOT_ALLOWED\`, \`MEDIA_FORBIDDEN\`, \`SIGNATURE_INVALID\`, \`SIGNATURE_EXPIRED\` (403), \`TRANSFORM_QUOTA\` (429 : 50 dérivés libres par version, débit de nouvelles générations par adresse IP), \`SERVER_BUSY\` (503), \`PROCESSING_PENDING\` (503 avec \`Retry-After\` : original ou rendu d'une vidéo retenu pendant le retrait de ses métadonnées, voir « Vidéos »).`
 
-const INFO_EN = `Public API of surgeMedia: media, folders and projects, for your applications.
+const INFO_EN = `Public API of SurgeMedia: media, folders and projects, for your applications.
 
 ## Authentication
 Every request carries a credential in the \`Authorization: Bearer <credential>\` header — never a cookie, never in the URL:
@@ -711,7 +711,7 @@ export function describeApi(routes: RouteMetaEntry[], serverUrl: string): Built 
 
   const document = {
     openapi: '3.1.0',
-    info: { title: 'surgeMedia API', version: '1.0.0', ...texts({ description: INFO_FR }, { description: INFO_EN }) },
+    info: { title: 'SurgeMedia API', version: '1.0.0', ...texts({ description: INFO_FR }, { description: INFO_EN }) },
     servers: [{ url: serverUrl }],
     security: [{ bearerAuth: [] }],
     tags: TAGS,

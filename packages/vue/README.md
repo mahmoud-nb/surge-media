@@ -1,6 +1,6 @@
 # @surge-media/vue
 
-Vue 3 components for [surgeMedia](https://github.com/mahmoud-nb/surge-media), the self-hosted media platform.
+Vue 3 components for [SurgeMedia](https://github.com/mahmoud-nb/surge-media), the self-hosted media platform.
 
 - **`SmImage`** and **`SmPicture`**: responsive images (`srcset` with real widths or densities, AVIF / WebP with a
   fallback), server-side crop around the focal point, presets when the project only allows presets, fallback to the
@@ -50,4 +50,4 @@ Changes: [CHANGELOG](https://github.com/mahmoud-nb/surge-media/blob/main/package
 
 ## License
 
-[MIT](./LICENSE). The surgeMedia server (`@surge-media/core`) is distributed under its own license (BUSL-1.1).
+[MIT](./LICENSE). The SurgeMedia server (`@surge-media/core`) is distributed under its own license (BUSL-1.1).

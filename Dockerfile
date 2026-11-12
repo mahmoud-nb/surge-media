@@ -1,6 +1,6 @@
 # syntax=docker/dockerfile:1.7
 #
-# surgeMedia — image du core : administration, API, diffusion et traitement des médias.
+# SurgeMedia — image du core : administration, API, diffusion et traitement des médias.
 #
 #   docker build -t surge-media .                     image complète, avec ffmpeg (cible « full », par défaut)
 #   docker build --target slim -t surge-media:slim .  sans ffmpeg (traitement des vidéos impossible)
@@ -12,7 +12,7 @@
 # serveur charge celui de DATABASE_PROVIDER (déduit de DATABASE_URL s'il manque). Guide : setup.md, § 4.
 
 ARG NODE_VERSION=24
-# Debian 13 « trixie » : ffmpeg 7.1 (Debian 12 « bookworm » n'a que ffmpeg 5.1, refusé par surgeMedia).
+# Debian 13 « trixie » : ffmpeg 7.1 (Debian 12 « bookworm » n'a que ffmpeg 5.1, refusé par SurgeMedia).
 ARG DEBIAN_RELEASE=trixie
 
 # ─── Build : dépendances, clients Prisma, serveur Nuxt, paquet npm ──────────────────────────────────────────
@@ -83,7 +83,7 @@ RUN apt-get update \
 
 ARG VERSION=dev
 ARG REVISION=unknown
-LABEL org.opencontainers.image.title="surgeMedia" \
+LABEL org.opencontainers.image.title="SurgeMedia" \
       org.opencontainers.image.description="Self-hosted platform to manage, transform and deliver media" \
       org.opencontainers.image.source="https://github.com/mahmoud-nb/surge-media" \
       org.opencontainers.image.documentation="https://github.com/mahmoud-nb/surge-media/blob/main/setup.md" \

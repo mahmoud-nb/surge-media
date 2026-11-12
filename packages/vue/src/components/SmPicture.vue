@@ -1,6 +1,6 @@
 <script setup lang="ts">
 /**
- * `<picture>` d'un média surgeMedia : une `<source type>` par format activé sur le serveur (AVIF, puis WebP)
+ * `<picture>` d'un média SurgeMedia : une `<source type>` par format activé sur le serveur (AVIF, puis WebP)
  * et une image de repli (JPEG, sinon PNG) ; direction artistique par `sources` (un cadrage par media query).
  * Mêmes propriétés et même repli que SmImage. Pour une vidéo : son image d'affiche. Toute la logique est
  * dans le client (`pictureSources`, `imageStyle`, `imageErrorFrameStyle`).

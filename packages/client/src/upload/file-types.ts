@@ -1,7 +1,7 @@
 import type { MediaKind } from '../types'
 
 /**
- * Types de fichiers que surgeMedia sait recevoir (miroir de `apps/core/shared/utils/media.ts`, recoupé par
+ * Types de fichiers que SurgeMedia sait recevoir (miroir de `apps/core/shared/utils/media.ts`, recoupé par
  * les tests de contrat) : extension canonique, genre, format converti après l'envoi (MKV, AVI…, lus par
  * leur rendu H.264 quand le traitement des vidéos est actif). Sert à nommer les types acceptés dans les
  * messages et à deviner le genre d'un fichier avant d'avoir les règles du serveur.

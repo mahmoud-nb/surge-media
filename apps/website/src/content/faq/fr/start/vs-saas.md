@@ -8,7 +8,7 @@ related:
 ---
 Trois différences principales :
 
-- **Hébergement** : surgeMedia tourne chez vous ; aucun média ne quitte votre infrastructure.
+- **Hébergement** : SurgeMedia tourne chez vous ; aucun média ne quitte votre infrastructure.
 - **Coûts** : aucune facturation au volume, ni par image, ni par transformation, ni par gigaoctet servi. Vous payez votre infrastructure et, au-delà de l’offre gratuite, une licence fixe.
 - **Réversibilité** : vos originaux restent dans votre stockage et vos métadonnées dans votre base SQL.
 

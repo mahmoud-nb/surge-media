@@ -1,5 +1,5 @@
 ---
-question: "Does surgeMedia run on Kubernetes?"
+question: "Does SurgeMedia run on Kubernetes?"
 order: 5
 status: partial
 keywords: ["kubernetes","k8s","helm","orchestrator","container","probe"]
