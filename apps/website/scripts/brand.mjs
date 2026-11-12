@@ -1,8 +1,8 @@
 /**
- * surgeMedia brand assets: the pictogram (wave and dot in a rounded square) and the monoline wordmark.
- * The wordmark is pure geometry (circles, ellipses, lines; one stroke width, round ends, the same
- * stroke as the pictogram's wave): no font is needed to draw or display it. Its M is the wave and
- * the dot of the i is the wave's dot.
+ * SurgeMedia brand assets: the pictogram (wave and dot in a rounded square) and the wordmark.
+ * The wordmark is drawn, not typed: square monospaced letters with rounded outer corners, flat ends and
+ * one stroke width (the lettering the owner picked, redrawn as geometry). No font is needed to draw or
+ * display it. The dot of the i is the accent colour, like the pictogram's dot.
  *
  *   pnpm --filter @surge-media/website brand
  *
@@ -11,119 +11,105 @@
  * The admin component (apps/core/app/components/app/Logo.vue) and scripts/og-image.svg embed the
  * same path data: after a change here, copy it from public/brand/surgemedia-logo-light.svg.
  *
- * Units: font size 100 (x-height 54.6, cap height 72.75), y pointing down, baseline at y = 0.
+ * Units: cap height 72.75, y pointing down, baseline at y = 0.
  */
 import { mkdirSync, writeFileSync } from 'node:fs';
 
-const XH = 54.6;
 const CAP = 72.75;
-const SW = 9; // stroke width of the letters
+const K = CAP / 27; // the lettering was measured on a 27 px cap height
+const XH = 16.5 * K; // x-height
+const ASC = 25 * K; // ascender of the d, a little under the cap height
+const DESC = 6 * K; // descender of the g
+const SW = 8; // stroke width
 const O = SW / 2;
+const RC = 6.5; // corner radius on the stroke centre (outer ≈ 10.5, inner ≈ 2.5)
+const W = 40; // centre-line width of a lowercase letter
+const ADV = 24 * K; // monospaced advance
+const M_ADV = 27.5 * K; // the M gets a wider cell
+const M_W = 52; // centre-line width of the M
+
 const T = -(XH - O); // x-height, stroke centre
 const B = -O; // baseline, stroke centre
-const CAPC = -(CAP - O); // cap height and ascender, stroke centre
+const C = -(CAP - O); // cap height, stroke centre
+const D = DESC - O; // descender, stroke centre
 const MID = (T + B) / 2;
-const R = (B - T) / 2; // bowl radius (a, d, e, g)
-const GAP = 7.5; // space between letters, before optical adjustments
+const XT = -XH; // x-height, outer edge (flat stem tops)
 
 const r2 = (n) => Math.round(n * 100) / 100;
-const rad = (d) => (d * Math.PI) / 180;
 
-/** Elliptical arc from angle a0 to a1, in degrees (y down: increasing angle = clockwise on screen). */
-function arc(cx, cy, rx, ry, a0, a1, move = true) {
-  const p = (a) => [r2(cx + rx * Math.cos(rad(a))), r2(cy + ry * Math.sin(rad(a)))];
-  const [x0, y0] = p(a0);
-  const [x1, y1] = p(a1);
-  const large = Math.abs(a1 - a0) > 180 ? 1 : 0;
-  const sweep = a1 > a0 ? 1 : 0;
-  return `${move ? `M${x0} ${y0}` : ''}A${r2(rx)} ${r2(ry)} 0 ${large} ${sweep} ${x1} ${y1}`;
-}
-const circle = (cx, cy, r) =>
-  `M${r2(cx - r)} ${r2(cy)}a${r2(r)} ${r2(r)} 0 1 0 ${r2(2 * r)} 0a${r2(r)} ${r2(r)} 0 1 0 ${r2(-2 * r)} 0`;
-
-/** The M as a wave: two stems, two round crests at cap height, a smooth trough between them. */
-function waveM(ox, { width = 78, valley = 30, crestR = 13 } = {}) {
-  const x0 = ox + O;
-  const x1 = ox + width - O;
-  const mid = (x0 + x1) / 2;
-  const top = CAPC;
-  const k = 0.5523 * crestR;
-  const kk = (mid - (x0 + crestR)) * 0.48;
-  const v = -valley;
-  return [
-    `M${r2(x0)} ${r2(B)}V${r2(top + crestR)}`,
-    `C${r2(x0)} ${r2(top + crestR - k)} ${r2(x0 + crestR - k)} ${r2(top)} ${r2(x0 + crestR)} ${r2(top)}`,
-    `C${r2(x0 + crestR + kk)} ${r2(top)} ${r2(mid - kk)} ${r2(v)} ${r2(mid)} ${r2(v)}`,
-    `C${r2(mid + kk)} ${r2(v)} ${r2(x1 - crestR - kk)} ${r2(top)} ${r2(x1 - crestR)} ${r2(top)}`,
-    `C${r2(x1 - crestR + k)} ${r2(top)} ${r2(x1)} ${r2(top + crestR - k)} ${r2(x1)} ${r2(top + crestR)}`,
-    `V${r2(B)}`,
-  ].join('');
+/** Polyline through `pts` (shifted by ox), with corners rounded to radius `rc` on the stroke centre. */
+function poly(ox, pts, rc = RC) {
+  const p = pts.map(([x, y]) => [x + ox, y]);
+  let d = `M${r2(p[0][0])} ${r2(p[0][1])}`;
+  for (let i = 1; i < p.length - 1; i++) {
+    const [px, py] = p[i - 1];
+    const [cx, cy] = p[i];
+    const [nx, ny] = p[i + 1];
+    const l1 = Math.hypot(cx - px, cy - py);
+    const l2 = Math.hypot(nx - cx, ny - cy);
+    const u1 = [(cx - px) / l1, (cy - py) / l1];
+    const u2 = [(nx - cx) / l2, (ny - cy) / l2];
+    const turn = Math.acos(Math.max(-1, Math.min(1, u1[0] * u2[0] + u1[1] * u2[1])));
+    if (turn < 1e-6) {
+      d += `L${r2(cx)} ${r2(cy)}`;
+      continue;
+    }
+    const t = Math.min(rc * Math.tan(turn / 2), l1 * (i === 1 ? 1 : 0.5), l2 * (i === p.length - 2 ? 1 : 0.5));
+    const r = t / Math.tan(turn / 2);
+    const sweep = u1[0] * u2[1] - u1[1] * u2[0] > 0 ? 1 : 0;
+    d += `L${r2(cx - u1[0] * t)} ${r2(cy - u1[1] * t)}A${r2(r)} ${r2(r)} 0 0 ${sweep} ${r2(cx + u2[0] * t)} ${r2(cy + u2[1] * t)}`;
+  }
+  const [lx, ly] = p[p.length - 1];
+  return `${d}L${r2(lx)} ${r2(ly)}`;
 }
 
-/** Each glyph: (left edge) => { d, w } (w = outer width), plus `dot` for the i. */
+/** Each glyph: (left edge of its centre line) => { d, w } (w = centre-line width), plus `dot` for the i. */
 const GLYPHS = {
-  s: (ox) => {
-    const rx = 15.5;
-    const ry = (B - T) / 4;
-    const cx = ox + O + rx;
-    return { d: arc(cx, T + ry, rx, ry, -28, -270) + arc(cx, B - ry, rx, ry, -90, 152, false), w: 2 * rx + SW };
+  // Capital S: its middle bar sits above the centre (smaller upper half), as on the mock-up.
+  S: (x) => ({ d: poly(x, [[W, -20 * K], [W, C], [0, C], [0, -15.5 * K], [W, -15.5 * K], [W, B], [0, B], [0, -7.5 * K]]), w: W }),
+  u: (x) => ({ d: poly(x, [[0, XT], [0, B], [W, B]]) + poly(x, [[W, XT], [W, 0]]), w: W }),
+  r: (x) => ({ d: poly(x, [[0, 0], [0, T], [W, T], [W, T + 12]]), w: W }),
+  g: (x) => {
+    const bowl = B - 6.5; // the bowl sits a little above the baseline
+    return { d: poly(x, [[W, bowl], [0, bowl], [0, T], [W, T], [W, D], [0, D], [0, D - 10.5]]), w: W };
   },
-  u: (ox) => {
-    const xl = ox + O;
-    const xr = xl + 2 * R;
-    return { d: `M${r2(xl)} ${r2(T)}V${r2(MID)}${arc(xl + R, MID, R, R, 180, 0, false)}M${r2(xr)} ${r2(T)}V${r2(B)}`, w: 2 * R + SW };
+  e: (x) => ({ d: poly(x, [[W, B - 10], [W, B], [0, B], [0, T], [W, T], [W, MID], [0, MID]]), w: W }),
+  M: (x) => ({ d: poly(x, [[0, 0], [0, C], [M_W, C], [M_W, 0]]) + poly(x, [[M_W / 2, C], [M_W / 2, -37.5]]), w: M_W }),
+  d: (x) => ({ d: poly(x, [[W, T], [0, T], [0, B], [W, B]]) + poly(x, [[W, -ASC], [W, 0]]), w: W }),
+  i: (x) => {
+    const stem = W / 2 + 2;
+    return {
+      d: poly(x, [[stem - 13, T], [stem, T], [stem, B]]) + poly(x, [[stem - 16.5, B], [stem + 16.5, B]]),
+      w: W,
+      dot: { x: x + stem - O, y: -ASC, w: SW, h: 6 * K },
+    };
   },
-  r: (ox) => {
-    const xl = ox + O;
-    const rr = 17;
-    return { d: `M${r2(xl)} ${r2(B)}V${r2(T)}M${r2(xl)} ${r2(T + rr)}${arc(xl + rr, T + rr, rr, rr, 180, 270, false)}h3`, w: rr + 3 + SW };
-  },
-  g: (ox) => {
-    const cx = ox + O + R;
-    const xr = cx + R;
-    const hookY = B + 4;
-    return { d: `${circle(cx, MID, R)}M${r2(xr)} ${r2(T)}V${r2(hookY)}${arc(cx, hookY, R, 15, 0, 155, false)}`, w: 2 * R + SW };
-  },
-  e: (ox) => {
-    const cx = ox + O + R;
-    return { d: `M${r2(cx - R)} ${r2(MID)}H${r2(cx + R)}${arc(cx, MID, R, R, 0, -318, false)}`, w: 2 * R + SW };
-  },
-  M: (ox) => ({ d: waveM(ox), w: 78 }),
-  d: (ox) => {
-    const cx = ox + O + R;
-    return { d: `${circle(cx, MID, R)}M${r2(cx + R)} ${r2(CAPC)}V${r2(B)}`, w: 2 * R + SW };
-  },
-  i: (ox) => ({ d: `M${r2(ox + O)} ${r2(T)}V${r2(B)}`, w: SW, dot: [ox + O, T - 15.5] }),
-  a: (ox) => {
-    const cx = ox + O + R;
-    return { d: `${circle(cx, MID, R)}M${r2(cx + R)} ${r2(T)}V${r2(B)}`, w: 2 * R + SW };
-  },
+  a: (x) => ({ d: poly(x, [[W, 0], [W, T], [0, T], [0, B], [18, B], [W, -24.2]]), w: W }),
 };
-/** Optical spacing: [before, after] each letter, added to GAP. */
-const SPACING = { s: [0, 0], u: [0, 0], r: [0, -3], g: [-1, 0], e: [-1, -1], M: [3, 3], d: [-1, 0], i: [0, 0], a: [-1, 0] };
 
-/** The wordmark: `surge` and `Media` as two stroked paths, plus the dot of the i. */
+/** The wordmark, monospaced (each letter centred in its cell): `Surge` and `Media` as two stroked paths, plus the dot of the i. */
 export function wordmark() {
-  let x = 0;
+  const first = (ADV - W) / 2 - O; // space before the first letter's outer edge, trimmed
+  let cell = 0;
   let surge = '';
   let media = '';
   let dot = null;
-  [...'surgeMedia'].forEach((ch, index) => {
-    x += SPACING[ch][0];
-    const glyph = GLYPHS[ch](x);
+  [...'SurgeMedia'].forEach((ch, index) => {
+    const adv = ch === 'M' ? M_ADV : ADV;
+    const width = ch === 'M' ? M_W : W;
+    const glyph = GLYPHS[ch](cell + (adv - width) / 2 - first);
     if (index < 5) surge += glyph.d;
     else media += glyph.d;
     if (glyph.dot) dot = glyph.dot;
-    x += glyph.w + SPACING[ch][1] + GAP;
+    cell += adv;
   });
-  const dotR = SW * 0.85; // same ratio as the pictogram (dot r 2.2, stroke 2.6)
   return {
     surge,
     media,
-    dot: { cx: r2(dot[0]), cy: r2(dot[1]), r: r2(dotR) },
-    width: r2(x - GAP),
-    top: r2(Math.min(-CAP, dot[1] - dotR)),
-    bottom: r2(B + 4 + 15 + O), // descender of the g
+    dot: { x: r2(dot.x), y: r2(dot.y), w: r2(dot.w), h: r2(dot.h) },
+    width: r2(cell - 2 * first),
+    top: r2(-CAP),
+    bottom: r2(DESC),
   };
 }
 
@@ -146,8 +132,8 @@ function iconSvg(t) {
 }
 
 function wordSvg(w, t) {
-  const stroke = `fill="none" stroke-width="${SW}" stroke-linecap="round" stroke-linejoin="round"`;
-  return `<path d="${w.surge}" ${stroke} stroke="${t.fg}"/><path d="${w.media}" ${stroke} stroke="${t.primary}"/><circle cx="${w.dot.cx}" cy="${w.dot.cy}" r="${w.dot.r}" fill="${t.accent}"/>`;
+  const stroke = `fill="none" stroke-width="${SW}" stroke-linecap="butt" stroke-linejoin="round"`;
+  return `<path d="${w.surge}" ${stroke} stroke="${t.fg}"/><path d="${w.media}" ${stroke} stroke="${t.primary}"/><rect x="${w.dot.x}" y="${w.dot.y}" width="${w.dot.w}" height="${w.dot.h}" rx="2" fill="${t.accent}"/>`;
 }
 
 const svg = (box, body, title) =>
@@ -172,9 +158,9 @@ if (isMain) {
   const wordBox = [-0.5, w.top - 0.5, w.width + 1, w.bottom - w.top + 1];
   const files = {};
   for (const [mode, t] of Object.entries(THEMES)) {
-    files[`../public/brand/surgemedia-logo-${mode}.svg`] = svg(logoBox(w), logoBody(w, t), 'surgeMedia');
-    files[`../public/brand/surgemedia-wordmark-${mode}.svg`] = svg(wordBox, wordSvg(w, t), 'surgeMedia');
-    files[`../public/brand/surgemedia-icon-${mode}.svg`] = svg([0, 0, 32, 32], iconSvg(t), 'surgeMedia');
+    files[`../public/brand/surgemedia-logo-${mode}.svg`] = svg(logoBox(w), logoBody(w, t), 'SurgeMedia');
+    files[`../public/brand/surgemedia-wordmark-${mode}.svg`] = svg(wordBox, wordSvg(w, t), 'SurgeMedia');
+    files[`../public/brand/surgemedia-icon-${mode}.svg`] = svg([0, 0, 32, 32], iconSvg(t), 'SurgeMedia');
   }
   // Starlight header: the full logo replaces the site title (alt text and title stay in the page).
   files['../src/assets/logo-light.svg'] = files['../public/brand/surgemedia-logo-light.svg'];
