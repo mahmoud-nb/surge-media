@@ -217,7 +217,7 @@ describe('rendu du rapport', () => {
 
   it('produit un Markdown lisible sans secret', () => {
     const markdown = renderMarkdown(report, t, 'fr')
-    expect(markdown).toContain('# Rapport de diagnostic surgeMedia')
+    expect(markdown).toContain('# Rapport de diagnostic SurgeMedia')
     expect(markdown).toContain('## Points d\'attention')
     expect(markdown).toContain('| `NUXT_SESSION_PASSWORD` | défini (37 caractères) | environnement |')
     expect(markdown).toContain('| `NUXT_SMTP_USER` | défini | environnement |')
@@ -233,7 +233,7 @@ describe('rendu du rapport', () => {
 
   it('a les mêmes messages en anglais', () => {
     const markdown = renderMarkdown(report, createTranslator('en'), 'en')
-    expect(markdown).toContain('# surgeMedia diagnostic report')
+    expect(markdown).toContain('# SurgeMedia diagnostic report')
     expect(markdown).toContain('set (37 characters)')
   })
 })

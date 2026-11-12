@@ -1,6 +1,6 @@
 ---
 title: Build a framework integration
-description: Use @surge-media/client to write your own surgeMedia components for a framework without an official package — Angular, SolidJS, Qwik, Lit… — with the same guarantees as the official ones.
+description: Use @surge-media/client to write your own SurgeMedia components for a framework without an official package — Angular, SolidJS, Qwik, Lit… — with the same guarantees as the official ones.
 ---
 
 The official packages cover Vue, and React and Svelte are planned (see [SDKs and components](../sdks/)). For another framework — Angular, SolidJS, Qwik, Lit, Ember — or for your own design system, build a small local library on top of **`@surge-media/client`**. The client holds all the logic: API calls, credentials, URLs, `srcset`, transformation policy, video sources, and the components' own logic — French and English texts, icons, attributes and inline styles, image fallback, video states — along with their CSS theme. Your library only maps it to the framework's components. The official packages are built exactly this way.
@@ -425,7 +425,7 @@ A video plays in the browser's native player, with the server's data. In any fra
 
 - One `<source>` per item of `media.sources`, **in the server's order** (`url`, `type`): the browser plays the first one it supports.
 - `poster` from `videoPoster(media, { posterWidth }, settings)`: a derivative of 1,280 px at most, or the poster as is when only presets are allowed. `width` and `height` from `videoSize(media)`, to reserve the space; `aria-label` from `videoLabel(media, label)` (the title, else the alternative text); inline styles `VIDEO_FRAME_STYLE` and `VIDEO_PLAYER_STYLE`.
-- One `<track>` per item of `media.textTracks` (`kind`, `language`, `label`, `url`, `default`), and then `crossorigin="anonymous"`: the tracks are served by surgeMedia's domain. The fallback text is `t('video.unsupported')`.
+- One `<track>` per item of `media.textTracks` (`kind`, `language`, `label`, `url`, `default`), and then `crossorigin="anonymous"`: the tracks are served by SurgeMedia's domain. The fallback text is `t('video.unsupported')`.
 - No `sources` yet (a converted format being prepared): in place of the player, the message `t(videoMessageKey(media))`, the processing status when `processingVisible(media.processing)`, and a `t('video.download')` link to `media.url`, in a `videoEmptyStyle(width, height)` frame. Call `followProcessing()` to get the updated media when it is ready.
 - Error on the last `<source>`: `heldVideoDelay(url)` (a `HEAD` request) tells whether the server holds the video (503 `PROCESSING_PENDING`) and in how many milliseconds to retry with `video.load()` — at most `VIDEO_RETRY_LIMIT` times, announcing `t('video.held')` (`role="status"`). `null`: the video cannot be played, show `t(videoMessageKey(media, true))`.
 - Ambient video (muted, looping): started automatically only when `prefersReducedMotion()` is false, with a visible pause button (`t('video.pause')`, `pause` icon). `whenNearViewport()` delays loading a video far from the screen.

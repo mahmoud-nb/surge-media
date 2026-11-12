@@ -1,4 +1,4 @@
-// surgeMedia — schéma de la base de données
+// SurgeMedia — schéma de la base de données
 //
 // Ce schéma doit rester PORTABLE entre SQLite, PostgreSQL et MySQL/MariaDB :
 //   - le `provider` du bloc `datasource` est réécrit par `surge-media init` et

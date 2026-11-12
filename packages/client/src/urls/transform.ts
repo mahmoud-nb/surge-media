@@ -1,5 +1,5 @@
 /**
- * Transformations d'images de surgeMedia (`/m/<id>/v<n>/<segment>/<nom>.<format>`), côté client : segment
+ * Transformations d'images de SurgeMedia (`/m/<id>/v<n>/<segment>/<nom>.<format>`), côté client : segment
  * en **forme canonique** (celle du serveur : une URL non canonique reçoit une redirection 301) et taille
  * réelle du fichier produit (le serveur n'agrandit jamais une image). Logique reprise du core
  * (apps/core/shared/utils/transforms.ts, server/lib/media/transform-plan.ts) et recoupée avec lui par les

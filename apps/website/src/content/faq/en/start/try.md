@@ -1,5 +1,5 @@
 ---
-question: "How can I try surgeMedia?"
+question: "How can I try SurgeMedia?"
 order: 6
 keywords: ["install","trial","getting started","docker","npm","free","evaluation","demo"]
 related:

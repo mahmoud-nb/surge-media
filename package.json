@@ -2,7 +2,7 @@
   "name": "surge-media",
   "private": true,
   "type": "module",
-  "description": "surgeMedia — plateforme auto-hébergée et modulaire de gestion et de traitement des médias.",
+  "description": "SurgeMedia — plateforme auto-hébergée et modulaire de gestion et de traitement des médias.",
   "license": "BUSL-1.1",
   "packageManager": "pnpm@12.4.2",
   "engines": {

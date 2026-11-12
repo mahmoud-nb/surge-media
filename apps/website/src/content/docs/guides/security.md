@@ -1,9 +1,9 @@
 ---
 title: Security & access control
-description: Credentials, scopes, allowed origins, signed URLs, transformation policies and audit log — how surgeMedia keeps your media and your API under control.
+description: Credentials, scopes, allowed origins, signed URLs, transformation policies and audit log — how SurgeMedia keeps your media and your API under control.
 ---
 
-surgeMedia is designed so that **every request is attributable and limited to what it needs**. Project owners manage access themselves, from the admin, without touching the server configuration.
+SurgeMedia is designed so that **every request is attributable and limited to what it needs**. Project owners manage access themselves, from the admin, without touching the server configuration.
 
 ## Credentials
 
@@ -12,7 +12,7 @@ Each credential belongs to a project (or to a user, for personal tokens), carrie
 | Credential | Prefix | Use it for | Never use it for |
 | --- | --- | --- | --- |
 | **Publishable key** | `sm_pk_` | Browsers and mobile apps reading **public** media of a project. | Writing, private media, signed URLs. |
-| **Secret key** | `sm_sk_` | Your servers, CI/CD, back-office integrations. | Browsers: surgeMedia **rejects** a secret key sent from a web page (`SECRET_IN_BROWSER`). |
+| **Secret key** | `sm_sk_` | Your servers, CI/CD, back-office integrations. | Browsers: SurgeMedia **rejects** a secret key sent from a web page (`SECRET_IN_BROWSER`). |
 | **Personal access token** | `sm_pat_` | Scripts and migrations acting as a user, across selected projects. | Long-running production services (use a secret key). |
 | **Delegated token** | `sm_dt_` | A browser task for a few minutes: upload, picker, media library. | Anything durable: it expires in 1 hour at most. |
 
@@ -43,7 +43,7 @@ Each project lists the origins allowed to call its API from a browser: `https://
 
 ## Direct uploads with delegated tokens
 
-Your server authenticates **its** user, then asks surgeMedia for a delegated token:
+Your server authenticates **its** user, then asks SurgeMedia for a delegated token:
 
 - scopes that are a subset of the issuing key's **current** scopes;
 - a lifetime of 1 to 60 minutes (15 by default), never beyond the issuing key's expiry;

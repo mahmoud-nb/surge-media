@@ -1,7 +1,7 @@
 /**
  * Script de maintenance : génère une migration pour CHAQUE fournisseur supporté.
  *
- * Le SQL produit par Prisma dépend du fournisseur : surgeMedia livre donc un
+ * Le SQL produit par Prisma dépend du fournisseur : SurgeMedia livre donc un
  * historique de migrations par fournisseur (prisma/migrations/<fournisseur>/).
  * Les changements sont calculés hors ligne (aucune base requise) entre
  * `prisma/migrations/schema.snapshot.prisma` (état du schéma à la dernière

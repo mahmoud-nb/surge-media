@@ -56,7 +56,7 @@ with *Custom › Security alerts*. There is no bug bounty program at this time.
 
 In scope:
 
-- the surgeMedia server (`@surge-media/core`): administration, authentication and sessions, public API
+- the SurgeMedia server (`@surge-media/core`): administration, authentication and sessions, public API
   (`/api/v1`), media delivery (`/m/`), image transformations, video processing, CLI;
 - the official Docker image and the Compose examples of this repository;
 - the front-end libraries `@surge-media/client` and `@surge-media/vue`.
@@ -64,7 +64,7 @@ In scope:
 Out of scope:
 
 - vulnerabilities in third-party dependencies or system packages (ffmpeg, libvips, Debian) without a demonstrated
-  impact on surgeMedia: please report them upstream;
+  impact on SurgeMedia: please report them upstream;
 - installations that contradict the production guidance (for example HTTP without TLS, the application port
   exposed without a reverse proxy, or untrusted proxies allowed by `NUXT_TRUST_PROXY`);
 - headers that the documentation leaves to the reverse proxy, such as `Strict-Transport-Security`;
@@ -75,7 +75,7 @@ Out of scope:
 
 ## Testing guidelines
 
-surgeMedia is self-hosted. Test **only on an instance that you installed yourself** (the license allows any
+SurgeMedia is self-hosted. Test **only on an instance that you installed yourself** (the license allows any
 non-production use), and never on someone else's installation without their written permission. The public demo
 is shared with other visitors and reset every two hours: do not test there. Do not access, modify or delete data
 that is not yours, and do not degrade a service used by others.
@@ -171,7 +171,7 @@ diffusion `/m/`, transformations d'images, traitement des vidéos, CLI), l'image
 Compose du dépôt, les bibliothèques `@surge-media/client` et `@surge-media/vue`.
 
 Hors périmètre : les vulnérabilités des dépendances et paquets système (ffmpeg, libvips, Debian) sans impact
-démontré sur surgeMedia, à signaler en amont ; les installations contraires au guide de production (HTTP sans TLS,
+démontré sur SurgeMedia, à signaler en amont ; les installations contraires au guide de production (HTTP sans TLS,
 port de l'application exposé sans mandataire, mandataires non fiables admis par `NUXT_TRUST_PROXY`) ; les en-têtes
 que la documentation confie au mandataire (`Strict-Transport-Security`) ; le déni de service volumétrique et
 l'épuisement des limites de débit documentées ; les attaques qui exigent un compte administrateur ou un accès au
@@ -181,7 +181,7 @@ attaques physiques.
 
 ## Règles de test
 
-surgeMedia est auto-hébergé. Testez **uniquement sur une instance que vous avez installée vous-même** (la licence
+SurgeMedia est auto-hébergé. Testez **uniquement sur une instance que vous avez installée vous-même** (la licence
 autorise tout usage hors production), jamais sur l'installation d'un tiers sans son accord écrit. La démo publique
 est partagée avec d'autres visiteurs et remise à zéro toutes les deux heures : n'y testez rien. N'accédez pas aux données d'autrui, ne les modifiez pas, ne les
 supprimez pas, et ne dégradez pas un service utilisé par d'autres. Nous n'engagerons aucune poursuite contre une

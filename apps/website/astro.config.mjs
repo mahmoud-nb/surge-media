@@ -22,7 +22,7 @@ export default defineConfig({
   trailingSlash: 'always',
   integrations: [
     starlight({
-      title: 'surgeMedia',
+      title: 'SurgeMedia',
       description:
         'Self-hosted media platform: store, transform and deliver images and videos from your own servers, through one secure headless API.',
       // Pictogram + drawn wordmark (scripts/brand.mjs). It replaces the text title, which stays in the

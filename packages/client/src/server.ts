@@ -18,7 +18,7 @@ export const DISPLAY_SCOPES = ['project:read', 'media:read'] as const satisfies 
 export const UPLOAD_SCOPES = ['project:read', 'media:read', 'media:upload'] as const satisfies readonly TokenScope[]
 
 export interface CreateDelegatedTokenOptions {
-  /** Adresse de l'installation surgeMedia (`https://media.example.com`, `…/api/v1` accepté). */
+  /** Adresse de l'installation SurgeMedia (`https://media.example.com`, `…/api/v1` accepté). */
   baseUrl: string
   projectId: string
   /** Clé secrète du projet (`sm_sk_`) ou jeton personnel (`sm_pat_`) qui détient les portées demandées. */

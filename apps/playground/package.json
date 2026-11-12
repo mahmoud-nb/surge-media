@@ -3,7 +3,7 @@
   "version": "0.0.0",
   "private": true,
   "type": "module",
-  "description": "Development sandbox for @surge-media/client and @surge-media/vue, connected to a local surgeMedia core.",
+  "description": "Development sandbox for @surge-media/client and @surge-media/vue, connected to a local SurgeMedia core.",
   "license": "BUSL-1.1",
   "scripts": {
     "dev": "vite",

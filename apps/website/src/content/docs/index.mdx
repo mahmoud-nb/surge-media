@@ -1,6 +1,6 @@
 ---
 title: Self-hosted media platform
-description: surgeMedia stores, transforms and delivers your images and videos from your own servers, under your own domain, through one secure headless API — for every environment from dev to production.
+description: SurgeMedia stores, transforms and delivers your images and videos from your own servers, under your own domain, through one secure headless API — for every environment from dev to production.
 template: splash
 editUrl: false
 lastUpdated: false
@@ -69,9 +69,9 @@ import CtaBand from '../../components/landing/CtaBand.astro';
 
 <Section
   id="features"
-  eyebrow="Why surgeMedia"
+  eyebrow="Why SurgeMedia"
   title="Everything a media platform should do. Nothing that locks you in."
-  lead="The convenience of a media SaaS, the control of your own infrastructure. surgeMedia gives your teams one place to manage media, and your applications one API to consume it."
+  lead="The convenience of a media SaaS, the control of your own infrastructure. SurgeMedia gives your teams one place to manage media, and your applications one API to consume it."
 >
   <FeatureGrid>
     <Feature icon="rocket" title="Live in minutes, not sprints">
@@ -111,7 +111,7 @@ import CtaBand from '../../components/landing/CtaBand.astro';
   lead="Stop copying uploads from production to staging and losing them in between. Every environment of every application consumes the same media, each with its own keys."
 >
   <EnvironmentsDiagram
-    caption="Your applications call one surgeMedia instance, which runs on — and stores into — your own infrastructure."
+    caption="Your applications call one SurgeMedia instance, which runs on — and stores into — your own infrastructure."
     appsLabel="Your applications"
     apps={[
       { name: 'Development', detail: 'localhost:5173' },
@@ -119,7 +119,7 @@ import CtaBand from '../../components/landing/CtaBand.astro';
       { name: 'Production', detail: 'www.acme.com' },
       { name: 'Mobile & back-office', detail: 'iOS · Android · CMS' },
     ]}
-    hubLabel="surgeMedia"
+    hubLabel="SurgeMedia"
     hubItems={[
       'REST API v1 — projects, media, folders, tags',
       'URL transformations — /m/…',
@@ -140,7 +140,7 @@ import CtaBand from '../../components/landing/CtaBand.astro';
   id="transformations"
   eyebrow="On-the-fly transformations"
   title="Every size, every format. One URL away."
-  lead="Upload the original once. surgeMedia generates the variant your page asks for on the first request, keeps it, and serves it with immutable cache headers from then on."
+  lead="Upload the original once. SurgeMedia generates the variant your page asks for on the first request, keeps it, and serves it with immutable cache headers from then on."
 >
 
 <Tabs syncKey="showcase">
@@ -305,7 +305,7 @@ POSTGRES_PASSWORD='change-me' docker compose -f docker/compose.postgres.yaml up 
 
 <CtaBand
   title="Own your media pipeline, starting today."
-  text="Install surgeMedia on your infrastructure in minutes. Free for development, testing and evaluation — for everyone."
+  text="Install SurgeMedia on your infrastructure in minutes. Free for development, testing and evaluation — for everyone."
   primary={{ label: 'Get started', href: '/guides/getting-started/' }}
   secondary={{ label: 'Compare plans', href: '/pricing/' }}
 />

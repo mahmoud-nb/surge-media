@@ -1,11 +1,11 @@
 ---
 title: Getting started
-description: Install surgeMedia on your own infrastructure with npm or Docker, choose your database, sign in and connect your first application.
+description: Install SurgeMedia on your own infrastructure with npm or Docker, choose your database, sign in and connect your first application.
 ---
 
 import { Tabs, TabItem, Steps, Aside, LinkCard, CardGrid } from '@astrojs/starlight/components';
 
-surgeMedia ships as **one npm package** (`@surge-media/core`) and **one Docker image** (`ghcr.io/mahmoud-nb/surge-media`, amd64 and arm64). Both contain the admin interface, the REST API, media delivery and image processing.
+SurgeMedia ships as **one npm package** (`@surge-media/core`) and **one Docker image** (`ghcr.io/mahmoud-nb/surge-media`, amd64 and arm64). Both contain the admin interface, the REST API, media delivery and image processing.
 
 ## Requirements
 
@@ -128,7 +128,7 @@ The admin's **API documentation** page generates this `.env` snippet for your pr
 
 ## Going to production
 
-- **Your domain and TLS**: put surgeMedia behind your reverse proxy (Nginx, Caddy, Traefik…) on a domain such as `media.your-company.com`, and set `NUXT_SITE_URL` to it. Behind a proxy, set `NUXT_TRUST_PROXY` so rate limits and audit logs see real client IPs.
+- **Your domain and TLS**: put SurgeMedia behind your reverse proxy (Nginx, Caddy, Traefik…) on a domain such as `media.your-company.com`, and set `NUXT_SITE_URL` to it. Behind a proxy, set `NUXT_TRUST_PROXY` so rate limits and audit logs see real client IPs.
 - **A CDN in front of `/m/`** (optional): public media are served with immutable cache headers.
 - **Backups**: back up the database and the media storage together (with Docker, the `/app/data` volume holds both for SQLite and local storage).
 - **Updates**: `npm install @surge-media/core@latest` then `npx surge-media db migrate`, or pull the new Docker image — migrations run at startup.

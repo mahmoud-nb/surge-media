@@ -19,7 +19,7 @@ export interface MediaStorage {
   getStream: (key: string, range?: ByteRange) => Promise<Readable>
   /**
    * Copie un fichier sous une nouvelle clé (duplication d'un média). Sous S3, la copie se fait
-   * côté service (CopyObject), sans transit par surgeMedia.
+   * côté service (CopyObject), sans transit par SurgeMedia.
    */
   copy: (fromKey: string, toKey: string) => Promise<void>
   /** Taille du fichier, ou null s'il n'existe pas. */

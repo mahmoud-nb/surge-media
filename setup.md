@@ -1,9 +1,9 @@
-# surgeMedia — Installation and operations guide
+# SurgeMedia — Installation and operations guide
 
-This guide is for the teams who install and run surgeMedia on their own infrastructure: requirements, installation
+This guide is for the teams who install and run SurgeMedia on their own infrastructure: requirements, installation
 with Docker or npm, configuration, reverse proxy, production checklist, backups, updates and troubleshooting.
 
-surgeMedia is a self-hosted media platform: an administration interface, a REST API for your applications,
+SurgeMedia is a self-hosted media platform: an administration interface, a REST API for your applications,
 on-the-fly image transformations and video delivery. It stores nothing outside your infrastructure and never
 contacts its publisher.
 
@@ -12,7 +12,7 @@ contacts its publisher.
 - Security policy and vulnerability reporting: [`SECURITY.md`](SECURITY.md).
 - License: [`LICENSE`](LICENSE) (Business Source License 1.1, summarised in § 19).
 
-> surgeMedia is in pre-release (0.x). Until 1.0, a minor version may contain breaking changes, always listed in
+> SurgeMedia is in pre-release (0.x). Until 1.0, a minor version may contain breaking changes, always listed in
 > the [changelog](apps/core/CHANGELOG.md). Start with a pilot project and read the changelog before each update.
 
 ---
@@ -221,7 +221,7 @@ Run the server under a process manager that restarts it on failure. Example syst
 
 ```ini
 [Unit]
-Description=surgeMedia
+Description=SurgeMedia
 After=network-online.target
 Wants=network-online.target
 
@@ -400,7 +400,7 @@ Optional. With a host and a sender, invitation and password reset links can be e
 | Variable | Default | Role |
 | --- | --- | --- |
 | `NUXT_SMTP_HOST` | — | SMTP server (required to send email) |
-| `NUXT_SMTP_FROM` | — | Sender, such as `surgeMedia <no-reply@example.com>` (required to send email) |
+| `NUXT_SMTP_FROM` | — | Sender, such as `SurgeMedia <no-reply@example.com>` (required to send email) |
 | `NUXT_SMTP_PORT` | `587` | 587 with STARTTLS, or 465 with `NUXT_SMTP_SECURE=true` |
 | `NUXT_SMTP_SECURE` | `false` | TLS from the start of the connection (port 465) |
 | `NUXT_SMTP_USER`, `NUXT_SMTP_PASSWORD` | — | Credentials, optional for relays without authentication |
@@ -422,7 +422,7 @@ Configure SPF, DKIM and DMARC for the sender's domain, or messages may land in s
 | --- | --- | --- |
 | `NUXT_LICENSE_KEY` | — | Commercial license (content of the `.lic` file). Takes precedence over the license installed in **Settings › License**, which then becomes read-only; a change needs a restart. Optional: without a license (Community edition) or after it ends, only paid features switch off |
 
-The license is verified on your server, offline, against public keys built into surgeMedia: nothing is sent
+The license is verified on your server, offline, against public keys built into SurgeMedia: nothing is sent
 anywhere. **Settings › License** shows its state (valid, expiring within 30 days, in its 30-day grace period after
 expiry, expired, not valid), the licensee, plan, enabled features, covered production instances and dates, and
 the **installation identifier** to quote to support and in your yearly statement of production instances.
@@ -435,7 +435,7 @@ ahead by mistake and pushed the mark forward, fix the clock, then run `surge-med
 **Declared use.** In **Settings › License**, with `surge-media init` or with `surge-media license usage`, the
 operator states how the instance is used: **evaluation** (trial, development, staging: always free), **Community
 production** (free: group revenue up to USD 500,000, no competing hosted service) or **production under a
-commercial license** (§ 19). It is only a statement, kept in the database: surgeMedia checks nothing and sends
+commercial license** (§ 19). It is only a statement, kept in the database: SurgeMedia checks nothing and sends
 nothing. The dashboard shows an information item (never a blocker) while the use is not declared, when the
 statement is more than a year old, or when the declared use needs a commercial license and none is active.
 
@@ -516,7 +516,7 @@ capture a new one after an update to save that time. Snapshots work with SQLite 
 | PostgreSQL | `postgresql://user:password@host:5432/surge_media` | Production, several processes or servers |
 | MySQL / MariaDB | `mysql://user:password@host:3306/surge_media` | Same, when MySQL is your standard |
 
-- Create an empty database and a dedicated user with rights to create tables; surgeMedia creates its schema
+- Create an empty database and a dedicated user with rights to create tables; SurgeMedia creates its schema
   through migrations.
 - **SQLite** switches the database to WAL mode at startup and warns if it cannot (network share, read-only file).
   Keep the file on a local disk, never on a network share. One process writes at a time: see § 13 before adding
@@ -544,7 +544,7 @@ NUXT_MEDIA_STORAGE_S3_ACCESS_KEY_ID="…"
 NUXT_MEDIA_STORAGE_S3_SECRET_ACCESS_KEY="…"
 ```
 
-- Bucket objects stay **private**: every download goes through surgeMedia, which applies visibility, signed URLs
+- Bucket objects stay **private**: every download goes through SurgeMedia, which applies visibility, signed URLs
   and transformations. Do not make the bucket public.
 - The credentials need to read, write, list and delete objects in the bucket (or under the prefix).
 - Switching storage changes neither the API nor the database: copy the existing files (same keys, same prefix)
@@ -559,7 +559,7 @@ Without video processing (default `off`), MP4, WebM and QuickTime files are stor
 MP4 and MOV files are only prepared for streaming (index at the start, location and device data removed),
 without re-encoding.
 
-With processing enabled, surgeMedia uses the system's ffmpeg, outside the request path, to remove GPS data
+With processing enabled, SurgeMedia uses the system's ffmpeg, outside the request path, to remove GPS data
 tracks, repair browser-recorded WebM files, extract a poster, produce an H.264 rendition when the original is
 not widely playable (HEVC, 4K, HDR…), optionally an AV1 rendition, and accept more formats (MKV, AVI, 3GP,
 MPEG-TS, OGV, WMV), converted on upload.
@@ -596,7 +596,7 @@ the storage; set container CPU and memory limits on top of `NUXT_VIDEO_CONCURREN
 
 ## 11. Reverse proxy, HTTPS and media domain
 
-Serve surgeMedia over **HTTPS** behind a reverse proxy, and never expose the application port to the Internet:
+Serve SurgeMedia over **HTTPS** behind a reverse proxy, and never expose the application port to the Internet:
 the examples publish it on `127.0.0.1` only. The proxy must forward the original `Host` header (used by the
 cross-site request protection) and **append** the client address to `X-Forwarded-For`.
 
@@ -665,7 +665,7 @@ Traefik also appends `X-Forwarded-For` by default; raise its timeouts and body s
 - [ ] Two-factor authentication required at least for administrators (**Settings › Security**, § 6).
 - [ ] `NUXT_SESSION_PASSWORD`, `NUXT_MEDIA_SIGNING_SECRET` and `NUXT_MFA_ENCRYPTION_KEY` stored safely, identical
       on every process, and included in backups.
-- [ ] Upload size and timeouts aligned between surgeMedia and the proxy (§ 11.1); enough space in `TMPDIR`.
+- [ ] Upload size and timeouts aligned between SurgeMedia and the proxy (§ 11.1); enough space in `TMPDIR`.
 - [ ] Database: PostgreSQL or MySQL if more than one process or sustained traffic (§ 13).
 - [ ] Backups of the database, the media storage and the secrets, with a restore test (§ 15).
 - [ ] `/api/health` monitored; logs collected (§ 14).
@@ -755,7 +755,7 @@ docker start surge-media
 ```
 
 Back up the database first, then the media: files added in between are only unreferenced. For a strictly
-consistent copy, stop the server or snapshot the volume. To restore, install the **same surgeMedia version** as
+consistent copy, stop the server or snapshot the volume. To restore, install the **same SurgeMedia version** as
 the backup, restore the database, the media and the secrets, then start it. Test a restore regularly.
 
 ## 16. Updating
@@ -812,7 +812,7 @@ writes nothing (except `--out`) and sends nothing: review the report, then attac
 | Two-factor code always refused | The phone's clock is off (codes change every 30 s): turn on automatic time; a code cannot be used twice |
 | "Two-factor authentication is unavailable on this server" | `NUXT_MFA_ENCRYPTION_KEY` missing or changed: restore the backed-up key; if it is lost, `surge-media user mfa-reset --all` and every account sets it up again |
 | Phone and recovery codes lost | An administrator resets it from the account's page; for the last administrator, `surge-media user mfa-reset <email>` on the server |
-| License refused: "not signed with a key this version recognizes" | The license needs a newer surgeMedia version: update, or write to the licensing contact |
+| License refused: "not signed with a key this version recognizes" | The license needs a newer SurgeMedia version: update, or write to the licensing contact |
 | "Server clock behind" (Settings › License, dashboard) | Fix the system time (NTP). If it was the clock that had run ahead by mistake, run `surge-media license clock-reset` once it is right (§ 7.10) |
 | Demo container stops at start: database "doesn't come from a demo snapshot" | The data volume holds a database that was not restored from a snapshot (for instance the `prepare` volume): give the `demo` service its own, empty volume (§ 7.11) |
 | Demo: visitors' uploads don't show in the administration | Media are served on another domain (`NUXT_MEDIA_PUBLIC_URL`), where the session cookie is not sent: serve `/m/` on the demo's own site (§ 7.11) |
@@ -849,9 +849,9 @@ Other questions: the [FAQ](https://mahmoud-nb.github.io/surge-media/faq/) or the
 [issues](https://github.com/mahmoud-nb/surge-media/issues). Report security issues privately, as described in
 [`SECURITY.md`](SECURITY.md), never in a public issue.
 
-## 18. Developing surgeMedia
+## 18. Developing SurgeMedia
 
-To work on surgeMedia itself rather than install it: Node.js 24.15 or later (required by Nuxt 4 to build; running
+To work on SurgeMedia itself rather than install it: Node.js 24.15 or later (required by Nuxt 4 to build; running
 the published package only needs Node.js 24), pnpm 12 (`corepack enable`) and Git.
 
 ```bash
@@ -867,12 +867,12 @@ pull requests and the Contributor License Agreement: [CONTRIBUTING.md](CONTRIBUT
 
 ## 19. License and support
 
-surgeMedia is source-available under the **Business Source License 1.1** (`BUSL-1.1`), not an open source
+SurgeMedia is source-available under the **Business Source License 1.1** (`BUSL-1.1`), not an open source
 license:
 
 - development, testing and evaluation are free for everyone;
 - production use is free, except when the organization using it (with its affiliates) had more than
-  **USD 500,000** of gross revenue in its last completed fiscal year, when surgeMedia is offered to third
+  **USD 500,000** of gross revenue in its last completed fiscal year, when SurgeMedia is offered to third
   parties as a competing hosted service, or when a feature that requires a license key is used in production
   without a valid key — these cases require a commercial license;
 - each version becomes available under the Apache License 2.0 three years after its first release.

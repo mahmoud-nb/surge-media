@@ -61,7 +61,7 @@ const RULES: Rule[] = [
   { pattern: /\b([a-z][a-z0-9+.-]*:\/\/)[^\s/@:]+:[^\s/@]+@/gi, replace: `$1${MASK}@` },
   // En-tête d'autorisation
   { pattern: /\b(Bearer|Basic)\s+[\w.~+/=-]+/g, replace: `$1 ${MASK}` },
-  // Clés et jetons de surgeMedia (publiques, secrètes, personnelles, délégués)
+  // Clés et jetons de SurgeMedia (publiques, secrètes, personnelles, délégués)
   { pattern: /\bsm_(?:sk|pk|pat|dt)_[\w-]+/g, replace: `sm_${MASK}` },
   // Paramètres sensibles d'une URL (liens signés, jetons)
   { pattern: /([?&](?:sig|signature|token|key|exp|code)=)[^&\s"']+/gi, replace: `$1${MASK}` },

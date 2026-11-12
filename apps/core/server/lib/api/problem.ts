@@ -181,7 +181,7 @@ export function sendProblem(event: H3Event, error: unknown) {
   if (problem.status === 401) {
     // RFC 6750 : pas d'attribut « error » quand aucun identifiant n'a été présenté.
     const invalid = problem.code === 'TOKEN_MISSING' ? '' : ', error="invalid_token"'
-    setResponseHeader(event, 'WWW-Authenticate', `Bearer realm="surgeMedia"${invalid}`)
+    setResponseHeader(event, 'WWW-Authenticate', `Bearer realm="SurgeMedia"${invalid}`)
   }
   for (const [name, value] of Object.entries(problem.options.headers ?? {})) setResponseHeader(event, name, value)
   return problemBody(problem, {

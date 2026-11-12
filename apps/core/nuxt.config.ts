@@ -89,7 +89,7 @@ export default defineNuxtConfig({
       secure: false, // TLS dès la connexion (port 465) ; sinon STARTTLS si le serveur le propose — NUXT_SMTP_SECURE
       user: '', // identifiant, facultatif (relais sans authentification) — NUXT_SMTP_USER
       password: '', // NUXT_SMTP_PASSWORD
-      from: '', // expéditeur, ex. « surgeMedia <no-reply@example.com> » — NUXT_SMTP_FROM
+      from: '', // expéditeur, ex. « SurgeMedia <no-reply@example.com> » — NUXT_SMTP_FROM
     },
     public: {
       // Appareils de confiance : jours sans ressaisie du mot de passe pour les actions sensibles,
@@ -202,7 +202,7 @@ export default defineNuxtConfig({
     // depuis un CDN) restent désactivées ; /_openapi.json (toutes les routes) n'existe qu'en développement.
     experimental: { openAPI: true },
     openAPI: {
-      meta: { title: 'surgeMedia', version: '1.0.0' },
+      meta: { title: 'SurgeMedia', version: '1.0.0' },
       ui: { scalar: false, swagger: false },
     },
     // Cible du serveur alignée sur `engines.node` (≥ 24) : celle de Nitro par défaut (es2019) signale à tort les

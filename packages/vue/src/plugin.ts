@@ -7,7 +7,7 @@ export interface SurgeMediaPlugin {
 }
 
 /**
- * Plugin Vue de surgeMedia : `app.use(createSurgeMedia({ baseUrl, projectId, publishableKey }))`. Fournit
+ * Plugin Vue de SurgeMedia : `app.use(createSurgeMedia({ baseUrl, projectId, publishableKey }))`. Fournit
  * le client, la langue et les réglages du projet à tous les composants ; dans le navigateur, lit le projet
  * (politique de transformation, formats activés) au démarrage. En rendu serveur, créer le plugin pour
  * chaque requête (jamais au niveau du module : un jeton délégué est propre à un utilisateur).

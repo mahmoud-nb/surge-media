@@ -1,9 +1,9 @@
 ---
 title: Architecture et API
-description: Le fonctionnement de surgeMedia — un back-end média headless avec une API REST et une diffusion par URL, sur votre propre infrastructure — et la façon dont les applications l’utilisent.
+description: Le fonctionnement de SurgeMedia — un back-end média headless avec une API REST et une diffusion par URL, sur votre propre infrastructure — et la façon dont les applications l’utilisent.
 ---
 
-surgeMedia sépare **l’endroit où vivent vos médias** de **l’endroit où ils sont utilisés**. C’est un back-end média _headless_ : il n’impose ni front-end, ni gabarit, ni CMS. Vos sites, applications mobiles, back-offices et partenaires consomment les médias en HTTP — depuis une seule instance que vous hébergez, sous votre propre domaine.
+SurgeMedia sépare **l’endroit où vivent vos médias** de **l’endroit où ils sont utilisés**. C’est un back-end média _headless_ : il n’impose ni front-end, ni gabarit, ni CMS. Vos sites, applications mobiles, back-offices et partenaires consomment les médias en HTTP — depuis une seule instance que vous hébergez, sous votre propre domaine.
 
 ## Vue d’ensemble
 
@@ -14,7 +14,7 @@ surgeMedia sépare **l’endroit où vivent vos médias** de **l’endroit où i
         │ API REST v1 (jeton Bearer)           │ GET /m/… (sans cookie, cacheable)
         ▼                                      ▼
   ┌─────────────────────────────────────────────────────────────┐
-  │ surgeMedia — sur votre serveur, sous votre domaine          │
+  │ SurgeMedia — sur votre serveur, sous votre domaine          │
   │   /api/v1   projets, médias, dossiers, jetons, URL signées  │
   │   /m/…      diffusion et transformations à la volée         │
   │   /admin    équipes, rôles, réglages, journal d’audit       │
@@ -63,7 +63,7 @@ Chaque média dispose d’URL stables, sans cookie et adaptées aux CDN :
 /m/<id>/v<version>/w_800,h_450,fit_cover/<nom>.avif  une transformation libre
 ```
 
-Les médias publics sont servis avec des en-têtes de cache immuables et longue durée : un CDN placé devant surgeMedia absorbe le trafic. Les médias privés exigent une **URL signée** ou un jeton `Bearer`. Les vidéos acceptent les requêtes HTTP `Range` pour la lecture à un instant donné. Voir la [référence des transformations d’images](../../reference/image-transformations/).
+Les médias publics sont servis avec des en-têtes de cache immuables et longue durée : un CDN placé devant SurgeMedia absorbe le trafic. Les médias privés exigent une **URL signée** ou un jeton `Bearer`. Les vidéos acceptent les requêtes HTTP `Range` pour la lecture à un instant donné. Voir la [référence des transformations d’images](../../reference/image-transformations/).
 
 ## Les identifiants en un coup d’œil
 
@@ -78,7 +78,7 @@ Détails et bonnes pratiques : [Sécurité et contrôle d’accès](../security
 
 ## Exemples concrets
 
-Les exemples ci-dessous utilisent `https://media.example.com` comme instance surgeMedia et `$PROJECT` comme identifiant de projet.
+Les exemples ci-dessous utilisent `https://media.example.com` comme instance SurgeMedia et `$PROJECT` comme identifiant de projet.
 
 ### 1. Des fiches produit rapides partout
 
@@ -103,7 +103,7 @@ const srcset = [400, 800, 1200].map((w) => `${src(items[0], `w_${w}`, 'avif')} $
 
 ### 2. Des envois directs depuis le navigateur, sans relayer les fichiers
 
-Une place de marché permet aux vendeurs d’envoyer leurs photos produit. Votre back-end authentifie le vendeur, puis demande à surgeMedia un **jeton délégué** limité à ce vendeur et à cette tâche :
+Une place de marché permet aux vendeurs d’envoyer leurs photos produit. Votre back-end authentifie le vendeur, puis demande à SurgeMedia un **jeton délégué** limité à ce vendeur et à cette tâche :
 
 ```bash
 curl -X POST "https://media.example.com/api/v1/projects/$PROJECT/delegated-tokens" \
@@ -119,7 +119,7 @@ curl -X POST "https://media.example.com/api/v1/projects/$PROJECT/delegated-token
 # → 201 { "token": "sm_dt_…", "expiresAt": "…", "scopes": ["media:upload"] }
 ```
 
-Le navigateur envoie ensuite directement ses fichiers sur `POST /api/v1/projects/$PROJECT/media` avec ce jeton. Le type de fichier (détecté d’après le contenu, pas l’extension), la taille et le nombre sont vérifiés par surgeMedia ; le jeton expire seul et devient aussitôt invalide si la clé émettrice est révoquée.
+Le navigateur envoie ensuite directement ses fichiers sur `POST /api/v1/projects/$PROJECT/media` avec ce jeton. Le type de fichier (détecté d’après le contenu, pas l’extension), la taille et le nombre sont vérifiés par SurgeMedia ; le jeton expire seul et devient aussitôt invalide si la clé émettrice est révoquée.
 
 **Impact métier :** aucun trafic d’envoi sur vos serveurs applicatifs, aucun secret durable dans le navigateur, et chaque fichier rattaché au vendeur qui l’a envoyé.
 
@@ -144,17 +144,17 @@ Chaque environnement d’une application utilise le **même projet** avec ses pr
 
 ### 5. Des vidéos qui se lisent, tout simplement
 
-Envoyez un MP4 ou un MOV : surgeMedia place l’index en tête du fichier pour une lecture immédiate, retire les pistes de localisation GPS, extrait une image d’affiche et accepte des sous-titres WebVTT ou SRT. Avec FFmpeg activé, il produit aussi des rendus H.264 et AV1 — renvoyés dans le tableau `sources` du média, prêts pour un élément `<video>`.
+Envoyez un MP4 ou un MOV : SurgeMedia place l’index en tête du fichier pour une lecture immédiate, retire les pistes de localisation GPS, extrait une image d’affiche et accepte des sous-titres WebVTT ou SRT. Avec FFmpeg activé, il produit aussi des rendus H.264 et AV1 — renvoyés dans le tableau `sources` du média, prêts pour un élément `<video>`.
 
 ## Performances et montée en charge
 
 - **Généré une fois, servi pour toujours** : une transformation s’exécute à la première requête, puis le fichier est conservé et servi avec un cache immuable. Les demandes équivalentes partagent le même fichier.
-- **Travail borné** : le traitement des images passe par une file bornée ; sous pression, surgeMedia répond `503` avec `Retry-After` au lieu de s’effondrer.
+- **Travail borné** : le traitement des images passe par une file bornée ; sous pression, SurgeMedia répond `503` avec `Retry-After` au lieu de s’effondrer.
 - **Traitement vidéo horizontal** : les tâches FFmpeg sont placées dans une file persistante, traitée par un ou plusieurs processus de travail, hors du chemin des requêtes.
 - **La base de données de votre choix** : SQLite pour un serveur unique, PostgreSQL ou MySQL / MariaDB pour plusieurs instances derrière un répartiteur de charge.
 
 ## Et ensuite ?
 
-- [Installez surgeMedia](../getting-started/) en quelques minutes.
+- [Installez SurgeMedia](../getting-started/) en quelques minutes.
 - [Sécurisez votre intégration](../security/) avec le bon identifiant pour chaque contexte.
 - [Choisissez une offre](../../pricing/) — gratuite sous 500 000 USD de chiffre d’affaires annuel.

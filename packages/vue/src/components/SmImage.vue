@@ -1,6 +1,6 @@
 <script setup lang="ts">
 /**
- * Image responsive d'un média surgeMedia (`<img>`) : srcset en largeurs (descripteurs = taille réelle des
+ * Image responsive d'un média SurgeMedia (`<img>`) : srcset en largeurs (descripteurs = taille réelle des
  * fichiers produits) ou en densités pour une taille fixe, recadrage serveur centré sur le point d'intérêt,
  * politique du projet respectée (préréglages si les paramètres libres sont refusés), dimensions toujours
  * posées (aucun décalage au chargement), repli sur l'original puis état d'erreur. Rendu serveur déterministe.

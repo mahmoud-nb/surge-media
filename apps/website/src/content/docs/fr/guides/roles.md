@@ -1,9 +1,9 @@
 ---
 title: Rôles et responsabilités
-description: Rôles de plateforme (Administrateur, Gestionnaire, Développeur, Éditeur) et rôles de projet (Propriétaire, Développeur, Éditeur) — qui peut faire quoi dans surgeMedia.
+description: Rôles de plateforme (Administrateur, Gestionnaire, Développeur, Éditeur) et rôles de projet (Propriétaire, Développeur, Éditeur) — qui peut faire quoi dans SurgeMedia.
 ---
 
-surgeMedia distingue deux niveaux de rôles : un **rôle de plateforme** pour chaque utilisateur, et un **rôle de projet** pour chaque projet dont il est membre. Ensemble, ils donnent à chacun exactement les accès dont il a besoin — et rien de plus.
+SurgeMedia distingue deux niveaux de rôles : un **rôle de plateforme** pour chaque utilisateur, et un **rôle de projet** pour chaque projet dont il est membre. Ensemble, ils donnent à chacun exactement les accès dont il a besoin — et rien de plus.
 
 ## Rôles de plateforme
 

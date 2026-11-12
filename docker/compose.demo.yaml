@@ -1,4 +1,4 @@
-# surgeMedia en mode démo : instance publique remise à zéro à heures fixes (setup.md, § 7.11).
+# SurgeMedia en mode démo : instance publique remise à zéro à heures fixes (setup.md, § 7.11).
 # SQLite, stockage local, un seul conteneur. À chaque démarrage, l'image restaure l'instantané de référence
 # (docker/snapshot/demo.tar.gz, capturé par « surge-media demo snapshot ») ; à l'heure de la remise à zéro, le
 # serveur s'arrête de lui-même et Docker le relance (restart: unless-stopped).

@@ -7,7 +7,7 @@ export function listenErrorMessage(error: unknown, worker: boolean): string | un
   if (!failure || typeof failure !== 'object' || failure.syscall !== 'listen') return undefined
   const port = failure.port ?? '?'
   if (failure.code === 'EADDRINUSE') {
-    return `[surge-media] Port ${port} déjà utilisé (autre application, ou surgeMedia déjà lancé) : arrêt. `
+    return `[surge-media] Port ${port} déjà utilisé (autre application, ou SurgeMedia déjà lancé) : arrêt. `
       + `Libérez-le ou choisissez un autre port : variable PORT ; avec la CLI, --port${worker ? ' ou WORKER_PORT' : ''} ; `
       + 'avec Docker, changez le port publié (ex. -p 127.0.0.1:8080:3000, ou SURGE_MEDIA_PORT avec Compose).'
   }

@@ -1,6 +1,6 @@
 <script setup lang="ts">
 /**
- * Vidéo d'un média surgeMedia dans le lecteur natif du navigateur (commandes accessibles) : `<source>` dans
+ * Vidéo d'un média SurgeMedia dans le lecteur natif du navigateur (commandes accessibles) : `<source>` dans
  * l'ordre de préférence du serveur (AV1, H.264, original), affiche dimensionnée, sous-titres `<track>`,
  * aucune lecture automatique (sauf mode `ambient`, muet, avec un bouton pause : WCAG 2.2.2). Suit le
  * traitement d'une vidéo en préparation ; sans source lisible, affiche l'état et un lien vers l'original ;

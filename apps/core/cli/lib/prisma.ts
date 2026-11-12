@@ -10,7 +10,7 @@ export interface CommandResult {
 }
 
 /**
- * Exécute la CLI Prisma installée avec surgeMedia (indépendamment du gestionnaire
+ * Exécute la CLI Prisma installée avec SurgeMedia (indépendamment du gestionnaire
  * de paquets et du PATH). La sortie est capturée pour n'être affichée qu'en cas d'erreur.
  */
 export function runPrisma(

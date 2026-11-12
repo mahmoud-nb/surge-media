@@ -6,6 +6,6 @@
 #   vulnerabilities:
 #     - id: CVE-2026-12345
 #       paths: ['usr/lib/x86_64-linux-gnu/libexample.so.1']
-#       statement: Bibliothèque présente dans l'image mais jamais chargée par surgeMedia ni par ffmpeg (ajout 2026-11-06).
+#       statement: Bibliothèque présente dans l'image mais jamais chargée par SurgeMedia ni par ffmpeg (ajout 2026-11-06).
 #       expired_at: 2027-02-03
 vulnerabilities: []

@@ -1,9 +1,9 @@
 ---
 title: Architecture & APIs
-description: How surgeMedia works — a headless media back end with a REST API and URL-based delivery, running on your own infrastructure — and how real applications use it.
+description: How SurgeMedia works — a headless media back end with a REST API and URL-based delivery, running on your own infrastructure — and how real applications use it.
 ---
 
-surgeMedia separates **where your media lives** from **where your media is used**. It is a _headless_ media back end: it imposes no front end, no template and no CMS. Your websites, mobile apps, back-offices and partners consume media over HTTP — from one instance you host, under your own domain.
+SurgeMedia separates **where your media lives** from **where your media is used**. It is a _headless_ media back end: it imposes no front end, no template and no CMS. Your websites, mobile apps, back-offices and partners consume media over HTTP — from one instance you host, under your own domain.
 
 ## The big picture
 
@@ -14,7 +14,7 @@ surgeMedia separates **where your media lives** from **where your media is used*
         │ REST API v1 (Bearer token)           │ GET /m/… (cookieless, cacheable)
         ▼                                      ▼
   ┌────────────────────────────────────────────────────────────┐
-  │ surgeMedia — on your server, under your domain             │
+  │ SurgeMedia — on your server, under your domain             │
   │   /api/v1   projects, media, folders, tokens, signed URLs  │
   │   /m/…      delivery and on-the-fly transformations        │
   │   /admin    teams, roles, settings, audit log              │
@@ -63,7 +63,7 @@ Every media has stable, cookieless, CDN-friendly URLs:
 /m/<id>/v<version>/w_800,h_450,fit_cover/<name>.avif  a free transformation
 ```
 
-Public media are served with long-lived immutable cache headers, so a CDN in front of surgeMedia absorbs the traffic. Private media require a **signed URL** or a `Bearer` token. Videos support HTTP `Range` requests for seeking. See the [image transformations reference](../../reference/image-transformations/).
+Public media are served with long-lived immutable cache headers, so a CDN in front of SurgeMedia absorbs the traffic. Private media require a **signed URL** or a `Bearer` token. Videos support HTTP `Range` requests for seeking. See the [image transformations reference](../../reference/image-transformations/).
 
 ## Credentials at a glance
 
@@ -78,7 +78,7 @@ Details and best practices: [Security & access control](../security/).
 
 ## Real-world examples
 
-The examples below use `https://media.example.com` as the surgeMedia instance and `$PROJECT` as a project ID.
+The examples below use `https://media.example.com` as the SurgeMedia instance and `$PROJECT` as a project ID.
 
 ### 1. Product pages that load fast everywhere
 
@@ -103,7 +103,7 @@ const srcset = [400, 800, 1200].map((w) => `${src(items[0], `w_${w}`, 'avif')} $
 
 ### 2. Uploads straight from the browser, without proxying files
 
-A marketplace lets sellers upload product photos. Your back end authenticates the seller, then asks surgeMedia for a **delegated token** limited to that seller and that task:
+A marketplace lets sellers upload product photos. Your back end authenticates the seller, then asks SurgeMedia for a **delegated token** limited to that seller and that task:
 
 ```bash
 curl -X POST "https://media.example.com/api/v1/projects/$PROJECT/delegated-tokens" \
@@ -119,7 +119,7 @@ curl -X POST "https://media.example.com/api/v1/projects/$PROJECT/delegated-token
 # → 201 { "token": "sm_dt_…", "expiresAt": "…", "scopes": ["media:upload"] }
 ```
 
-The browser then uploads directly to `POST /api/v1/projects/$PROJECT/media` with that token. File type (detected from the content, not the extension), size and count are enforced by surgeMedia; the token expires on its own and dies immediately if the issuing key is revoked.
+The browser then uploads directly to `POST /api/v1/projects/$PROJECT/media` with that token. File type (detected from the content, not the extension), size and count are enforced by SurgeMedia; the token expires on its own and dies immediately if the issuing key is revoked.
 
 **Business impact:** no upload traffic through your application servers, no long-lived secret in the browser, and every file traceable to the seller who sent it.
 
@@ -144,17 +144,17 @@ Every environment of an application uses the **same project** with its own keys,
 
 ### 5. Video that just plays
 
-Upload an MP4 or a MOV: surgeMedia moves the index to the front for instant playback, removes GPS location tracks, extracts a poster image and accepts WebVTT or SRT subtitles. With FFmpeg enabled, it also produces H.264 and AV1 renditions — returned in the `sources` array of the media, ready for a `<video>` element.
+Upload an MP4 or a MOV: SurgeMedia moves the index to the front for instant playback, removes GPS location tracks, extracts a poster image and accepts WebVTT or SRT subtitles. With FFmpeg enabled, it also produces H.264 and AV1 renditions — returned in the `sources` array of the media, ready for a `<video>` element.
 
 ## Performance and scaling
 
 - **Generated once, served forever**: a transformation runs on the first request, then the file is stored and served with immutable caching. Equivalent requests share the same file.
-- **Bounded work**: image processing runs in a bounded queue; under pressure, surgeMedia answers `503` with `Retry-After` instead of collapsing.
+- **Bounded work**: image processing runs in a bounded queue; under pressure, SurgeMedia answers `503` with `Retry-After` instead of collapsing.
 - **Horizontal video processing**: FFmpeg jobs live in a persistent queue processed by one or more workers, out of the request path.
 - **Database of your choice**: SQLite for a single server, PostgreSQL or MySQL / MariaDB for several instances behind a load balancer.
 
 ## Next steps
 
-- [Install surgeMedia](../getting-started/) in a few minutes.
+- [Install SurgeMedia](../getting-started/) in a few minutes.
 - [Secure your integration](../security/) with the right credential for each context.
 - [Choose a plan](../../pricing/) — free under USD 500k annual revenue.

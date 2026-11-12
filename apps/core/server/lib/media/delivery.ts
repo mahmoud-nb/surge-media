@@ -74,7 +74,7 @@ async function authorizeCredential(event: H3Event, authorization: string, media:
   const match = /^Bearer\s+(\S+)\s*$/i.exec(authorization)
   const resolution = match ? await resolvePrincipal(match[1]!) : { ok: false as const, code: 'TOKEN_INVALID' as const }
   if (!resolution.ok) {
-    setResponseHeader(event, 'WWW-Authenticate', 'Bearer realm="surgeMedia", error="invalid_token"')
+    setResponseHeader(event, 'WWW-Authenticate', 'Bearer realm="SurgeMedia", error="invalid_token"')
     throw createError({ statusCode: 401, statusMessage: resolution.code, data: { code: resolution.code } })
   }
   const { principal } = resolution

@@ -1,5 +1,5 @@
 #!/bin/sh
-# surgeMedia — point d'entrée de l'image Docker (setup.md, § 4.4).
+# SurgeMedia — point d'entrée de l'image Docker (setup.md, § 4.4).
 #
 #   server   (défaut) applique les migrations en attente puis lance le serveur web
 #            (SURGE_MEDIA_MIGRATE=false : sans migration, par exemple pour une instance de plus) ;

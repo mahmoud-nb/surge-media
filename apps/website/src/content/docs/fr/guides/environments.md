@@ -3,11 +3,11 @@ title: Une source de vérité pour tous les environnements
 description: Utilisez la même médiathèque en développement, en préproduction et en production, avec des clés et des origines par environnement — et arrêtez de copier les fichiers d’un environnement à l’autre.
 ---
 
-La plupart des équipes finissent avec un bucket de médias par environnement : les éditeurs envoient en production, les développeurs copient les fichiers à la main vers la préproduction, et les environnements locaux affichent des images cassées. surgeMedia règle le problème à la racine : **chaque environnement lit les mêmes médias**, chacun avec ses propres identifiants.
+La plupart des équipes finissent avec un bucket de médias par environnement : les éditeurs envoient en production, les développeurs copient les fichiers à la main vers la préproduction, et les environnements locaux affichent des images cassées. SurgeMedia règle le problème à la racine : **chaque environnement lit les mêmes médias**, chacun avec ses propres identifiants.
 
 ## Avant et après
 
-| <span class="sr-only">Aspect</span> | Un bucket par environnement | surgeMedia |
+| <span class="sr-only">Aspect</span> | Un bucket par environnement | SurgeMedia |
 | --- | --- | --- |
 | Où vivent les médias | Copiés dans chaque environnement | Un projet, une médiathèque |
 | La préproduction montre les vrais contenus | Seulement après une synchronisation manuelle | Toujours — mêmes identifiants, mêmes URL |

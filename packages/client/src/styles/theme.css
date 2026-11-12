@@ -1,5 +1,5 @@
 /*
- * Thème facultatif des composants surgeMedia (`import '@surge-media/client/style.css'`, repris par chaque
+ * Thème facultatif des composants SurgeMedia (`import '@surge-media/client/style.css'`, repris par chaque
  * librairie : `@surge-media/vue/style.css`…) : jetons de couleur en clair et en sombre, contrastes WCAG 2.2
  * AA vérifiés par `pnpm a11y:contrast` (scripts/check-contrast.ts).
  * Tout est dans la couche `surge-media` : les styles du site l'emportent toujours. Pour adapter le thème,

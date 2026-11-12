@@ -1,6 +1,6 @@
 # @surge-media/client
 
-Framework-free TypeScript client for [surgeMedia](https://github.com/mahmoud-nb/surge-media), the self-hosted media
+Framework-free TypeScript client for [SurgeMedia](https://github.com/mahmoud-nb/surge-media), the self-hosted media
 platform: read the API v1 from a browser, Node.js or an edge runtime, build responsive image and video URLs, and
 upload files.
 
@@ -62,4 +62,4 @@ Changes: [CHANGELOG](https://github.com/mahmoud-nb/surge-media/blob/main/package
 
 ## License
 
-[MIT](./LICENSE). The surgeMedia server (`@surge-media/core`) is distributed under its own license (BUSL-1.1).
+[MIT](./LICENSE). The SurgeMedia server (`@surge-media/core`) is distributed under its own license (BUSL-1.1).

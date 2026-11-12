@@ -1,5 +1,5 @@
 ---
-question: "Comment essayer surgeMedia ?"
+question: "Comment essayer SurgeMedia ?"
 order: 6
 keywords: ["installer","essai","démarrage","docker","npm","gratuit","évaluation","démo"]
 related:

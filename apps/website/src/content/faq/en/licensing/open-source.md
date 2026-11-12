@@ -1,5 +1,5 @@
 ---
-question: "Is surgeMedia open source?"
+question: "Is SurgeMedia open source?"
 order: 1
 keywords: ["open source","license","bsl","business source license","apache","mit","source code"]
 related:

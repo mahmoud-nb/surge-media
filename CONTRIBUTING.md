@@ -1,6 +1,6 @@
-# Contributing to surgeMedia
+# Contributing to SurgeMedia
 
-Thank you for your interest in surgeMedia. Bug reports, ideas, documentation fixes and pull requests are all
+Thank you for your interest in SurgeMedia. Bug reports, ideas, documentation fixes and pull requests are all
 welcome.
 
 ## Reporting a problem or suggesting a feature
@@ -8,7 +8,7 @@ welcome.
 - **Security issue**: never in a public issue. Follow the [security policy](SECURITY.md) (private reporting
   through GitHub).
 - **Bug**: open an [issue](https://github.com/mahmoud-nb/surge-media/issues) with the version, how you installed
-  surgeMedia (npm package or Docker image), what you did, what you expected and what happened. Attach the report of
+  SurgeMedia (npm package or Docker image), what you did, what you expected and what happened. Attach the report of
   `npx surge-media diagnose` ([setup.md § 17.1](setup.md#171-diagnostic-report)): it contains no secret and no
   personal data, but read it before posting.
 - **Feature request**: open an issue describing the need first, before any code: a short discussion avoids work
@@ -67,7 +67,7 @@ Keep pull requests focused: one change per pull request is easier to review and 
 
 ## Contributor License Agreement
 
-Before your first pull request can be merged, you are asked to accept the surgeMedia **Contributor License
+Before your first pull request can be merged, you are asked to accept the SurgeMedia **Contributor License
 Agreement** (CLA). A bot comments on the pull request with a link to the agreement; accepting it takes one click
 with your GitHub account, once for all your future contributions.
 

@@ -1,6 +1,6 @@
 # @surge-media/core
 
-**surgeMedia** is a self-hosted, modular platform for managing, transforming and delivering media, on your own
+**SurgeMedia** is a self-hosted, modular platform for managing, transforming and delivering media, on your own
 infrastructure and under your own domain. This package is its core: the administration interface, the REST API for
 your applications, on-the-fly image transformations and video handling.
 
@@ -69,8 +69,8 @@ and require it at least for administrators in **Settings › Security**. `GET /a
 database, the storage and the image engine. To update: `npm install @surge-media/core@latest`,
 `npx surge-media db migrate`, then restart.
 
-To work on surgeMedia itself, clone the repository and see
-[Developing surgeMedia](https://github.com/mahmoud-nb/surge-media/blob/main/setup.md#18-developing-surgemedia) (pnpm 12, `pnpm dev`).
+To work on SurgeMedia itself, clone the repository and see
+[Developing SurgeMedia](https://github.com/mahmoud-nb/surge-media/blob/main/setup.md#18-developing-surgemedia) (pnpm 12, `pnpm dev`).
 
 ## Running with Docker
 
@@ -199,7 +199,7 @@ The OpenAPI 3.1 specification is served at `/api/v1/openapi.json`, and the inter
 ## Videos
 
 MP4, WebM and QuickTime files are delivered as uploaded; MP4 and MOV files are optimised for streaming and
-stripped of location and device data at upload time, without re-encoding. With `NUXT_VIDEO_PROCESSING` enabled, surgeMedia
+stripped of location and device data at upload time, without re-encoding. With `NUXT_VIDEO_PROCESSING` enabled, SurgeMedia
 also uses the system's ffmpeg to produce H.264 (and optionally AV1) renditions, extract posters and accept more
 formats (MKV, AVI, 3GP, MPEG-TS, OGV, WMV). Jobs are queued in the database and never run inside a request; the
 `external` mode runs them in separate worker processes (`surge-media worker`).
@@ -237,14 +237,14 @@ Versions follow [Semantic Versioning](https://semver.org). See the
 
 ## License
 
-surgeMedia is source-available under the **Business Source License 1.1** (SPDX `BUSL-1.1`). It is not an
+SurgeMedia is source-available under the **Business Source License 1.1** (SPDX `BUSL-1.1`). It is not an
 open source license. In short:
 
 - development, testing and evaluation are **free for everyone**;
 - production use is **free**, except in three cases that require a commercial license:
   - the organization using it, or on whose behalf it is used, together with its affiliates, had a gross revenue
     above **USD 500,000** in its last completed fiscal year;
-  - surgeMedia is offered to third parties as a **competing hosted service** (media storage as a service,
+  - SurgeMedia is offered to third parties as a **competing hosted service** (media storage as a service,
     headless media CMS, media transformation or delivery service…);
   - a feature that requires a **license key** is used in production without a valid key (no feature requires
     one yet);

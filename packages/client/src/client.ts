@@ -8,7 +8,7 @@ import type { UploadProgress } from './upload/request'
 
 export interface SurgeClientOptions {
   /**
-   * Adresse de l'installation surgeMedia (`NUXT_SITE_URL`), par exemple `https://media.example.com` ;
+   * Adresse de l'installation SurgeMedia (`NUXT_SITE_URL`), par exemple `https://media.example.com` ;
    * `…/api/v1` est accepté aussi.
    */
   baseUrl: string
@@ -91,7 +91,7 @@ const MAX_IDS = 100
 export { normalizeBaseUrl }
 
 /**
- * Client de l'API v1 de surgeMedia pour un projet : lectures avec cache ETag, identifiant (clé publique
+ * Client de l'API v1 de SurgeMedia pour un projet : lectures avec cache ETag, identifiant (clé publique
  * ou jetons délégués renouvelés), erreurs `SurgeApiError` traduisibles.
  */
 export function createSurgeClient(options: SurgeClientOptions): SurgeClient {

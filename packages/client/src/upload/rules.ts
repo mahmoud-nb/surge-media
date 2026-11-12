@@ -103,7 +103,7 @@ export function checkFile(file: FileLike, rules: UploadRules, kinds?: readonly M
   if (types.length === 0) return unsupported(types)
   const matched = matchFileType(file, rules, kinds)
   if (matched) return file.size > matched.maxSize ? tooLarge(matched.maxSize) : null
-  // Type annoncé précis, ou extension d'un type que surgeMedia connaît mais que ces règles refusent.
+  // Type annoncé précis, ou extension d'un type que SurgeMedia connaît mais que ces règles refusent.
   const extension = fileExtension(file.name ?? '')
   const knownExtension = Object.keys(UPLOAD_FILE_TYPES).some(type => extensionsOf(type).includes(extension))
   if (!genericType(file.type) || knownExtension) return unsupported(types)

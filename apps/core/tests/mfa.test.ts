@@ -102,12 +102,12 @@ describe('base32 et URI otpauth', () => {
   })
 
   it('construit l’URI avec émetteur, compte et réglages explicites', () => {
-    const uri = otpauthUri({ secret: Buffer.from('foobar'), account: 'ana@example.com', issuer: 'surgeMedia (media.example.com)' })
-    expect(uri).toBe('otpauth://totp/surgeMedia%20(media.example.com):ana%40example.com?secret=MZXW6YTBOI&issuer=surgeMedia%20%28media.example.com%29&algorithm=SHA1&digits=6&period=30')
+    const uri = otpauthUri({ secret: Buffer.from('foobar'), account: 'ana@example.com', issuer: 'SurgeMedia (media.example.com)' })
+    expect(uri).toBe('otpauth://totp/SurgeMedia%20(media.example.com):ana%40example.com?secret=MZXW6YTBOI&issuer=SurgeMedia%20%28media.example.com%29&algorithm=SHA1&digits=6&period=30')
   })
 
   it('produit un QR code SVG noir sur blanc', () => {
-    const svg = otpauthQrSvg('otpauth://totp/surgeMedia:ana%40example.com?secret=MZXW6YTBOI')
+    const svg = otpauthQrSvg('otpauth://totp/SurgeMedia:ana%40example.com?secret=MZXW6YTBOI')
     expect(svg.startsWith('<svg')).toBe(true)
     expect(svg).toContain('#000000')
     expect(svg).toContain('#ffffff')
@@ -195,11 +195,11 @@ describe('e-mail de notification', () => {
     const { mfaNoticeMail } = await import('../server/lib/mail/mfa-notice')
     const date = new Date('2026-10-30T10:00:00Z')
     const fr = mfaNoticeMail({ locale: 'fr', kind: 'recoveryUsed', to: 'ana@example.com', date, site: 'https://media.example.com', remaining: 7 })
-    expect(fr.subject).toBe('Code de secours utilisé sur surgeMedia')
+    expect(fr.subject).toBe('Code de secours utilisé sur SurgeMedia')
     expect(fr.text).toContain('Il vous en reste 7.')
     expect(fr.text).toContain('prévenez sans attendre votre administrateur')
     const en = mfaNoticeMail({ locale: 'en', kind: 'reset', to: 'ana@example.com', date, site: 'https://media.example.com', by: 'Bob <script>' })
-    expect(en.subject).toBe('Two-factor authentication reset on surgeMedia')
+    expect(en.subject).toBe('Two-factor authentication reset on SurgeMedia')
     expect(en.text).toContain('reset by Bob <script>')
     expect(en.html).toContain('Bob &lt;script&gt;')
     expect(en.html).not.toContain('<script>')

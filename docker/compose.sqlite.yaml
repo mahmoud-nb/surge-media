@@ -1,4 +1,4 @@
-# surgeMedia avec SQLite : un seul conteneur ; base, médias et secrets générés dans le volume « data ».
+# SurgeMedia avec SQLite : un seul conteneur ; base, médias et secrets générés dans le volume « data ».
 # Un serveur, trafic modéré (setup.md, § 13). Guide : setup.md, § 4.3.
 #
 #   docker compose -f docker/compose.sqlite.yaml up -d

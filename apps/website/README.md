@@ -1,6 +1,6 @@
-# surgeMedia — site public et documentation
+# SurgeMedia — site public et documentation
 
-Vitrine commerciale et documentation de surgeMedia, construites avec [Astro Starlight](https://starlight.astro.build) :
+Vitrine commerciale et documentation de SurgeMedia, construites avec [Astro Starlight](https://starlight.astro.build) :
 anglais par défaut, français sous `/fr/`, thèmes clair et sombre, recherche intégrée. Publiées sur GitHub Pages à
 chaque merge sur `main` (`.github/workflows/website.yml`).
 

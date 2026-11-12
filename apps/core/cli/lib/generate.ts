@@ -32,7 +32,7 @@ export function setGeneratorOutput(schema: string, output: string): string {
   return schema.replace(GENERATOR_OUTPUT, (_, before: string, _current: string, after: string) => `${before}${output}${after}`)
 }
 
-const TYPES_ENTRY = `// Généré par surgeMedia (cli/lib/generate.ts) : ne pas modifier.
+const TYPES_ENTRY = `// Généré par SurgeMedia (cli/lib/generate.ts) : ne pas modifier.
 // Types du client Prisma, communs aux trois fournisseurs. Le client exécuté est celui de
 // DATABASE_PROVIDER, chargé au démarrage par server/utils/prisma.ts.
 export type * from './${TYPES_PROVIDER}/client'

@@ -1,6 +1,6 @@
 ---
 title: Créer une intégration pour un framework
-description: Utilisez @surge-media/client pour écrire vos propres composants surgeMedia dans un framework sans paquet officiel — Angular, SolidJS, Qwik, Lit… — avec les mêmes garanties que les paquets officiels.
+description: Utilisez @surge-media/client pour écrire vos propres composants SurgeMedia dans un framework sans paquet officiel — Angular, SolidJS, Qwik, Lit… — avec les mêmes garanties que les paquets officiels.
 ---
 
 Les paquets officiels couvrent Vue, et React et Svelte sont prévus (voir [SDK et composants](../sdks/)). Pour un autre framework — Angular, SolidJS, Qwik, Lit, Ember — ou pour votre propre design system, créez une petite librairie locale au-dessus de **`@surge-media/client`**. Le client porte toute la logique : appels à l’API, identifiants, URL, `srcset`, politique de transformation, sources vidéo, et celle des composants — textes en français et en anglais, icônes, attributs et styles en ligne, repli d’une image, états d’une vidéo —, ainsi que leur thème CSS. Votre librairie se contente de la relier aux composants du framework. Les paquets officiels sont construits exactement ainsi.
@@ -425,7 +425,7 @@ Une vidéo s’affiche dans le lecteur natif du navigateur, avec les données du
 
 - Une `<source>` par élément de `media.sources`, **dans l’ordre du serveur** (`url`, `type`) : le navigateur lit la première qu’il sait lire.
 - `poster` tiré de `videoPoster(media, { posterWidth }, settings)` : un dérivé de 1 280 px au plus, ou l’affiche telle quelle si seuls les préréglages sont permis. `width` et `height` tirés de `videoSize(media)`, pour réserver la place ; `aria-label` de `videoLabel(media, label)` (le titre, sinon le texte alternatif) ; styles en ligne `VIDEO_FRAME_STYLE` et `VIDEO_PLAYER_STYLE`.
-- Une `<track>` par élément de `media.textTracks` (`kind`, `language`, `label`, `url`, `default`), et alors `crossorigin="anonymous"` : les pistes sont servies par le domaine de surgeMedia. Le texte de repli est `t('video.unsupported')`.
+- Une `<track>` par élément de `media.textTracks` (`kind`, `language`, `label`, `url`, `default`), et alors `crossorigin="anonymous"` : les pistes sont servies par le domaine de SurgeMedia. Le texte de repli est `t('video.unsupported')`.
 - Pas encore de `sources` (format converti en préparation) : à la place du lecteur, le message `t(videoMessageKey(media))`, l’état du traitement si `processingVisible(media.processing)` et un lien `t('video.download')` vers `media.url`, dans un cadre `videoEmptyStyle(width, height)`. Appelez `followProcessing()` pour recevoir le média à jour quand il sera prêt.
 - Erreur de la dernière `<source>` : `heldVideoDelay(url)` (une requête `HEAD`) indique si le serveur retient la vidéo (503 `PROCESSING_PENDING`) et dans combien de millisecondes réessayer avec `video.load()` — au plus `VIDEO_RETRY_LIMIT` fois, en annonçant `t('video.held')` (`role="status"`). `null` : la vidéo est illisible, affichez `t(videoMessageKey(media, true))`.
 - Vidéo d’ambiance (muette, en boucle) : lancée seule seulement si `prefersReducedMotion()` est faux, avec un bouton pause visible (`t('video.pause')`, icône `pause`). `whenNearViewport()` retarde le chargement d’une vidéo loin de l’écran.

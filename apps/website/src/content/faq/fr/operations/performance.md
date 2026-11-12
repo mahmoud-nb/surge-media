@@ -3,7 +3,7 @@ question: "Quelles performances attendre ?"
 order: 2
 keywords: ["performance","débit","latence","benchmark","charge","requêtes par seconde"]
 ---
-Sur un seul processus Node.js, mesuré sur un ordinateur portable à 8 cœurs, surgeMedia sert environ :
+Sur un seul processus Node.js, mesuré sur un ordinateur portable à 8 cœurs, SurgeMedia sert environ :
 
 - 15 000 revalidations par seconde (réponses `304`) ;
 - plus de 6 000 images transformées, déjà générées, par seconde ;
