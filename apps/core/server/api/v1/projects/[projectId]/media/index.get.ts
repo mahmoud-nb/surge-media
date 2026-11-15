@@ -4,7 +4,7 @@ import { getGlobalTagsRevision, getRevision } from '../../../../../lib/cache/rev
 import { defineApiHandler, parseApiQuery, requireApiProject } from '../../../../../lib/api/context'
 import { apiProblem } from '../../../../../lib/api/problem'
 import { listApiMedia } from '../../../../../lib/api/queries'
-import { activeProcessingParts, apiLinkExpiry, etagMatches, toApiMedia, weakEtag } from '../../../../../lib/api/serializers'
+import { activeProcessingParts, apiLinkExpiry, etagMatches, seesSourceRef, toApiMedia, weakEtag } from '../../../../../lib/api/serializers'
 import { mediaBaseUrl } from '../../../../../lib/media/urls'
 import { resolveTagSlugs, tagFilterWhere } from '../../../../../lib/tags/service'
 
@@ -13,7 +13,7 @@ defineRouteMeta({
     'operationId': 'listMedia',
     'tags': ['media'],
     'summary': 'Liste et recherche des médias',
-    'description': 'Médias actifs du projet (hors corbeille), triés et paginés par curseur ; filtres combinables (étiquettes : `tags`, au moins une par défaut, toutes avec `tagMatch=all`). Clé publique : médias publics seulement, et liste ou recherche seulement si le projet l\'autorise (sinon `ids` uniquement). URL des médias privés signées pour environ une heure. `ETag` → 304 sans exécuter la requête ; une page qui contient une vidéo en attente ou en cours de traitement est relue à chaque revalidation (son `ETag` suit l\'avancement de `processing`).',
+    'description': 'Médias actifs du projet (hors corbeille), triés et paginés par curseur ; filtres combinables (étiquettes : `tags`, au moins une par défaut, toutes avec `tagMatch=all`). `sourceRef` et `checksum` (clé secrète ou jeton personnel) retrouvent un média importé par sa référence d\'origine ou par l\'empreinte de son fichier. Clé publique : médias publics seulement, et liste ou recherche seulement si le projet l\'autorise (sinon `ids` uniquement). URL des médias privés signées pour environ une heure. `ETag` → 304 sans exécuter la requête ; une page qui contient une vidéo en attente ou en cours de traitement est relue à chaque revalidation (son `ETag` suit l\'avancement de `processing`).',
     'x-scopes': ['media:read'],
     'x-credentials': ['publishable', 'secret', 'personal', 'delegated'],
     'x-query': 'MediaListQuery',
@@ -21,6 +21,7 @@ defineRouteMeta({
       'INVALID_REQUEST',
       'INVALID_CURSOR',
       'LISTING_DISABLED',
+      'CREDENTIAL_NOT_ALLOWED',
       'FOLDER_NOT_FOUND',
       'TAG_NOT_FOUND',
       'PROJECT_NOT_FOUND',
@@ -34,15 +35,17 @@ defineRouteMeta({
     'x-i18n': {
       en: {
         summary: 'List and search media',
-        description: 'Active media of the project (outside the trash), sorted and paginated with a cursor; filters can be combined (tags: `tags`, at least one by default, all of them with `tagMatch=all`). Publishable key: public media only, and listing or search only when the project allows it (otherwise `ids` only). URLs of private media are signed for about an hour. `ETag` → 304 without running the query; a page that contains a video waiting for or undergoing processing is read again on each revalidation (its `ETag` follows the progress of `processing`).',
+        description: 'Active media of the project (outside the trash), sorted and paginated with a cursor; filters can be combined (tags: `tags`, at least one by default, all of them with `tagMatch=all`). `sourceRef` and `checksum` (secret key or personal token) find an imported media item by its source reference or by the checksum of its file. Publishable key: public media only, and listing or search only when the project allows it (otherwise `ids` only). URLs of private media are signed for about an hour. `ETag` → 304 without running the query; a page that contains a video waiting for or undergoing processing is read again on each revalidation (its `ETag` follows the progress of `processing`).',
       },
     },
   },
 })
 
 /**
- * GET /api/v1/projects/:projectId/media — ?q&kind&visibility&folder&recursive&tags&tagMatch&untagged&ids&sort&limit&cursor&withTotal
+ * GET /api/v1/projects/:projectId/media — ?q&kind&visibility&folder&recursive&tags&tagMatch&untagged&ids&sourceRef&checksum&sort&limit&cursor&withTotal
  * (portée media:read) → { items: Media[], nextCursor, total? }.
+ * `sourceRef`, `checksum` (import d'un stock existant, .claude/architecture-import.md) : clé secrète ou jeton
+ * personnel seulement (403 CREDENTIAL_NOT_ALLOWED), comme la lecture du champ `sourceRef`.
  * Clé publique : médias publics seulement, et liste/recherche seulement si le projet a activé la
  * « liste publique » (sinon `ids` uniquement : 403 LISTING_DISABLED).
  * `folder` : identifiant ou `root` (+ `recursive` : sous-dossiers compris) ; 404 FOLDER_NOT_FOUND.
@@ -60,10 +63,15 @@ export default defineApiHandler(async (event, principal) => {
     throw apiProblem('LISTING_DISABLED', 'This project does not allow listing with a publishable key: request media by ids, or enable public listing.')
   }
 
+  const server = seesSourceRef(principal)
+  if ((query.sourceRef || query.checksum) && !server) {
+    throw apiProblem('CREDENTIAL_NOT_ALLOWED', 'The sourceRef and checksum filters require a secret key or a personal token.')
+  }
+
   const expires = apiLinkExpiry()
   const revision = await getRevision({ type: 'project', id: project.id })
   // Révision des étiquettes globales : renommer une globale change `tags` des médias sans toucher l'espace.
-  const parts = ['media-list', project.id, revision, await getGlobalTagsRevision(), query, publicOnly ? 'public' : 'full', expires]
+  const parts = ['media-list', project.id, revision, await getGlobalTagsRevision(), query, publicOnly ? 'public' : server ? 'server' : 'full', expires]
   const etag = weakEtag(parts)
   const ifNoneMatch = getRequestHeader(event, 'if-none-match')
   if (etagMatches(ifNoneMatch, etag)) {
@@ -85,7 +93,7 @@ export default defineApiHandler(async (event, principal) => {
   }
   const base = mediaBaseUrl(event)
   return {
-    items: page.items.map(media => toApiMedia(media, base, expires)),
+    items: page.items.map(media => toApiMedia(media, base, expires, principal)),
     nextCursor: page.nextCursor,
     ...(page.total === undefined ? {} : { total: page.total }),
   }

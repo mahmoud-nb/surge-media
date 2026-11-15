@@ -44,6 +44,7 @@ export const API_ERRORS = {
   TAG_NAME_TAKEN: { status: 409, title: 'Tag name already used' },
   TAG_SLUG_TAKEN: { status: 409, title: 'Tag slug already used' },
   TAG_LIMIT_REACHED: { status: 409, title: 'Tag limit reached' },
+  SOURCE_REF_EXISTS: { status: 409, title: 'Source reference already imported' },
   FILE_TOO_LARGE: { status: 413, title: 'File too large' },
   BODY_TOO_LARGE: { status: 413, title: 'Request body too large' },
   UNSUPPORTED_TYPE: { status: 415, title: 'Unsupported media type' },

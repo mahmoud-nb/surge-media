@@ -56,5 +56,5 @@ export default defineApiHandler(async (event, principal) => {
   const replaced = await withApiUpload(event, principal, (upload, options) => replaceMediaFile(media, upload, options), media.kind)
   const expires = apiLinkExpiry()
   setResponseHeader(event, 'ETag', mediaEtag(replaced, expires))
-  return toApiMedia(replaced, mediaBaseUrl(event), expires)
+  return toApiMedia(replaced, mediaBaseUrl(event), expires, principal)
 })

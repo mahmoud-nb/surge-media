@@ -65,6 +65,9 @@ export async function listApiMedia(projectId: string, query: ApiMediaListQuery, 
     base.visibility = query.visibility.toUpperCase() as Media['visibility']
   }
   if (query.kind) base.kind = query.kind.toUpperCase() as Media['kind']
+  // Import (droit vérifié par la route : identifiant de serveur seulement) : référence d'origine, empreinte.
+  if (query.sourceRef) base.sourceRef = query.sourceRef
+  if (query.checksum) base.checksum = query.checksum
   // Dossier (et descendants si récursif) ; 404 FOLDER_NOT_FOUND pour un dossier d'un autre espace.
   if (query.folder) Object.assign(base, await folderWhere({ type: 'project', id: projectId }, query.folder === 'root' ? null : query.folder, Boolean(query.recursive)))
 
@@ -73,7 +76,7 @@ export async function listApiMedia(projectId: string, query: ApiMediaListQuery, 
   // Réhydratation d'une sélection : ces médias, dans l'ordre demandé, sans pagination.
   if (query.ids) {
     const found = await prisma.media.findMany({ where: { ...base, id: { in: query.ids } }, include: API_MEDIA_INCLUDE })
-    const byId = new Map(found.map(media => [media.id, media]))
+    const byId = new Map(found.filter(exactSourceRef(query)).map(media => [media.id, media]))
     const items = query.ids.map(id => byId.get(id)).filter((media): media is ApiMediaRecord => Boolean(media))
     return { items, nextCursor: null, ...(query.withTotal ? { total: items.length } : {}) }
   }
@@ -107,7 +110,16 @@ export async function listApiMedia(projectId: string, query: ApiMediaListQuery, 
   const nextCursor = rows.length > query.limit && last
     ? encodeCursor({ sort: query.sort, value: cursorValue(last, query.sort), id: last.id })
     : null
-  return { items, nextCursor, ...(total === undefined ? {} : { total }) }
+  return { items: items.filter(exactSourceRef(query)), nextCursor, ...(total === undefined ? {} : { total }) }
+}
+
+/**
+ * Référence d'origine comparée à l'identique, comme à l'envoi (`findMediaBySourceRef`) : la collation
+ * par défaut de MySQL ignore la casse, les accents et les espaces de fin, pas celles de SQLite et de
+ * PostgreSQL. Les variantes écartées ici restent comptées par `total` sous MySQL (cas marginal).
+ */
+function exactSourceRef(query: Pick<ApiMediaListQuery, 'sourceRef'>): (media: Pick<Media, 'sourceRef'>) => boolean {
+  return media => !query.sourceRef || media.sourceRef === query.sourceRef
 }
 
 /** Média actif d'un projet (et public pour une clé publique), ou null. */

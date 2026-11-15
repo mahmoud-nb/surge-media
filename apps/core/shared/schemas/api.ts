@@ -18,7 +18,7 @@ import {
 } from '../utils/api'
 import { ORIGIN_MAX_LENGTH } from '../utils/credentials'
 import { FOLDER_NAME_MAX_LENGTH } from '../utils/folders'
-import { acceptedMimeTypes, CONVERTED_MIME_TYPES, ENABLED_MEDIA_KINDS, MEDIA_VISIBILITIES, SIGNED_URL_MAX_TTL } from '../utils/media'
+import { acceptedMimeTypes, CHECKSUM_PATTERN, CONVERTED_MIME_TYPES, ENABLED_MEDIA_KINDS, MEDIA_VISIBILITIES, normalizeSourceRef, SIGNED_URL_MAX_TTL, SOURCE_REF_MAX_LENGTH } from '../utils/media'
 import { isWildcardOrigin, normalizeOrigin } from '../utils/origins'
 import { DELEGATED_TOKEN_SCOPES, TOKEN_SCOPES } from '../utils/permissions'
 import { MEDIA_TAG_LIMIT, TAG_BULK_MAX, TAG_COLORS, TAG_DEFAULT_MATCH, TAG_FILTER_MAX, TAG_LEVELS, TAG_MATCHES, TAG_NAME_MAX_LENGTH, TAG_SLUG_MAX_LENGTH, TAG_SLUG_PATTERN } from '../utils/tags'
@@ -61,6 +61,18 @@ function slugListParameter(max: number) {
 }
 export const API_VISIBILITIES = lower(MEDIA_VISIBILITIES)
 
+/**
+ * Référence d'origine d'un média importé (.claude/architecture-import.md, IM6) : texte libre choisi par
+ * l'application (ancien chemin, ancienne URL, identifiant du système d'origine), espaces de bord retirés,
+ * forme NFC, comparé à l'identique (casse et accents compris).
+ */
+const apiSourceRefSchema = z.string().transform((value, ctx) => {
+  const ref = normalizeSourceRef(value)
+  if (ref !== null) return ref
+  ctx.addIssue({ code: 'custom', message: `A source reference holds 1 to ${SOURCE_REF_MAX_LENGTH} characters, without control characters.` })
+  return z.NEVER
+})
+
 // ─── Requêtes ────────────────────────────────────────────────────────────────
 
 export const apiMediaListQuerySchema = z.object({
@@ -92,6 +104,14 @@ export const apiMediaListQuerySchema = z.object({
   )),
   untagged: z.enum(['true', 'false']).transform(value => value === 'true').optional()
     .meta(doc('`true` : seulement les médias sans étiquette. Incompatible avec `tags`.', '`true`: only media items without tags. Incompatible with `tags`.')),
+  sourceRef: apiSourceRefSchema.optional().meta(doc(
+    'Référence d\'origine exacte (casse et accents compris) d\'un média importé : retrouve le média déjà créé pour un ancien chemin ou une ancienne URL. Clé secrète ou jeton personnel seulement (`CREDENTIAL_NOT_ALLOWED` sinon).',
+    'Exact source reference (case and accents included) of an imported media item: finds the media item already created for a former path or URL. Secret key or personal token only (`CREDENTIAL_NOT_ALLOWED` otherwise).',
+  )),
+  checksum: z.string().trim().toLowerCase().regex(CHECKSUM_PATTERN, 'A checksum is the SHA-256 of the file: 64 hexadecimal characters.').optional().meta(doc(
+    'Empreinte SHA-256 (64 caractères hexadécimaux) du fichier original : retrouve les médias du projet qui ont exactement ce contenu. Une vidéo réécrite par le traitement du serveur n\'a plus l\'empreinte du fichier envoyé. Clé secrète ou jeton personnel seulement (`CREDENTIAL_NOT_ALLOWED` sinon).',
+    'SHA-256 checksum (64 hexadecimal characters) of the original file: finds the media items of the project with exactly these contents. A video rewritten by server processing no longer has the checksum of the uploaded file. Secret key or personal token only (`CREDENTIAL_NOT_ALLOWED` otherwise).',
+  )),
 }).superRefine((query, ctx) => {
   if (query.tags && query.untagged) ctx.addIssue({ code: 'custom', path: ['untagged'], message: 'Use either tags or untagged, not both.' })
 })
@@ -198,6 +218,10 @@ export const apiMediaUploadFieldsSchema = z.strictObject({
   tags: slugListParameter(MEDIA_TAG_LIMIT).optional().meta(doc(
     `Étiquettes du nouveau média : slugs séparés par des virgules (${MEDIA_TAG_LIMIT} au plus), globales ou du projet.`,
     `Tags of the new media item: comma-separated slugs (${MEDIA_TAG_LIMIT} at most), global or of the project.`,
+  )),
+  sourceRef: apiSourceRefSchema.optional().meta(doc(
+    `Référence d'origine d'un média importé (${SOURCE_REF_MAX_LENGTH} caractères au plus) : ancien chemin, ancienne URL ou identifiant du système d'origine. Un envoi dont la référence existe déjà parmi les médias actifs du projet est refusé (\`SOURCE_REF_EXISTS\`, avec \`mediaId\`) : relancer un import ne crée aucun doublon. La vidéo d'un tel envoi est traitée après les envois courants. Clé secrète ou jeton personnel seulement (\`CREDENTIAL_NOT_ALLOWED\` sinon).`,
+    `Source reference of an imported media item (${SOURCE_REF_MAX_LENGTH} characters at most): former path, former URL or id in the system of origin. An upload whose reference already exists among the active media of the project is refused (\`SOURCE_REF_EXISTS\`, with \`mediaId\`): running an import again creates no duplicate. The video of such an upload is processed after regular uploads. Secret key or personal token only (\`CREDENTIAL_NOT_ALLOWED\` otherwise).`,
   )),
 })
 
@@ -519,6 +543,10 @@ export const apiMediaSchema = z.object({
     'Focal point (fractions 0 to 1 of the width and height, from the top left corner; poster image for a video): center of `fit_cover` crops; `null` = center of the image.',
   )),
   urlExpiresAt: isoDate.nullable().meta(doc('Échéance des URL signées ; null pour un média public (URL permanentes).', 'Expiry of the signed URLs; null for a public media item (permanent URLs).')),
+  sourceRef: z.string().nullable().meta(doc(
+    'Référence d\'origine d\'un média importé (champ `sourceRef` de l\'envoi) ; null pour un autre média, et toujours null pour une clé publique ou un jeton délégué.',
+    'Source reference of an imported media item (`sourceRef` field of the upload); null for any other media item, and always null for a publishable key or a delegated token.',
+  )),
   createdAt: isoDate,
   updatedAt: isoDate,
 })
@@ -697,4 +725,5 @@ export const apiProblemSchema = z.object({
   accepted: z.array(z.string()).optional().meta(doc('Types MIME acceptés, reconnus d\'après le contenu (UNSUPPORTED_TYPE).', 'Accepted MIME types, detected from the contents (UNSUPPORTED_TYPE).')),
   timeout: z.number().int().optional().meta(doc('Délai sans donnée reçue, en secondes, après lequel l\'envoi a été arrêté (UPLOAD_TIMEOUT).', 'Time without data received, in seconds, after which the upload was stopped (UPLOAD_TIMEOUT).')),
   tags: z.array(z.string()).optional().meta(doc('Étiquettes inconnues de ce projet (TAG_NOT_FOUND).', 'Tags unknown in this project (TAG_NOT_FOUND).')),
+  mediaId: z.string().optional().meta(doc('Média du projet qui porte déjà cette référence d\'origine (SOURCE_REF_EXISTS).', 'Media item of the project that already carries this source reference (SOURCE_REF_EXISTS).')),
 })

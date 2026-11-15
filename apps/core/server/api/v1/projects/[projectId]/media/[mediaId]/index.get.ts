@@ -43,5 +43,5 @@ export default defineApiHandler(async (event, principal) => {
     setResponseStatus(event, 304)
     return null
   }
-  return toApiMedia(media, mediaBaseUrl(event), expires)
+  return toApiMedia(media, mediaBaseUrl(event), expires, principal)
 })
