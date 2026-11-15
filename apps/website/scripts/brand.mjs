@@ -127,8 +127,8 @@ const ICON_GAP = CAP * 0.42;
 /** The pictogram in a 32 × 32 box. Monochrome: wave and dot are cut out of the square. */
 function iconSvg(t) {
   if (t.iconFg)
-    return `<rect width="32" height="32" rx="9" fill="${t.iconBg}"/><path d="${WAVE}" fill="none" stroke="${t.iconFg}" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/><circle cx="25" cy="10" r="2.2" fill="${t.iconFg}"/>`;
-  return `<mask id="sm-cut"><rect width="32" height="32" fill="#fff"/><path d="${WAVE}" fill="none" stroke="#000" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/><circle cx="25" cy="10" r="2.2" fill="#000"/></mask><rect width="32" height="32" rx="9" fill="${t.iconBg}" mask="url(#sm-cut)"/>`;
+    return `<rect width="32" height="32" rx="9" fill="${t.iconBg}"/><path d="${WAVE}" fill="none" stroke="${t.iconFg}" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/><circle cx="27" cy="10" r="2.4" fill="${t.iconFg}"/>`;
+  return `<mask id="sm-cut"><rect width="32" height="32" fill="#fff"/><path d="${WAVE}" fill="none" stroke="#000" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/><circle cx="27" cy="10" r="2.4" fill="#000"/></mask><rect width="32" height="32" rx="9" fill="${t.iconBg}" mask="url(#sm-cut)"/>`;
 }
 
 function wordSvg(w, t) {
