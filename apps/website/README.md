@@ -22,7 +22,7 @@ Dans `apps/website` :
 | `pnpm check:links` | liens internes et ancres du build (après `pnpm build`) |
 | `pnpm preview` | sert le build localement |
 | `pnpm og-image` | régénère `public/og.png` depuis `scripts/og-image.svg` |
-| `pnpm brand` | redessine le logo depuis `scripts/brand.mjs` : `public/brand/` (logo, logotype, pictogramme ; clair, sombre, monochrome) et `src/assets/logo-*.svg` (en-tête). Recopier ensuite les tracés dans `scripts/og-image.svg` (puis `pnpm og-image`) et dans `apps/core/app/components/app/Logo.vue` |
+| `pnpm brand` | régénère le logo depuis les dessins de `scripts/brand-sources/` (logo en ligne et carré, blancs sur fond noir) : `public/brand/` (logo complet, logos en ligne et carré, pictogramme ; clair, sombre, monochrome) et `src/assets/logo-*.svg` (en-tête). Recopier ensuite les tracés dans `scripts/og-image.svg` (puis `pnpm og-image`) et dans `apps/core/app/components/app/Logo.vue` |
 
 ## Ajouter ou modifier une page
 
