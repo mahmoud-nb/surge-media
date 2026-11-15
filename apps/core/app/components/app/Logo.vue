@@ -30,7 +30,7 @@ const { t } = useI18n()
         stroke-linecap="round"
         stroke-linejoin="round"
       />
-      <circle cx="25" cy="10" r="2.2" class="fill-primary-foreground" />
+      <circle cx="27" cy="10" r="2.4" class="fill-primary-foreground" />
     </svg>
     <svg
       viewBox="0 -95.3 639.43 117.86"
