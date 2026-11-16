@@ -28,6 +28,8 @@ export interface PreparedFolders {
   ids: Map<string, string>
   /** Chemins absents du projet (non créés : option absente, ou essai à blanc). */
   missing: string[]
+  /** Dossiers qu'il faudrait créer pour ces chemins, parents compris (plus que `missing` : un par niveau absent). */
+  toCreate: number
   created: number
 }
 
@@ -38,8 +40,9 @@ export interface PreparedFolders {
 export async function prepareFolders(client: FolderClient, projectId: string, rows: readonly Pick<ManifestRow, 'folder'>[], create: boolean): Promise<PreparedFolders> {
   const paths = new Map<string, string[]>()
   for (const row of rows) if (row.folder.length > 0) paths.set(folderKey(row.folder), row.folder)
-  const result: PreparedFolders = { ids: new Map(), missing: [], created: 0 }
+  const result: PreparedFolders = { ids: new Map(), missing: [], toCreate: 0, created: 0 }
   if (paths.size === 0) return result
+  const absent = new Set<string>()
 
   const children = new Map<string, ApiFolder>()
   const childKey = (parentId: string | null, name: string) => `${parentId ?? ''}/${name.normalize('NFC').toLowerCase()}`
@@ -49,7 +52,7 @@ export async function prepareFolders(client: FolderClient, projectId: string, ro
   for (const segments of [...paths.values()].sort((a, b) => a.length - b.length)) {
     let parentId: string | null = null
     let found = true
-    for (const name of segments) {
+    for (const [depth, name] of segments.entries()) {
       let folder = children.get(childKey(parentId, name))
       if (!folder && create) {
         folder = await client.createFolder(projectId, name, parentId)
@@ -57,6 +60,8 @@ export async function prepareFolders(client: FolderClient, projectId: string, ro
         result.created++
       }
       if (!folder) {
+        // Ce niveau et tous ceux d'en dessous manquent.
+        for (let level = depth; level < segments.length; level++) absent.add(folderKey(segments.slice(0, level + 1)))
         found = false
         break
       }
@@ -65,6 +70,7 @@ export async function prepareFolders(client: FolderClient, projectId: string, ro
     if (found && parentId) result.ids.set(folderKey(segments), parentId)
     else result.missing.push(segments.join('/'))
   }
+  result.toCreate = absent.size
   return result
 }
 

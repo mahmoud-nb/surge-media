@@ -437,7 +437,7 @@ export const fr = {
   'import.plan.converted': '{count} vidéo(s) dans un format converti (MKV, AVI…) : acceptées seulement si le traitement des vidéos est actif sur le serveur.',
   'import.plan.foldersDropped': '{count} fichier(s) proposés hors dossier : leur chemin ne fait pas un dossier valable (trop profond ou nom refusé).',
   'import.plan.skipped': 'Ignorés : {symlinks} lien(s) symbolique(s), {hidden} fichier(s) ou dossier(s) caché(s), {special} fichier(s) spécial(aux).',
-  'import.plan.duration': 'Durée minimale au débit par défaut du serveur (60 envois par minute) : environ {minutes} min. Relevez NUXT_API_RATE_LIMIT_UPLOADS le temps d\'un gros import.',
+  'import.plan.duration': 'Durée minimale au débit par défaut du serveur (60 envois par minute) : environ {minutes} min. Pour un gros import, relevez le temps de l\'import NUXT_API_RATE_LIMIT_UPLOADS et la limite de l\'identifiant (NUXT_API_RATE_LIMIT_SECRET ou _PERSONAL) : un fichier coûte jusqu\'à trois requêtes.',
   'import.plan.root': 'Les chemins du manifeste sont relatifs à {path} : gardez le manifeste dans ce dossier, ou passez --root à « import run ».',
   'import.plan.written': 'Manifeste écrit dans {path}. Complétez-le si besoin (title, alt, folder, tags), puis : surge-media import run <manifeste> --dry-run',
 
@@ -451,6 +451,7 @@ export const fr = {
   'import.run.progress': '{done}/{total} · {created} créé(s) · {skipped} déjà présent(s) · {problems} problème(s)',
   'import.run.summary': 'Manifeste : {total} ligne(s). Créés : {created} · déjà importés : {exists} · doublons rattachés : {deduplicated} · refusés : {rejected} · en échec : {failed} · non traités : {pending}.',
   'import.run.summaryDryRun': 'Essai à blanc sur {total} ligne(s). À créer : {created} · déjà importés : {exists} · doublons : {deduplicated} · refusés : {rejected} · en échec : {failed} · non examinés : {pending}.',
+  'import.run.rateLimited': 'Le débit du serveur a freiné l\'import : pour aller plus vite, relevez {variables} le temps de l\'import (setup.md § 7.7).',
   'import.run.files': 'Table de correspondance : {mapping}. État de l\'import : {state}.',
   'import.run.aborted': 'Import arrêté : corrigez le problème puis relancez la même commande.',
   'import.run.rerun': '{count} ligne(s) restent à traiter : relancez la même commande.',
@@ -458,6 +459,7 @@ export const fr = {
   'import.run.doneDryRun': 'Essai à blanc terminé : rien n\'a été envoyé. Relancez sans --dry-run.',
   'import.run.done': 'Import terminé.',
   'import.wait.rateLimited': 'débit atteint, reprise dans {seconds} s',
+  'import.wait.rateLimitedBy': 'débit atteint ({variable}), reprise dans {seconds} s',
   'import.wait.serverBusy': 'serveur occupé, reprise dans {seconds} s',
   'import.wait.network': 'connexion perdue, nouvel essai dans {seconds} s',
 

@@ -436,7 +436,7 @@ export const en: Record<MessageKey, string> = {
   'import.plan.converted': '{count} video(s) in a converted format (MKV, AVI…): accepted only while video processing is active on the server.',
   'import.plan.foldersDropped': '{count} file(s) proposed outside any folder: their path does not make a valid folder (too deep or name refused).',
   'import.plan.skipped': 'Skipped: {symlinks} symbolic link(s), {hidden} hidden file(s) or directories, {special} special file(s).',
-  'import.plan.duration': 'Minimum duration at the default server rate (60 uploads per minute): about {minutes} min. Raise NUXT_API_RATE_LIMIT_UPLOADS for the time of a large import.',
+  'import.plan.duration': 'Minimum duration at the default server rate (60 uploads per minute): about {minutes} min. For a large import, raise NUXT_API_RATE_LIMIT_UPLOADS and the credential limit (NUXT_API_RATE_LIMIT_SECRET or _PERSONAL) for the time of the import: a file costs up to three requests.',
   'import.plan.root': 'The paths of the manifest are relative to {path}: keep the manifest in this directory, or pass --root to "import run".',
   'import.plan.written': 'Manifest written to {path}. Complete it if needed (title, alt, folder, tags), then: surge-media import run <manifest> --dry-run',
 
@@ -450,6 +450,7 @@ export const en: Record<MessageKey, string> = {
   'import.run.progress': '{done}/{total} · {created} created · {skipped} already there · {problems} problem(s)',
   'import.run.summary': 'Manifest: {total} line(s). Created: {created} · already imported: {exists} · duplicates attached: {deduplicated} · rejected: {rejected} · failed: {failed} · not processed: {pending}.',
   'import.run.summaryDryRun': 'Dry run on {total} line(s). To create: {created} · already imported: {exists} · duplicates: {deduplicated} · rejected: {rejected} · failed: {failed} · not examined: {pending}.',
+  'import.run.rateLimited': 'The server rate limits slowed the import down: to go faster, raise {variables} for the time of the import (setup.md § 7.7).',
   'import.run.files': 'Mapping table: {mapping}. Import state: {state}.',
   'import.run.aborted': 'Import stopped: fix the problem, then run the same command again.',
   'import.run.rerun': '{count} line(s) remain: run the same command again.',
@@ -457,6 +458,7 @@ export const en: Record<MessageKey, string> = {
   'import.run.doneDryRun': 'Dry run finished: nothing was uploaded. Run again without --dry-run.',
   'import.run.done': 'Import finished.',
   'import.wait.rateLimited': 'rate limit reached, resuming in {seconds} s',
+  'import.wait.rateLimitedBy': 'rate limit reached ({variable}), resuming in {seconds} s',
   'import.wait.serverBusy': 'server busy, resuming in {seconds} s',
   'import.wait.network': 'connection lost, retrying in {seconds} s',
 

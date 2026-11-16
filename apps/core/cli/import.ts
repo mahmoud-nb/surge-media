@@ -7,10 +7,11 @@ import type { MessageKey } from './i18n/fr'
 import { healthUrl } from './lib/diagnose/collect'
 import { formatBytes } from './lib/diagnose/render'
 import { readEnvFile } from './lib/env-file'
-import { ApiError, type ApiClient, type ApiMe, type ApiProject, apiRoot, createApiClient } from './lib/import/api'
+import { ApiError, type ApiClient, type ApiMe, type ApiProject, apiRoot, createApiClient, RATE_LIMIT_VARIABLES } from './lib/import/api'
 import { csvLine } from './lib/import/csv'
 import { manifestHeader, manifestLine, type ManifestIssue, type ManifestRow, parseManifest } from './lib/import/manifest'
 import { estimatedMinutes, planDraft, scanBucket, scanDirectory } from './lib/import/plan'
+import { createProgressLine } from './lib/import/progress'
 import { buildRedirects, parseMapping, REDIRECT_FORMATS, type RedirectFormat, redirectOrigin, type RedirectSkip, renderRedirects } from './lib/import/redirects'
 import { pendingRows, prepareFolders, prepareTags, runImport } from './lib/import/run'
 import { createS3Reader, parseS3Url, S3_ACCESS_KEY_VARIABLE, S3_SECRET_KEY_VARIABLE, s3Hint, type S3Reader, type S3Sdk, s3SettingsFrom, s3Url } from './lib/import/s3'
@@ -278,12 +279,18 @@ export async function runImportRun(ctx: CliContext, args: ImportRunArgs): Promis
 
   const hardStop = new AbortController()
   let waitNotice: ((message: string) => void) | null = null
+  /** Variables des limites qui ont freiné l'import : rappelées dans le bilan. */
+  const limitedBy = new Set<string>()
   const client = createApiClient({
     baseUrl: url,
     key: key!,
     userAgent: `surge-media-cli/${packageVersion()}`,
     signal: hardStop.signal,
-    onWait: ({ seconds, reason }) => waitNotice?.(t(`import.wait.${reason}`, { seconds })),
+    onWait: ({ seconds, reason, policy }) => {
+      const variable = policy ? RATE_LIMIT_VARIABLES[policy] : undefined
+      if (variable) limitedBy.add(variable)
+      waitNotice?.(variable ? t('import.wait.rateLimitedBy', { seconds, variable }) : t(`import.wait.${reason}`, { seconds }))
+    },
   })
 
   const me = await client.me().catch(error => apiFailure(error, url))
@@ -316,7 +323,7 @@ export async function runImportRun(ctx: CliContext, args: ImportRunArgs): Promis
   if (folders.missing.length > 0) {
     if (!createFolders) stop(`${t('import.error.foldersMissing', { count: folders.missing.length })}\n${listed(t, folders.missing)}`)
     if (!project.scopes.includes('media:write')) stop(t('import.error.scope', { scope: 'media:write' }))
-    if (dryRun) say.info(t('import.run.foldersToCreate', { count: folders.missing.length }))
+    if (dryRun) say.info(t('import.run.foldersToCreate', { count: folders.toCreate }))
     else {
       folders = await prepareFolders(client, project.id, todo, true).catch(error => apiFailure(error, url))
       say.info(t('import.run.foldersCreated', { count: folders.created }))
@@ -340,16 +347,19 @@ export async function runImportRun(ctx: CliContext, args: ImportRunArgs): Promis
   }
 
   // 6. Envois. Premier Ctrl+C : les envois en cours se terminent ; second : arrêt immédiat.
+  // Progression : notre ligne, pas le `spinner` de @clack/prompts, qui met le terminal en mode brut et
+  // termine le processus (code 0) sur Ctrl+C avant tout arrêt propre (lib/import/progress.ts).
+  const interactive = !json && Boolean(process.stdout.isTTY)
+  const progress = interactive ? createProgressLine(process.stdout) : null
   let stopRequested = false
   const onSigint = () => {
     if (stopRequested) return hardStop.abort(new Error('interrupted'))
     stopRequested = true
-    say.warn(t('import.run.stopping'))
+    if (progress) progress.interrupt(() => log.warn(t('import.run.stopping')))
+    else say.warn(t('import.run.stopping'))
   }
   process.on('SIGINT', onSigint)
 
-  const interactive = !json && Boolean(process.stdout.isTTY)
-  const progress = interactive ? spinner() : null
   const tally: Record<ImportStatus, number> = { created: 0, exists: 0, deduplicated: 0, rejected: 0, failed: 0 }
   let done = 0
   const progressText = () => t('import.run.progress', { done, total: todo.length, created: tally.created, skipped: tally.exists + tally.deduplicated, problems: tally.rejected + tally.failed })
@@ -397,7 +407,7 @@ export async function runImportRun(ctx: CliContext, args: ImportRunArgs): Promis
   const counts = countByStatus(rows, entries)
   const remaining = counts.failed + counts.pending
   if (json) {
-    process.stdout.write(`${JSON.stringify({ type: 'summary', dryRun, total: rows.length, ...counts, interrupted: outcome.interrupted, fatal: outcome.fatal?.code ?? null, mapping: dryRun ? null : files.mapping, state: dryRun ? null : files.state })}\n`)
+    process.stdout.write(`${JSON.stringify({ type: 'summary', dryRun, total: rows.length, ...counts, interrupted: outcome.interrupted, fatal: outcome.fatal?.code ?? null, rateLimitedBy: [...limitedBy], mapping: dryRun ? null : files.mapping, state: dryRun ? null : files.state })}\n`)
   }
   else {
     log.info(t(dryRun ? 'import.run.summaryDryRun' : 'import.run.summary', { total: rows.length, ...counts, already: before.created + before.exists + before.deduplicated }))
@@ -409,6 +419,7 @@ export async function runImportRun(ctx: CliContext, args: ImportRunArgs): Promis
       if (hint) log.warn(t(`import.hint.s3.${hint}`))
     }
     if (outcome.fatal) log.error(t('import.error.api', { code: outcome.fatal.code, detail: outcome.fatal.detail ?? '' }))
+    if (limitedBy.size > 0) log.info(t('import.run.rateLimited', { variables: [...limitedBy].join(', ') }))
     if (!dryRun) log.info(t('import.run.files', { mapping: files.mapping, state: files.state }))
   }
 

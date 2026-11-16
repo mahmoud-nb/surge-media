@@ -5,10 +5,11 @@ import { afterAll, describe, expect, it, vi } from 'vitest'
 import { en } from '../cli/i18n/en'
 import { fr } from '../cli/i18n/fr'
 import { importFiles, readApiKey, resolveProject, serverUrl } from '../cli/import'
-import { ApiError, type ApiMedia, apiRoot, createApiClient, isFatalApiError, MAX_SERVER_WAITS, NETWORK_RETRY_DELAYS_MS, permanentUrl, retryAfterSeconds } from '../cli/lib/import/api'
+import { ApiError, type ApiMedia, apiRoot, createApiClient, exhaustedPolicy, isFatalApiError, MAX_SERVER_WAITS, NETWORK_RETRY_DELAYS_MS, permanentUrl, RATE_LIMIT_VARIABLES, retryAfterSeconds } from '../cli/lib/import/api'
 import { csvField, csvLine, CsvError, parseCsv } from '../cli/lib/import/csv'
 import { folderSegments, manifestHeader, manifestLine, manifestRef, type ManifestRow, parseManifest, sourceKind } from '../cli/lib/import/manifest'
 import { estimatedMinutes, scanDirectory, validFolderPath } from '../cli/lib/import/plan'
+import { createProgressLine, fitLine } from '../cli/lib/import/progress'
 import { folderKey, pendingRows, prepareFolders, prepareTags, runImport, type RunOptions, withPublicUrl } from '../cli/lib/import/run'
 import type { SourceError } from '../cli/lib/import/sources'
 import { displayUrl, DOWNLOAD_MAX_REDIRECTS, downloadSource, fileChecksum, filenameFromUrl, resolveFileSource } from '../cli/lib/import/sources'
@@ -283,6 +284,24 @@ describe('client de l\'API', () => {
     expect(String(url)).not.toContain(KEY)
   })
 
+  it('limite atteinte : nommée d\'après l\'en-tête RateLimit du refus', async () => {
+    // Envoi refusé : la limite de l'identifiant passe, celle des envois est épuisée (en-têtes du serveur).
+    expect(exhaustedPolicy('"secret";r=1180;t=1, "uploads";r=0;t=1')).toBe('uploads')
+    expect(exhaustedPolicy('"secret";r=0;t=3')).toBe('secret')
+    expect(exhaustedPolicy('"secret";r=0;t=3, "uploads";r=0;t=1')).toBe('uploads')
+    expect(exhaustedPolicy('"secret";r=12;t=1')).toBeNull()
+    expect(exhaustedPolicy('n\'importe quoi')).toBeNull()
+    expect(exhaustedPolicy(null)).toBeNull()
+    expect(RATE_LIMIT_VARIABLES).toMatchObject({ uploads: 'NUXT_API_RATE_LIMIT_UPLOADS', secret: 'NUXT_API_RATE_LIMIT_SECRET', personal: 'NUXT_API_RATE_LIMIT_PERSONAL' })
+
+    const waits: unknown[] = []
+    const fetch = vi.fn<typeof globalThis.fetch>()
+      .mockResolvedValueOnce(problem(429, 'RATE_LIMITED', {}, { 'retry-after': '2', 'ratelimit': '"secret";r=0;t=2' }))
+      .mockResolvedValueOnce(json({ items: [] }))
+    expect(await client(fetch, { onWait: event => waits.push(event) }).findBySourceRef('p1', 'img:1')).toBeNull()
+    expect(waits).toEqual([{ seconds: 2, reason: 'rateLimited', policy: 'secret' }])
+  })
+
   it('après un refus de débit, les envois passent un par un, espacés du délai demandé', async () => {
     const path = png(join(TMP, 'file.png'), 'file')
     let inFlight = 0
@@ -514,11 +533,24 @@ describe('déroulé d\'un import', () => {
     const checked = await prepareFolders(client, 'p1', rows, false)
     expect(checked.ids.get(folderKey(['BLOG', '2024']))).toBe('f2')
     expect(checked.missing).toEqual(['Blog/2025/été'])
+    // Deux dossiers à créer pour un seul chemin absent : « 2025 » puis « été ».
+    expect(checked.toCreate).toBe(2)
     expect(createFolder).not.toHaveBeenCalled()
     const created = await prepareFolders(client, 'p1', rows, true)
     expect(createFolder.mock.calls).toEqual([['p1', '2025', 'f1'], ['p1', 'été', 'new-2025']])
     expect(created).toMatchObject({ missing: [], created: 2 })
     expect(created.ids.get('blog/2025/été')).toBe('new-été')
+  })
+
+  it('dossiers à créer : chaque niveau absent compté une fois, comme la création le fera', async () => {
+    const createFolder = vi.fn(async (_project: string, name: string, parentId: string | null) => ({ id: `new-${parentId ?? ''}/${name}`, parentId, name }))
+    const client = { folders: vi.fn(async () => []), createFolder }
+    const rows = [{ folder: ['images', 'lot-00', 'a'] }, { folder: ['images', 'lot-00', 'b'] }, { folder: ['Images', 'lot-01', 'a'] }, { folder: ['videos'] }]
+    const checked = await prepareFolders(client, 'p1', rows, false)
+    expect(checked.missing).toHaveLength(4)
+    // images, lot-00, lot-00/a, lot-00/b, lot-01, lot-01/a, videos.
+    expect(checked.toCreate).toBe(7)
+    expect((await prepareFolders(client, 'p1', rows, true)).created).toBe(7)
   })
 
   it('étiquettes : absentes signalées, ou créées d\'après leur slug', async () => {
@@ -533,6 +565,51 @@ describe('déroulé d\'un import', () => {
   it('domaine public : seul le chemin /m/ est gardé', () => {
     expect(withPublicUrl('http://127.0.0.1:3000/m/a/v1/x.png', 'https://cdn.example.com/media/')).toBe('https://cdn.example.com/media/m/a/v1/x.png')
     expect(withPublicUrl('http://127.0.0.1:3000/m/a/v1/x.png', null)).toBe('http://127.0.0.1:3000/m/a/v1/x.png')
+  })
+})
+
+describe('ligne de progression', () => {
+  it('une seule ligne réécrite, coupée à la largeur du terminal', () => {
+    vi.useFakeTimers()
+    try {
+      const written: string[] = []
+      const line = createProgressLine({ write: text => written.push(text), columns: 20 }, { intervalMs: 100 })
+      line.start('0/3')
+      expect(written).toEqual(['\r\x1B[2K◒  0/3'])
+      vi.advanceTimersByTime(100)
+      expect(written.at(-1)).toBe('\r\x1B[2K◐  0/3')
+      line.message('1/3 · un texte bien trop long pour la ligne')
+      // 19 colonnes au plus (une de moins que le terminal), jamais de saut de ligne.
+      expect(written.at(-1)).toBe('\r\x1B[2K◐  1/3 · un texte …')
+      expect(written.every(text => !text.includes('\n'))).toBe(true)
+
+      // Un avertissement (arrêt demandé) : ligne effacée, message, ligne redessinée.
+      line.interrupt(() => written.push('avertissement\n'))
+      expect(written.slice(-3)).toEqual(['\r\x1B[2K', 'avertissement\n', '\r\x1B[2K◐  1/3 · un texte …'])
+
+      line.stop('3/3')
+      expect(written.at(-1)).toBe('\r\x1B[2K◇  3/3\n')
+      const count = written.length
+      vi.advanceTimersByTime(1_000)
+      line.message('ignoré')
+      expect(written).toHaveLength(count)
+    }
+    finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('avant le démarrage, un message passe tel quel', () => {
+    const written: string[] = []
+    const line = createProgressLine({ write: text => written.push(text) })
+    line.interrupt(() => written.push('direct\n'))
+    expect(written).toEqual(['direct\n'])
+  })
+
+  it('texte ramené sur une ligne et coupé par caractères, pas par octets', () => {
+    expect(fitLine('a\r\n  b', 10)).toBe('a b')
+    expect(fitLine('éééééé', 4)).toBe('ééé…')
+    expect(fitLine('abcd', 4)).toBe('abcd')
   })
 })
 

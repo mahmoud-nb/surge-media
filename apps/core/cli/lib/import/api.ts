@@ -113,7 +113,40 @@ export interface ApiClientOptions {
   /** Attente (remplaçable dans les tests) ; interrompue par `signal`. */
   sleep?: (ms: number, signal?: AbortSignal) => Promise<void>
   /** Prévenu avant chaque attente demandée par le serveur ou après une coupure. */
-  onWait?: (event: { seconds: number, reason: 'rateLimited' | 'serverBusy' | 'network' }) => void
+  onWait?: (event: WaitEvent) => void
+}
+
+export interface WaitEvent {
+  seconds: number
+  reason: 'rateLimited' | 'serverBusy' | 'network'
+  /** Limite atteinte d'après l'en-tête `RateLimit` du refus (`uploads`, `secret`, `personal`), si le serveur la nomme. */
+  policy?: string
+}
+
+/**
+ * Variable du serveur qui règle chaque limite de l'API v1 (`setup.md` § 7.7) : la commande la nomme
+ * quand elle freine un import. Un fichier coûte jusqu'à trois requêtes (référence, empreinte, envoi) :
+ * relever la seule limite des envois laisse l'import buter sur celle de l'identifiant (essai I-4).
+ */
+export const RATE_LIMIT_VARIABLES: Readonly<Record<string, string>> = {
+  uploads: 'NUXT_API_RATE_LIMIT_UPLOADS',
+  secret: 'NUXT_API_RATE_LIMIT_SECRET',
+  personal: 'NUXT_API_RATE_LIMIT_PERSONAL',
+}
+
+/**
+ * Politique épuisée d'après l'en-tête `RateLimit` (brouillon IETF : `"secret";r=0;t=3, "uploads";r=0;t=1`) :
+ * la dernière dont il ne reste rien (la limite des envois s'ajoute après celle de l'identifiant) ; null sinon.
+ */
+export function exhaustedPolicy(header: string | null): string | null {
+  if (!header) return null
+  let found: string | null = null
+  for (const item of header.split(',')) {
+    const match = /^\s*"([^"]+)"\s*;(.*)$/.exec(item)
+    const remaining = match ? /(?:^|;)\s*r=(\d+)/.exec(match[2]!) : null
+    if (match && remaining && Number(remaining[1]) === 0) found = match[1]!
+  }
+  return found
 }
 
 /** Reprises après une coupure réseau, puis l'erreur remonte (`NETWORK`). */
@@ -203,7 +236,7 @@ export function createApiClient(options: ApiClientOptions) {
    */
   const lanes = { upload: newLane(), other: newLane() }
 
-  type Attempt<T> = { ok: true, value: T } | { ok: false, seconds: number, reason: 'rateLimited' | 'serverBusy', problem: ApiError }
+  type Attempt<T> = { ok: true, value: T } | { ok: false, seconds: number, reason: 'rateLimited' | 'serverBusy', policy: string | null, problem: ApiError }
 
   async function call<T>(method: string, path: string, init: { query?: Record<string, string>, json?: unknown, form?: () => Promise<FormData>, lane?: keyof typeof lanes } = {}): Promise<T> {
     const url = new URL(`${root}${path}`)
@@ -239,6 +272,7 @@ export function createApiClient(options: ApiClientOptions) {
             ok: false,
             seconds: retryAfterSeconds(response.headers.get('retry-after')),
             reason: response.status === 429 ? 'rateLimited' : 'serverBusy',
+            policy: response.status === 429 ? exhaustedPolicy(response.headers.get('ratelimit')) : null,
             problem: await readProblem(response),
           }
         }
@@ -266,7 +300,7 @@ export function createApiClient(options: ApiClientOptions) {
           if (++waits > MAX_SERVER_WAITS) throw refused.problem
           lane.slowUntil = Date.now() + SLOW_MODE_MS
           lane.spacingMs = refused.seconds * 1000
-          options.onWait?.({ seconds: refused.seconds, reason: refused.reason })
+          options.onWait?.({ seconds: refused.seconds, reason: refused.reason, ...(refused.policy ? { policy: refused.policy } : {}) })
           await sleep(refused.seconds * 1000, options.signal)
         }
         else {
