@@ -79,7 +79,7 @@ async function openS3(ctx: CliContext, args: S3Args, stop: (message: string) => 
   const { t } = ctx
   if (args.s3Endpoint && !/^https?:\/\/[^\s]+$/i.test(args.s3Endpoint)) stop(t('import.error.s3Endpoint'))
   const settings = s3SettingsFrom(process.env, { endpoint: args.s3Endpoint, region: args.s3Region, pathStyle: args.s3PathStyle })
-  if (!settings) return stop(t('import.error.s3Credentials', { id: S3_ACCESS_KEY_VARIABLE, secret: S3_SECRET_KEY_VARIABLE }))
+  if (!settings) return stop(t('import.error.s3Credentials', { id: S3_ACCESS_KEY_VARIABLE, secret: S3_SECRET_KEY_VARIABLE })) // gitleaks:allow (nom de variable, pas une valeur)
   const sdk = await loadServerModule<S3Sdk>(ctx.packageDir, SERVER_ENTRY, '@aws-sdk/client-s3').catch(() => stop(t('import.error.s3Sdk')))
   return createS3Reader(sdk, settings)
 }

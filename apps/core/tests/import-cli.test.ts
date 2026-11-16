@@ -244,7 +244,7 @@ describe('téléchargement d\'une source', () => {
 })
 
 describe('client de l\'API', () => {
-  const KEY = 'sm_sk_test_0123456789'
+  const KEY = 'sm_sk_test_0123456789' // gitleaks:allow (fausse clé des tests)
   const json = (value: unknown, init: ResponseInit = {}) => new Response(JSON.stringify(value), { headers: { 'content-type': 'application/json' }, ...init })
   const problem = (status: number, code: string, extra: Record<string, unknown> = {}, headers: Record<string, string> = {}) =>
     json({ type: 'x', title: 'x', status, code, instance: '/x', requestId: 'r', ...extra }, { status, headers })
