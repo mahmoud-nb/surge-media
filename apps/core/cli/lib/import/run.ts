@@ -1,7 +1,7 @@
 import { sniffMimeType } from '../../../server/lib/media/sniff'
 import { ApiError, type ApiClient, type ApiFolder, type ApiMedia, isFatalApiError, permanentUrl, type UploadTypeRule } from './api'
 import type { ManifestRow } from './manifest'
-import { fileChecksum, type LocalFile, openSource, SourceError } from './sources'
+import { fileChecksum, type LocalFile, type OpenOptions, openSource, SourceError } from './sources'
 import { FINAL_STATUSES, type ImportEntry, type ImportStatus } from './state'
 
 /**
@@ -123,6 +123,8 @@ export interface RunOptions {
   /** Arrêt propre (premier Ctrl+C) : plus aucune nouvelle ligne, les envois en cours se terminent. */
   shouldStop?: () => boolean
   onResult?: (row: ManifestRow, entry: ImportEntry) => void
+  /** Téléchargement des sources `s3://` ; requis si le manifeste en contient. */
+  s3?: OpenOptions['s3']
   /** Lecture des sources (remplaçable dans les tests). */
   open?: (row: ManifestRow) => Promise<LocalFile>
   now?: () => Date
@@ -158,7 +160,7 @@ export async function runImport(options: RunOptions): Promise<RunOutcome> {
   const { client, projectId, entries } = options
   const now = options.now ?? (() => new Date())
   const maxBytes = Math.max(0, ...options.rules.map(rule => rule.maxSize))
-  const open = options.open ?? ((row: ManifestRow) => openSource(row, { root: options.root, maxBytes, signal: options.signal }))
+  const open = options.open ?? ((row: ManifestRow) => openSource(row, { root: options.root, maxBytes, signal: options.signal, s3: options.s3 }))
   /** Empreinte → envoi en cours ou terminé de ce contenu (null : il a échoué, le suivant tente sa chance). */
   const byChecksum = new Map<string, Promise<KnownMedia | null>>()
   const outcome: RunOutcome = { processed: 0, interrupted: false, fatal: null }

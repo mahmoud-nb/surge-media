@@ -73,7 +73,7 @@ describe('manifeste', () => {
     const text = [
       'source,ref,visibility,folder,title',
       ',,,,',
-      's3://bucket/a.jpg,,,,',
+      'ftp://hote/a.jpg,,,,',
       'a.jpg,img:1,secret,,',
       'b.jpg,img:1,,,',
       `c.jpg,,,${Array.from({ length: 9 }, (_, index) => `n${index}`).join('/')},`,
@@ -118,7 +118,7 @@ describe('manifeste', () => {
     expect(sourceKind('uploads/a.jpg')).toBe('file')
     expect(sourceKind('C:\\photos\\a.jpg')).toBe('file')
     expect(sourceKind('HTTPS://cdn.exemple.fr/a.jpg')).toBe('http')
-    expect(sourceKind('s3://bucket/a.jpg')).toBeNull()
+    expect(sourceKind('s3://bucket/a.jpg')).toBe('s3')
     expect(sourceKind('ftp://hote/a.jpg')).toBeNull()
     expect(folderSegments(' /marque//2024/ été / ')).toEqual(['marque', '2024', 'été'])
   })

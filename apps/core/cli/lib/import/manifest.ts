@@ -4,6 +4,7 @@ import { FOLDER_MAX_DEPTH, FOLDER_NAME_MAX_LENGTH } from '../../../shared/utils/
 import { MEDIA_VISIBILITIES, normalizeSourceRef, SOURCE_REF_MAX_LENGTH } from '../../../shared/utils/media'
 import { MEDIA_TAG_LIMIT, TAG_SLUG_MAX_LENGTH, TAG_SLUG_PATTERN } from '../../../shared/utils/tags'
 import { csvLine, CsvError, parseCsv } from './csv'
+import { parseS3Url } from './s3'
 
 /**
  * Manifeste de `surge-media import` (.claude/architecture-import.md, § 4) : un fichier par ligne. Seule la
@@ -20,12 +21,12 @@ const TEXT_MAX_LENGTH = 191
 export const MANIFEST_TAG_SEPARATOR = '|'
 const VISIBILITIES = MEDIA_VISIBILITIES.map(value => value.toLowerCase())
 
-export type SourceKind = 'file' | 'http'
+export type SourceKind = 'file' | 'http' | 's3'
 
 export interface ManifestRow {
   /** Ligne du manifeste (messages d'erreur). */
   line: number
-  /** Chemin relatif à la racine, ou URL `http(s)://`, tel qu'écrit. */
+  /** Chemin relatif à la racine, URL `http(s)://` ou adresse `s3://compartiment/clé`, tel qu'écrit. */
   source: string
   kind: SourceKind
   /** Référence d'origine envoyée au serveur (`sourceRef`) : colonne `ref`, sinon `source`. */
@@ -84,9 +85,13 @@ export function manifestRef(source: string, ref: string): string | null {
   return `sha256:${createHash('sha256').update(normalized).digest('hex')}`
 }
 
-/** Genre de source d'après sa forme ; null pour un schéma que l'outil ne lit pas (`s3://`, `ftp://`…). */
+/**
+ * Genre de source d'après sa forme ; null pour un schéma que l'outil ne lit pas (`ftp://`…) ou une adresse
+ * `s3://` sans compartiment ni clé.
+ */
 export function sourceKind(source: string): SourceKind | null {
   if (/^https?:\/\//i.test(source)) return 'http'
+  if (/^s3:\/\//i.test(source)) return parseS3Url(source)?.key ? 's3' : null
   // Un schéma d'URL a au moins deux lettres : `C:\photos\a.jpg` reste un chemin.
   if (/^[a-z][a-z0-9+.-]+:\/\//i.test(source)) return null
   return 'file'

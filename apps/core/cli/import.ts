@@ -10,10 +10,15 @@ import { readEnvFile } from './lib/env-file'
 import { ApiError, type ApiClient, type ApiMe, type ApiProject, apiRoot, createApiClient } from './lib/import/api'
 import { csvLine } from './lib/import/csv'
 import { manifestHeader, manifestLine, type ManifestIssue, type ManifestRow, parseManifest } from './lib/import/manifest'
-import { estimatedMinutes, planDraft, scanDirectory } from './lib/import/plan'
+import { estimatedMinutes, planDraft, scanBucket, scanDirectory } from './lib/import/plan'
+import { buildRedirects, parseMapping, REDIRECT_FORMATS, type RedirectFormat, redirectOrigin, type RedirectSkip, renderRedirects } from './lib/import/redirects'
 import { pendingRows, prepareFolders, prepareTags, runImport } from './lib/import/run'
+import { createS3Reader, parseS3Url, S3_ACCESS_KEY_VARIABLE, S3_SECRET_KEY_VARIABLE, type S3Reader, type S3Sdk, s3SettingsFrom, s3Url } from './lib/import/s3'
+import { SourceError } from './lib/import/sources'
 import { appendState, countByStatus, type ImportEntry, type ImportStatus, loadState, startState, writeMapping } from './lib/import/state'
 import { ENV_FILE, packageVersion } from './lib/project'
+import { loadServerModule } from './lib/sql-client'
+import { SERVER_ENTRY } from './server'
 
 /**
  * `surge-media import` : reprise des médias qu'un client possède déjà (.claude/architecture-import.md).
@@ -43,7 +48,27 @@ function fail(message: string): never {
 
 // ─── import plan ─────────────────────────────────────────────────────────────
 
-export interface ImportPlanArgs {
+/** Options du compartiment S3 d'où viennent les fichiers (`--from s3://…`, sources `s3://` d'un manifeste). */
+export interface S3Args {
+  s3Endpoint?: string
+  s3Region?: string
+  s3PathStyle?: boolean
+}
+
+/**
+ * Lecteur du compartiment source : identifiants dans l'environnement seulement, SDK du serveur construit
+ * (ou de `node_modules` dans le dépôt des sources). `stop` arrête la commande avec le message donné.
+ */
+async function openS3(ctx: CliContext, args: S3Args, stop: (message: string) => never): Promise<S3Reader> {
+  const { t } = ctx
+  if (args.s3Endpoint && !/^https?:\/\/[^\s]+$/i.test(args.s3Endpoint)) stop(t('import.error.s3Endpoint'))
+  const settings = s3SettingsFrom(process.env, { endpoint: args.s3Endpoint, region: args.s3Region, pathStyle: args.s3PathStyle })
+  if (!settings) return stop(t('import.error.s3Credentials', { id: S3_ACCESS_KEY_VARIABLE, secret: S3_SECRET_KEY_VARIABLE }))
+  const sdk = await loadServerModule<S3Sdk>(ctx.packageDir, SERVER_ENTRY, '@aws-sdk/client-s3').catch(() => stop(t('import.error.s3Sdk')))
+  return createS3Reader(sdk, settings)
+}
+
+export interface ImportPlanArgs extends S3Args {
   from?: string
   out?: string
   foldersFromPath?: boolean
@@ -55,23 +80,28 @@ export async function runImportPlan(ctx: CliContext, args: ImportPlanArgs): Prom
   const locale = detectLocale(langFromArgv(process.argv))
   intro(t('intro.importPlan'))
   if (!args.from) fail(t('import.error.fromRequired'))
-  if (/^[a-z][a-z0-9+.-]+:\/\//i.test(args.from)) fail(t('import.error.fromScheme'))
-  const root = resolve(args.from)
-  if (!existsSync(root) || !statSync(root).isDirectory()) fail(t('import.error.fromNotDirectory', { path: root }))
+  const bucket = /^s3:\/\//i.test(args.from) ? parseS3Url(args.from) : null
+  if (/^s3:\/\//i.test(args.from) && !bucket) fail(t('import.error.fromS3'))
+  if (!bucket && /^[a-z][a-z0-9+.-]+:\/\//i.test(args.from)) fail(t('import.error.fromScheme'))
+  const root = bucket ? s3Url(bucket.bucket, bucket.key) : resolve(args.from)
+  if (!bucket && (!existsSync(root) || !statSync(root).isDirectory())) fail(t('import.error.fromNotDirectory', { path: root }))
   const out = resolve(args.out ?? 'manifest.csv')
   const rejectedPath = out.replace(/\.csv$/i, '') + '.rejected.csv'
   if (existsSync(out) && !args.force) fail(t('import.error.outExists', { path: out }))
+  const reader = bucket ? await openS3(ctx, args, fail) : null
 
   const progress = spinner()
   progress.start(t('import.plan.scanning'))
-  const report = await scanDirectory(root, {
+  const scanOptions = {
     foldersFromPath: Boolean(args.foldersFromPath),
-    onFile: (count) => {
+    onFile: (count: number) => {
       if (count % 200 === 0) progress.message(t('import.plan.scanned', { count }))
     },
-  }).catch((error: unknown) => {
+  }
+  const report = await (reader && bucket ? scanBucket(reader, bucket.bucket, bucket.key, scanOptions) : scanDirectory(root, scanOptions)).catch((error: unknown) => {
     progress.stop(t('import.plan.scanFailed'))
-    fail(t('import.error.read', { path: root, message: (error as Error).message }))
+    const message = error instanceof SourceError ? [error.code, error.detail].filter(Boolean).join(' — ') : (error as Error).message
+    fail(t('import.error.read', { path: root, message }))
   })
   progress.stop(t('import.plan.scanDone', { count: report.files.length, size: formatBytes(report.totalBytes, locale) }))
 
@@ -93,13 +123,14 @@ export async function runImportPlan(ctx: CliContext, args: ImportPlanArgs): Prom
   const { symlinks, hidden, special } = report.skipped
   if (symlinks + hidden + special > 0) log.info(t('import.plan.skipped', { symlinks, hidden, special }))
   log.info(t('import.plan.duration', { minutes: estimatedMinutes(report.files.length) }))
-  log.info(t('import.plan.root', { path: root }))
+  // Un manifeste d'adresses `s3://` ne dépend d'aucun dossier : rien à dire de la racine.
+  if (!bucket) log.info(t('import.plan.root', { path: root }))
   outro(t('import.plan.written', { path: out }))
 }
 
 // ─── import run ──────────────────────────────────────────────────────────────
 
-export interface ImportRunArgs {
+export interface ImportRunArgs extends S3Args {
   manifest?: string
   project?: string
   root?: string
@@ -222,6 +253,14 @@ export async function runImportRun(ctx: CliContext, args: ImportRunArgs): Promis
   if (visibility !== undefined && visibility !== 'public' && visibility !== 'private') stop(t('import.error.visibility'))
   const publicUrl = args.publicUrl ?? null
   if (publicUrl !== null && !/^https?:\/\/[^\s?#]+$/i.test(publicUrl)) stop(t('import.error.publicUrl'))
+  // Sources `s3://` : le compartiment du client, avec ses propres identifiants (jamais ceux du serveur).
+  const s3Reader = rows.some(row => row.kind === 's3') ? await openS3(ctx, args, stop) : null
+  const s3Download = s3Reader
+    ? (source: string, path: string, options: { maxBytes: number, signal?: AbortSignal }) => {
+        const location = parseS3Url(source)!
+        return s3Reader.download(location.bucket, location.key, path, options)
+      }
+    : undefined
 
   // 3. Serveur et identifiant.
   const env = { ...readEnvFile(join(ctx.instanceDir, ENV_FILE)), ...process.env }
@@ -337,6 +376,7 @@ export async function runImportRun(ctx: CliContext, args: ImportRunArgs): Promis
     retryRejected: Boolean(args.retryRejected),
     defaultVisibility: visibility as 'public' | 'private' | undefined ?? null,
     publicUrl,
+    s3: s3Download,
     signal: hardStop.signal,
     shouldStop: () => stopRequested,
     onResult: (row, entry) => {
@@ -376,6 +416,84 @@ export async function runImportRun(ctx: CliContext, args: ImportRunArgs): Promis
     process.exit(2)
   }
   if (!json) outro(t(dryRun ? 'import.run.doneDryRun' : 'import.run.done'))
+}
+
+// ─── import redirects ────────────────────────────────────────────────────────
+
+export interface ImportRedirectsArgs {
+  mapping?: string
+  format?: string
+  out?: string
+  prefix?: string
+  origin?: string
+  force?: boolean
+}
+
+/**
+ * `surge-media import redirects <table.csv> --format nginx|caddy|apache|cloudflare|json` : règles de
+ * redirection 301 des anciennes adresses vers les URL des médias importés. Le fichier va sur la sortie
+ * standard (ou dans `--out`), le bilan sur la sortie d'erreur : `… > redirections.conf` reste propre.
+ */
+export function runImportRedirects(ctx: CliContext, args: ImportRedirectsArgs): void {
+  const { t } = ctx
+  const stop = (message: string): never => {
+    process.stderr.write(`${message}\n`)
+    process.exit(1)
+  }
+  if (!args.mapping) stop(t('import.error.mappingRequired'))
+  const mappingPath = resolve(args.mapping!)
+  if (!existsSync(mappingPath) || !statSync(mappingPath).isFile()) stop(t('import.error.mappingMissing', { path: mappingPath }))
+  if (!args.format || !(REDIRECT_FORMATS as readonly string[]).includes(args.format)) stop(t('import.error.redirectFormat', { formats: REDIRECT_FORMATS.join(', ') }))
+  const format = args.format as RedirectFormat
+  const origin = args.origin === undefined ? null : redirectOrigin(args.origin)
+  if (args.origin !== undefined && origin === null) stop(t('import.error.redirectOrigin'))
+  const prefix = args.prefix ?? ''
+  if (/[\s"\\$`{};?#]/.test(prefix)) stop(t('import.error.redirectPrefix'))
+  const out = args.out ? resolve(args.out) : null
+  if (out && existsSync(out) && !args.force) stop(t('import.error.outExists', { path: out }))
+
+  let rows
+  try {
+    rows = parseMapping(readFileSync(mappingPath, 'utf8'))
+  }
+  catch (error) {
+    return stop(t('import.error.read', { path: mappingPath, message: (error as Error).message }))
+  }
+  if (typeof rows === 'string') return stop(t('import.error.mappingInvalid', { path: mappingPath }))
+
+  const plan = buildRedirects(rows, { format, prefix, origin })
+  const note = (message: string) => process.stderr.write(`${message}\n`)
+  /** Adresses écartées, raison par raison : dites même quand aucune règle n'en sort (ex. `--origin` oublié). */
+  const explainSkipped = () => {
+    const reasons = new Map<RedirectSkip, string[]>()
+    for (const item of plan.skipped) reasons.set(item.reason, [...(reasons.get(item.reason) ?? []), item.source])
+    for (const [reason, sources] of reasons) {
+      note(t(`import.redirects.skipped.${reason}`, { count: sources.length }))
+      note(listed(t, sources))
+    }
+  }
+  if (plan.rules.length === 0) {
+    explainSkipped()
+    stop(t('import.redirects.none'))
+  }
+  const content = renderRedirects(format, plan.rules, {
+    title: t('import.redirects.title', { count: plan.rules.length }),
+    usage: redirectUsage(t, format),
+  })
+  if (out) writeFileSync(out, content)
+  else process.stdout.write(content)
+
+  note(t('import.redirects.summary', { count: plan.rules.length, notImported: plan.notImported }))
+  explainSkipped()
+  if (out) note(t('import.redirects.written', { path: out }))
+}
+
+/** Où installer le fichier produit, format par format (commentaires de tête ; rien pour le CSV et le JSON). */
+function redirectUsage(t: T, format: RedirectFormat): string[] {
+  if (format === 'nginx') return [t('import.redirects.usage.nginx1'), t('import.redirects.usage.nginx2'), t('import.redirects.usage.nginx3')]
+  if (format === 'caddy') return [t('import.redirects.usage.caddy')]
+  if (format === 'apache') return [t('import.redirects.usage.apache')]
+  return []
 }
 
 type T = CliContext['t']

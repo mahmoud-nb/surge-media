@@ -183,6 +183,11 @@ export async function downloadSource(url: string, directory: string, options: Do
 export interface OpenOptions extends DownloadOptions {
   /** Racine des chemins relatifs du manifeste. */
   root: string
+  /**
+   * Téléchargement d'une source `s3://` dans `path` (cli/lib/import/s3.ts) ; absent quand le manifeste n'en
+   * contient pas — la commande refuse de démarrer sans lui s'il en contient.
+   */
+  s3?: (source: string, path: string, options: { maxBytes: number, signal?: AbortSignal }) => Promise<{ size: number }>
 }
 
 /** Fichier local d'une ligne du manifeste ; `cleanup()` à appeler dans tous les cas. */
@@ -196,6 +201,13 @@ export async function openSource(row: Pick<ManifestRow, 'source' | 'kind' | 'fil
     await rm(directory, { recursive: true, force: true, maxRetries: 3 }).catch(() => {})
   }
   try {
+    if (row.kind === 's3') {
+      if (!options.s3) throw new SourceError('SOURCE_UNREADABLE', 's3 source not configured')
+      const path = join(directory, 'file')
+      const { size } = await options.s3(row.source, path, { maxBytes: options.maxBytes, signal: options.signal })
+      // Dernier segment de la clé, tel quel : une clé n'est pas une URL (`%`, `?` et `#` y sont ordinaires).
+      return { path, size, filename: row.filename ?? row.source.split('/').filter(Boolean).at(-1) ?? 'media', cleanup }
+    }
     const file = await downloadSource(row.source, directory, options)
     return { ...file, filename: row.filename ?? filenameFromUrl(row.source), cleanup }
   }

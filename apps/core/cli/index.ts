@@ -15,6 +15,7 @@
  *   surge-media demo restore --from <archive>     remettre la démo à zéro depuis l'archive (serveur arrêté)
  *   surge-media import plan --from <dossier>      préparer le manifeste CSV d'un import de médias existants
  *   surge-media import run <manifeste.csv>        envoyer les fichiers du manifeste par l'API v1 (reprenable, sans doublon)
+ *   surge-media import redirects <table.csv>      écrire les redirections 301 des anciennes adresses (nginx, Caddy, Apache…)
  *
  * Le .env et les données vivent dans le dossier de l'installation : le dossier courant pour le paquet publié,
  * apps/core dans le dépôt des sources (`--cwd` pour un autre dossier ; cli/lib/project.ts).
@@ -25,7 +26,7 @@ import { runInit, runMigrate, runReset, type CliContext } from './database'
 import { runDemoRestore, runDemoSnapshot } from './demo'
 import { runDiagnose } from './diagnose'
 import { createTranslator, detectLocale, langFromArgv, LOCALES } from './i18n'
-import { DEFAULT_CONCURRENCY, runImportPlan, runImportRun } from './import'
+import { DEFAULT_CONCURRENCY, runImportPlan, runImportRedirects, runImportRun } from './import'
 import { isInsideNodeModules, packageVersion, resolveLocation } from './lib/project'
 import { runLicenseClockReset } from './license'
 import { DEFAULT_WEB_PORT, DEFAULT_WORKER_PORT, runServer } from './server'
@@ -161,6 +162,26 @@ const demoRestore = defineCommand({
   run: ({ args }) => runDemoRestore(context(args.cwd), args),
 })
 
+const s3Args = {
+  s3Endpoint: { type: 'string', description: t('args.importS3Endpoint'), valueHint: 'url' },
+  s3Region: { type: 'string', description: t('args.importS3Region'), valueHint: 'us-east-1' },
+  s3PathStyle: { type: 'boolean', description: t('args.importS3PathStyle') },
+} as const
+
+const importRedirects = defineCommand({
+  meta: { name: 'redirects', description: t('command.import.redirects') },
+  args: {
+    ...commonArgs,
+    mapping: { type: 'positional', required: false, description: t('args.importMapping'), valueHint: 'mapping.csv' },
+    format: { type: 'string', description: t('args.importRedirectFormat'), valueHint: 'nginx|caddy|apache|cloudflare|json' },
+    out: { type: 'string', description: t('args.importRedirectOut'), valueHint: 'path' },
+    prefix: { type: 'string', description: t('args.importRedirectPrefix'), valueHint: '/uploads' },
+    origin: { type: 'string', description: t('args.importRedirectOrigin'), valueHint: 'url' },
+    force: { type: 'boolean', description: t('args.importForce') },
+  },
+  run: ({ args }) => runImportRedirects(context(args.cwd), args),
+})
+
 const importPlan = defineCommand({
   meta: { name: 'plan', description: t('command.import.plan') },
   args: {
@@ -168,6 +189,7 @@ const importPlan = defineCommand({
     from: { type: 'string', description: t('args.importFrom'), valueHint: 'path' },
     out: { type: 'string', description: t('args.importOut'), valueHint: 'manifest.csv' },
     foldersFromPath: { type: 'boolean', description: t('args.importFoldersFromPath') },
+    ...s3Args,
     force: { type: 'boolean', description: t('args.importForce') },
   },
   run: ({ args }) => runImportPlan(context(args.cwd), args),
@@ -192,6 +214,7 @@ const importRun = defineCommand({
     retryRejected: { type: 'boolean', description: t('args.importRetryRejected') },
     resetState: { type: 'boolean', description: t('args.importResetState') },
     json: { type: 'boolean', description: t('args.importJson') },
+    ...s3Args,
   },
   run: ({ args }) => runImportRun(context(args.cwd), args),
 })
@@ -221,7 +244,7 @@ const main = defineCommand({
     }),
     import: defineCommand({
       meta: { name: 'import', description: t('command.import') },
-      subCommands: { plan: importPlan, run: importRun },
+      subCommands: { plan: importPlan, run: importRun, redirects: importRedirects },
     }),
   },
 })
