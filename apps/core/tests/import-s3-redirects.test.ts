@@ -8,7 +8,7 @@ import { fr } from '../cli/i18n/fr'
 import { parseCsv } from '../cli/lib/import/csv'
 import { parseManifest, sourceKind } from '../cli/lib/import/manifest'
 import { scanBucket } from '../cli/lib/import/plan'
-import { buildRedirects, type MappingRow, oldAddress, parseMapping, REDIRECT_FORMATS, redirectOrigin, renderRedirects } from '../cli/lib/import/redirects'
+import { buildRedirects, type MappingRow, oldAddress, parseMapping, REDIRECT_FORMATS, redirectOrigin, regexEscaped, renderRedirects } from '../cli/lib/import/redirects'
 import { createS3Reader, parseS3Url, S3_ACCESS_KEY_VARIABLE, S3_SECRET_KEY_VARIABLE, s3Hint, type S3Sdk, s3SettingsFrom, s3SourceError, s3Url } from '../cli/lib/import/s3'
 import { openSource, type SourceError } from '../cli/lib/import/sources'
 import { renderMapping } from '../cli/lib/import/state'
@@ -373,5 +373,16 @@ describe('messages de la CLI', () => {
       expect(messages['import.error.redirectFormat']).toContain('{formats}')
     }
     expect(REDIRECT_FORMATS).toEqual(['nginx', 'caddy', 'apache', 'cloudflare', 'json'])
+  })
+})
+
+describe('redirections : échappement des expressions Apache', () => {
+  it('tout caractère spécial échappé, antislash compris : l\'expression ne vise que le chemin exact', () => {
+    const path = String.raw`/up\loads/a.b(1)+[x]{2}$^|?*.jpg`
+    const escaped = regexEscaped(path)
+    expect(escaped).toBe(String.raw`/up\\loads/a\.b\(1\)\+\[x\]\{2\}\$\^\|\?\*\.jpg`)
+    const pattern = new RegExp(`^${escaped}$`)
+    expect(pattern.test(path)).toBe(true)
+    expect(pattern.test(path.replace('a.b', 'aXb'))).toBe(false)
   })
 })

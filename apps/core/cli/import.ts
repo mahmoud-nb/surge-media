@@ -42,6 +42,21 @@ const WAIT_NOTICE_INTERVAL_MS = 30_000
 /** Problèmes du manifeste et lignes en échec détaillés au plus ; le reste est compté. */
 const SHOWN_LIMIT = 20
 
+/**
+ * Écrit un fichier produit par la commande. Sans `force`, création exclusive (`wx`) : un fichier apparu
+ * depuis la vérification du début n'est jamais écrasé (false si le fichier existe déjà).
+ */
+export function writeOutputFile(path: string, content: string, force: boolean, mode?: number): boolean {
+  try {
+    writeFileSync(path, content, { flag: force ? 'w' : 'wx', ...(mode === undefined ? {} : { mode }) })
+    return true
+  }
+  catch (error) {
+    if ((error as NodeJS.ErrnoException).code === 'EEXIST') return false
+    throw error
+  }
+}
+
 function fail(message: string): never {
   cancel(message)
   process.exit(1)
@@ -108,7 +123,9 @@ export async function runImportPlan(ctx: CliContext, args: ImportPlanArgs): Prom
   progress.stop(t('import.plan.scanDone', { count: report.files.length, size: formatBytes(report.totalBytes, locale) }))
 
   if (report.files.length === 0) fail(t('import.plan.nothing', { path: root }))
-  writeFileSync(out, manifestHeader() + report.files.map(file => manifestLine(planDraft(file))).join(''), { mode: 0o600 })
+  if (!writeOutputFile(out, manifestHeader() + report.files.map(file => manifestLine(planDraft(file))).join(''), Boolean(args.force), 0o600)) {
+    fail(t('import.error.outExists', { path: out }))
+  }
   if (report.rejected.length > 0) {
     writeFileSync(rejectedPath, csvLine(['source', 'reason', 'detail']) + report.rejected.map(item => csvLine([item.source, item.reason, item.detail])).join(''), { mode: 0o600 })
   }
@@ -496,7 +513,7 @@ export function runImportRedirects(ctx: CliContext, args: ImportRedirectsArgs): 
     title: t('import.redirects.title', { count: plan.rules.length }),
     usage: redirectUsage(t, format),
   })
-  if (out) writeFileSync(out, content)
+  if (out && !writeOutputFile(out, content, Boolean(args.force))) stop(t('import.error.outExists', { path: out }))
   else process.stdout.write(content)
 
   note(t('import.redirects.summary', { count: plan.rules.length, notImported: plan.notImported }))

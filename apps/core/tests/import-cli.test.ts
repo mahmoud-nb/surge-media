@@ -1,10 +1,10 @@
-import { mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterAll, describe, expect, it, vi } from 'vitest'
 import { en } from '../cli/i18n/en'
 import { fr } from '../cli/i18n/fr'
-import { importFiles, readApiKey, resolveProject, serverUrl } from '../cli/import'
+import { importFiles, readApiKey, resolveProject, serverUrl, writeOutputFile } from '../cli/import'
 import { ApiError, type ApiMedia, apiRoot, createApiClient, exhaustedPolicy, isFatalApiError, MAX_SERVER_WAITS, NETWORK_RETRY_DELAYS_MS, permanentUrl, RATE_LIMIT_VARIABLES, retryAfterSeconds } from '../cli/lib/import/api'
 import { csvField, csvLine, CsvError, parseCsv } from '../cli/lib/import/csv'
 import { folderSegments, manifestHeader, manifestLine, manifestRef, type ManifestRow, parseManifest, sourceKind } from '../cli/lib/import/manifest'
@@ -610,6 +610,17 @@ describe('ligne de progression', () => {
     expect(fitLine('a\r\n  b', 10)).toBe('a b')
     expect(fitLine('éééééé', 4)).toBe('ééé…')
     expect(fitLine('abcd', 4)).toBe('abcd')
+  })
+})
+
+describe('fichiers produits', () => {
+  it('jamais écrasés sans --force, même apparus après la vérification ; écrasés avec', () => {
+    const path = join(TMP, 'sortie.csv')
+    expect(writeOutputFile(path, 'a', false, 0o600)).toBe(true)
+    expect(writeOutputFile(path, 'b', false)).toBe(false)
+    expect(readFileSync(path, 'utf8')).toBe('a')
+    expect(writeOutputFile(path, 'c', true)).toBe(true)
+    expect(readFileSync(path, 'utf8')).toBe('c')
   })
 })
 

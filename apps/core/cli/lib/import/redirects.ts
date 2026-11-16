@@ -161,7 +161,8 @@ export interface RedirectLabels {
 }
 
 const quoted = (value: string) => `"${value}"`
-const regexEscaped = (value: string) => value.replace(/[.*+?^()|[\]]/g, '\\$&')
+/** Échappe tout caractère spécial d'une expression régulière, antislash compris, même ceux déjà écartés en amont. */
+export const regexEscaped = (value: string) => value.replace(/[\\^$.*+?()[\]{}|]/g, '\\$&')
 const comments = (labels: RedirectLabels) => [labels.title, ...labels.usage].map(line => `# ${line}\n`).join('')
 
 /**
