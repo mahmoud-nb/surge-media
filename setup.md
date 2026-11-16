@@ -645,8 +645,12 @@ check the result before loading it (`nginx -t`, `caddy validate`, `apachectl con
 
 **Good to know.**
 
-- Uploads are limited to 60 per minute and per credential by default: raise `NUXT_API_RATE_LIMIT_UPLOADS` (§ 7.7)
-  for the time of a large import. The command waits when the server asks it to.
+- Uploads are limited to 60 per minute and per credential by default, and a file costs up to three requests
+  (lookup by reference, lookup by contents, upload). For a large import, raise both `NUXT_API_RATE_LIMIT_UPLOADS`
+  and `NUXT_API_RATE_LIMIT_SECRET` (`NUXT_API_RATE_LIMIT_PERSONAL` with a personal token) for the time of the import
+  (§ 7.7), then set them back. The command waits when the server asks it to, and names the limit that slowed it down.
+  Order of magnitude measured on a laptop (SQLite, local storage): 5,000 images, 5.9 GB, about 84 min at the
+  default limits, 12 min with the upload limit raised, 7 min with both.
 - The files are **copied**: an import into the bucket SurgeMedia uses does not move the objects that were already
   there. Keep the former location readable until your application points to the new URLs, then remove it.
 - When the server has neither `NUXT_SITE_URL` nor `NUXT_MEDIA_PUBLIC_URL`, pass `--public-url` so that the mapping

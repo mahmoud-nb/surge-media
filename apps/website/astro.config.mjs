@@ -67,6 +67,7 @@ export default defineConfig({
           translations: { fr: 'Guides' },
           items: [
             { slug: 'guides/environments' },
+            { slug: 'guides/migrating' },
             { slug: 'guides/security' },
             { slug: 'guides/roles' },
           ],
