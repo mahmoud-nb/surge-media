@@ -3,3 +3,12 @@
 
 # Clé de chiffrement des seconds facteurs propre aux tests (apps/core/tests/mfa.test.ts), sans usage réel.
 0bd5a9b5dd159a507d0b506812ce760c00d00a81:apps/core/tests/mfa.test.ts:generic-api-key:36
+
+# Les exceptions de l'import sont globales (fichier:règle:ligne, sans commit) : une branche rebasée ou fusionnée
+# par squash change l'identifiant des commits. Les lignes actuelles portent aussi `gitleaks:allow`.
+# Nom de la variable d'environnement du secret S3 (S3_SECRET_KEY_VARIABLE) passé à un message, pas une valeur.
+apps/core/cli/import.ts:generic-api-key:66
+# Fausse clé secrète des tests de l'import (sm_sk_test_…), envoyée à un faux serveur.
+apps/core/tests/import-cli.test.ts:generic-api-key:246
+# Première rédaction de l'un des commentaires ci-dessus, qui citait ce nom après le mot-clé de la règle.
+.gitleaksignore:generic-api-key:7

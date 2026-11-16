@@ -116,5 +116,27 @@ export const MEDIA_ERROR_CODES = [
   'INVALID_TEXT_TRACK', // fichier de sous-titres illisible (422, data.line, data.detail)
   'PROCESSING_DISABLED', // traitement des vidéos inactif (aucun mode, ou aucun processus de travail vu) (409)
   'PROCESSING_PENDING', // diffusion retenue tant qu'une piste de métadonnées n'est pas retirée (503, Retry-After)
+  'SOURCE_REF_EXISTS', // envoi dont la référence d'origine existe déjà dans le projet (409, data.mediaId)
 ] as const
 export type MediaErrorCode = (typeof MEDIA_ERROR_CODES)[number]
+
+/**
+ * Référence d'origine d'un média importé (`Media.sourceRef` ; .claude/architecture-import.md, IM6) :
+ * ancien chemin, ancienne URL ou identifiant du système d'origine. VARCHAR(191) sous MySQL ; une
+ * référence plus longue est remplacée par son empreinte par l'outil d'import.
+ */
+export const SOURCE_REF_MAX_LENGTH = 191
+
+/**
+ * Référence d'origine telle qu'elle est enregistrée et comparée : espaces de bord retirés, forme NFC.
+ * null : vide, trop longue, ou avec un caractère de contrôle (jamais tronquée : deux références
+ * distinctes ne doivent pas se confondre).
+ */
+export function normalizeSourceRef(value: string): string | null {
+  const ref = value.normalize('NFC').trim()
+  if (ref.length === 0 || ref.length > SOURCE_REF_MAX_LENGTH || /\p{Cc}/u.test(ref)) return null
+  return ref
+}
+
+/** Empreinte SHA-256 d'un fichier, en hexadécimal minuscule (`Media.checksum`). */
+export const CHECKSUM_PATTERN = /^[a-f0-9]{64}$/

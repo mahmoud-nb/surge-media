@@ -34,6 +34,7 @@ export const fr = {
     TAG_NAME_TAKEN: 'Une étiquette porte déjà ce nom.',
     TAG_SLUG_TAKEN: 'Une étiquette utilise déjà cet identifiant.',
     TAG_LIMIT_REACHED: 'Le nombre maximal d\'étiquettes est atteint.',
+    SOURCE_REF_EXISTS: 'Ce fichier a déjà été importé.',
     TOO_MANY_TAGS: 'Ce média porte déjà le nombre maximal d\'étiquettes.',
     METHOD_NOT_ALLOWED: 'Opération non permise.',
     REQUEST_TIMEOUT: 'La demande a pris trop de temps.',

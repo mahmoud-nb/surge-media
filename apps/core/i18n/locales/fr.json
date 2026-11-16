@@ -738,6 +738,7 @@
       "unknownUploader": "Compte ou identifiant supprimé",
       "createdAt": "Téléversé le",
       "checksum": "Empreinte SHA-256",
+      "sourceRef": "Référence d'origine (import)",
       "editTitle": "Description",
       "saved": "Modifications enregistrées.",
       "backToProject": "Retour aux médias du projet",

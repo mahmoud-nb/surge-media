@@ -33,5 +33,5 @@ export default defineApiHandler(async (event, principal) => {
   const updated = await removeMediaPoster(media)
   const expires = apiLinkExpiry()
   setResponseHeader(event, 'ETag', mediaEtag(updated, expires))
-  return toApiMedia(updated, mediaBaseUrl(event), expires)
+  return toApiMedia(updated, mediaBaseUrl(event), expires, principal)
 })

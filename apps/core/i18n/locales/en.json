@@ -738,6 +738,7 @@
       "unknownUploader": "Deleted account or credential",
       "createdAt": "Uploaded on",
       "checksum": "SHA-256 checksum",
+      "sourceRef": "Source reference (import)",
       "editTitle": "Description",
       "saved": "Changes saved.",
       "backToProject": "Back to project media",
