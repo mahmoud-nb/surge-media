@@ -95,6 +95,11 @@ export const JOB_RETRY_DELAYS_MS = [30_000, 300_000] as const
 export const JOB_PROGRESS_WRITE_MS = 5_000
 /** Priorité des tâches créées pour les vidéos déjà envoyées (passent après les envois récents). */
 export const BACKFILL_PRIORITY = -10
+/**
+ * Priorité de la tâche d'une vidéo importée (envoi avec une référence d'origine ;
+ * .claude/architecture-import.md, IM9) : après les envois courants, avant le traitement de l'existant.
+ */
+export const IMPORT_PRIORITY = -5
 /** Un processus de travail vu dans cette fenêtre rend le mode `external` actif. */
 export const WORKER_SEEN_WINDOW_MS = 300_000
 /** Présence d'un processus de travail : `Setting` `videoWorker:<id>`, réécrit toutes les 60 s. */

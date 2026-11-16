@@ -132,6 +132,11 @@ export interface Media {
   focalPoint: FocalPoint | null
   /** Échéance des URL signées ; null pour un média public (URL permanentes). */
   urlExpiresAt: string | null
+  /**
+   * Référence d'origine d'un média importé (ancien chemin, ancienne URL) : lisible seulement avec une clé
+   * secrète ou un jeton personnel, donc toujours null pour ce client (clé publique, jeton délégué).
+   */
+  sourceRef: string | null
   createdAt: string
   updatedAt: string
 }

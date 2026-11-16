@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto'
 import type { ApiFolder, ApiMedia, ApiMediaProcessing, ApiMediaSource, ApiPreset, ApiProject, ApiTag, ApiTagRef, ApiTextTrack } from '#shared/schemas/api'
-import { API_LINK_BUCKET, API_LINK_TTL } from '#shared/utils/api'
+import { API_LINK_BUCKET, API_LINK_TTL, type ApiCredentialType } from '#shared/utils/api'
 import { extensionForMime } from '#shared/utils/media'
 import type { TokenScope } from '#shared/utils/permissions'
 import type { TransformFormat, TransformPolicy } from '#shared/utils/transforms'
@@ -48,6 +48,19 @@ export function toApiTag(tag: Tag, mediaCount?: number): ApiTag {
   }
 }
 
+/** Identité qui lit une représentation : seul son type compte. */
+export type CredentialViewer = { type: ApiCredentialType }
+
+/**
+ * La référence d'origine d'un média importé (ancien chemin, ancienne URL, identifiant interne du système
+ * d'origine ; .claude/architecture-import.md, IM6) ne sort que vers un identifiant de serveur : clé
+ * secrète ou jeton personnel. Jamais vers un navigateur (clé publique, jeton délégué), qui ne peut ni
+ * la lire, ni filtrer par elle ou par empreinte, ni la poser.
+ */
+export function seesSourceRef(viewer: CredentialViewer): boolean {
+  return viewer.type === 'secret' || viewer.type === 'personal'
+}
+
 /** Échéance des URL signées incluses dans les réponses : ~1 h, alignée sur le quart d'heure. */
 export function apiLinkExpiry(nowMs = Date.now()): number {
   return alignedExpiry(Math.floor(nowMs / 1000), API_LINK_TTL, API_LINK_BUCKET)
@@ -56,9 +69,10 @@ export function apiLinkExpiry(nowMs = Date.now()): number {
 /**
  * Média v1 : URL permanentes pour un média public ; pour un média privé, URL signées (fichier et
  * sources d'une vidéo, aperçu, affiche, et gabarit des dérivés avec le droit « derived ») valables
- * jusqu'à `expires`, identiques pendant chaque quart d'heure.
+ * jusqu'à `expires`, identiques pendant chaque quart d'heure. `viewer` : identité qui lit ; la
+ * référence d'origine d'un média importé n'est montrée qu'à un identifiant de serveur (`seesSourceRef`).
  */
-export function toApiMedia(media: ApiMediaRecord, base: string, expires: number): ApiMedia {
+export function toApiMedia(media: ApiMediaRecord, base: string, expires: number, viewer: CredentialViewer | null = null): ApiMedia {
   const signed = media.visibility === 'PRIVATE'
   const signature = (access: SignedAccess) => (signed ? `?${signMediaAccess(media, access, expires)}` : '')
   const hasPreview = hasDerivedFiles(media)
@@ -92,6 +106,7 @@ export function toApiMedia(media: ApiMediaRecord, base: string, expires: number)
     processing: toApiProcessing(media, media.jobs[0]),
     focalPoint: mediaFocalPoint(media),
     urlExpiresAt: signed ? new Date(expires * 1000).toISOString() : null,
+    sourceRef: viewer && seesSourceRef(viewer) ? media.sourceRef : null,
     createdAt: media.createdAt.toISOString(),
     updatedAt: media.updatedAt.toISOString(),
   }

@@ -32,6 +32,7 @@ export const en: ClientMessages = {
     TAG_NAME_TAKEN: 'A tag already has this name.',
     TAG_SLUG_TAKEN: 'A tag already uses this identifier.',
     TAG_LIMIT_REACHED: 'The maximum number of tags has been reached.',
+    SOURCE_REF_EXISTS: 'This file has already been imported.',
     TOO_MANY_TAGS: 'This media already carries the maximum number of tags.',
     METHOD_NOT_ALLOWED: 'Operation not allowed.',
     REQUEST_TIMEOUT: 'The request took too long.',

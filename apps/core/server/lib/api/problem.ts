@@ -22,6 +22,8 @@ export interface ProblemExtensions {
   timeout?: number
   /** Étiquettes inconnues de ce projet (TAG_NOT_FOUND). */
   tags?: string[]
+  /** Média du projet qui porte déjà la référence d'origine (SOURCE_REF_EXISTS). */
+  mediaId?: string
 }
 
 export interface ProblemOptions {
@@ -85,6 +87,8 @@ function problemDetail(code: ApiErrorCode, data: Record<string, unknown>): strin
       return 'No such text track for this video.'
     case 'VERSION_CONFLICT':
       return 'The file was replaced by another request in the meantime.'
+    case 'SOURCE_REF_EXISTS':
+      return 'An active media item of this project already carries this source reference (see mediaId): nothing was created.'
     case 'FOLDER_NOT_FOUND':
       return 'No such folder in this space.'
     case 'FOLDER_NAME_TAKEN':
@@ -128,6 +132,7 @@ function problemExtensions(code: ApiErrorCode, data: Record<string, unknown>): P
   if (code === 'UNSUPPORTED_TYPE' && Array.isArray(data.accepted)) return { accepted: data.accepted.filter(type => typeof type === 'string') }
   if (code === 'UPLOAD_TIMEOUT' && Number.isInteger(data.timeout)) return { timeout: data.timeout as number }
   if (code === 'TAG_NOT_FOUND' && Array.isArray(data.tags)) return { tags: data.tags.filter(tag => typeof tag === 'string') }
+  if (code === 'SOURCE_REF_EXISTS' && typeof data.mediaId === 'string') return { mediaId: data.mediaId }
   return undefined
 }
 

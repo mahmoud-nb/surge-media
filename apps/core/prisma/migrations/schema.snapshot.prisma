@@ -451,6 +451,10 @@ model Media {
   uploadSubject     String?
   /// Média d'origine d'une copie créée par duplication
   duplicatedFromId  String?
+  /// Référence d'origine d'un média importé (ancien chemin, ancienne URL ou identifiant du système
+  /// d'origine ; .claude/architecture-import.md, IM6) : fixée à l'envoi par l'API v1, 191 caractères au
+  /// plus, comparée à l'identique par l'application ; jamais copiée par une duplication
+  sourceRef         String?
   createdAt         DateTime   @default(now())
   updatedAt         DateTime   @updatedAt
   /// Suppression logique (corbeille) ; null = média actif
@@ -477,6 +481,9 @@ model Media {
   @@index([deletedAt, createdAt])
   @@index([duplicatedFromId])
   @@index([uploadedByTokenId])
+  /// Reprise d'un import : un envoi dont la référence existe déjà dans le projet est refusé (non unique
+  /// en base : un média restauré de la corbeille peut partager la référence d'un nouvel envoi)
+  @@index([projectId, sourceRef])
 }
 
 /// Étiquette des médias (architecture-tags.md) : globale (projectId null : bibliothèque et tous les

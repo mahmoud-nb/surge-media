@@ -8,7 +8,7 @@ import { mediaSearchColumns, normalizeSearchText } from '#shared/utils/search'
 import { sameFocalPoint } from '#shared/utils/transforms'
 import { isConvertedContainer, type VideoHdrTransfer, type VideoMetadata, videoMetadata, type VideoRewrite, VIDEO_REWRITES } from '#shared/utils/video'
 import type { TagViewer } from '#shared/utils/tags'
-import { BACKFILL_PRIORITY, type ProcessingStateValue, RENDITION_FORMATS, RENDITION_NAMES, type RenditionName } from '#shared/utils/video-processing'
+import { BACKFILL_PRIORITY, IMPORT_PRIORITY, type ProcessingStateValue, RENDITION_FORMATS, RENDITION_NAMES, type RenditionName } from '#shared/utils/video-processing'
 import type { AccessToken, Media, MediaJob, MediaRendition, MediaTextTrack, Prisma } from '../../generated/prisma/client'
 import type { Space } from '../../utils/access'
 import { folderWhere, requireFolderInSpace } from '../folders/service'
@@ -122,6 +122,11 @@ export interface MediaProvenance {
   userId: string | null
   tokenId?: string | null
   subject?: string | null
+  /**
+   * Référence d'origine d'un média importé (déjà normalisée, `normalizeSourceRef`) : seulement à la
+   * création par l'API v1 (`createMedia`) ; une copie ne la reprend jamais.
+   */
+  sourceRef?: string | null
 }
 
 /** Options d'analyse d'un fichier reçu : types restreints (contrainte d'un jeton délégué). */
@@ -213,6 +218,8 @@ export function toMediaDetail(media: MediaWithUploader, viewer: TagViewer) {
     checksum: media.checksum,
     metadata: media.metadata,
     duplicatedFromId: media.duplicatedFromId,
+    /** Référence d'origine d'un média importé (ancien chemin, ancienne URL…), null sinon. */
+    sourceRef: media.sourceRef,
     /** Pistes de texte d'une vidéo ; `url` signée (droit « admin ») si le média est privé ou dans la corbeille. */
     textTracks: media.textTracks.map((track, index) => ({
       id: track.id,
@@ -470,8 +477,31 @@ async function processesFile(kind: MediaKind, mimeType: string): Promise<boolean
 }
 
 /**
+ * Média actif d'un espace qui porte exactement cette référence d'origine (le plus récent), ou null.
+ * Comparaison refaite ici à l'identique : la collation par défaut de MySQL ignore la casse, les
+ * accents et les espaces de fin, celles de SQLite et de PostgreSQL non.
+ */
+export async function findMediaBySourceRef(space: Space, sourceRef: string): Promise<Pick<Media, 'id' | 'sourceRef'> | null> {
+  const prisma = await usePrisma()
+  const candidates = await prisma.media.findMany({
+    where: { projectId: projectIdOf(space), sourceRef, deletedAt: null },
+    select: { id: true, sourceRef: true },
+    orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+    take: SOURCE_REF_CANDIDATES,
+  })
+  return candidates.find(candidate => candidate.sourceRef === sourceRef) ?? null
+}
+
+/** Variantes de casse ou d'accents d'une même référence lues au plus (MySQL) : très au-delà du plausible. */
+const SOURCE_REF_CANDIDATES = 50
+
+/**
  * Nouveau média dans un espace : fichier écrit dans le stockage puis enregistré en base (annulé si l'une échoue).
  * Vidéo, traitement actif : tâche créée dans la même écriture (création imbriquée, atomique), état « en attente ».
+ * `provenance.sourceRef` (import par l'API v1) : refus si un média actif de l'espace la porte déjà
+ * (409 SOURCE_REF_EXISTS, `data.mediaId`), avant toute analyse et toute écriture. Deux envois simultanés
+ * de la même référence peuvent passer tous les deux (aucune contrainte en base) : l'outil d'import
+ * n'envoie jamais deux fois la même en parallèle.
  */
 export async function createMedia(
   space: Space,
@@ -482,6 +512,12 @@ export async function createMedia(
 ): Promise<MediaWithUploader> {
   const folderId = input.folderId ?? null
   if (folderId) await requireFolderInSpace(space, folderId)
+  const sourceRef = provenance.sourceRef ?? null
+  // Reprise d'un import : rien n'est analysé ni stocké pour une référence déjà présente.
+  if (sourceRef) {
+    const existing = await findMediaBySourceRef(space, sourceRef)
+    if (existing) throw mediaError(409, 'SOURCE_REF_EXISTS', { mediaId: existing.id })
+  }
   const analyzed = await analyze(upload, options)
   const storage = await useMediaStorage()
   const stored = await storeOriginal(upload, analyzed)
@@ -501,8 +537,10 @@ export async function createMedia(
         title,
         altText,
         ...provenanceData(provenance),
+        sourceRef,
         ...(processing
-          ? { processingState: 'PENDING', jobs: { create: { sourceKey: stored.key, priority: jobPriority(data.metadata), runAfter: new Date() } } }
+          // Vidéo d'un import (IM9) : après les envois courants, sauf si le fichier est retenu en attendant.
+          ? { processingState: 'PENDING', jobs: { create: { sourceKey: stored.key, priority: jobPriority(data.metadata, sourceRef ? IMPORT_PRIORITY : 0), runAfter: new Date() } } }
           : {}),
       },
       include: MEDIA_INCLUDE,

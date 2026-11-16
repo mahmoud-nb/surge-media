@@ -77,5 +77,5 @@ export default defineApiHandler(async (event, principal) => {
   setResponseStatus(event, 201)
   setResponseHeader(event, 'ETag', mediaEtag(copy, expires))
   if (location) setResponseHeader(event, 'Location', location)
-  return toApiMedia(copy, mediaBaseUrl(event), expires)
+  return toApiMedia(copy, mediaBaseUrl(event), expires, principal)
 })

@@ -30,6 +30,7 @@ export const imageMedia: Media = {
   processing: null,
   focalPoint: { x: 0.3, y: 0.6 },
   urlExpiresAt: null,
+  sourceRef: null,
   createdAt: '2026-10-01T10:00:00.000Z',
   updatedAt: '2026-10-02T10:00:00.000Z',
 }

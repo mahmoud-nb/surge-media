@@ -1136,6 +1136,14 @@ const pageFlash = flash.consume()
                   <NuxtTime :datetime="media.createdAt" :locale="locale" date-style="medium" time-style="short" />
                 </dd>
               </div>
+              <div v-if="media.sourceRef" class="grid gap-0.5 sm:col-span-2">
+                <dt class="text-muted-foreground">
+                  {{ t('media.detail.sourceRef') }}
+                </dt>
+                <dd class="font-mono text-xs break-all text-foreground">
+                  {{ media.sourceRef }}
+                </dd>
+              </div>
               <div class="grid gap-0.5 sm:col-span-2">
                 <dt class="text-muted-foreground">
                   {{ t('media.detail.checksum') }}

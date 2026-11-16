@@ -92,11 +92,11 @@ describe('spécification OpenAPI générée depuis les routes', () => {
   it('dérive les paramètres et les corps des schémas zod', () => {
     const list = fr.paths['/projects/{projectId}/media'].get
     expect(list.parameters.map((parameter: Doc) => parameter.name ?? parameter.$ref)).toEqual([
-      '#/components/parameters/projectId', 'q', 'kind', 'visibility', 'ids', 'folder', 'recursive', 'sort', 'limit', 'cursor', 'withTotal', 'tags', 'tagMatch', 'untagged',
+      '#/components/parameters/projectId', 'q', 'kind', 'visibility', 'ids', 'folder', 'recursive', 'sort', 'limit', 'cursor', 'withTotal', 'tags', 'tagMatch', 'untagged', 'sourceRef', 'checksum',
     ])
     const upload = fr.components.requestBodies.MediaUpload.content['multipart/form-data'].schema
     expect(upload.required).toEqual(['file'])
-    expect(Object.keys(upload.properties)).toEqual(['file', 'title', 'altText', 'visibility', 'folderId', 'tags'])
+    expect(Object.keys(upload.properties)).toEqual(['file', 'title', 'altText', 'visibility', 'folderId', 'tags', 'sourceRef'])
     expect(Object.keys(fr.components.schemas).sort()).toEqual([
       'DelegatedToken', 'DelegatedTokenClaims', 'ErrorCatalog', 'Folder', 'FolderList', 'Me', 'Media', 'MediaList', 'MediaProcessing', 'MediaSource', 'MediaTagsBulkResult', 'Preset', 'PresetList', 'Problem',
       'Project', 'ProjectList', 'SignedUrl', 'SignedUrlError', 'SignedUrlList', 'Tag', 'TagList', 'TagRef', 'TextTrack', 'TextTrackList', 'UploadConstraints',
@@ -109,7 +109,7 @@ describe('spécification OpenAPI générée depuis les routes', () => {
     expect(list.description).toContain('**Portée** : `media:read` · **Identifiants** : clé publique, clé secrète, jeton personnel, jeton délégué')
     expect(Object.keys(list.responses)).toEqual(['200', '304', '400', '401', '403', '404', '429'])
     const forbidden = list.responses[403].content['application/problem+json'].examples
-    expect(Object.keys(forbidden).sort()).toEqual(['INSUFFICIENT_SCOPE', 'LISTING_DISABLED', 'ORIGIN_NOT_ALLOWED', 'PROJECT_ARCHIVED', 'SECRET_IN_BROWSER'])
+    expect(Object.keys(forbidden).sort()).toEqual(['CREDENTIAL_NOT_ALLOWED', 'INSUFFICIENT_SCOPE', 'LISTING_DISABLED', 'ORIGIN_NOT_ALLOWED', 'PROJECT_ARCHIVED', 'SECRET_IN_BROWSER'])
     expect(forbidden.LISTING_DISABLED.value).toMatchObject({ type: `${SERVER}/errors#LISTING_DISABLED`, status: 403, code: 'LISTING_DISABLED' })
     expect(list.responses[429].headers['Retry-After']).toEqual({ $ref: '#/components/headers/RetryAfter' })
 
