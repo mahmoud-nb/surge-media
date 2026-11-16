@@ -515,4 +515,6 @@ export const en: Record<MessageKey, string> = {
   'import.redirects.skipped.conflict': '{count} address(es) left out: another file already has a rule for the same path (different former domains? one rule per domain with --format json):',
   'import.redirects.skipped.noOrigin': '{count} source(s) without a domain: the cloudflare format requires full addresses, give --origin:',
   'import.redirects.written': 'Redirects written to {path}. Check the configuration before loading it (nginx -t, caddy validate, apachectl configtest).',
+  'import.hint.s3.region': 'The service refuses the requested region: give the region of the bucket with --s3-region (default us-east-1).',
+  'import.hint.s3.host': 'The host of the bucket was not found: check --s3-endpoint, and add --s3-path-style when the service has no bucket.host addresses (MinIO, Garage…).',
 }

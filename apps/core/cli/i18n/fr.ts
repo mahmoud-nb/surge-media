@@ -516,6 +516,8 @@ export const fr = {
   'import.redirects.skipped.conflict': '{count} adresse(s) écartée(s) : un autre fichier a déjà une règle pour le même chemin (anciens domaines différents ? une règle par domaine avec --format json) :',
   'import.redirects.skipped.noOrigin': '{count} source(s) sans domaine : le format cloudflare exige des adresses complètes, précisez --origin :',
   'import.redirects.written': 'Redirections écrites dans {path}. Vérifiez la configuration avant de la charger (nginx -t, caddy validate, apachectl configtest).',
+  'import.hint.s3.region': 'Le service refuse la région demandée : donnez celle du compartiment avec --s3-region (us-east-1 par défaut).',
+  'import.hint.s3.host': 'L\'hôte du compartiment est introuvable : vérifiez --s3-endpoint, et ajoutez --s3-path-style si le service n\'a pas d\'adresses de la forme compartiment.hôte (MinIO, Garage…).',
 } as const
 
 export type MessageKey = keyof typeof fr

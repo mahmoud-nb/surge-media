@@ -9,7 +9,7 @@ import { parseCsv } from '../cli/lib/import/csv'
 import { parseManifest, sourceKind } from '../cli/lib/import/manifest'
 import { scanBucket } from '../cli/lib/import/plan'
 import { buildRedirects, type MappingRow, oldAddress, parseMapping, REDIRECT_FORMATS, redirectOrigin, renderRedirects } from '../cli/lib/import/redirects'
-import { createS3Reader, parseS3Url, S3_ACCESS_KEY_VARIABLE, S3_SECRET_KEY_VARIABLE, type S3Sdk, s3SettingsFrom, s3SourceError, s3Url } from '../cli/lib/import/s3'
+import { createS3Reader, parseS3Url, S3_ACCESS_KEY_VARIABLE, S3_SECRET_KEY_VARIABLE, s3Hint, type S3Sdk, s3SettingsFrom, s3SourceError, s3Url } from '../cli/lib/import/s3'
 import { openSource, type SourceError } from '../cli/lib/import/sources'
 import { renderMapping } from '../cli/lib/import/state'
 
@@ -101,6 +101,17 @@ describe('adresse et réglages S3', () => {
     expect(code({ name: 'SignatureDoesNotMatch' })).toEqual(['SOURCE_UNREADABLE', 'SignatureDoesNotMatch'])
     expect(code({ name: 'TimeoutError' })).toEqual(['DOWNLOAD_FAILED', 'TimeoutError'])
     expect(code(new Error('boom'))).toEqual(['DOWNLOAD_FAILED', 'Error'])
+  })
+
+  it('erreurs vues sur un vrai service (Garage) : mauvaise région, hôte du compartiment introuvable', () => {
+    const region = s3SourceError({ name: 'AuthorizationHeaderMalformed', Code: 'AuthorizationHeaderMalformed', $metadata: { httpStatusCode: 400 } })
+    expect([region.code, region.detail, s3Hint(region.detail)]).toEqual(['SOURCE_UNREADABLE', 'AuthorizationHeaderMalformed', 'region'])
+    const host = s3SourceError(Object.assign(new Error('getaddrinfo ENOTFOUND anciens.s3.localhost'), { code: 'ENOTFOUND' }))
+    expect([host.code, host.detail, s3Hint(host.detail)]).toEqual(['DOWNLOAD_FAILED', 'ENOTFOUND', 'host'])
+    expect(s3SourceError({ name: 'PermanentRedirect' }).code).toBe('SOURCE_UNREADABLE')
+    expect(s3Hint('AccessDenied')).toBeNull()
+    expect(s3Hint(null)).toBeNull()
+    for (const messages of [fr, en] as Record<string, string>[]) expect(messages['import.hint.s3.region'] && messages['import.hint.s3.host']).toBeTruthy()
   })
 })
 

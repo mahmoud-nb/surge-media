@@ -614,8 +614,9 @@ npx surge-media import plan --from s3://old-media/uploads/ --folders-from-path -
 npx surge-media import run uploads.csv --s3-region eu-west-3 --url https://media.example.com --create-folders
 ```
 
-For an S3-compatible service, add `--s3-endpoint https://…` and, where the service needs it (MinIO), `--s3-path-style`;
-the region defaults to `us-east-1` (`auto` for R2). `SURGE_MEDIA_IMPORT_S3_SESSION_TOKEN` is read for temporary
+For an S3-compatible service, add `--s3-endpoint https://…` and, where the service needs it (MinIO, Garage),
+`--s3-path-style`; the region defaults to `us-east-1` (`auto` for R2, the configured `s3_region` for Garage), and
+the command says so when the service refuses the region. `SURGE_MEDIA_IMPORT_S3_SESSION_TOKEN` is read for temporary
 credentials. The manifest then holds `s3://bucket/key` sources; `plan` reads the first kilobyte of each object to
 recognise its type, `run` downloads each object to a temporary directory before uploading it.
 

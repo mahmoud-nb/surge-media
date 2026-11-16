@@ -13,7 +13,7 @@ import { manifestHeader, manifestLine, type ManifestIssue, type ManifestRow, par
 import { estimatedMinutes, planDraft, scanBucket, scanDirectory } from './lib/import/plan'
 import { buildRedirects, parseMapping, REDIRECT_FORMATS, type RedirectFormat, redirectOrigin, type RedirectSkip, renderRedirects } from './lib/import/redirects'
 import { pendingRows, prepareFolders, prepareTags, runImport } from './lib/import/run'
-import { createS3Reader, parseS3Url, S3_ACCESS_KEY_VARIABLE, S3_SECRET_KEY_VARIABLE, type S3Reader, type S3Sdk, s3SettingsFrom, s3Url } from './lib/import/s3'
+import { createS3Reader, parseS3Url, S3_ACCESS_KEY_VARIABLE, S3_SECRET_KEY_VARIABLE, s3Hint, type S3Reader, type S3Sdk, s3SettingsFrom, s3Url } from './lib/import/s3'
 import { SourceError } from './lib/import/sources'
 import { appendState, countByStatus, type ImportEntry, type ImportStatus, loadState, startState, writeMapping } from './lib/import/state'
 import { ENV_FILE, packageVersion } from './lib/project'
@@ -101,7 +101,8 @@ export async function runImportPlan(ctx: CliContext, args: ImportPlanArgs): Prom
   const report = await (reader && bucket ? scanBucket(reader, bucket.bucket, bucket.key, scanOptions) : scanDirectory(root, scanOptions)).catch((error: unknown) => {
     progress.stop(t('import.plan.scanFailed'))
     const message = error instanceof SourceError ? [error.code, error.detail].filter(Boolean).join(' — ') : (error as Error).message
-    fail(t('import.error.read', { path: root, message }))
+    const hint = error instanceof SourceError ? s3Hint(error.detail) : null
+    fail(`${t('import.error.read', { path: root, message })}${hint ? `\n${t(`import.hint.s3.${hint}`)}` : ''}`)
   })
   progress.stop(t('import.plan.scanDone', { count: report.files.length, size: formatBytes(report.totalBytes, locale) }))
 
@@ -403,6 +404,10 @@ export async function runImportRun(ctx: CliContext, args: ImportRunArgs): Promis
     const problems = rows.map(row => ({ row, entry: entries.get(row.ref) })).filter(item => item.entry?.status === 'failed' || item.entry?.status === 'rejected')
     for (const { row, entry } of problems.slice(0, SHOWN_LIMIT)) log.warn(`${t('import.manifest.line', { line: row.line })} ${row.source} : ${explain(entry!.code, entry!.detail)}`)
     if (problems.length > SHOWN_LIMIT) log.warn(t('import.more', { count: problems.length - SHOWN_LIMIT }))
+    // Compartiment source mal réglé : la même cause pour toutes ses lignes, dite une fois.
+    for (const hint of new Set(problems.map(item => item.row.kind === 's3' ? s3Hint(item.entry!.detail) : null))) {
+      if (hint) log.warn(t(`import.hint.s3.${hint}`))
+    }
     if (outcome.fatal) log.error(t('import.error.api', { code: outcome.fatal.code, detail: outcome.fatal.detail ?? '' }))
     if (!dryRun) log.info(t('import.run.files', { mapping: files.mapping, state: files.state }))
   }

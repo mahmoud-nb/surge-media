@@ -91,11 +91,34 @@ export interface S3Sdk {
  */
 export function s3SourceError(error: unknown): SourceError {
   if (error instanceof SourceError) return error
-  const name = (error as { name?: string, Code?: string } | null)?.name ?? (error as { Code?: string } | null)?.Code ?? 'Error'
-  const status = (error as { $metadata?: { httpStatusCode?: number } } | null)?.$metadata?.httpStatusCode
+  const raw = error as { name?: string, Code?: string, code?: string, cause?: { code?: string }, $metadata?: { httpStatusCode?: number } } | null
+  // Erreur du service : son code (`NoSuchKey`…). Erreur du réseau : le code du système (`ENOTFOUND`…), plus parlant
+  // que le nom générique `Error`.
+  const name = raw?.name && raw.name !== 'Error' ? raw.name : raw?.Code ?? raw?.code ?? raw?.cause?.code ?? raw?.name ?? 'Error'
+  const status = raw?.$metadata?.httpStatusCode
   if (name === 'NoSuchKey' || name === 'NoSuchBucket' || name === 'NotFound' || status === 404) return new SourceError('SOURCE_NOT_FOUND', name)
-  if (name === 'AccessDenied' || name === 'InvalidAccessKeyId' || name === 'SignatureDoesNotMatch' || status === 403) return new SourceError('SOURCE_UNREADABLE', name)
+  if (S3_REFUSALS.has(name) || status === 403) return new SourceError('SOURCE_UNREADABLE', name)
   return new SourceError('DOWNLOAD_FAILED', name)
+}
+
+/** Refus du service qu'un nouvel essai ne changera pas : identifiants, droits, ou région du compartiment. */
+const S3_REFUSALS = new Set(['AccessDenied', 'InvalidAccessKeyId', 'SignatureDoesNotMatch', ...S3_REGION_ERRORS()])
+
+/** Codes par lesquels un service dit que la région demandée n'est pas celle du compartiment (`--s3-region`). */
+function S3_REGION_ERRORS(): string[] {
+  return ['AuthorizationHeaderMalformed', 'PermanentRedirect', 'IllegalLocationConstraintException']
+}
+
+/**
+ * Piste pour l'exploitant d'après le détail d'un échec : `region` (mauvaise `--s3-region`), `host` (hôte du
+ * compartiment introuvable : `--s3-endpoint`, ou `--s3-path-style` pour un service qui n'a pas d'adresses
+ * `compartiment.hôte`), sinon null.
+ */
+export function s3Hint(detail: string | null): 'region' | 'host' | null {
+  if (!detail) return null
+  if (S3_REGION_ERRORS().includes(detail)) return 'region'
+  if (detail === 'ENOTFOUND' || detail === 'EAI_AGAIN') return 'host'
+  return null
 }
 
 export function createS3Reader(sdk: S3Sdk, settings: S3Settings): S3Reader {
