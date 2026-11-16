@@ -50,6 +50,8 @@ export const DIAGNOSE_VARIABLES: readonly VariableSpec[] = [
   ...spec('demo', 'count', ['NUXT_DEMO_ACCOUNTS']),
   ...spec('demo', 'personal', ['NUXT_DEMO_CONTACT_URL', 'NUXT_DEMO_ABUSE_URL', 'NUXT_DEMO_TERMS_URL', 'NUXT_DEMO_LEGAL_PUBLISHER_NAME', 'NUXT_DEMO_LEGAL_TRADE_NAME', 'NUXT_DEMO_LEGAL_REGISTRATION', 'NUXT_DEMO_LEGAL_ADDRESS', 'NUXT_DEMO_LEGAL_EMAIL', 'NUXT_DEMO_LEGAL_PHONE', 'NUXT_DEMO_LEGAL_DIRECTOR', 'NUXT_DEMO_LEGAL_HOST_NAME', 'NUXT_DEMO_LEGAL_HOST_ADDRESS', 'NUXT_DEMO_LEGAL_HOST_PHONE']),
   ...spec('docker', 'shown', ['SURGE_MEDIA_MIGRATE', 'SURGE_MEDIA_SECRETS_DIR']),
+  // Clé de l'API lue par `surge-media import` (cli/import.ts) : jamais dans le .env du serveur, parfois dans le shell.
+  ...spec('api', 'secret', ['SURGE_MEDIA_API_KEY']),
 ]
 
 const BY_NAME = new Map(DIAGNOSE_VARIABLES.map(item => [item.name, item]))

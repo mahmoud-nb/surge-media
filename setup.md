@@ -263,6 +263,8 @@ For video processing in `external` mode, add a second unit running `surge-media 
 | `license clock-reset` | Bring the license reference-time mark back to this machine's clock, after the server clock ran ahead by mistake (§ 7.10); recorded in the audit log; `--yes` to skip the confirmation |
 | `license usage [evaluation\|community\|commercial]` | Show the declared use of the instance, or declare it (§ 7.10); declaring the same value again confirms it; recorded in the audit log. With Docker: `docker compose exec surge-media node node_modules/@surge-media/core/dist/cli/index.mjs license usage community` |
 | `diagnose` | Print a support report without secrets (§ 17.1): version, configuration, database and migrations, storage, tools, license, running server, recent failures. `--out <file>` (mode 0600), `--json`, `--anonymize` (hides host names and the licensee), `--log <file>` (appends the redacted end of an exported log, `--lines`), `--url` or `--no-server` for the health probe. Read-only |
+| `import plan --from <directory>` | Scan a directory of existing media and write a CSV manifest, one line per file (§ 9.1). No server needed. `--out <manifest.csv>`, `--folders-from-path`, `--force` |
+| `import run <manifest.csv>` | Upload the files of a manifest to a project through the API (§ 9.1): resumable, without duplicates. API key in `SURGE_MEDIA_API_KEY` or `--key-file`. `--dry-run`, `--project`, `--root`, `--url`, `--create-folders`, `--create-tags`, `--concurrency`, `--visibility`, `--public-url`, `--no-dedupe`, `--retry-rejected`, `--reset-state`, `--json` |
 | `demo snapshot --out <file.tar.gz>` | Capture the demo's reference content (database and media) into an archive, server running or not (§ 7.11); SQLite and local storage only |
 | `demo restore --from <file.tar.gz>` | Replace the database and media with those of a demo archive, server stopped (§ 7.11). Only with `NUXT_DEMO_MODE=true`, and never over a database that does not come from a demo snapshot |
 
@@ -552,6 +554,66 @@ NUXT_MEDIA_STORAGE_S3_SECRET_ACCESS_KEY="…"
 - With several processes or a worker on another machine, every process must see the same files: the same bucket
   and prefix, or the same disk mounted at the same path.
 - `GET /api/health` checks that the storage answers.
+
+### 9.1 Importing existing media
+
+SurgeMedia only serves the media it has recorded. Files that already sit in a directory, behind URLs, or in the
+bucket you now give to SurgeMedia are not picked up: they are imported once, with `surge-media import`. The
+command is a client of the API: it needs the address of the server and a **secret key** of the target project (or
+a personal token) with the `media:upload` scope, plus `media:write` to create folders and `tags:manage` to create
+tags.
+
+```bash
+# 1. List the files of a directory in a manifest (one line per file, types detected from the contents).
+npx surge-media import plan --from /var/www/uploads --folders-from-path --out uploads.csv
+
+# 2. Check everything without uploading, then import. The key never goes on the command line.
+export SURGE_MEDIA_API_KEY=sm_sk_…
+npx surge-media import run uploads.csv --root /var/www/uploads --url https://media.example.com --create-folders --dry-run
+npx surge-media import run uploads.csv --root /var/www/uploads --url https://media.example.com --create-folders
+```
+
+**Manifest.** A CSV file (UTF-8, comma-separated, quotes when a value holds a comma) with a header line. Only
+`source` is required; write the manifest by hand, or export it from your own database, when the files are behind
+URLs.
+
+| Column | Content |
+| --- | --- |
+| `source` | Path relative to `--root` (default: the directory of the manifest), or an `http(s)://` URL |
+| `ref` | Reference of the file in its former system, 191 characters at most (default: `source`). It makes the import safe to run again |
+| `title`, `alt` | Title and alternative text |
+| `visibility` | `public` (default) or `private` |
+| `folder` | Folder of the project, such as `brand/2024` (created with `--create-folders`) |
+| `tags` | Tag slugs separated by `\|` (created with `--create-tags`) |
+| `filename` | File name to record (default: the last segment of `source`) |
+
+**What a run does.** For each line: read the file (a URL is downloaded to a temporary directory), recognise its
+type, skip it when its reference is already on the server, attach it to an existing media item when the project
+already holds the same contents (`--no-dedupe` to upload anyway), otherwise upload it. Two files are written next
+to the manifest, with mode 0600:
+
+- `<manifest>.mapping.csv`: for each line, `source`, `sourceRef`, `status` (`created`, `exists`, `deduplicated`,
+  `rejected`, `failed`), `mediaId`, `version`, the delivery `url` and an error `code`. Load it in your database to
+  rewrite your URLs; prefer storing `mediaId` and building URLs with `@surge-media/client`. The URL of a private
+  media item is given without its temporary signature.
+- `<manifest>.state.jsonl`: the progress, so that the same command resumes after an interruption. If it is lost,
+  nothing is duplicated: the server refuses a reference it already holds.
+
+Exit code `0`: every line is settled, permanent refusals included; `2`: some lines failed or remain, run the same
+command again; `1`: the command could not run. Press Ctrl+C once to stop after the uploads in progress.
+
+**Good to know.**
+
+- Uploads are limited to 60 per minute and per credential by default: raise `NUXT_API_RATE_LIMIT_UPLOADS` (§ 7.7)
+  for the time of a large import. The command waits when the server asks it to.
+- The files are **copied**: an import into the bucket SurgeMedia uses does not move the objects that were already
+  there. Keep the former location readable until your application points to the new URLs, then remove it.
+- When the server has neither `NUXT_SITE_URL` nor `NUXT_MEDIA_PUBLIC_URL`, pass `--public-url` so that the mapping
+  table holds your public domain.
+- SVG, HEIC and TIFF files are not accepted; MKV, AVI and similar videos only while video processing is active
+  (§ 10). `import plan` lists what it leaves out in `<manifest>.rejected.csv`.
+- With Docker, run it from the host with Node.js, or in the container when the files are mounted in it:
+  `docker compose exec -e SURGE_MEDIA_API_KEY surge-media node node_modules/@surge-media/core/dist/cli/index.mjs import run /import/uploads.csv`.
 
 ## 10. Video processing
 

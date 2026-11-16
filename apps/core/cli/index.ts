@@ -13,6 +13,8 @@
  *   surge-media diagnose [--out <fichier>]        rapport sans secret pour le support (Markdown, ou JSON avec --json)
  *   surge-media demo snapshot --out <archive>     capturer le contenu de référence de la démo (SQLite, stockage local)
  *   surge-media demo restore --from <archive>     remettre la démo à zéro depuis l'archive (serveur arrêté)
+ *   surge-media import plan --from <dossier>      préparer le manifeste CSV d'un import de médias existants
+ *   surge-media import run <manifeste.csv>        envoyer les fichiers du manifeste par l'API v1 (reprenable, sans doublon)
  *
  * Le .env et les données vivent dans le dossier de l'installation : le dossier courant pour le paquet publié,
  * apps/core dans le dépôt des sources (`--cwd` pour un autre dossier ; cli/lib/project.ts).
@@ -23,6 +25,7 @@ import { runInit, runMigrate, runReset, type CliContext } from './database'
 import { runDemoRestore, runDemoSnapshot } from './demo'
 import { runDiagnose } from './diagnose'
 import { createTranslator, detectLocale, langFromArgv, LOCALES } from './i18n'
+import { DEFAULT_CONCURRENCY, runImportPlan, runImportRun } from './import'
 import { isInsideNodeModules, packageVersion, resolveLocation } from './lib/project'
 import { runLicenseClockReset } from './license'
 import { DEFAULT_WEB_PORT, DEFAULT_WORKER_PORT, runServer } from './server'
@@ -158,6 +161,41 @@ const demoRestore = defineCommand({
   run: ({ args }) => runDemoRestore(context(args.cwd), args),
 })
 
+const importPlan = defineCommand({
+  meta: { name: 'plan', description: t('command.import.plan') },
+  args: {
+    ...commonArgs,
+    from: { type: 'string', description: t('args.importFrom'), valueHint: 'path' },
+    out: { type: 'string', description: t('args.importOut'), valueHint: 'manifest.csv' },
+    foldersFromPath: { type: 'boolean', description: t('args.importFoldersFromPath') },
+    force: { type: 'boolean', description: t('args.importForce') },
+  },
+  run: ({ args }) => runImportPlan(context(args.cwd), args),
+})
+
+const importRun = defineCommand({
+  meta: { name: 'run', description: t('command.import.run') },
+  args: {
+    ...commonArgs,
+    manifest: { type: 'positional', required: false, description: t('args.importManifest'), valueHint: 'manifest.csv' },
+    project: { type: 'string', description: t('args.importProject'), valueHint: 'id|slug' },
+    root: { type: 'string', description: t('args.importRoot'), valueHint: 'path' },
+    url: { type: 'string', description: t('args.importUrl'), valueHint: 'url' },
+    keyFile: { type: 'string', description: t('args.importKeyFile'), valueHint: 'path' },
+    publicUrl: { type: 'string', description: t('args.importPublicUrl'), valueHint: 'url' },
+    visibility: { type: 'string', description: t('args.importVisibility'), valueHint: 'public|private' },
+    concurrency: { type: 'string', description: t('args.importConcurrency'), valueHint: String(DEFAULT_CONCURRENCY) },
+    dryRun: { type: 'boolean', description: t('args.importDryRun') },
+    createFolders: { type: 'boolean', description: t('args.importCreateFolders') },
+    createTags: { type: 'boolean', description: t('args.importCreateTags') },
+    dedupe: { type: 'boolean', default: true, description: t('args.importDedupe') },
+    retryRejected: { type: 'boolean', description: t('args.importRetryRejected') },
+    resetState: { type: 'boolean', description: t('args.importResetState') },
+    json: { type: 'boolean', description: t('args.importJson') },
+  },
+  run: ({ args }) => runImportRun(context(args.cwd), args),
+})
+
 const main = defineCommand({
   meta: { name: 'surge-media', version: packageVersion(), description: t('cli.description') },
   subCommands: {
@@ -180,6 +218,10 @@ const main = defineCommand({
     demo: defineCommand({
       meta: { name: 'demo', description: t('command.demo') },
       subCommands: { snapshot: demoSnapshot, restore: demoRestore },
+    }),
+    import: defineCommand({
+      meta: { name: 'import', description: t('command.import') },
+      subCommands: { plan: importPlan, run: importRun },
     }),
   },
 })
