@@ -4,7 +4,7 @@ import { join } from 'node:path'
 import { afterAll, describe, expect, it, vi } from 'vitest'
 import { en } from '../cli/i18n/en'
 import { fr } from '../cli/i18n/fr'
-import { importFiles, readApiKey, resolveProject, serverUrl, writeOutputFile } from '../cli/import'
+import { importFiles, readApiKey, resolveProject, runImportRedirects, serverUrl, writeOutputFile } from '../cli/import'
 import { ApiError, type ApiMedia, apiRoot, createApiClient, exhaustedPolicy, isFatalApiError, MAX_SERVER_WAITS, NETWORK_RETRY_DELAYS_MS, permanentUrl, RATE_LIMIT_VARIABLES, retryAfterSeconds } from '../cli/lib/import/api'
 import { csvField, csvLine, CsvError, parseCsv } from '../cli/lib/import/csv'
 import { folderSegments, manifestHeader, manifestLine, manifestRef, type ManifestRow, parseManifest, sourceKind } from '../cli/lib/import/manifest'
@@ -621,6 +621,27 @@ describe('fichiers produits', () => {
     expect(readFileSync(path, 'utf8')).toBe('a')
     expect(writeOutputFile(path, 'c', true)).toBe(true)
     expect(readFileSync(path, 'utf8')).toBe('c')
+  })
+
+  it('import redirects --out : le fichier seul, rien sur la sortie standard ; sans --out, la sortie standard', () => {
+    const mapping = join(TMP, 'redirects.mapping.csv')
+    writeFileSync(mapping, 'source,sourceRef,status,mediaId,version,url,code\na.jpg,a,created,m1,1,https://media.exemple.fr/m/m1/v1/a.jpg,\n')
+    const ctx = { t: (key: string) => key } as unknown as Parameters<typeof runImportRedirects>[0]
+    const stdout = vi.spyOn(process.stdout, 'write').mockImplementation(() => true)
+    const stderr = vi.spyOn(process.stderr, 'write').mockImplementation(() => true)
+    try {
+      const out = join(TMP, 'redirects.conf')
+      runImportRedirects(ctx, { mapping, format: 'nginx', prefix: '/uploads', out })
+      expect(readFileSync(out, 'utf8')).toContain('"/uploads/a.jpg" "https://media.exemple.fr/m/m1/v1/a.jpg";')
+      expect(stdout).not.toHaveBeenCalled()
+      runImportRedirects(ctx, { mapping, format: 'nginx', prefix: '/uploads' })
+      expect(stdout).toHaveBeenCalledTimes(1)
+      expect(String(stdout.mock.calls[0]![0])).toContain('map $uri $surge_media_redirect')
+    }
+    finally {
+      stdout.mockRestore()
+      stderr.mockRestore()
+    }
   })
 })
 

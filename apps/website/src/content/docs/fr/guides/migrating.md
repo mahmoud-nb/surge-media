@@ -201,7 +201,7 @@ npx surge-media import redirects uploads.mapping.csv --format nginx --prefix /up
 | `cloudflare` | Le CSV des Bulk Redirects (demande `--origin https://www.example.com`) |
 | `json` | La liste brute, pour tout autre outil |
 
-L’ancienne adresse d’un fichier est le chemin de son URL quand `source` est une URL ; pour un chemin ou une clé `s3://`, c’est `--prefix` suivi du chemin. Les règles portent sur le chemin exact et ignorent la chaîne de requête. Les adresses qui contiennent un caractère interprété par la syntaxe de configuration sont écartées et listées. Testez toujours le fichier avant de le charger (`nginx -t`, `caddy validate`, `apachectl configtest`).
+L’ancienne adresse d’un fichier est le chemin de son URL quand `source` est une URL ; pour un chemin ou une clé `s3://`, c’est `--prefix` suivi du chemin, ou de la clé entière (`s3://old-media/uploads/a.jpg` donne `uploads/a.jpg` : omettez `--prefix` si le compartiment était servi depuis sa racine). Les règles portent sur le chemin exact, casse comprise, et ignorent la chaîne de requête (Apache la transmet à la nouvelle URL, qui l’ignore). Les adresses qui contiennent un caractère interprété par la syntaxe de configuration sont écartées et listées. Testez toujours le fichier avant de le charger (`nginx -t`, `caddy validate`, `apachectl configtest`).
 
 Si les anciennes URL appartiennent à un service que vous quittez (un CDN ou une plateforme de médias SaaS), vous ne pouvez pas les rediriger : gardez l’ancien service en lecture seule jusqu’à ce que votre base et vos pages ne contiennent plus que les nouvelles URL.
 
@@ -216,6 +216,6 @@ Si les anciennes URL appartiennent à un service que vous quittez (un CDN ou une
 - **Dates** : la date de création d’un média importé est celle de l’import.
 - **Les dérivés** produits par votre ancien système (vignettes, recadrages) ne sont pas importés : SurgeMedia les produit à la demande depuis l’original.
 - **Un même fichier deux fois dans la source** : il est envoyé une fois ; chaque ligne pointe vers le même média dans la table de correspondance.
-- **Avec Docker**, lancez la commande depuis l’hôte avec Node.js, ou dans le conteneur quand les fichiers y sont montés : `docker compose exec -e SURGE_MEDIA_API_KEY surge-media node node_modules/@surge-media/core/dist/cli/index.mjs import run /import/uploads.csv`.
+- **Avec Docker**, lancez la commande depuis l’hôte avec Node.js, ou dans le conteneur quand les fichiers y sont montés : `docker compose exec -e SURGE_MEDIA_API_KEY surge-media node node_modules/@surge-media/core/dist/cli/index.mjs import run /import/uploads.csv`. La commande écrit son fichier de progression et la table de correspondance à côté du manifeste : montez ce dossier en écriture, ou gardez le manifeste dans un dossier accessible en écriture et passez `--root` vers celui en lecture seule.
 
 Le [guide d’installation](https://github.com/mahmoud-nb/surge-media/blob/main/setup.md#91-importing-existing-media) (en anglais) détaille toutes les options des commandes `import`.

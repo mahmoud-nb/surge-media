@@ -202,6 +202,13 @@ describe('points d\'attention', () => {
     expect(computeFindings(s3, SECRETS)).toEqual([{ level: 'error', code: 's3Incomplete', params: { names: 'NUXT_MEDIA_STORAGE_S3_BUCKET, NUXT_MEDIA_STORAGE_S3_SECRET_ACCESS_KEY' } }])
   })
 
+  it('signale un préfixe de stockage sans « / » final (clés « prodoriginals/… »), pas un préfixe correct ni absent', () => {
+    const withPrefix = (prefix: string | null) => sampleReport({ storage: { driver: 's3', prefix, local: null, s3: { endpoint: null, region: 'eu-north-1', bucket: 'medias', forcePathStyle: false, accessKey: true, secretKey: true } } })
+    expect(computeFindings(withPrefix('prod'), SECRETS)).toEqual([{ level: 'warning', code: 'storagePrefixNoSlash', params: { prefix: 'prod' } }])
+    expect(computeFindings(withPrefix('prod/'), SECRETS)).toEqual([])
+    expect(computeFindings(withPrefix(null), SECRETS)).toEqual([])
+  })
+
   it('rappelle la licence et l\'usage, sauf en démo', () => {
     const license = { ...(sampleReport().license as { ok: true, data: never }).data as object, usage: null, state: 'expired', expiresAt: '2026-09-01T00:00:00.000Z' }
     expect(codes(sampleReport({ license: { ok: true, data: license as never } }))).toEqual(['license_expired', 'usageUndeclared'])

@@ -141,6 +141,10 @@ export function buildRedirects(rows: readonly MappingRow[], options: RedirectOpt
       plan.skipped.push({ source: row.source, reason: 'unsafe' })
       continue
     }
+    if (options.format === 'apache' && apacheTarget(row.url) === null) {
+      plan.skipped.push({ source: row.source, reason: 'unsafe' })
+      continue
+    }
     const key = config ? address.path : `${origin ?? ''}${address.path}`
     const known = seen.get(key)
     if (known !== undefined) {
@@ -160,6 +164,37 @@ export interface RedirectLabels {
   usage: string[]
 }
 
+/**
+ * Cible d'une règle Apache. `RedirectMatch` encode toujours sa cible, `%` compris : `%20` deviendrait `%2520`.
+ * On écrit donc l'URL décodée, qu'Apache réencode à l'identique. Null quand elle garde une séquence que
+ * `decodeURI` ne décode pas (`%3F`, `%23`, `%2F`…) : décodée, elle changerait de sens ; encodée, Apache la casse.
+ */
+export function apacheTarget(url: string): string | null {
+  let decoded: string
+  try {
+    decoded = decodeURI(url)
+  }
+  catch {
+    return null
+  }
+  return /%[0-9a-f]{2}/i.test(decoded) || UNSAFE.test(decoded) ? null : decoded
+}
+
+/**
+ * Chemins des règles nginx à écrire en expression régulière. Les chaînes d'une `map` nginx se comparent sans
+ * tenir compte de la casse, et deux chaînes qui ne diffèrent que par la casse font refuser toute la
+ * configuration (`conflicting parameter`). Ces chemins-là passent en `~^…$`, sensible à la casse ; les autres
+ * restent des chaînes, trouvées par table de hachage.
+ */
+export function nginxCaseCollisions(rules: readonly RedirectRule[]): Set<string> {
+  const byLower = new Map<string, string[]>()
+  for (const rule of rules) {
+    const lower = rule.path.toLowerCase()
+    byLower.set(lower, [...byLower.get(lower) ?? [], rule.path])
+  }
+  return new Set([...byLower.values()].filter(paths => paths.length > 1).flat())
+}
+
 const quoted = (value: string) => `"${value}"`
 /** Échappe tout caractère spécial d'une expression régulière, antislash compris, même ceux déjà écartés en amont. */
 export const regexEscaped = (value: string) => value.replace(/[\\^$.*+?()[\]{}|]/g, '\\$&')
@@ -173,12 +208,15 @@ const comments = (labels: RedirectLabels) => [labels.title, ...labels.usage].map
  */
 export function renderRedirects(format: RedirectFormat, rules: readonly RedirectRule[], labels: RedirectLabels): string {
   switch (format) {
-    case 'nginx':
-      return `${comments(labels)}map $uri $surge_media_redirect {\n    default "";\n${rules.map(rule => `    ${quoted(rule.path)} ${quoted(rule.to)};\n`).join('')}}\n`
+    case 'nginx': {
+      const caseSensitive = nginxCaseCollisions(rules)
+      const key = (path: string) => quoted(caseSensitive.has(path) ? `~^${regexEscaped(path)}$` : path)
+      return `${comments(labels)}map $uri $surge_media_redirect {\n    default "";\n${rules.map(rule => `    ${key(rule.path)} ${quoted(rule.to)};\n`).join('')}}\n`
+    }
     case 'caddy':
       return `${comments(labels)}map {path} {surge_media_redirect} {\n${rules.map(rule => `\t${quoted(rule.path)} ${quoted(rule.to)}\n`).join('')}\tdefault ""\n}\n@surge_media_moved expression \`{surge_media_redirect} != ""\`\nredir @surge_media_moved {surge_media_redirect} 301\n`
     case 'apache':
-      return `${comments(labels)}${rules.map(rule => `RedirectMatch 301 ${quoted(`^${regexEscaped(rule.path)}$`)} ${quoted(rule.to)}\n`).join('')}`
+      return `${comments(labels)}${rules.map(rule => `RedirectMatch 301 ${quoted(`^${regexEscaped(rule.path)}$`)} ${quoted(apacheTarget(rule.to) ?? rule.to)}\n`).join('')}`
     case 'cloudflare':
       // Sans schéma : la règle vaut pour http et https. Chemin encodé, comme dans une URL.
       return rules.map(rule => csvLine([`${new URL(rule.origin!).host}${encodeURI(rule.path)}`, rule.to, 301])).join('')

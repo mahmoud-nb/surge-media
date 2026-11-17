@@ -230,6 +230,7 @@ export const fr = {
   'diagnose.finding.storageNotCreated': 'Le dossier de stockage {path} n\'existe pas encore : le serveur le créera au démarrage.',
   'diagnose.finding.storageReadOnly': 'Le dossier de stockage {path} n\'est pas accessible en écriture.',
   'diagnose.finding.s3Incomplete': 'Stockage S3 incomplet, le serveur ne démarrera pas : {names}.',
+  'diagnose.finding.storagePrefixNoSlash': 'NUXT_MEDIA_STORAGE_PREFIX ne finit pas par « / » : les fichiers sont rangés sous « {prefix}originals/… ». Voulu ? Sinon, pour une nouvelle installation, ajoutez « / » ; pour une installation existante, renommez d\'abord les fichiers (clés) avec le nouveau préfixe.',
   'diagnose.finding.storageDriverUnknown': 'Pilote de stockage inconnu : {driver} (local ou s3).',
   'diagnose.finding.sharpUnavailable': 'sharp ne se charge pas : le traitement des images est impossible.',
   'diagnose.finding.toolMissing': '{tool} introuvable ({path}) alors que le traitement des vidéos est actif.',
@@ -519,6 +520,7 @@ export const fr = {
   'import.redirects.skipped.noOrigin': '{count} source(s) sans domaine : le format cloudflare exige des adresses complètes, précisez --origin :',
   'import.redirects.written': 'Redirections écrites dans {path}. Vérifiez la configuration avant de la charger (nginx -t, caddy validate, apachectl configtest).',
   'import.hint.s3.region': 'Le service refuse la région demandée : donnez celle du compartiment avec --s3-region (us-east-1 par défaut).',
+  'import.hint.s3.regionKnown': 'Le compartiment est dans la région {region} : relancez avec --s3-region {region}.',
   'import.hint.s3.host': 'L\'hôte du compartiment est introuvable : vérifiez --s3-endpoint, et ajoutez --s3-path-style si le service n\'a pas d\'adresses de la forme compartiment.hôte (MinIO, Garage…).',
 } as const
 

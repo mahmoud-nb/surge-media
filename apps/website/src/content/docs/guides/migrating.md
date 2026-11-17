@@ -201,7 +201,7 @@ npx surge-media import redirects uploads.mapping.csv --format nginx --prefix /up
 | `cloudflare` | The CSV of Bulk Redirects (needs `--origin https://www.example.com`) |
 | `json` | The raw list, for any other tool |
 
-The old address of a file is the path of its URL when `source` is a URL; for a path or an `s3://` key, it is `--prefix` followed by the path. Rules match the exact path and ignore the query string. Addresses holding characters that the configuration syntax interprets are left out and listed. Always test the file before loading it (`nginx -t`, `caddy validate`, `apachectl configtest`).
+The old address of a file is the path of its URL when `source` is a URL; for a path or an `s3://` key, it is `--prefix` followed by the path, or by the whole key (`s3://old-media/uploads/a.jpg` gives `uploads/a.jpg`: leave `--prefix` out if the bucket was served from its root). Rules match the exact path, case included, and ignore the query string (Apache passes it on to the new URL, which ignores it). Addresses holding characters that the configuration syntax interprets are left out and listed. Always test the file before loading it (`nginx -t`, `caddy validate`, `apachectl configtest`).
 
 If the old URLs belong to a service you are leaving (a CDN or a SaaS media platform), you cannot redirect them: keep the old service running read-only until your database and your pages only hold the new URLs.
 
@@ -216,6 +216,6 @@ If the old URLs belong to a service you are leaving (a CDN or a SaaS media platf
 - **Dates**: the creation date of an imported media item is the date of the import.
 - **Derivatives** produced by your former system (thumbnails, crops) are not imported: SurgeMedia generates them on demand from the original.
 - **Same file twice in your source**: it is uploaded once; every line points to the same media item in the mapping table.
-- **With Docker**, run the command from the host with Node.js, or in the container when the files are mounted in it: `docker compose exec -e SURGE_MEDIA_API_KEY surge-media node node_modules/@surge-media/core/dist/cli/index.mjs import run /import/uploads.csv`.
+- **With Docker**, run the command from the host with Node.js, or in the container when the files are mounted in it: `docker compose exec -e SURGE_MEDIA_API_KEY surge-media node node_modules/@surge-media/core/dist/cli/index.mjs import run /import/uploads.csv`. The command writes its progress file and the mapping table next to the manifest: mount that folder writable, or keep the manifest in a writable folder and pass `--root` to the read-only one.
 
 The [installation guide](https://github.com/mahmoud-nb/surge-media/blob/main/setup.md#91-importing-existing-media) lists every option of the `import` commands.
