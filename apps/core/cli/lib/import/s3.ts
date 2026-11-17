@@ -91,14 +91,55 @@ export interface S3Sdk {
  */
 export function s3SourceError(error: unknown): SourceError {
   if (error instanceof SourceError) return error
-  const raw = error as { name?: string, Code?: string, code?: string, cause?: { code?: string }, $metadata?: { httpStatusCode?: number } } | null
+  const raw = error as S3RawError | null
   // Erreur du service : son code (`NoSuchKey`…). Erreur du réseau : le code du système (`ENOTFOUND`…), plus parlant
   // que le nom générique `Error`.
   const name = raw?.name && raw.name !== 'Error' ? raw.name : raw?.Code ?? raw?.code ?? raw?.cause?.code ?? raw?.name ?? 'Error'
   const status = raw?.$metadata?.httpStatusCode
   if (name === 'NoSuchKey' || name === 'NoSuchBucket' || name === 'NotFound' || status === 404) return new SourceError('SOURCE_NOT_FOUND', name)
-  if (S3_REFUSALS.has(name) || status === 403) return new SourceError('SOURCE_UNREADABLE', name)
+  if (S3_REFUSALS.has(name) || status === 403) {
+    const extra = S3_REGION_ERRORS().includes(name) ? bucketRegion(raw) : name === 'AccessDenied' ? deniedAction(raw) : null
+    return new SourceError('SOURCE_UNREADABLE', extra ? `${name} (${extra})` : name)
+  }
   return new SourceError('DOWNLOAD_FAILED', name)
+}
+
+interface S3RawError {
+  name?: string
+  Code?: string
+  code?: string
+  message?: string
+  Region?: string
+  Endpoint?: string
+  cause?: { code?: string }
+  $metadata?: { httpStatusCode?: number }
+  $response?: { headers?: Record<string, string | undefined> }
+}
+
+const REGION_PATTERN = /^[a-z]{2}(?:-[a-z]+)+-\d$/
+
+/**
+ * Région réelle du compartiment, quand le service la donne : en-tête `x-amz-bucket-region` (AWS), champ `Region`
+ * (AuthorizationHeaderMalformed) ou hôte de `Endpoint` (PermanentRedirect). Rien d'autre n'est repris du message.
+ */
+function bucketRegion(raw: S3RawError | null): string | null {
+  const candidates = [
+    raw?.$response?.headers?.['x-amz-bucket-region'],
+    raw?.Region,
+    /\.s3[.-]([a-z0-9-]+)\.amazonaws\.com$/.exec(raw?.Endpoint ?? '')?.[1],
+  ]
+  return candidates.find((value): value is string => typeof value === 'string' && REGION_PATTERN.test(value)) ?? null
+}
+
+/** Action refusée (`s3:ListBucket`…) tirée du message d'AWS, sans l'ARN de l'utilisateur ni le numéro de compte. */
+function deniedAction(raw: S3RawError | null): string | null {
+  return /perform: (s3:[A-Za-z]+)/.exec(raw?.message ?? '')?.[1] ?? null
+}
+
+/** Région du compartiment notée dans le détail d'une erreur de région (`PermanentRedirect (eu-north-1)`), sinon null. */
+export function s3BucketRegion(detail: string | null): string | null {
+  const match = /^(\w+) \(([a-z0-9-]+)\)$/.exec(detail ?? '')
+  return match && S3_REGION_ERRORS().includes(match[1]!) && REGION_PATTERN.test(match[2]!) ? match[2]! : null
 }
 
 /** Refus du service qu'un nouvel essai ne changera pas : identifiants, droits, ou région du compartiment. */
@@ -114,8 +155,9 @@ function S3_REGION_ERRORS(): string[] {
  * compartiment introuvable : `--s3-endpoint`, ou `--s3-path-style` pour un service qui n'a pas d'adresses
  * `compartiment.hôte`), sinon null.
  */
-export function s3Hint(detail: string | null): 'region' | 'host' | null {
+export function s3Hint(detail: string | null): 'region' | 'regionKnown' | 'host' | null {
   if (!detail) return null
+  if (s3BucketRegion(detail)) return 'regionKnown'
   if (S3_REGION_ERRORS().includes(detail)) return 'region'
   if (detail === 'ENOTFOUND' || detail === 'EAI_AGAIN') return 'host'
   return null

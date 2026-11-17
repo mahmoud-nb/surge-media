@@ -229,6 +229,7 @@ export const en: Record<MessageKey, string> = {
   'diagnose.finding.storageNotCreated': 'The storage directory {path} does not exist yet: the server creates it at startup.',
   'diagnose.finding.storageReadOnly': 'The storage directory {path} is not writable.',
   'diagnose.finding.s3Incomplete': 'Incomplete S3 storage, the server will not start: {names}.',
+  'diagnose.finding.storagePrefixNoSlash': 'NUXT_MEDIA_STORAGE_PREFIX does not end with "/": files are stored under "{prefix}originals/…". Intended? If not, add "/" for a new installation; for an existing one, first rename the files (keys) with the new prefix.',
   'diagnose.finding.storageDriverUnknown': 'Unknown storage driver: {driver} (local or s3).',
   'diagnose.finding.sharpUnavailable': 'sharp does not load: image processing is impossible.',
   'diagnose.finding.toolMissing': '{tool} not found ({path}) although video processing is on.',
@@ -518,5 +519,6 @@ export const en: Record<MessageKey, string> = {
   'import.redirects.skipped.noOrigin': '{count} source(s) without a domain: the cloudflare format requires full addresses, give --origin:',
   'import.redirects.written': 'Redirects written to {path}. Check the configuration before loading it (nginx -t, caddy validate, apachectl configtest).',
   'import.hint.s3.region': 'The service refuses the requested region: give the region of the bucket with --s3-region (default us-east-1).',
+  'import.hint.s3.regionKnown': 'The bucket is in region {region}: run the command again with --s3-region {region}.',
   'import.hint.s3.host': 'The host of the bucket was not found: check --s3-endpoint, and add --s3-path-style when the service has no bucket.host addresses (MinIO, Garage…).',
 }

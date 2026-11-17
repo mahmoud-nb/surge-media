@@ -341,7 +341,7 @@ afterwards.
 | --- | --- | --- |
 | `NUXT_MEDIA_STORAGE_DRIVER` | `local` | `local` (server disk) or `s3` |
 | `NUXT_MEDIA_STORAGE_ROOT` | `./data/media` | Directory of the `local` driver (relative to the installation directory, or absolute) |
-| `NUXT_MEDIA_STORAGE_PREFIX` | — | Prefix of every key, to share a bucket between installations (`prod/`) |
+| `NUXT_MEDIA_STORAGE_PREFIX` | — | Prefix of every key, to share a bucket between installations (`prod/`). It is put in front of each key as is: end it with `/` (`surge-media diagnose` warns otherwise) |
 | `NUXT_MEDIA_STORAGE_S3_BUCKET` | — | Bucket name |
 | `NUXT_MEDIA_STORAGE_S3_REGION` | — | Region (`eu-west-3`; `auto` for Cloudflare R2) |
 | `NUXT_MEDIA_STORAGE_S3_ENDPOINT` | — | Empty for AWS; endpoint of a compatible service (`https://<account>.r2.cloudflarestorage.com`) |

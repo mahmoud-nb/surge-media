@@ -73,6 +73,9 @@ export function computeFindings(report: Omit<DiagnoseReport, 'findings'>, variab
     if (missing.length) add('error', 's3Incomplete', { names: missing.join(', ') })
   }
   if (storage.driver !== 'local' && storage.driver !== 's3') add('error', 'storageDriverUnknown', { driver: storage.driver })
+  // Le préfixe est collé tel quel devant les clés (server/lib/storage/flydrive.ts) : « prod » donne « prodoriginals/… ».
+  // Pas de correction d'office : elle changerait les clés des fichiers déjà écrits.
+  if (storage.prefix && !storage.prefix.endsWith('/')) add('warning', 'storagePrefixNoSlash', { prefix: storage.prefix })
 
   // ─── Traitement des médias ────────────────────────────────────────────────
   const { processing } = report

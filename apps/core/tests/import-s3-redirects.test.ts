@@ -8,8 +8,8 @@ import { fr } from '../cli/i18n/fr'
 import { parseCsv } from '../cli/lib/import/csv'
 import { parseManifest, sourceKind } from '../cli/lib/import/manifest'
 import { scanBucket } from '../cli/lib/import/plan'
-import { buildRedirects, type MappingRow, oldAddress, parseMapping, REDIRECT_FORMATS, redirectOrigin, regexEscaped, renderRedirects } from '../cli/lib/import/redirects'
-import { createS3Reader, parseS3Url, S3_ACCESS_KEY_VARIABLE, S3_SECRET_KEY_VARIABLE, s3Hint, type S3Sdk, s3SettingsFrom, s3SourceError, s3Url } from '../cli/lib/import/s3'
+import { apacheTarget, buildRedirects, type MappingRow, nginxCaseCollisions, oldAddress, parseMapping, REDIRECT_FORMATS, redirectOrigin, regexEscaped, renderRedirects } from '../cli/lib/import/redirects'
+import { createS3Reader, parseS3Url, S3_ACCESS_KEY_VARIABLE, S3_SECRET_KEY_VARIABLE, s3BucketRegion, s3Hint, type S3Sdk, s3SettingsFrom, s3SourceError, s3Url } from '../cli/lib/import/s3'
 import { openSource, type SourceError } from '../cli/lib/import/sources'
 import { renderMapping } from '../cli/lib/import/state'
 
@@ -112,6 +112,35 @@ describe('adresse et réglages S3', () => {
     expect(s3Hint('AccessDenied')).toBeNull()
     expect(s3Hint(null)).toBeNull()
     for (const messages of [fr, en] as Record<string, string>[]) expect(messages['import.hint.s3.region'] && messages['import.hint.s3.host']).toBeTruthy()
+  })
+
+  it('erreurs vues sur AWS S3 (eu-north-1) : région réelle du compartiment, action refusée sans le compte', () => {
+    // Forme relevée le 2026-11-17 : 301 PermanentRedirect, en-tête x-amz-bucket-region et Endpoint.
+    const redirect = s3SourceError({
+      name: 'PermanentRedirect',
+      Code: 'PermanentRedirect',
+      Endpoint: 'anciens.s3.eu-north-1.amazonaws.com',
+      $metadata: { httpStatusCode: 301 },
+      $response: { headers: { 'x-amz-bucket-region': 'eu-north-1' } },
+    })
+    expect([redirect.code, redirect.detail]).toEqual(['SOURCE_UNREADABLE', 'PermanentRedirect (eu-north-1)'])
+    expect([s3Hint(redirect.detail), s3BucketRegion(redirect.detail)]).toEqual(['regionKnown', 'eu-north-1'])
+    // Sans en-tête : l'hôte de Endpoint, puis le champ Region d'AuthorizationHeaderMalformed.
+    expect(s3SourceError({ name: 'PermanentRedirect', Endpoint: 'anciens.s3.eu-west-3.amazonaws.com' }).detail).toBe('PermanentRedirect (eu-west-3)')
+    expect(s3SourceError({ name: 'AuthorizationHeaderMalformed', Region: 'ap-southeast-2' }).detail).toBe('AuthorizationHeaderMalformed (ap-southeast-2)')
+    // Valeur douteuse : ignorée, conseil générique.
+    expect(s3SourceError({ name: 'PermanentRedirect', Region: 'eu north 1; rm' }).detail).toBe('PermanentRedirect')
+    expect(s3Hint('PermanentRedirect')).toBe('region')
+
+    const denied = s3SourceError({
+      name: 'AccessDenied',
+      message: 'User: arn:aws:iam::123456789012:user/import is not authorized to perform: s3:ListBucket on resource: "arn:aws:s3:::anciens" because no identity-based policy allows the s3:ListBucket action',
+      $metadata: { httpStatusCode: 403 },
+    })
+    expect([denied.code, denied.detail]).toEqual(['SOURCE_UNREADABLE', 'AccessDenied (s3:ListBucket)'])
+    expect(denied.message).not.toContain('123456789012')
+    expect([s3Hint(denied.detail), s3BucketRegion(denied.detail)]).toEqual([null, null])
+    for (const messages of [fr, en] as Record<string, string>[]) expect(messages['import.hint.s3.regionKnown']).toContain('--s3-region {region}')
   })
 })
 
@@ -384,5 +413,41 @@ describe('redirections : échappement des expressions Apache', () => {
     const pattern = new RegExp(`^${escaped}$`)
     expect(pattern.test(path)).toBe(true)
     expect(pattern.test(path.replace('a.b', 'aXb'))).toBe(false)
+  })
+})
+
+describe('redirections : comportements vérifiés sur nginx 1.27 et Apache 2.4', () => {
+  const labels = { title: 'Titre', usage: ['Usage'] }
+  const NEW = 'https://media.exemple.fr'
+
+  it('nginx : deux chemins qui ne diffèrent que par la casse passent en expression sensible à la casse', () => {
+    const rules = [
+      { path: '/x/a.jpg', origin: null, to: `${NEW}/m1/v1/a.jpg` },
+      { path: '/x/A.jpg', origin: null, to: `${NEW}/m2/v1/A.jpg` },
+      { path: '/x/b.jpg', origin: null, to: `${NEW}/m3/v1/b.jpg` },
+    ]
+    expect(nginxCaseCollisions(rules)).toEqual(new Set(['/x/a.jpg', '/x/A.jpg']))
+    const text = renderRedirects('nginx', rules, labels)
+    expect(text).toContain(`    "~^/x/a\\.jpg$" "${NEW}/m1/v1/a.jpg";\n`)
+    expect(text).toContain(`    "~^/x/A\\.jpg$" "${NEW}/m2/v1/A.jpg";\n`)
+    expect(text).toContain(`    "/x/b.jpg" "${NEW}/m3/v1/b.jpg";\n`)
+  })
+
+  it('apache : cible décodée, qu\'Apache réencode ; écartée si elle garde %3F, %23 ou %2F', () => {
+    expect(apacheTarget(`${NEW}/m1/v1/with%20space%C3%A9%25.jpg`)).toBe(`${NEW}/m1/v1/with spaceé%.jpg`)
+    expect(apacheTarget(`${NEW}/m1/v1/a%3Fb.jpg`)).toBeNull()
+    expect(apacheTarget(`${NEW}/m1/v1/a%23b.jpg`)).toBeNull()
+    expect(apacheTarget(`${NEW}/m1/v1/a%2Fb.jpg`)).toBeNull()
+    expect(apacheTarget(`${NEW}/m1/v1/a%22b.jpg`)).toBeNull()
+    expect(apacheTarget(`${NEW}/m1/v1/%E0%A4%A.jpg`)).toBeNull()
+    const rows: MappingRow[] = [
+      { source: 'a b.jpg', status: 'created', url: `${NEW}/m1/v1/a%20b.jpg` },
+      { source: 'q.jpg', status: 'created', url: `${NEW}/m2/v1/q%3F.jpg` },
+    ]
+    const plan = buildRedirects(rows, { format: 'apache', prefix: '/uploads', origin: null })
+    expect(plan.skipped).toEqual([{ source: 'q.jpg', reason: 'unsafe' }])
+    expect(renderRedirects('apache', plan.rules, labels)).toContain(`RedirectMatch 301 "^/uploads/a b\\.jpg$" "${NEW}/m1/v1/a b.jpg"\n`)
+    // Les autres formats gardent l'URL telle quelle.
+    expect(buildRedirects(rows, { format: 'nginx', prefix: '/uploads', origin: null }).rules).toHaveLength(2)
   })
 })

@@ -14,7 +14,7 @@ import { estimatedMinutes, planDraft, scanBucket, scanDirectory } from './lib/im
 import { createProgressLine } from './lib/import/progress'
 import { buildRedirects, parseMapping, REDIRECT_FORMATS, type RedirectFormat, redirectOrigin, type RedirectSkip, renderRedirects } from './lib/import/redirects'
 import { pendingRows, prepareFolders, prepareTags, runImport } from './lib/import/run'
-import { createS3Reader, parseS3Url, S3_ACCESS_KEY_VARIABLE, S3_SECRET_KEY_VARIABLE, s3Hint, type S3Reader, type S3Sdk, s3SettingsFrom, s3Url } from './lib/import/s3'
+import { createS3Reader, parseS3Url, S3_ACCESS_KEY_VARIABLE, S3_SECRET_KEY_VARIABLE, s3BucketRegion, s3Hint, type S3Reader, type S3Sdk, s3SettingsFrom, s3Url } from './lib/import/s3'
 import { SourceError } from './lib/import/sources'
 import { appendState, countByStatus, type ImportEntry, type ImportStatus, loadState, startState, writeMapping } from './lib/import/state'
 import { ENV_FILE, packageVersion } from './lib/project'
@@ -118,7 +118,8 @@ export async function runImportPlan(ctx: CliContext, args: ImportPlanArgs): Prom
     progress.stop(t('import.plan.scanFailed'))
     const message = error instanceof SourceError ? [error.code, error.detail].filter(Boolean).join(' — ') : (error as Error).message
     const hint = error instanceof SourceError ? s3Hint(error.detail) : null
-    fail(`${t('import.error.read', { path: root, message })}${hint ? `\n${t(`import.hint.s3.${hint}`)}` : ''}`)
+    const region = error instanceof SourceError ? s3BucketRegion(error.detail) ?? '' : ''
+    fail(`${t('import.error.read', { path: root, message })}${hint ? `\n${t(`import.hint.s3.${hint}`, { region })}` : ''}`)
   })
   progress.stop(t('import.plan.scanDone', { count: report.files.length, size: formatBytes(report.totalBytes, locale) }))
 
@@ -432,8 +433,9 @@ export async function runImportRun(ctx: CliContext, args: ImportRunArgs): Promis
     for (const { row, entry } of problems.slice(0, SHOWN_LIMIT)) log.warn(`${t('import.manifest.line', { line: row.line })} ${row.source} : ${explain(entry!.code, entry!.detail)}`)
     if (problems.length > SHOWN_LIMIT) log.warn(t('import.more', { count: problems.length - SHOWN_LIMIT }))
     // Compartiment source mal réglé : la même cause pour toutes ses lignes, dite une fois.
-    for (const hint of new Set(problems.map(item => item.row.kind === 's3' ? s3Hint(item.entry!.detail) : null))) {
-      if (hint) log.warn(t(`import.hint.s3.${hint}`))
+    for (const detail of new Set(problems.map(item => item.row.kind === 's3' ? item.entry!.detail : null))) {
+      const hint = s3Hint(detail)
+      if (hint) log.warn(t(`import.hint.s3.${hint}`, { region: s3BucketRegion(detail) ?? '' }))
     }
     if (outcome.fatal) log.error(t('import.error.api', { code: outcome.fatal.code, detail: outcome.fatal.detail ?? '' }))
     if (limitedBy.size > 0) log.info(t('import.run.rateLimited', { variables: [...limitedBy].join(', ') }))
@@ -513,7 +515,10 @@ export function runImportRedirects(ctx: CliContext, args: ImportRedirectsArgs): 
     title: t('import.redirects.title', { count: plan.rules.length }),
     usage: redirectUsage(t, format),
   })
-  if (out && !writeOutputFile(out, content, Boolean(args.force))) stop(t('import.error.outExists', { path: out }))
+  // Avec --out, le fichier seul : rien sur la sortie standard (sinon `… > fichier` en recevrait une copie).
+  if (out) {
+    if (!writeOutputFile(out, content, Boolean(args.force))) stop(t('import.error.outExists', { path: out }))
+  }
   else process.stdout.write(content)
 
   note(t('import.redirects.summary', { count: plan.rules.length, notImported: plan.notImported }))
