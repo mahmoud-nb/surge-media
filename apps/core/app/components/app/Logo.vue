@@ -17,7 +17,7 @@ const { t } = useI18n()
 </script>
 
 <template>
-  <span class="inline-flex items-center gap-2">
+  <span class="inline-flex items-end gap-2">
     <svg viewBox="0 0 32 32" class="size-8 shrink-0" aria-hidden="true" focusable="false">
       <rect width="32" height="32" rx="9" class="fill-primary" />
       <path
