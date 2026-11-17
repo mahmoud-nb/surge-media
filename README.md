@@ -13,11 +13,8 @@
 
 [![TypeScript: strict](https://img.shields.io/badge/TypeScript-strict-3178c6?logo=typescript&logoColor=white)](https://www.typescriptlang.org/tsconfig/#strict)
 [![Tested with Vitest](https://img.shields.io/badge/tested_with-Vitest-6e9f18?logo=vitest&logoColor=white)](https://github.com/mahmoud-nb/surge-media/actions/workflows/ci.yml)
-[![Node.js ≥ 24](https://img.shields.io/badge/Node.js-%E2%89%A5%2024-5fa04e?logo=nodedotjs&logoColor=white)](setup.md)
-[![Databases: SQLite, PostgreSQL, MySQL](https://img.shields.io/badge/databases-SQLite%20%C2%B7%20PostgreSQL%20%C2%B7%20MySQL-4169e1)](setup.md)
 [![Docker](https://img.shields.io/badge/Docker-ready-2496ed?logo=docker&logoColor=white)](setup.md)
 [![WCAG 2.2 AA](https://img.shields.io/badge/WCAG_2.2-AA-005a9c)](https://www.w3.org/TR/WCAG22/)
-[![i18n: English, French](https://img.shields.io/badge/i18n-English%20%C2%B7%20Fran%C3%A7ais-8a2be2)](https://mahmoud-nb.github.io/surge-media/fr/)
 [![Conventional Commits](https://img.shields.io/badge/Conventional_Commits-1.0.0-fe5196?logo=conventionalcommits&logoColor=white)](https://www.conventionalcommits.org)
 
 **Self-hosted media platform**: store, transform and deliver your images and videos from your own servers, under
