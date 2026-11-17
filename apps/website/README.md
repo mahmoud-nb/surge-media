@@ -1,5 +1,8 @@
 # SurgeMedia — site public et documentation
 
+[![i18n: English, French](https://img.shields.io/badge/i18n-English%20%C2%B7%20Fran%C3%A7ais-8a2be2)](https://mahmoud-nb.github.io/surge-media/fr/)
+[![WCAG 2.2 AA](https://img.shields.io/badge/WCAG_2.2-AA-005a9c)](https://www.w3.org/TR/WCAG22/)
+
 Vitrine commerciale et documentation de SurgeMedia, construites avec [Astro Starlight](https://starlight.astro.build) :
 anglais par défaut, français sous `/fr/`, thèmes clair et sombre, recherche intégrée. Publiées sur GitHub Pages à
 chaque merge sur `main` (`.github/workflows/website.yml`).

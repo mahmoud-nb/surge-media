@@ -6,7 +6,16 @@
 </h1>
 
 [![CI](https://github.com/mahmoud-nb/surge-media/actions/workflows/ci.yml/badge.svg)](https://github.com/mahmoud-nb/surge-media/actions/workflows/ci.yml)
+[![CodeQL](https://github.com/mahmoud-nb/surge-media/actions/workflows/codeql.yml/badge.svg)](https://github.com/mahmoud-nb/surge-media/actions/workflows/codeql.yml)
+[![Security](https://github.com/mahmoud-nb/surge-media/actions/workflows/security.yml/badge.svg)](https://github.com/mahmoud-nb/surge-media/actions/workflows/security.yml)
+[![OpenSSF Scorecard](https://api.securityscorecards.dev/projects/github.com/mahmoud-nb/surge-media/badge)](https://scorecard.dev/viewer/?uri=github.com/mahmoud-nb/surge-media)
 [![License: BUSL-1.1](https://img.shields.io/badge/license-BUSL--1.1-blue)](LICENSE)
+
+[![TypeScript: strict](https://img.shields.io/badge/TypeScript-strict-3178c6?logo=typescript&logoColor=white)](https://www.typescriptlang.org/tsconfig/#strict)
+[![Tested with Vitest](https://img.shields.io/badge/tested_with-Vitest-6e9f18?logo=vitest&logoColor=white)](https://github.com/mahmoud-nb/surge-media/actions/workflows/ci.yml)
+[![Docker](https://img.shields.io/badge/Docker-ready-2496ed?logo=docker&logoColor=white)](setup.md)
+[![WCAG 2.2 AA](https://img.shields.io/badge/WCAG_2.2-AA-005a9c)](https://www.w3.org/TR/WCAG22/)
+[![Conventional Commits](https://img.shields.io/badge/Conventional_Commits-1.0.0-fe5196?logo=conventionalcommits&logoColor=white)](https://www.conventionalcommits.org)
 
 **Self-hosted media platform**: store, transform and deliver your images and videos from your own servers, under
 your own domain, through one secure headless API — an administration interface for your teams, a REST API for your

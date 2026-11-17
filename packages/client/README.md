@@ -1,5 +1,11 @@
 # @surge-media/client
 
+[![CI](https://github.com/mahmoud-nb/surge-media/actions/workflows/ci.yml/badge.svg)](https://github.com/mahmoud-nb/surge-media/actions/workflows/ci.yml)
+[![License: MIT](https://img.shields.io/badge/license-MIT-green)](https://github.com/mahmoud-nb/surge-media/blob/main/packages/client/LICENSE)
+[![Types included](https://img.shields.io/badge/types-included-3178c6?logo=typescript&logoColor=white)](https://github.com/mahmoud-nb/surge-media/tree/main/packages/client)
+[![Tested with Vitest](https://img.shields.io/badge/tested_with-Vitest-6e9f18?logo=vitest&logoColor=white)](https://github.com/mahmoud-nb/surge-media/actions/workflows/ci.yml)
+[![Runtimes: browser, Node.js, edge](https://img.shields.io/badge/runtimes-browser%20%C2%B7%20Node.js%20%C2%B7%20edge-555)](https://github.com/mahmoud-nb/surge-media/tree/main/packages/client)
+
 Framework-free TypeScript client for [SurgeMedia](https://github.com/mahmoud-nb/surge-media), the self-hosted media
 platform: read the API v1 from a browser, Node.js or an edge runtime, build responsive image and video URLs, and
 upload files.
