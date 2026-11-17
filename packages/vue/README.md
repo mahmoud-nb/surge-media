@@ -1,5 +1,12 @@
 # @surge-media/vue
 
+[![CI](https://github.com/mahmoud-nb/surge-media/actions/workflows/ci.yml/badge.svg)](https://github.com/mahmoud-nb/surge-media/actions/workflows/ci.yml)
+[![License: MIT](https://img.shields.io/badge/license-MIT-green)](https://github.com/mahmoud-nb/surge-media/blob/main/packages/vue/LICENSE)
+[![Types included](https://img.shields.io/badge/types-included-3178c6?logo=typescript&logoColor=white)](https://github.com/mahmoud-nb/surge-media/tree/main/packages/vue)
+[![Vue 3.5+](https://img.shields.io/badge/Vue-3.5%2B-42b883?logo=vuedotjs&logoColor=white)](https://vuejs.org)
+[![Tested with Vitest](https://img.shields.io/badge/tested_with-Vitest-6e9f18?logo=vitest&logoColor=white)](https://github.com/mahmoud-nb/surge-media/actions/workflows/ci.yml)
+[![WCAG 2.2 AA](https://img.shields.io/badge/WCAG_2.2-AA-005a9c)](https://www.w3.org/TR/WCAG22/)
+
 Vue 3 components for [SurgeMedia](https://github.com/mahmoud-nb/surge-media), the self-hosted media platform.
 
 - **`SmImage`** and **`SmPicture`**: responsive images (`srcset` with real widths or densities, AVIF / WebP with a
