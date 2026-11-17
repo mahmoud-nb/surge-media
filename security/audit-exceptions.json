@@ -5,5 +5,12 @@
     "reason": "Tiré par release-it (proxy-agent › get-uri), outil de publication lancé par le mainteneur : absent de .output et de l'image, aucun serveur FTP contacté. Correctif en version majeure 6, que get-uri n'a pas adoptée (8.0.1 le 2026-11-07).",
     "added": "2026-11-06",
     "expires": "2027-02-03"
+  },
+  {
+    "id": "GHSA-fc5q-39xc-vjpf",
+    "package": "picomatch",
+    "reason": "Outil de construction seulement (Vite, Rollup, Nitro, @vercel/nft, tinyglobby, unstorage/anymatch, ESLint) : motifs écrits par le projet, jamais par un utilisateur ; absent de .output (seul vue-router le cite dans ses devDependencies) et des dépendances de production de @surge-media/client et @surge-media/vue. Aucune version corrigée publiée (<= 4.0.7) : à lever dès qu'elle sort.",
+    "added": "2026-11-17",
+    "expires": "2027-02-15"
   }
 ]
