@@ -34,7 +34,7 @@ export const DIAGNOSE_VARIABLES: readonly VariableSpec[] = [
   ...spec('install', 'secret', ['NUXT_BOOTSTRAP_ADMIN_PASSWORD']),
   ...spec('database', 'shown', ['DATABASE_PROVIDER']),
   ...spec('database', 'host', ['DATABASE_URL']),
-  ...spec('secrets', 'secret', ['NUXT_SESSION_PASSWORD', 'NUXT_MEDIA_SIGNING_SECRET', 'NUXT_MEDIA_PREVIOUS_SIGNING_SECRET', 'NUXT_MFA_ENCRYPTION_KEY']),
+  ...spec('secrets', 'secret', ['NUXT_APP_SECRET', 'NUXT_SESSION_PASSWORD', 'NUXT_MEDIA_SIGNING_SECRET', 'NUXT_MEDIA_PREVIOUS_SIGNING_SECRET', 'NUXT_MFA_ENCRYPTION_KEY']),
   ...spec('storage', 'shown', ['NUXT_MEDIA_STORAGE_DRIVER', 'NUXT_MEDIA_STORAGE_ROOT', 'NUXT_MEDIA_STORAGE_PREFIX', 'NUXT_MEDIA_STORAGE_S3_REGION', 'NUXT_MEDIA_STORAGE_S3_FORCE_PATH_STYLE']),
   ...spec('storage', 'host', ['NUXT_MEDIA_STORAGE_S3_ENDPOINT', 'NUXT_MEDIA_STORAGE_S3_BUCKET', 'NUXT_MEDIA_PUBLIC_URL']),
   ...spec('storage', 'secret', ['NUXT_MEDIA_STORAGE_S3_ACCESS_KEY_ID', 'NUXT_MEDIA_STORAGE_S3_SECRET_ACCESS_KEY']),
@@ -58,9 +58,9 @@ export const DIAGNOSE_VARIABLES: readonly VariableSpec[] = [
 const BY_NAME = new Map(DIAGNOSE_VARIABLES.map(item => [item.name, item]))
 
 /** Variables lisibles dans un fichier (secrets Docker, `NOM_FILE=/run/secrets/…`), comme docker/entrypoint.sh. */
-export const FILE_VARIABLES = ['DATABASE_URL', 'NUXT_SESSION_PASSWORD', 'NUXT_MEDIA_SIGNING_SECRET', 'NUXT_MEDIA_PREVIOUS_SIGNING_SECRET', 'NUXT_MEDIA_STORAGE_S3_ACCESS_KEY_ID', 'NUXT_MEDIA_STORAGE_S3_SECRET_ACCESS_KEY', 'NUXT_SMTP_PASSWORD', 'NUXT_BOOTSTRAP_ADMIN_PASSWORD', 'NUXT_MFA_ENCRYPTION_KEY', 'NUXT_LICENSE_KEY'] as const
+export const FILE_VARIABLES = ['DATABASE_URL', 'NUXT_APP_SECRET', 'NUXT_SESSION_PASSWORD', 'NUXT_MEDIA_SIGNING_SECRET', 'NUXT_MEDIA_PREVIOUS_SIGNING_SECRET', 'NUXT_MEDIA_STORAGE_S3_ACCESS_KEY_ID', 'NUXT_MEDIA_STORAGE_S3_SECRET_ACCESS_KEY', 'NUXT_SMTP_PASSWORD', 'NUXT_BOOTSTRAP_ADMIN_PASSWORD', 'NUXT_MFA_ENCRYPTION_KEY', 'NUXT_LICENSE_KEY'] as const
 /** Secrets que l'image génère et garde dans son volume quand ils manquent (docker/entrypoint.sh, `ensure_secret`). */
-export const GENERATED_SECRETS = ['NUXT_SESSION_PASSWORD', 'NUXT_MEDIA_SIGNING_SECRET', 'NUXT_MFA_ENCRYPTION_KEY'] as const
+export const GENERATED_SECRETS = ['NUXT_APP_SECRET', 'NUXT_SESSION_PASSWORD', 'NUXT_MEDIA_SIGNING_SECRET', 'NUXT_MFA_ENCRYPTION_KEY'] as const
 
 /** D'où vient une valeur : environnement, fichier `NOM_FILE`, secret gardé par l'image, `.env`, ou rien (valeur par défaut). */
 export type VariableSource = 'env' | 'file' | 'secrets-dir' | 'dotenv' | 'default'

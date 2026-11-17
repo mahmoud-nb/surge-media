@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto'
 import type { H3Event } from 'h3'
+import { deriveSecret } from 'nuxt/server'
 import type { User as SessionUser } from '#auth-utils'
 import { MFA_CHALLENGE_SECONDS, MFA_SETUP_SECONDS, mfaRequiredFor, normalizeTotpCode, parseMfaPolicy, type MfaErrorCode, type MfaLoginStep, type MfaPolicy } from '#shared/utils/mfa'
 import { EMAIL_LOCALES, type EmailLocale } from '#shared/utils/users'
@@ -74,11 +75,14 @@ export function mfaIssuer(event: H3Event): string {
 
 // ─── Cookies scellés : défi de connexion et configuration en cours ──────────
 
-function sealedCookie(event: H3Event, name: string, maxAge: number) {
+/** Clé des cookies du défi et de la configuration MFA, dérivée de NUXT_APP_SECRET (distincte de celle des sessions). */
+export const MFA_COOKIE_SECRET_PURPOSE = 'surge-media:mfa-cookies'
+
+async function sealedCookie(event: H3Event, name: string, maxAge: number) {
   const config = useRuntimeConfig(event).session
   return {
     name,
-    password: config.password,
+    password: await deriveSecret(MFA_COOKIE_SECRET_PURPOSE),
     maxAge,
     cookie: { httpOnly: true, secure: !config.cookie || config.cookie.secure !== false, sameSite: 'strict' as const, path: '/api/auth' },
   }
@@ -87,20 +91,20 @@ function sealedCookie(event: H3Event, name: string, maxAge: number) {
 async function readSealed<T extends { expiresAt: number }>(event: H3Event, name: string, maxAge: number): Promise<T | null> {
   // Pas de cookie : ne pas appeler useSession, qui en poserait un vide.
   if (!getCookie(event, name)) return null
-  const session = await useSession<Partial<T>>(event, sealedCookie(event, name, maxAge))
+  const session = await useSession<Partial<T>>(event, await sealedCookie(event, name, maxAge))
   const data = session.data as Partial<T>
   return data.expiresAt && data.expiresAt > Date.now() ? data as T : null
 }
 
 async function writeSealed<T extends object>(event: H3Event, name: string, maxAge: number, data: T): Promise<void> {
-  const session = await useSession<T>(event, sealedCookie(event, name, maxAge))
+  const session = await useSession<T>(event, await sealedCookie(event, name, maxAge))
   await session.clear()
   await session.update(data)
 }
 
 async function clearSealed(event: H3Event, name: string, maxAge: number): Promise<void> {
   if (!getCookie(event, name)) return
-  const session = await useSession(event, sealedCookie(event, name, maxAge))
+  const session = await useSession(event, await sealedCookie(event, name, maxAge))
   await session.clear()
 }
 

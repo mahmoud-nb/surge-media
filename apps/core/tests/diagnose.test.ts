@@ -2,8 +2,11 @@ import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { createTranslator } from '../cli/i18n'
+import { en } from '../cli/i18n/en'
+import { fr } from '../cli/i18n/fr'
 import { displayVariable, healthUrl } from '../cli/lib/diagnose/collect'
-import { computeFindings, SESSION_PASSWORD_MIN_LENGTH } from '../cli/lib/diagnose/findings'
+import { APP_SECRET_MIN_LENGTH, computeFindings } from '../cli/lib/diagnose/findings'
+import { renameLegacySecrets } from '../cli/lib/env-file'
 import { anonymizeHost, maskConnectionUrl, redactLines } from '../cli/lib/diagnose/redact'
 import { renderJson, renderMarkdown } from '../cli/lib/diagnose/render'
 import type { DatabaseInfo, DiagnoseReport } from '../cli/lib/diagnose/report'
@@ -66,7 +69,7 @@ describe('valeurs et sources', () => {
 
   it('montre une valeur selon sa classe, jamais un secret ni une donnée personnelle', () => {
     const list = resolve({
-      NUXT_SESSION_PASSWORD: 'session-secret-value-0123456789abcdef',
+      NUXT_APP_SECRET: 'session-secret-value-0123456789abcdef',
       NUXT_SMTP_FROM: 'Jane <jane@example.com>',
       NUXT_DEMO_ACCOUNTS: '[{"email":"a@b.c","password":"pw-demo-123"},{"email":"d@e.f","password":"pw-demo-456"}]',
       DATABASE_URL: 'postgresql://surge:db-password@db.internal:5432/media?sslpassword=tls-secret',
@@ -75,7 +78,7 @@ describe('valeurs et sources', () => {
     const shown = list.map(item => displayVariable(item, false))
     const text = JSON.stringify(shown)
     for (const secret of ['session-secret-value', 'jane@example.com', 'pw-demo-123', 'db-password', 'tls-secret']) expect(text).not.toContain(secret)
-    expect(shown.find(item => item.name === 'NUXT_SESSION_PASSWORD')).toMatchObject({ set: true, value: null, length: 37 })
+    expect(shown.find(item => item.name === 'NUXT_APP_SECRET')).toMatchObject({ set: true, value: null, length: 37 })
     expect(shown.find(item => item.name === 'NUXT_DEMO_ACCOUNTS')).toMatchObject({ set: true, count: 2 })
     expect(shown.find(item => item.name === 'DATABASE_URL')?.value).toBe('postgresql://surge:****@db.internal:5432/media?sslpassword=****')
     expect(shown.find(item => item.name === 'NUXT_VIDEO_CRF')?.value).toBe('20')
@@ -85,7 +88,7 @@ describe('valeurs et sources', () => {
 
   it('signale les variables inconnues avec le nom le plus proche', () => {
     const unknown = unknownVariables({
-      env: { NUXT_SMTP_HOTS: 'x', NUXT_SESSION_PASSWORD_FILE: '/run/secrets/s', SURGE_MEDIA_IMAGE: 'img', PATH: '/bin' },
+      env: { NUXT_SMTP_HOTS: 'x', NUXT_APP_SECRET_FILE: '/run/secrets/s', SURGE_MEDIA_IMAGE: 'img', PATH: '/bin' },
       dotenv: { NUXT_COMPLETELY_UNRELATED_SETTING: '1' },
     })
     expect(unknown).toEqual([
@@ -117,12 +120,12 @@ describe('masquage', () => {
       'connect postgresql://surge:hunter2-password@db:5432/x failed',
       'cookie surge-media-session=Fe26.2**xyz; secret value session-secret-value-0123456789abcdef',
       'version 1.2.3 at 17:09:56',
-    ], [{ name: 'NUXT_SESSION_PASSWORD', value: 'session-secret-value-0123456789abcdef' }, { name: 'SHORT', value: 'abc' }])
+    ], [{ name: 'NUXT_APP_SECRET', value: 'session-secret-value-0123456789abcdef' }, { name: 'SHORT', value: 'abc' }])
     const text = lines.join('\n')
     for (const leaked of ['deadbeef', '1793041280', 'jane.doe@example.com', '203.0.113.42', '2001:db8', 'abc.def.ghi', 'sm_sk_1234', 'hunter2', 'Fe26.2', 'session-secret-value']) {
       expect(text).not.toContain(leaked)
     }
-    expect(text).toContain('[NUXT_SESSION_PASSWORD]')
+    expect(text).toContain('[NUXT_APP_SECRET]')
     expect(text).toContain('2026-11-06T17:09:56.123Z')
     expect(lines[5]).toBe('version 1.2.3 at 17:09:56')
     expect(redactions).toBeGreaterThanOrEqual(10)
@@ -157,7 +160,7 @@ function healthyDatabase(): DatabaseInfo {
 }
 
 const SECRETS = resolveVariables({
-  env: { NUXT_SESSION_PASSWORD: 'x'.repeat(40), NUXT_MEDIA_SIGNING_SECRET: 'y'.repeat(40), NUXT_MFA_ENCRYPTION_KEY: 'z'.repeat(43), NUXT_SITE_URL: 'https://media.example.com' },
+  env: { NUXT_APP_SECRET: 'x'.repeat(40), NUXT_MEDIA_SIGNING_SECRET: 'y'.repeat(40), NUXT_MFA_ENCRYPTION_KEY: 'z'.repeat(43), NUXT_SITE_URL: 'https://media.example.com' },
   dotenv: {},
   secretsDir: null,
 })
@@ -169,7 +172,7 @@ describe('points d\'attention', () => {
   })
 
   it('signale les problèmes, erreurs d\'abord', () => {
-    const variables = resolveVariables({ env: { NUXT_SESSION_PASSWORD: 'short', NUXT_BOOTSTRAP_ADMIN_EMAIL: 'admin@example.com' }, dotenv: {}, secretsDir: null })
+    const variables = resolveVariables({ env: { NUXT_APP_SECRET: 'short', NUXT_BOOTSTRAP_ADMIN_EMAIL: 'admin@example.com' }, dotenv: {}, secretsDir: null })
     const report = sampleReport({
       system: { ...sampleReport().system, node: 'v22.11.0', disks: [{ role: 'tmp', path: '/tmp', free: 100, total: 1000 }] },
       database: { ok: true, data: { ...healthyDatabase(), migrations: { available: 19, applied: 18, pending: ['20261106_next'], failed: [], unknown: [] } } },
@@ -181,7 +184,7 @@ describe('points d\'attention', () => {
     expect(found).toEqual([
       'nodeVersion',
       'secretMissing',
-      'sessionPasswordShort',
+      'appSecretShort',
       'migrationsPending',
       'toolMissing',
       'serverUnhealthy',
@@ -191,7 +194,17 @@ describe('points d\'attention', () => {
       'bootstrapSet',
       'failedJobs',
     ])
-    expect(computeFindings(report, variables).find(finding => finding.code === 'sessionPasswordShort')?.params).toEqual({ length: 5, min: SESSION_PASSWORD_MIN_LENGTH })
+    expect(computeFindings(report, variables).find(finding => finding.code === 'appSecretShort')?.params).toEqual({ length: 5, min: APP_SECRET_MIN_LENGTH })
+  })
+
+  it('NUXT_SESSION_PASSWORD (avant nuxt-auth-utils 0.6) : erreur seul, avertissement à côté de NUXT_APP_SECRET', () => {
+    const findings = (env: Record<string, string>) => computeFindings(sampleReport(), resolveVariables({ env: { NUXT_MEDIA_SIGNING_SECRET: 'y'.repeat(40), NUXT_MFA_ENCRYPTION_KEY: 'z'.repeat(43), NUXT_SITE_URL: 'https://media.example.com', ...env }, dotenv: {}, secretsDir: null }))
+      .map(finding => [finding.level, finding.code, finding.params?.name])
+    // Ancienne variable seule : à renommer, mais pas « secret manquant » en plus.
+    expect(findings({ NUXT_SESSION_PASSWORD: 'x'.repeat(40) })).toEqual([['error', 'sessionPasswordObsolete', undefined]])
+    expect(findings({ NUXT_SESSION_PASSWORD: 'x'.repeat(40), NUXT_APP_SECRET: 'w'.repeat(40) })).toEqual([['warning', 'sessionPasswordObsolete', undefined]])
+    expect(findings({})).toEqual([['error', 'secretMissing', 'NUXT_APP_SECRET']])
+    for (const messages of [fr, en] as Record<string, string>[]) expect(messages['diagnose.finding.sessionPasswordObsolete']).toContain('NUXT_APP_SECRET')
   })
 
   it('distingue un dossier de stockage à créer d\'un dossier impossible à créer, et liste les réglages S3 manquants', () => {
@@ -218,7 +231,7 @@ describe('points d\'attention', () => {
 
 describe('rendu du rapport', () => {
   const t = createTranslator('fr')
-  const variables = resolveVariables({ env: { NUXT_SESSION_PASSWORD: 'session-secret-value-0123456789abcdef', NUXT_SITE_URL: 'https://media.example.com', NUXT_SMTP_USER: 'mailer@example.com' }, dotenv: {}, secretsDir: null })
+  const variables = resolveVariables({ env: { NUXT_APP_SECRET: 'session-secret-value-0123456789abcdef', NUXT_SITE_URL: 'https://media.example.com', NUXT_SMTP_USER: 'mailer@example.com' }, dotenv: {}, secretsDir: null })
   const partial = sampleReport({ configuration: { variables: variables.map(item => displayVariable(item, false)), unknown: [{ name: 'NUXT_SMTP_HOTS', source: 'env', suggestion: 'NUXT_SMTP_HOST' }] } })
   const report: DiagnoseReport = { ...partial, findings: computeFindings(partial, variables) }
 
@@ -226,7 +239,7 @@ describe('rendu du rapport', () => {
     const markdown = renderMarkdown(report, t, 'fr')
     expect(markdown).toContain('# Rapport de diagnostic SurgeMedia')
     expect(markdown).toContain('## Points d\'attention')
-    expect(markdown).toContain('| `NUXT_SESSION_PASSWORD` | défini (37 caractères) | environnement |')
+    expect(markdown).toContain('| `NUXT_APP_SECRET` | défini (37 caractères) | environnement |')
     expect(markdown).toContain('| `NUXT_SMTP_USER` | défini | environnement |')
     expect(markdown).toContain('faute de frappe pour `NUXT_SMTP_HOST` ?')
     for (const secret of ['session-secret-value', 'mailer@example.com']) expect(markdown).not.toContain(secret)
@@ -251,5 +264,22 @@ describe('sonde locale', () => {
     expect(healthUrl('3200', '0.0.0.0')).toBe('http://127.0.0.1:3200/api/health')
     expect(healthUrl('3200', '10.0.0.5')).toBe('http://10.0.0.5:3200/api/health')
     expect(healthUrl('3200', 'fd00::5')).toBe('http://[fd00::5]:3200/api/health')
+  })
+})
+
+describe('secret racine : NUXT_SESSION_PASSWORD renommé en NUXT_APP_SECRET dans le .env', () => {
+  it('renomme la ligne en gardant sa place, sa valeur et le reste du fichier', () => {
+    const before = '# Sessions\nNUXT_SESSION_PASSWORD="abc$def"\nNUXT_SITE_URL="https://media.example.com"\n'
+    expect(renameLegacySecrets(before)).toEqual({
+      content: '# Sessions\nNUXT_APP_SECRET="abc$def"\nNUXT_SITE_URL="https://media.example.com"\n',
+      renamed: [{ from: 'NUXT_SESSION_PASSWORD', to: 'NUXT_APP_SECRET' }],
+    })
+    expect(renameLegacySecrets('export NUXT_SESSION_PASSWORD = x\n').content).toBe('export NUXT_APP_SECRET = x\n')
+  })
+
+  it('retire l\'ancienne ligne quand NUXT_APP_SECRET existe déjà ; ne touche à rien sinon', () => {
+    expect(renameLegacySecrets('NUXT_APP_SECRET="new"\nNUXT_SESSION_PASSWORD="old"\r\nPORT=3000\n').content).toBe('NUXT_APP_SECRET="new"\nPORT=3000\n')
+    const untouched = '# NUXT_SESSION_PASSWORD="exemple commenté"\nMY_NUXT_SESSION_PASSWORD=x\nPORT=3000\n'
+    expect(renameLegacySecrets(untouched)).toEqual({ content: untouched, renamed: [] })
   })
 })

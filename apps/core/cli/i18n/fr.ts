@@ -127,6 +127,7 @@ export const fr = {
 
   'step.env': 'Fichier .env mis à jour',
   'step.secretGenerated': 'Secret généré ({name})',
+  'step.secretRenamed': '{from} renommé en {to} dans le .env (même valeur : les utilisateurs devront seulement se reconnecter une fois)',
   'step.schema': 'Schéma Prisma configuré pour {provider}',
   'step.generate': 'Génération des clients Prisma (un par fournisseur)…',
   'step.generateDone': 'Clients Prisma générés',
@@ -216,7 +217,8 @@ export const fr = {
   'diagnose.finding.nodeVersion': 'Node {version} : SurgeMedia demande Node {required} ou plus récent.',
   'diagnose.finding.lowDiskSpace': 'Espace libre faible ({role}, {path}) : {free}.',
   'diagnose.finding.secretMissing': '{name} n\'est pas défini : le serveur ne peut pas démarrer correctement. « surge-media init » le génère.',
-  'diagnose.finding.sessionPasswordShort': 'NUXT_SESSION_PASSWORD fait {length} caractères : il en faut au moins {min}.',
+  'diagnose.finding.appSecretShort': 'NUXT_APP_SECRET fait {length} caractères : il en faut au moins {min}.',
+  'diagnose.finding.sessionPasswordObsolete': 'NUXT_SESSION_PASSWORD n\'est plus lu (nuxt-auth-utils 0.6) : renommez-le en NUXT_APP_SECRET, même valeur. « surge-media db migrate » et l\'image Docker le font pour vous ; les utilisateurs se reconnectent une fois.',
   'diagnose.finding.mfaKeyMissing': 'NUXT_MFA_ENCRYPTION_KEY n\'est pas défini : la double authentification ne peut pas être activée.',
   'diagnose.finding.siteUrlMissing': 'NUXT_SITE_URL n\'est pas défini : les liens vers les médias sont déduits de chaque requête.',
   'diagnose.finding.bootstrapSet': 'Les variables d\'amorçage (NUXT_BOOTSTRAP_ADMIN_*) sont encore définies alors que des comptes existent : retirez-les.',

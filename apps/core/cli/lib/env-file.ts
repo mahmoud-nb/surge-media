@@ -29,3 +29,33 @@ export function updateEnvFile(path: string, values: Record<string, string>, temp
 
   writeFileSync(path, content)
 }
+
+/** Anciennes variables renommées : nuxt-auth-utils 0.6 ignore NUXT_SESSION_PASSWORD au profit de NUXT_APP_SECRET. */
+export const RENAMED_SECRETS = [{ from: 'NUXT_SESSION_PASSWORD', to: 'NUXT_APP_SECRET' }] as const
+
+/**
+ * Renomme dans le texte d'un .env les variables de `RENAMED_SECRETS` quand la nouvelle est absente : la ligne
+ * garde sa place et sa valeur (aucun secret perdu ni régénéré, les liens signés dérivés restent valables). Si les
+ * deux existent, l'ancienne est retirée. Rend le texte modifié et les renommages faits.
+ */
+export function renameLegacySecrets(content: string): { content: string, renamed: { from: string, to: string }[] } {
+  const renamed: { from: string, to: string }[] = []
+  for (const { from, to } of RENAMED_SECRETS) {
+    const oldLine = new RegExp(`^([ \t]*(?:export[ \t]+)?)${from}([ \t]*=.*)$`, 'm')
+    if (!oldLine.test(content)) continue
+    const hasNew = new RegExp(`^[ \t]*(?:export[ \t]+)?${to}[ \t]*=`, 'm').test(content)
+    content = hasNew
+      ? content.replace(new RegExp(`${oldLine.source}\r?\n?`, 'm'), '')
+      : content.replace(oldLine, (_line, prefix: string, rest: string) => `${prefix}${to}${rest}`)
+    renamed.push({ from, to })
+  }
+  return { content, renamed }
+}
+
+/** Applique `renameLegacySecrets` à un fichier .env existant ; rend les renommages faits. */
+export function renameLegacySecretsInFile(path: string): { from: string, to: string }[] {
+  if (!existsSync(path)) return []
+  const { content, renamed } = renameLegacySecrets(readFileSync(path, 'utf8'))
+  if (renamed.length) writeFileSync(path, content)
+  return renamed
+}
