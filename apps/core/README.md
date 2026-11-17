@@ -1,5 +1,11 @@
 # @surge-media/core
 
+[![CI](https://github.com/mahmoud-nb/surge-media/actions/workflows/ci.yml/badge.svg)](https://github.com/mahmoud-nb/surge-media/actions/workflows/ci.yml)
+[![License: BUSL-1.1](https://img.shields.io/badge/license-BUSL--1.1-blue)](https://github.com/mahmoud-nb/surge-media/blob/main/LICENSE)
+[![TypeScript: strict](https://img.shields.io/badge/TypeScript-strict-3178c6?logo=typescript&logoColor=white)](https://www.typescriptlang.org/tsconfig/#strict)
+[![Tested with Vitest](https://img.shields.io/badge/tested_with-Vitest-6e9f18?logo=vitest&logoColor=white)](https://github.com/mahmoud-nb/surge-media/actions/workflows/ci.yml)
+[![Node.js ≥ 24](https://img.shields.io/badge/Node.js-%E2%89%A5%2024-5fa04e?logo=nodedotjs&logoColor=white)](https://github.com/mahmoud-nb/surge-media/blob/main/setup.md)
+
 **SurgeMedia** is a self-hosted, modular platform for managing, transforming and delivering media, on your own
 infrastructure and under your own domain. This package is its core: the administration interface, the REST API for
 your applications, on-the-fly image transformations and video handling.
