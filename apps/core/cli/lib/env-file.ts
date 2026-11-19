@@ -52,10 +52,21 @@ export function renameLegacySecrets(content: string): { content: string, renamed
   return { content, renamed }
 }
 
-/** Applique `renameLegacySecrets` à un fichier .env existant ; rend les renommages faits. */
+/**
+ * Applique `renameLegacySecrets` à un fichier .env existant ; rend les renommages faits. Fichier absent : rien à
+ * renommer. Lu directement, sans contrôle d'existence préalable (pas d'intervalle entre un contrôle et l'écriture,
+ * CodeQL `js/file-system-race`) ; réécrit seulement si une variable a été renommée.
+ */
 export function renameLegacySecretsInFile(path: string): { from: string, to: string }[] {
-  if (!existsSync(path)) return []
-  const { content, renamed } = renameLegacySecrets(readFileSync(path, 'utf8'))
+  let text: string
+  try {
+    text = readFileSync(path, 'utf8')
+  }
+  catch (error) {
+    if ((error as NodeJS.ErrnoException).code === 'ENOENT') return []
+    throw error
+  }
+  const { content, renamed } = renameLegacySecrets(text)
   if (renamed.length) writeFileSync(path, content)
   return renamed
 }

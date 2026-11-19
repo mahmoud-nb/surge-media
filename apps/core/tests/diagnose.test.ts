@@ -1,4 +1,5 @@
-import { readFileSync } from 'node:fs'
+import { mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { createTranslator } from '../cli/i18n'
@@ -6,7 +7,7 @@ import { en } from '../cli/i18n/en'
 import { fr } from '../cli/i18n/fr'
 import { displayVariable, healthUrl } from '../cli/lib/diagnose/collect'
 import { APP_SECRET_MIN_LENGTH, computeFindings } from '../cli/lib/diagnose/findings'
-import { renameLegacySecrets } from '../cli/lib/env-file'
+import { renameLegacySecrets, renameLegacySecretsInFile } from '../cli/lib/env-file'
 import { anonymizeHost, maskConnectionUrl, redactLines } from '../cli/lib/diagnose/redact'
 import { renderJson, renderMarkdown } from '../cli/lib/diagnose/render'
 import type { DatabaseInfo, DiagnoseReport } from '../cli/lib/diagnose/report'
@@ -281,5 +282,29 @@ describe('secret racine : NUXT_SESSION_PASSWORD renommé en NUXT_APP_SECRET dans
     expect(renameLegacySecrets('NUXT_APP_SECRET="new"\nNUXT_SESSION_PASSWORD="old"\r\nPORT=3000\n').content).toBe('NUXT_APP_SECRET="new"\nPORT=3000\n')
     const untouched = '# NUXT_SESSION_PASSWORD="exemple commenté"\nMY_NUXT_SESSION_PASSWORD=x\nPORT=3000\n'
     expect(renameLegacySecrets(untouched)).toEqual({ content: untouched, renamed: [] })
+  })
+
+  it('fichier .env : absent → rien ; renommé sur place ; sans ancienne variable, jamais réécrit', () => {
+    const directory = mkdtempSync(join(tmpdir(), 'surge-media-env-file-test-'))
+    try {
+      expect(renameLegacySecretsInFile(join(directory, 'absent.env'))).toEqual([])
+
+      const legacy = join(directory, 'legacy.env')
+      writeFileSync(legacy, 'PORT=3000\nNUXT_SESSION_PASSWORD="old-value"\n')
+      expect(renameLegacySecretsInFile(legacy)).toEqual([{ from: 'NUXT_SESSION_PASSWORD', to: 'NUXT_APP_SECRET' }])
+      expect(readFileSync(legacy, 'utf8')).toBe('PORT=3000\nNUXT_APP_SECRET="old-value"\n')
+
+      const current = join(directory, 'current.env')
+      writeFileSync(current, 'NUXT_APP_SECRET="value"\n')
+      const before = statSync(current).mtimeMs
+      expect(renameLegacySecretsInFile(current)).toEqual([])
+      expect(statSync(current).mtimeMs).toBe(before)
+
+      // Autre erreur de lecture qu'une absence (ici un dossier) : remontée, pas ignorée.
+      expect(() => renameLegacySecretsInFile(directory)).toThrow()
+    }
+    finally {
+      rmSync(directory, { recursive: true, force: true })
+    }
   })
 })
