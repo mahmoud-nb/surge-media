@@ -18,4 +18,5 @@
 **/tests
 setup.md
 dev-guide.md
+.dev
 docker/compose*.yaml
