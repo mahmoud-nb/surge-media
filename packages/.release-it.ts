@@ -63,7 +63,11 @@ export default {
     requireCleanWorkingDir: true,
     requireUpstream: true,
     requireCommits: true,
-    commitsPath: LIBRARY_PATHS.join(' '),
+    // Un seul chemin : release-it 21 le passe comme un argument unique à `git rev-list -- <chemin>` (la liste jointe
+    // par des espaces ne désignait aucun fichier : « There are no commits since the latest tag »). packages/ compte
+    // aussi packages/core pour ce seul contrôle (vide depuis le 2026-10-11) ; le changelog reste filtré sur
+    // LIBRARY_PATHS. Même correctif que le core (#44).
+    commitsPath: 'packages',
     commitMessage: 'chore(release): libs v${version}',
     tagName: 'libs-v${version}',
     tagMatch: 'libs-v[0-9]*',
