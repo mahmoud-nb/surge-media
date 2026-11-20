@@ -7,3 +7,6 @@ export const LICENSE_URL = `${REPOSITORY_URL}/blob/main/LICENSE`;
 export const SALES_URL = 'mailto:licensing@surgeup.org?subject=SurgeMedia%20commercial%20license';
 /** General contact of Surge Up, the publisher. */
 export const CONTACT_URL = 'mailto:contact@surgeup.org?subject=SurgeMedia';
+/** Order a plan by email (no online checkout yet): the subject names the plan, the reply is an invoice. */
+export const orderUrl = (plan: string): string =>
+  `mailto:licensing@surgeup.org?subject=${encodeURIComponent(`SurgeMedia ${plan} license`)}`;
