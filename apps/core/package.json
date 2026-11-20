@@ -1,6 +1,6 @@
 {
   "name": "@surge-media/core",
-  "version": "0.0.0",
+  "version": "0.1.0",
   "type": "module",
   "description": "Self-hosted platform to manage, transform and deliver media: administration interface, REST API, on-the-fly image transformations and video processing.",
   "keywords": [
