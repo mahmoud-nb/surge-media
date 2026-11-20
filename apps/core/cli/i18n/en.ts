@@ -126,6 +126,7 @@ export const en: Record<MessageKey, string> = {
 
   'step.env': '.env file updated',
   'step.secretGenerated': 'Secret generated ({name})',
+  'step.secretRenamed': '{from} renamed to {to} in the .env (same value: users only need to sign in again once)',
   'step.schema': 'Prisma schema configured for {provider}',
   'step.generate': 'Generating the Prisma clients (one per provider)…',
   'step.generateDone': 'Prisma clients generated',
@@ -215,7 +216,8 @@ export const en: Record<MessageKey, string> = {
   'diagnose.finding.nodeVersion': 'Node {version}: SurgeMedia requires Node {required} or later.',
   'diagnose.finding.lowDiskSpace': 'Low free space ({role}, {path}): {free}.',
   'diagnose.finding.secretMissing': '{name} is not set: the server cannot start properly. "surge-media init" generates it.',
-  'diagnose.finding.sessionPasswordShort': 'NUXT_SESSION_PASSWORD has {length} characters: at least {min} are needed.',
+  'diagnose.finding.appSecretShort': 'NUXT_APP_SECRET has {length} characters: at least {min} are needed.',
+  'diagnose.finding.sessionPasswordObsolete': 'NUXT_SESSION_PASSWORD is no longer read (nuxt-auth-utils 0.6): rename it to NUXT_APP_SECRET, same value. "surge-media db migrate" and the Docker image do it for you; users sign in again once.',
   'diagnose.finding.mfaKeyMissing': 'NUXT_MFA_ENCRYPTION_KEY is not set: two-factor authentication cannot be turned on.',
   'diagnose.finding.siteUrlMissing': 'NUXT_SITE_URL is not set: media links are derived from each request.',
   'diagnose.finding.bootstrapSet': 'The bootstrap variables (NUXT_BOOTSTRAP_ADMIN_*) are still set although accounts exist: remove them.',

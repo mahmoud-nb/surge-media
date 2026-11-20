@@ -30,10 +30,10 @@ export default defineNuxtConfig({
     // locale et réseaux privés (Docker), false = en-tête ignoré, ou liste d'adresses / plages CIDR
     // (server/lib/http/client-ip.ts) — NUXT_TRUST_PROXY. Texte : Nitro peut en faire un booléen (destr), géré.
     trustProxy: 'true',
-    // nuxt-auth-utils : cookie scellé HTTP-only (secret : NUXT_SESSION_PASSWORD).
+    // nuxt-auth-utils 0.6 : cookie scellé HTTP-only, avec une clé dérivée de `appSecret` (NUXT_APP_SECRET,
+    // 32 caractères au moins, généré par `surge-media init` et par l'image Docker). Une build n'en génère jamais.
     session: {
       name: 'surge-media-session',
-      password: '',
       maxAge: 60 * 60 * 12, // 12 h — NUXT_SESSION_MAX_AGE
       cookie: {
         sameSite: 'lax',

@@ -1,6 +1,6 @@
 import type { Role } from '../utils/permissions'
 
-// Typage des sessions nuxt-auth-utils (cookie scellé, chiffré avec NUXT_SESSION_PASSWORD).
+// Typage des sessions nuxt-auth-utils (cookie scellé, clé dérivée de NUXT_APP_SECRET).
 declare module '#auth-utils' {
   /** Données visibles côté client (useUserSession().user). */
   interface User {

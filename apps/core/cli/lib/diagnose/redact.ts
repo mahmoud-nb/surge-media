@@ -80,7 +80,7 @@ function escapeRegExp(value: string): string {
 }
 
 /**
- * Caviarde des lignes de journal : valeurs connues d'abord (`[NUXT_SESSION_PASSWORD]`), puis les motifs ci-dessus.
+ * Caviarde des lignes de journal : valeurs connues d'abord (`[NUXT_APP_SECRET]`), puis les motifs ci-dessus.
  * Rend les lignes et le nombre de remplacements.
  */
 export function redactLines(lines: readonly string[], known: readonly KnownValue[]): { lines: string[], redactions: number } {
