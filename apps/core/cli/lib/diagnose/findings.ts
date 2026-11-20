@@ -9,7 +9,8 @@ import { type ResolvedVariable, variableValue } from './variables'
 /** En deçà, l'espace libre d'un dossier de l'installation est signalé. */
 export const LOW_DISK_BYTES = 1024 ** 3
 /** nuxt-auth-utils refuse un secret de session plus court. */
-export const SESSION_PASSWORD_MIN_LENGTH = 32
+/** Longueur minimale de NUXT_APP_SECRET exigée par Nuxt 4.6 (deriveSecret). */
+export const APP_SECRET_MIN_LENGTH = 32
 const DAY_MS = 86_400_000
 
 const ORDER: Record<FindingLevel, number> = { error: 0, warning: 1, info: 2 }
@@ -30,12 +31,15 @@ export function computeFindings(report: Omit<DiagnoseReport, 'findings'>, variab
   }
 
   // ─── Configuration ────────────────────────────────────────────────────────
-  for (const name of ['NUXT_SESSION_PASSWORD', 'NUXT_MEDIA_SIGNING_SECRET']) {
-    if (!value(name)) add('error', 'secretMissing', { name })
+  // NUXT_SESSION_PASSWORD (avant nuxt-auth-utils 0.6) : renommé par `surge-media init` / `db migrate` et par l'image.
+  const legacySession = value('NUXT_SESSION_PASSWORD')
+  if (legacySession) add(value('NUXT_APP_SECRET') ? 'warning' : 'error', 'sessionPasswordObsolete')
+  for (const name of ['NUXT_APP_SECRET', 'NUXT_MEDIA_SIGNING_SECRET']) {
+    if (!value(name) && !(name === 'NUXT_APP_SECRET' && legacySession)) add('error', 'secretMissing', { name })
   }
-  const session = value('NUXT_SESSION_PASSWORD')
-  if (session && session.length < SESSION_PASSWORD_MIN_LENGTH) {
-    add('error', 'sessionPasswordShort', { length: session.length, min: SESSION_PASSWORD_MIN_LENGTH })
+  const appSecret = value('NUXT_APP_SECRET')
+  if (appSecret && appSecret.length < APP_SECRET_MIN_LENGTH) {
+    add('error', 'appSecretShort', { length: appSecret.length, min: APP_SECRET_MIN_LENGTH })
   }
   if (!value('NUXT_MFA_ENCRYPTION_KEY')) add('warning', 'mfaKeyMissing')
   if (!value('NUXT_SITE_URL') && report.system.install !== 'source') add('warning', 'siteUrlMissing')

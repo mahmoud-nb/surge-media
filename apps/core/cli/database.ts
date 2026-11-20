@@ -14,7 +14,7 @@ import {
   type DatabaseProvider,
 } from '../shared/database'
 import type { Translate } from './i18n'
-import { readEnvFile, updateEnvFile } from './lib/env-file'
+import { readEnvFile, renameLegacySecretsInFile, updateEnvFile } from './lib/env-file'
 import { generateClients, providerSchemaFile } from './lib/generate'
 import { sqliteDriverError } from './lib/native'
 import { runPrisma } from './lib/prisma'
@@ -45,10 +45,11 @@ type MigrationMode = 'deploy' | 'reset' | 'skip'
 const DATABASE_ENV_KEYS = ['DATABASE_PROVIDER', 'DATABASE_URL'] as const
 
 /**
- * Secrets aléatoires ajoutés au .env s'ils sont absents : sessions (nuxt-auth-utils), liens signés des médias,
+ * Secrets aléatoires ajoutés au .env s'ils sont absents : secret racine de l'application (NUXT_APP_SECRET : sessions
+ * de nuxt-auth-utils, cookies de la double authentification), liens signés des médias,
  * chiffrement des secrets de la double authentification.
  */
-const GENERATED_SECRETS = ['NUXT_SESSION_PASSWORD', 'NUXT_MEDIA_SIGNING_SECRET', 'NUXT_MFA_ENCRYPTION_KEY'] as const
+const GENERATED_SECRETS = ['NUXT_APP_SECRET', 'NUXT_MEDIA_SIGNING_SECRET', 'NUXT_MFA_ENCRYPTION_KEY'] as const
 
 // ─── Commandes ───────────────────────────────────────────────────────────────
 
@@ -98,6 +99,7 @@ export async function runMigrate(ctx: CliContext): Promise<void> {
   if (!current.provider || !current.url) fail(t('error.notConfigured'))
   const target = current as DatabaseTarget
 
+  renameSecrets(ctx)
   if (ctx.isSource) await generateStep(ctx, target)
   await prismaStep(ctx, ['migrate', 'deploy'], t('step.migrate'), t('step.migrateDone'), target)
   outro(t('outro.migrate'))
@@ -308,6 +310,11 @@ function showSummary(ctx: CliContext, target: DatabaseTarget, siteUrl?: string, 
   )
 }
 
+/** Renomme dans le .env les secrets dont le nom a changé (NUXT_SESSION_PASSWORD → NUXT_APP_SECRET), valeur gardée. */
+function renameSecrets(ctx: CliContext): void {
+  for (const { from, to } of renameLegacySecretsInFile(join(ctx.instanceDir, ENV_FILE))) log.success(ctx.t('step.secretRenamed', { from, to }))
+}
+
 /**
  * Écrit le .env de l'installation puis migre la base. Dépôt des sources seulement : schéma de développement
  * réécrit (Prisma Studio, commandes Prisma lancées à la main) et clients Prisma régénérés s'il le faut ; le
@@ -318,6 +325,7 @@ async function applyTarget(ctx: CliContext, target: DatabaseTarget, mode: Migrat
 
   const envPath = join(instanceDir, ENV_FILE)
   const values: Record<string, string> = { ...extra, DATABASE_PROVIDER: target.provider, DATABASE_URL: target.url }
+  renameSecrets(ctx)
   // Secrets générés une seule fois (jamais remplacés : cela déconnecterait tout le monde ou
   // invaliderait les liens signés déjà partagés).
   const existing = readEnvFile(envPath)

@@ -60,8 +60,10 @@ RUN apt-get update \
 
 WORKDIR /app
 # npm 12 et plus n'exécutent les scripts d'installation des dépendances qu'une fois approuvés : ceux qu'il faut
-# le sont d'avance (champ ignoré par npm 11).
-RUN printf '%s\n' '{"private":true,"allowScripts":{"better-sqlite3":true,"@prisma/engines":true,"prisma":true}}' > package.json
+# le sont d'avance (champ ignoré par npm 11). `overrides` : correctifs de sécurité des dépendances indirectes, comme
+# ceux de pnpm-workspace.yaml (npm ignore ces derniers) — effect, épinglé en 3.20.0 par @prisma/config 7.10.1
+# (GHSA-7589-6fvf-x4pw). À retirer avec la ligne de pnpm-workspace.yaml.
+RUN printf '%s\n' '{"private":true,"allowScripts":{"better-sqlite3":true,"@prisma/engines":true,"prisma":true},"overrides":{"effect":"^3.22.1"}}' > package.json
 RUN --mount=type=bind,from=package,target=/package \
     npm install --omit=dev --no-audit --no-fund --no-package-lock /package/surge-media-core.tgz
 # Échec de la build plutôt qu'un conteneur qui démarre sans pilote SQLite, sharp ou argon2.

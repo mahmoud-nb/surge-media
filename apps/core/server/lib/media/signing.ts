@@ -129,17 +129,16 @@ export function checkSignature(secrets: readonly string[], target: SignatureTarg
 let derivedSecret: string | undefined
 
 /**
- * Secret courant : NUXT_MEDIA_SIGNING_SECRET, sinon dérivé du secret des sessions. Sert aussi, par
- * une clé dérivée, aux jetons délégués (server/lib/access/delegated.ts).
+ * Secret courant : NUXT_MEDIA_SIGNING_SECRET, sinon dérivé du secret racine de l'application (NUXT_APP_SECRET).
+ * Sert aussi, par une clé dérivée, aux jetons délégués (server/lib/access/delegated.ts).
  */
 export function currentSigningSecret(): string {
-  const { media, session } = useRuntimeConfig()
+  const { media, appSecret } = useRuntimeConfig() as { media: { signingSecret?: string }, appSecret?: unknown }
   if (media.signingSecret) return media.signingSecret
-  // Repli : secret dérivé de celui des sessions (le changer invaliderait aussi les liens).
-  // `pnpm db:init` génère un NUXT_MEDIA_SIGNING_SECRET dédié.
-  const sessionSecret = session.password || process.env.NUXT_SESSION_PASSWORD
-  if (!sessionSecret) throw new Error('[surge-media] NUXT_MEDIA_SIGNING_SECRET (ou NUXT_SESSION_PASSWORD) doit être défini.')
-  derivedSecret ??= createHmac('sha256', sessionSecret).update('surge-media:media-signing').digest('base64url')
+  // Repli : secret dérivé de NUXT_APP_SECRET (le changer invaliderait aussi les liens). `surge-media init` et
+  // l'image Docker génèrent un NUXT_MEDIA_SIGNING_SECRET dédié.
+  if (typeof appSecret !== 'string' || appSecret === '') throw new Error('[surge-media] NUXT_MEDIA_SIGNING_SECRET (ou NUXT_APP_SECRET) doit être défini.')
+  derivedSecret ??= createHmac('sha256', appSecret).update('surge-media:media-signing').digest('base64url')
   return derivedSecret
 }
 

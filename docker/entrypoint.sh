@@ -28,7 +28,7 @@ say() {
 
 # Variables sensibles lisibles dans un fichier (secrets Docker) : NOM_FILE=/run/secrets/…
 load_file_variables() {
-  for name in DATABASE_URL NUXT_SESSION_PASSWORD NUXT_MEDIA_SIGNING_SECRET NUXT_MEDIA_PREVIOUS_SIGNING_SECRET \
+  for name in DATABASE_URL NUXT_APP_SECRET NUXT_SESSION_PASSWORD NUXT_MEDIA_SIGNING_SECRET NUXT_MEDIA_PREVIOUS_SIGNING_SECRET \
     NUXT_MEDIA_STORAGE_S3_ACCESS_KEY_ID NUXT_MEDIA_STORAGE_S3_SECRET_ACCESS_KEY NUXT_SMTP_PASSWORD \
     NUXT_BOOTSTRAP_ADMIN_PASSWORD NUXT_MFA_ENCRYPTION_KEY NUXT_LICENSE_KEY; do
     eval "file=\${${name}_FILE:-}"
@@ -90,6 +90,24 @@ ensure_secret() {
     rm -f "$tmp"
   fi
   export "$name=$(cat "$file")"
+}
+
+# nuxt-auth-utils 0.6 ignore NUXT_SESSION_PASSWORD : sa valeur devient NUXT_APP_SECRET (variable ou fichier conservé
+# dans le volume), sans nouveau secret. Les liens signés dérivés restent valables ; les utilisateurs se reconnectent une fois.
+migrate_legacy_secrets() {
+  if [ -z "${NUXT_APP_SECRET:-}" ]; then
+    if [ -n "${NUXT_SESSION_PASSWORD:-}" ]; then
+      export NUXT_APP_SECRET="$NUXT_SESSION_PASSWORD"
+      say "NUXT_SESSION_PASSWORD est obsolète : sa valeur sert de NUXT_APP_SECRET. Renommez la variable." \
+        "NUXT_SESSION_PASSWORD is obsolete: its value is used as NUXT_APP_SECRET. Rename the variable."
+    elif [ -s "$SECRETS_DIR/NUXT_SESSION_PASSWORD" ] && [ ! -e "$SECRETS_DIR/NUXT_APP_SECRET" ]; then
+      if mv "$SECRETS_DIR/NUXT_SESSION_PASSWORD" "$SECRETS_DIR/NUXT_APP_SECRET" 2>/dev/null; then
+        say "Secret NUXT_SESSION_PASSWORD renommé en NUXT_APP_SECRET dans $SECRETS_DIR (même valeur)." \
+          "Secret NUXT_SESSION_PASSWORD renamed to NUXT_APP_SECRET in $SECRETS_DIR (same value)."
+      fi
+    fi
+  fi
+  unset NUXT_SESSION_PASSWORD
 }
 
 migrate() {
@@ -163,7 +181,8 @@ case "$command" in
     migrate
     ;;
   server)
-    ensure_secret NUXT_SESSION_PASSWORD
+    migrate_legacy_secrets
+    ensure_secret NUXT_APP_SECRET
     ensure_secret NUXT_MEDIA_SIGNING_SECRET
     ensure_secret NUXT_MFA_ENCRYPTION_KEY
     restore_demo_snapshot
@@ -171,7 +190,8 @@ case "$command" in
     exec node "$SERVER" "$@"
     ;;
   worker)
-    ensure_secret NUXT_SESSION_PASSWORD
+    migrate_legacy_secrets
+    ensure_secret NUXT_APP_SECRET
     ensure_secret NUXT_MEDIA_SIGNING_SECRET
     ensure_secret NUXT_MFA_ENCRYPTION_KEY
     export NUXT_SERVER_ROLE=worker

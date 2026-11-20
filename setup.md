@@ -159,11 +159,11 @@ When the database is not reachable yet (database container still starting), migr
 
 - A host directory mounted on `/app/data` must belong to uid 1000: `chown -R 1000:1000 <directory>`.
 - The image reads no `.env` file: pass variables with `-e`, `--env-file` or Compose.
-- `NUXT_SESSION_PASSWORD`, `NUXT_MEDIA_SIGNING_SECRET` and `NUXT_MFA_ENCRYPTION_KEY`, when not provided, are generated
+- `NUXT_APP_SECRET`, `NUXT_MEDIA_SIGNING_SECRET` and `NUXT_MFA_ENCRYPTION_KEY`, when not provided, are generated
   on first start and stored in `secrets/` (mode `0600`), then never replaced. Containers on different volumes or hosts must receive
   the same values explicitly.
 - Sensitive variables can be read from files (Docker or Kubernetes secrets) with the `_FILE` suffix:
-  `DATABASE_URL`, `NUXT_SESSION_PASSWORD`, `NUXT_MEDIA_SIGNING_SECRET`, `NUXT_MEDIA_PREVIOUS_SIGNING_SECRET`,
+  `DATABASE_URL`, `NUXT_APP_SECRET`, `NUXT_MEDIA_SIGNING_SECRET`, `NUXT_MEDIA_PREVIOUS_SIGNING_SECRET`,
   `NUXT_MEDIA_STORAGE_S3_ACCESS_KEY_ID`, `NUXT_MEDIA_STORAGE_S3_SECRET_ACCESS_KEY`, `NUXT_SMTP_PASSWORD`,
   `NUXT_BOOTSTRAP_ADMIN_PASSWORD`, `NUXT_MFA_ENCRYPTION_KEY`, `NUXT_LICENSE_KEY`. Example:
   `NUXT_SMTP_PASSWORD_FILE=/run/secrets/smtp_password`.
@@ -323,7 +323,7 @@ over `.env`.
 
 | Variable | Default | Role |
 | --- | --- | --- |
-| `NUXT_SESSION_PASSWORD` | generated | Session cookie secret, 32 characters minimum. Changing it signs everyone out |
+| `NUXT_APP_SECRET` | generated | Root secret of the application, 32 characters minimum: the session and two-factor cookie keys are derived from it. Changing it signs everyone out. Replaces `NUXT_SESSION_PASSWORD`, renamed with the same value by `surge-media db migrate` and by the Docker image |
 | `NUXT_SESSION_MAX_AGE` | `43200` (12 h) | Session lifetime, in seconds |
 | `NUXT_SESSION_COOKIE_SECURE` | `true` | Session cookie restricted to HTTPS (`localhost` excepted). Set `false` only for a test over plain HTTP |
 | `NUXT_PUBLIC_TRUSTED_DEVICE_DAYS` | `15` | Days during which a browser marked "Trust this device" is not asked again for the password before sensitive actions (365 maximum, `0` disables the option) |
@@ -770,7 +770,7 @@ Traefik also appends `X-Forwarded-For` by default; raise its timeouts and body s
 - [ ] `NUXT_TRUST_PROXY` matches your proxies and CDN (§ 11.3).
 - [ ] Bootstrap variables removed after the first sign-in (§ 6).
 - [ ] Two-factor authentication required at least for administrators (**Settings › Security**, § 6).
-- [ ] `NUXT_SESSION_PASSWORD`, `NUXT_MEDIA_SIGNING_SECRET` and `NUXT_MFA_ENCRYPTION_KEY` stored safely, identical
+- [ ] `NUXT_APP_SECRET`, `NUXT_MEDIA_SIGNING_SECRET` and `NUXT_MFA_ENCRYPTION_KEY` stored safely, identical
       on every process, and included in backups.
 - [ ] Upload size and timeouts aligned between SurgeMedia and the proxy (§ 11.1); enough space in `TMPDIR`.
 - [ ] Database: PostgreSQL or MySQL if more than one process or sustained traffic (§ 13).
@@ -841,7 +841,7 @@ Back up together:
 | --- | --- |
 | Database | SQLite file with its `-wal` and `-shm` files, or your PostgreSQL / MySQL database |
 | Media | `NUXT_MEDIA_STORAGE_ROOT` (local storage), or the bucket (versioning or replication on your side) |
-| Secrets | `NUXT_SESSION_PASSWORD`, `NUXT_MEDIA_SIGNING_SECRET` and `NUXT_MFA_ENCRYPTION_KEY`: `.env`, your secret store, or `/app/data/secrets` in Docker |
+| Secrets | `NUXT_APP_SECRET`, `NUXT_MEDIA_SIGNING_SECRET` and `NUXT_MFA_ENCRYPTION_KEY`: `.env`, your secret store, or `/app/data/secrets` in Docker |
 | Configuration | `.env`, Compose files, proxy configuration |
 
 ```bash
@@ -924,7 +924,7 @@ writes nothing (except `--out`) and sends nothing: review the report, then attac
 | Demo container stops at start: database "doesn't come from a demo snapshot" | The data volume holds a database that was not restored from a snapshot (for instance the `prepare` volume): give the `demo` service its own, empty volume (§ 7.11) |
 | Demo: visitors' uploads don't show in the administration | Media are served on another domain (`NUXT_MEDIA_PUBLIC_URL`), where the session cookie is not sent: serve `/m/` on the demo's own site (§ 7.11) |
 | `403 Cross-origin request blocked` | The proxy rewrites the `Host` header, or a modifying request comes from another origin |
-| `NUXT_SESSION_PASSWORD … was not set` | Run `surge-media init`, or set a secret of 32 characters or more |
+| `appSecret` is not set (500 on sign-in) | Run `surge-media init` (or `db migrate` to rename an old `NUXT_SESSION_PASSWORD`), or set `NUXT_APP_SECRET` to 32 characters or more (`openssl rand -base64 32`) |
 | `start` stops at once with exit code 1 | Port already used: another `--port`/`PORT`, or stop the other application; update `NUXT_SITE_URL` if it contains the port |
 | `start` refuses to run with SQLite (npm 12) | Install scripts not approved: `npm install-scripts approve better-sqlite3 @prisma/engines prisma`, then `npm rebuild better-sqlite3 @prisma/engines` |
 | "database is locked" during a migration | SQLite held by the running server: stop it while migrating (the Docker `server` command migrates on its own) |
