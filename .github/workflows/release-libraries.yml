@@ -139,7 +139,8 @@ jobs:
               echo "@surge-media/$name@$VERSION est déjà publiée : rien à faire."
               continue
             fi
-            npm publish "artifacts/surge-media-$name-$VERSION.tgz" --access public --tag "$DIST_TAG" --provenance="$PROVENANCE"
+            # « ./ » : sans lui, npm lit « artifacts/… » comme un dépôt GitHub (utilisateur/dépôt).
+            npm publish "./artifacts/surge-media-$name-$VERSION.tgz" --access public --tag "$DIST_TAG" --provenance="$PROVENANCE"
           done
 
   assets:
