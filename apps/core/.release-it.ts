@@ -61,7 +61,10 @@ export default {
     requireCleanWorkingDir: true,
     requireUpstream: true,
     requireCommits: true,
-    commitsPath: CORE_PATHS.join(' '),
+    // Un seul chemin : release-it 21 le passe comme un argument unique à `git rev-list -- <chemin>` (la liste jointe
+    // par des espaces ne désignait aucun fichier : « There are no commits since the latest tag »). Le changelog, lui,
+    // reste filtré sur tous les CORE_PATHS ; une release qui ne touche que l'image : `--no-git.requireCommits`.
+    commitsPath: '.',
     commitMessage: 'chore(release): v${version}',
     tagName: 'v${version}',
     tagAnnotation: 'SurgeMedia v${version}',
