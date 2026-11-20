@@ -180,7 +180,8 @@ jobs:
           if [ -n "$NPM_TOKEN" ]; then
             echo "//registry.npmjs.org/:_authToken=${NPM_TOKEN}" > "$HOME/.npmrc"
           fi
-          npm publish artifacts/surge-media-core.tgz --access public --tag "$DIST_TAG" --provenance="$PROVENANCE"
+          # « ./ » : sans lui, npm lit « artifacts/… » comme un dépôt GitHub (utilisateur/dépôt) et tente un git ls-remote.
+          npm publish ./artifacts/surge-media-core.tgz --access public --tag "$DIST_TAG" --provenance="$PROVENANCE"
 
   docker:
     name: Image Docker ${{ matrix.target }} (GHCR)
