@@ -1,6 +1,6 @@
 {
   "name": "@surge-media/vue",
-  "version": "0.0.0",
+  "version": "0.1.0",
   "type": "module",
   "description": "Vue 3 components for SurgeMedia: responsive images, <picture>, videos with sources, posters and captions, file uploads with delegated tokens, processing status.",
   "keywords": [
