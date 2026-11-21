@@ -8,7 +8,9 @@
 #   2. npm : publication de ces archives (@surge-media/client puis @surge-media/vue, qui en dépend), étiquette
 #      `latest` (plus haute version stable), `next` (préversion) ou `release-X.Y` (correctif d'une ancienne
 #      ligne), avec provenance si le dépôt est public ; publication de confiance (OIDC) ou secret NPM_TOKEN ;
-#   3. assets : archives et SHA256SUMS joints à la release GitHub ; attestation de provenance si le dépôt est public.
+#   3. assets : archives et SHA256SUMS joints à la release GitHub ; attestation de provenance si le dépôt est public ;
+#   4. latest (sans attendre les autres) : « Latest » rendue à la plus haute release stable du core, qu'une release
+#      des librairies publiée depuis le formulaire GitHub prend par défaut.
 #
 # Audit des dépendances npm (bloquant) avant tout ; sans cache pnpm (un cache écrit par un autre workflow ne doit
 # pas pouvoir influencer une version publiée) ; actions tierces épinglées par empreinte de commit
@@ -171,3 +173,27 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: gh release upload "$TAG" artifacts/*.tgz artifacts/SHA256SUMS --clobber --repo "$GITHUB_REPOSITORY"
+
+  latest:
+    name: Release « Latest » rendue au core
+    # Sans attendre les publications : la release des librairies doit cesser d'être « Latest » même si l'une échoue.
+    if: startsWith(github.event.release.tag_name || inputs.tag, 'libs-v')
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    steps:
+      # Le formulaire de GitHub coche « Set as the latest release » par défaut : une release des librairies prendrait
+      # la place du core sur la page du dépôt et à l'adresse releases/latest. « Latest » revient à la plus haute
+      # version stable du core (tags vX.Y.Z, sans brouillon ni préversion) ; sans release du core, rien ne change.
+      - name: Plus haute release stable du core marquée « Latest »
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          core=$(gh release list --repo "$GITHUB_REPOSITORY" --exclude-drafts --exclude-pre-releases --limit 200 \
+            --json tagName --jq '.[].tagName' | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' | sort -V | tail -n 1 || true)
+          if [ -z "$core" ]; then
+            echo "Aucune release stable du core : « Latest » inchangée."
+            exit 0
+          fi
+          gh release edit "$core" --latest --repo "$GITHUB_REPOSITORY"
+          echo "« Latest » : $core"
