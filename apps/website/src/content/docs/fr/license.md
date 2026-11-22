@@ -27,6 +27,19 @@ SurgeMedia est distribué sous **Business Source License 1.1** (identifiant SPDX
 
 Les paquets front-end **`@surge-media/client`** et **`@surge-media/vue`** sont distribués sous **licence MIT** : utilisez-les, modifiez-les et livrez-les dans n’importe quel projet, commercial ou non, quel que soit votre chiffre d’affaires. Ils ne font pas partie de l’œuvre couverte par la Business Source License, qui s’applique au serveur SurgeMedia (`@surge-media/core`) auquel ils se connectent.
 
+## Usage gratuit : une demande, pas une condition
+
+Si vous utilisez SurgeMedia gratuitement, nous aimerions le savoir : c’est ce qui fait vivre le projet. **Ce n’est pas une condition de la licence** : l’oublier, ou ne pas pouvoir le faire (confidentialité, outil interne…), ne remet jamais en cause votre droit d’utiliser SurgeMedia.
+
+- **Faites-vous connaître** — le bouton facultatif **Enregistrer cette instance**, dans **Réglages › Licence**, prépare un e-mail que vous relisez et envoyez vous-même ; SurgeMedia n’envoie jamais rien de lui-même. Vous pouvez aussi simplement [nous écrire](mailto:licensing@surgeup.org?subject=Nous%20utilisons%20SurgeMedia).
+- **Mentionnez SurgeMedia** — là où vous citez les outils que vous utilisez (page de crédits, documentation, article, conférence), avec un lien vers [usesurgemedia.com](https://usesurgemedia.com/).
+
+En retour :
+
+- vous êtes prévenu des **avis de sécurité et des versions importantes** ;
+- vos retours **comptent dans la feuille de route** ;
+- avec votre **accord écrit uniquement**, votre organisation peut figurer parmi les utilisateurs de SurgeMedia. Nous ne publions jamais un nom ou un logo sans lui.
+
 ## Des questions ?
 
 La [FAQ des tarifs](../pricing/#faq) répond aux questions les plus courantes. Pour d’autres arrangements de licence, [contactez-nous](mailto:licensing@surgeup.org?subject=Licence%20SurgeMedia).
