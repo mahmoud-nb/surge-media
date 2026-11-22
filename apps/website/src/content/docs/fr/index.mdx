@@ -1,13 +1,13 @@
 ---
 title: Plateforme de médias auto-hébergée
-description: SurgeMedia stocke, transforme et diffuse vos images et vidéos depuis vos propres serveurs, sous votre propre domaine, via une seule API headless sécurisée — pour chaque environnement, du développement à la production.
+description: SurgeMedia stocke, transforme et diffuse vos images et vidéos depuis vos propres serveurs, sous votre propre domaine, via une seule API headless sécurisée. La même API sert chaque environnement, du développement à la production.
 template: splash
 editUrl: false
 lastUpdated: false
 eyebrow: Auto-hébergé · Headless · Code source public
 hero:
   title: L’infrastructure média <span class="sm-gradient">qui vous appartient vraiment</span>.
-  tagline: Stockez, transformez et diffusez toutes vos images et vidéos via une seule API sécurisée — sur vos serveurs, sous votre domaine, pour chaque environnement, du développement à la production. Aucune facturation à la transformation. Aucun média qui quitte votre infrastructure.
+  tagline: Stockez, transformez et diffusez toutes vos images et vidéos via une seule API sécurisée, sur vos serveurs et sous votre domaine, pour tous vos environnements, du développement à la production. Aucune facturation à la transformation. Aucun média ne quitte votre infrastructure.
   actions:
     - text: Démarrer en 5 minutes
       link: /fr/guides/getting-started/
@@ -78,22 +78,22 @@ import CtaBand from '../../../components/landing/CtaBand.astro';
       `npx surge-media init` ou une seule image Docker. La CLI configure votre base de données, applique les migrations et génère les secrets. Aucune compilation, aucun compte tiers à créer.
     </Feature>
     <Feature icon="server" title="Auto-hébergé de bout en bout">
-      Vos serveurs, votre domaine (`media.votre-entreprise.fr`), votre disque ou votre bucket compatible S3. Vos médias ne transitent jamais par un tiers — idéal pour le RGPD et la souveraineté des données.
+      Vos serveurs, votre domaine (`media.votre-entreprise.fr`), votre disque ou votre bucket compatible S3. Vos médias ne transitent jamais par un tiers, ce qui est idéal pour le RGPD et la souveraineté des données.
     </Feature>
     <Feature icon="database" title="La base de données que vous utilisez déjà">
-      SQLite par défaut pour les petites structures et les démarrages rapides. PostgreSQL ou MySQL / MariaDB pour la production à l’échelle de l’entreprise — même paquet, même image, une seule variable.
+      SQLite par défaut pour les petites structures et les démarrages rapides. PostgreSQL ou MySQL / MariaDB pour la production à l’échelle de l’entreprise. Même paquet, même image, une seule variable.
     </Feature>
     <Feature icon="random" title="Une source de vérité pour tous les environnements">
       Développement, préproduction et production lisent la même médiathèque, avec des clés d’API par environnement : fini les envois en double et les synchronisations de buckets.
     </Feature>
     <Feature icon="setting" title="Traitements à la demande">
-      Redimensionnement, recadrage, point d’intérêt, AVIF et WebP — en changeant simplement l’URL, grâce à Sharp. Rendus vidéo (H.264, AV1), affiches et sous-titres avec FFmpeg, hors du chemin des requêtes.
+      Redimensionnement, recadrage, point d’intérêt, AVIF et WebP avec Sharp, en changeant simplement l’URL. Rendus vidéo (H.264, AV1), affiches et sous-titres avec FFmpeg, hors du chemin des requêtes.
     </Feature>
     <Feature icon="padlock" title="Des API verrouillées par conception">
-      Clés publiques et secrètes, portées, échéances et rotation, origines autorisées (CORS), URL signées et jetons d’envoi éphémères — gérés par les responsables de projet, sans ticket à l’exploitation.
+      Clés publiques et secrètes, portées, échéances et rotation, origines autorisées (CORS), URL signées et jetons d’envoi éphémères. Les responsables de projet gèrent tout, sans ticket à l’exploitation.
     </Feature>
     <Feature icon="list-format" title="Des rôles à l’image de votre organisation">
-      Administrateur, Gestionnaire, Développeur et Éditeur sur la plateforme ; Propriétaire, Développeur et Éditeur par projet. Chacun dispose exactement des accès nécessaires, la double authentification peut être exigée, et les actions sensibles sont journalisées.
+      Administrateur, Gestionnaire, Développeur et Éditeur sur la plateforme ; Propriétaire, Développeur et Éditeur par projet. Chacun a exactement les accès dont il a besoin. La double authentification peut être exigée et les actions sensibles sont journalisées.
     </Feature>
     <Feature icon="laptop" title="Une administration que vos équipes vont adopter">
       Envoi, rangement en dossiers, étiquettes et filtres, point d’intérêt, génération d’URL et d’extraits HTML. Thèmes clair et sombre, français et anglais, conforme WCAG 2.2 AA.
@@ -111,7 +111,7 @@ import CtaBand from '../../../components/landing/CtaBand.astro';
   lead="Arrêtez de copier les fichiers de la production vers la préproduction et de les perdre en route. Chaque environnement de chaque application consomme les mêmes médias, avec ses propres clés."
 >
   <EnvironmentsDiagram
-    caption="Vos applications appellent une seule instance SurgeMedia, qui s’exécute — et stocke — sur votre propre infrastructure."
+    caption="Vos applications appellent une seule instance SurgeMedia, qui s’exécute sur votre propre infrastructure et y stocke ses données."
     appsLabel="Vos applications"
     apps={[
       { name: 'Développement', detail: 'localhost:5173' },
@@ -184,7 +184,7 @@ https://media.example.com/m/k7d2m9qz/v3/w_800,h_450,g_focal,q_70/hero.avif
 }
 ```
 
-Remplacez `{transform}` et `{format}` côté client pour construire n’importe quel `srcset` — sans requête supplémentaire.
+Remplacez `{transform}` et `{format}` côté client pour construire n’importe quel `srcset`, sans requête supplémentaire.
 
 </TabItem>
 </Tabs>
@@ -195,7 +195,7 @@ Remplacez `{transform}` et `{format}` côté client pour construire n’importe 
   id="install"
   eyebrow="Installation"
   title="Installez-le à votre façon"
-  lead="Un paquet npm, une image Docker. Choisissez la base de données adaptée à vos besoins d’aujourd’hui — passez à PostgreSQL ou MySQL quand vous grandissez."
+  lead="Un paquet npm, une image Docker. Choisissez la base de données adaptée à vos besoins d’aujourd’hui, et passez à PostgreSQL ou MySQL quand vous grandirez."
 >
 
 <Tabs syncKey="install">
@@ -254,7 +254,7 @@ POSTGRES_PASSWORD='a-changer' docker compose -f docker/compose.postgres.yaml up 
   />
   <LinkCard
     title="Rôles et responsabilités"
-    description="Les administrateurs pilotent la plateforme, les gestionnaires leurs projets, les développeurs les clés et les intégrations, les éditeurs le contenu — avec un rôle par projet en plus du rôle de plateforme."
+    description="Les administrateurs pilotent la plateforme, les gestionnaires leurs projets, les développeurs les clés et les intégrations, les éditeurs le contenu. Un rôle par projet complète le rôle de plateforme."
     href="guides/roles/"
   />
   <LinkCard
@@ -279,11 +279,11 @@ POSTGRES_PASSWORD='a-changer' docker compose -f docker/compose.postgres.yaml up 
 >
 
 <CardGrid>
-  <LinkCard title="@surge-media/vue" description="En développement — images responsives, vidéos, envois et sélecteurs pour Vue 3 et Nuxt. MIT." href="reference/sdks/" />
-  <LinkCard title="@surge-media/client" description="En développement — le client sans framework pour navigateurs, Node.js et environnements edge. MIT." href="reference/sdks/#surge-mediaclient" />
-  <LinkCard title="@surge-media/react" description="Prévu — les mêmes composants pour React et Next.js." href="reference/sdks/" />
-  <LinkCard title="@surge-media/svelte" description="Prévu — les mêmes composants pour Svelte et SvelteKit." href="reference/sdks/" />
-  <LinkCard title="API REST v1" description="Disponible — OpenAPI 3.1, tous les langages, tous les frameworks." href="guides/architecture/" />
+  <LinkCard title="@surge-media/vue" description="En développement. Images responsives, vidéos, envois et sélecteurs pour Vue 3 et Nuxt. MIT." href="reference/sdks/" />
+  <LinkCard title="@surge-media/client" description="En développement. Le client sans framework pour navigateurs, Node.js et environnements edge. MIT." href="reference/sdks/#surge-mediaclient" />
+  <LinkCard title="@surge-media/react" description="Prévu. Les mêmes composants pour React et Next.js." href="reference/sdks/" />
+  <LinkCard title="@surge-media/svelte" description="Prévu. Les mêmes composants pour Svelte et SvelteKit." href="reference/sdks/" />
+  <LinkCard title="API REST v1" description="Disponible. OpenAPI 3.1, tous les langages, tous les frameworks." href="guides/architecture/" />
 </CardGrid>
 
 </Section>
@@ -305,7 +305,7 @@ POSTGRES_PASSWORD='a-changer' docker compose -f docker/compose.postgres.yaml up 
 
 <CtaBand
   title="Reprenez la maîtrise de vos médias, dès aujourd’hui."
-  text="Installez SurgeMedia sur votre infrastructure en quelques minutes. Gratuit pour le développement, les tests et l’évaluation — pour tout le monde."
+  text="Installez SurgeMedia sur votre infrastructure en quelques minutes. Le développement, les tests et l’évaluation sont gratuits pour tout le monde."
   primary={{ label: 'Démarrer', href: '/fr/guides/getting-started/' }}
   secondary={{ label: 'Comparer les offres', href: '/fr/pricing/' }}
 />

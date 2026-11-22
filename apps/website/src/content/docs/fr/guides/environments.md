@@ -1,6 +1,6 @@
 ---
 title: Une source de vérité pour tous les environnements
-description: Utilisez la même médiathèque en développement, en préproduction et en production, avec des clés et des origines par environnement — et arrêtez de copier les fichiers d’un environnement à l’autre.
+description: Utilisez la même médiathèque en développement, en préproduction et en production, avec des clés et des origines par environnement. Plus besoin de copier les fichiers d’un environnement à l’autre.
 ---
 
 La plupart des équipes finissent avec un bucket de médias par environnement : les éditeurs envoient en production, les développeurs copient les fichiers à la main vers la préproduction, et les environnements locaux affichent des images cassées. SurgeMedia règle le problème à la racine : **chaque environnement lit les mêmes médias**, chacun avec ses propres identifiants.
@@ -10,7 +10,7 @@ La plupart des équipes finissent avec un bucket de médias par environnement :
 | <span class="sr-only">Aspect</span> | Un bucket par environnement | SurgeMedia |
 | --- | --- | --- |
 | Où vivent les médias | Copiés dans chaque environnement | Un projet, une médiathèque |
-| La préproduction montre les vrais contenus | Seulement après une synchronisation manuelle | Toujours — mêmes identifiants, mêmes URL |
+| La préproduction montre les vrais contenus | Seulement après une synchronisation manuelle | Toujours, avec les mêmes identifiants et les mêmes URL |
 | Développement local | Images manquantes ou factices | Les vrais médias, en lecture seule si vous le souhaitez |
 | Clé compromise en préproduction | Souvent partagée avec la production | Révoquez uniquement la clé de préproduction |
 | Arrivée d’un nouveau développeur | Des accès pour chaque bucket | Une clé publique pour son poste |
@@ -19,7 +19,7 @@ La plupart des équipes finissent avec un bucket de médias par environnement :
 
 1. **Un projet par application** (ou par client, pour les agences). Le projet regroupe les médias, les membres et les politiques.
 2. **Une clé par environnement**, étiquetée `development`, `staging` ou `production` (toute étiquette convient : `preview`, `qa`…). L’administration regroupe les clés par environnement.
-3. **Des origines autorisées** pour chaque front-end : `http://localhost:5173`, `https://staging.acme.app`, `https://www.acme.fr` — ou `https://*.acme.app` pour les déploiements de prévisualisation.
+3. **Des origines autorisées** pour chaque front-end : `http://localhost:5173`, `https://staging.acme.app`, `https://www.acme.fr`, ou `https://*.acme.app` pour les déploiements de prévisualisation.
 4. **Configurez chaque environnement** avec le même identifiant de projet et ses propres clés :
 
 ```bash

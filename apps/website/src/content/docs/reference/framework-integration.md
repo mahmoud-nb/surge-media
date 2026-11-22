@@ -1,9 +1,9 @@
 ---
 title: Build a framework integration
-description: Use @surge-media/client to write your own SurgeMedia components for a framework without an official package — Angular, SolidJS, Qwik, Lit… — with the same guarantees as the official ones.
+description: Use @surge-media/client to write your own SurgeMedia components for a framework that has no official package (Angular, SolidJS, Qwik, Lit…), with the same guarantees as the official ones.
 ---
 
-The official packages cover Vue, and React and Svelte are planned (see [SDKs and components](../sdks/)). For another framework — Angular, SolidJS, Qwik, Lit, Ember — or for your own design system, build a small local library on top of **`@surge-media/client`**. The client holds all the logic: API calls, credentials, URLs, `srcset`, transformation policy, video sources, and the components' own logic — French and English texts, icons, attributes and inline styles, image fallback, video states — along with their CSS theme. Your library only maps it to the framework's components. The official packages are built exactly this way.
+The official packages cover Vue; React and Svelte are planned (see [SDKs and components](../sdks/)). For another framework (Angular, SolidJS, Qwik, Lit, Ember) or for your own design system, build a small local library on top of **`@surge-media/client`**. The client holds all the logic: API calls, credentials, URLs, `srcset`, transformation policy and video sources. It also holds the components' own logic (French and English texts, icons, attributes and inline styles, image fallback, video states) and their CSS theme. Your library only connects it to the framework's components. The official packages are built exactly this way.
 
 ## What the client gives you
 
@@ -23,7 +23,7 @@ The official packages cover Vue, and React and Svelte are planned (see [SDKs and
 
 ### The component logic
 
-The official components only hold the rendering: everything below lives in the client, written once for every framework.
+The official components only handle rendering. Everything below lives in the client, written once for every framework.
 
 | You need | Use |
 | --- | --- |
@@ -41,16 +41,16 @@ The official components only hold the rendering: everything below lives in the c
 | Icons (SVG paths, always decorative) | `ICONS`, `iconSvgAttributes(name, size)` |
 | Minimal inline styles | `imageStyle()`, `imageErrorFrameStyle()`, `VIDEO_PLAYER_STYLE`…, `VISUALLY_HIDDEN`, `cssText()` |
 
-Inline styles are objects with camelCase properties, accepted as is by Vue and React; `cssText()` turns them into a string (`max-width: 100%; height: auto`) for frameworks that expect a text style: SolidJS, Angular, Lit, Svelte. Without any stylesheet, they keep sizes, aspect ratios and screen reader texts (`VISUALLY_HIDDEN`) correct.
+Inline styles are objects with camelCase properties, which Vue and React accept as is. For frameworks that expect a style string (SolidJS, Angular, Lit, Svelte), `cssText()` converts them (`max-width: 100%; height: auto`). Even without a stylesheet, they keep sizes, aspect ratios and screen reader text (`VISUALLY_HIDDEN`) correct.
 
 ### The theme
 
-`@surge-media/client/style.css` is the optional theme of the official packages (`@surge-media/vue/style.css` reuses it as is). Import it once in the application and put the same stable classes on your elements: `sm-image`, `sm-image--error`, `sm-video`, `sm-video__player`, `sm-video__message`, `sm-status`, `sm-thumbnail`, `sm-uploader`… It defines `--sm-*` tokens (`--sm-color-primary`, `--sm-color-surface`, `--sm-radius`…) in light and dark, with checked contrast (WCAG 2.2 AA); everything lives in the `surge-media` CSS layer, so your styles always win.
+`@surge-media/client/style.css` is the optional theme of the official packages (`@surge-media/vue/style.css` reuses it as is). Import it once in the application and put the same stable classes on your elements: `sm-image`, `sm-image--error`, `sm-video`, `sm-video__player`, `sm-video__message`, `sm-status`, `sm-thumbnail`, `sm-uploader`… It defines `--sm-*` tokens (`--sm-color-primary`, `--sm-color-surface`, `--sm-radius`…) for light and dark modes, with contrast checked against WCAG 2.2 AA. Everything lives in the `surge-media` CSS layer, so your styles always win.
 
 ## How an integration is organized
 
-1. **A shared context** for the application — and for each request with server-side rendering: the client, the project's display settings (`DisplaySettings`: policy, formats, maximum size, presets), read once, and the translation of texts. Use the framework's own mechanism: Angular providers, Solid context, Qwik context…
-2. **The component logic, already in the client**: `imageSource()`, `pictureSources()`, `videoPoster()`, `resolveAltText()`… turn a `Media` object and the settings into ready-to-render attributes, texts and styles. Your library only adds a small framework-agnostic core: reading the settings and following things over time (a video being processed, a private media item about to expire).
+1. **A shared context** for the application (and for each request with server-side rendering): the client, the project's display settings (`DisplaySettings`: policy, formats, maximum size, presets) read once, and text translation. Use the framework's own mechanism: Angular providers, Solid context, Qwik context…
+2. **The component logic, already in the client**: `imageSource()`, `pictureSources()`, `videoPoster()`, `resolveAltText()`… turn a `Media` object and the settings into ready-to-render attributes, text and styles. Your library only adds a small framework-agnostic core that reads the settings and tracks changes over time (a video being processed, a private media item about to expire).
 3. **Thin components** that call these functions and render a plain `<img>`, `<picture>` or `<video>` with the theme's `sm-*` classes.
 
 ## Step 1: the framework-agnostic core
@@ -114,9 +114,9 @@ export function followExpiry(
 }
 ```
 
-`DEFAULT_SETTINGS` is used for the first render, before the project is read. To know the policy without reading the project (server-side rendering), pass your values as the second argument of `projectSettings()` and the third of `displaySettings()`: `DisplayDefaults` (`policy`, `formats`, `maxDimension`, `widths`, `imageFormat`). Call `followExpiry()` again with each media item read.
+`DEFAULT_SETTINGS` is used for the first render, before the project is read. To know the policy without reading the project (server-side rendering), pass your values as `DisplayDefaults` (`policy`, `formats`, `maxDimension`, `widths`, `imageFormat`): the second argument of `projectSettings()` and the third of `displaySettings()`. Call `followExpiry()` again each time you read a media item.
 
-The rest is not yours to write: the components call the client directly with the context's settings. `imageSource(media, options, settings)` does the hard part: a `srcset` by width (or by density when the display width is fixed), the real size of each file (the server never enlarges an image), the server-side crop around the focal point when an `aspect` is given, the format enabled on the server, and presets when the project does not allow free parameters. Its options (`ImageOptions`) are the props of the official components: `width`, `height`, `aspect`, `fit`, `transform`, `preset`, `presets`, `format`, `widths`, `sizes`. `pictureSources()` likewise returns the `<source>` tags of a `<picture>` (with a stable `key` for your lists) and its fallback image.
+You don't need to write the rest: the components call the client directly with the context's settings. `imageSource(media, options, settings)` does the hard part. It handles a `srcset` by width (or by density when the display width is fixed), the real size of each file (the server never enlarges an image), the server-side crop around the focal point when an `aspect` is given, the format enabled on the server, and presets when the project does not allow free parameters. Its options (`ImageOptions`) are the props of the official components: `width`, `height`, `aspect`, `fit`, `transform`, `preset`, `presets`, `format`, `widths`, `sizes`. `pictureSources()` likewise returns the `<source>` tags of a `<picture>` (with a stable `key` for your lists) and its fallback image.
 
 ## Step 2: SolidJS components
 
@@ -259,7 +259,7 @@ render(() => (
 ), document.getElementById('app')!)
 ```
 
-The context also carries `t`, the translation of the component texts (`t('video.download')`, `t('processing.states.pending')`…) in French or English, falling back to the base language (`en-GB` → `en`). Pass your overrides or other languages as the second argument of `createTranslate()`: `{ en: { video: { download: 'Download' } } }`. `SurgeIcon` renders an icon from the client — the pause button of an ambient video, the icon of a processing status (`PROCESSING_ICONS`) — with `aria-hidden`: a text always carries the meaning.
+The context also carries `t`, which translates the component text (`t('video.download')`, `t('processing.states.pending')`…) into French or English, falling back to the base language (`en-GB` → `en`). Pass your overrides or other languages as the second argument of `createTranslate()`: `{ en: { video: { download: 'Download' } } }`. `SurgeIcon` renders an icon from the client, such as the pause button of an ambient video or a processing status icon (`PROCESSING_ICONS`), with `aria-hidden`: the meaning is always carried by text.
 
 ## Step 3: an Angular component
 
@@ -405,7 +405,7 @@ Then, in any template that imports `SurgeImageComponent`: `<surge-image [media]=
 
 ## Step 4: videos
 
-A video plays in the browser's native player, with the server's data. In any framework, the markup to produce is:
+A video plays in the browser's native player, using data from the server. Whatever the framework, the markup to produce is:
 
 ```html title="Video markup"
 <div class="sm-video" style="position: relative; display: inline-block;
@@ -424,11 +424,11 @@ A video plays in the browser's native player, with the server's data. In any fra
 ```
 
 - One `<source>` per item of `media.sources`, **in the server's order** (`url`, `type`): the browser plays the first one it supports.
-- `poster` from `videoPoster(media, { posterWidth }, settings)`: a derivative of 1,280 px at most, or the poster as is when only presets are allowed. `width` and `height` from `videoSize(media)`, to reserve the space; `aria-label` from `videoLabel(media, label)` (the title, else the alternative text); inline styles `VIDEO_FRAME_STYLE` and `VIDEO_PLAYER_STYLE`.
-- One `<track>` per item of `media.textTracks` (`kind`, `language`, `label`, `url`, `default`), and then `crossorigin="anonymous"`: the tracks are served by SurgeMedia's domain. The fallback text is `t('video.unsupported')`.
-- No `sources` yet (a converted format being prepared): in place of the player, the message `t(videoMessageKey(media))`, the processing status when `processingVisible(media.processing)`, and a `t('video.download')` link to `media.url`, in a `videoEmptyStyle(width, height)` frame. Call `followProcessing()` to get the updated media when it is ready.
-- Error on the last `<source>`: `heldVideoDelay(url)` (a `HEAD` request) tells whether the server holds the video (503 `PROCESSING_PENDING`) and in how many milliseconds to retry with `video.load()` — at most `VIDEO_RETRY_LIMIT` times, announcing `t('video.held')` (`role="status"`). `null`: the video cannot be played, show `t(videoMessageKey(media, true))`.
-- Ambient video (muted, looping): started automatically only when `prefersReducedMotion()` is false, with a visible pause button (`t('video.pause')`, `pause` icon). `whenNearViewport()` delays loading a video far from the screen.
+- `poster` comes from `videoPoster(media, { posterWidth }, settings)`: a derivative of 1,280 px at most, or the poster as is when only presets are allowed. `width` and `height` come from `videoSize(media)`, to reserve the space; `aria-label` from `videoLabel(media, label)` (the title, or else the alternative text); the inline styles from `VIDEO_FRAME_STYLE` and `VIDEO_PLAYER_STYLE`.
+- One `<track>` per item of `media.textTracks` (`kind`, `language`, `label`, `url`, `default`), in which case add `crossorigin="anonymous"`: the tracks are served from SurgeMedia's domain. The fallback text is `t('video.unsupported')`.
+- No `sources` yet (a converted format is being prepared): instead of the player, show the message `t(videoMessageKey(media))`, the processing status when `processingVisible(media.processing)` is true, and a `t('video.download')` link to `media.url`, in a `videoEmptyStyle(width, height)` frame. Call `followProcessing()` to get the updated media when it is ready.
+- Error on the last `<source>`: `heldVideoDelay(url)` (a `HEAD` request) tells whether the server is holding the video (503 `PROCESSING_PENDING`) and how many milliseconds to wait before retrying with `video.load()`. Retry at most `VIDEO_RETRY_LIMIT` times, announcing `t('video.held')` (`role="status"`). If it returns `null`, the video cannot be played: show `t(videoMessageKey(media, true))`.
+- Ambient video (muted, looping): it starts automatically only when `prefersReducedMotion()` is false, and has a visible pause button (`t('video.pause')`, `pause` icon). `whenNearViewport()` delays loading a video that is far from the screen.
 
 ## Package your library
 
@@ -452,12 +452,12 @@ The framework is a **peer dependency** (the application's own copy); the client 
 What the official packages guarantee, and your integration should too:
 
 - **Credentials**: a publishable key, or delegated tokens from `getToken`, issued by your server with the secret key. Never a secret key or a personal token in a browser.
-- **Server-side rendering**: one client and one context per request (a delegated token belongs to one visitor), and the project settings known **before** rendering — read them in an initializer (Angular `provideAppInitializer`, a Solid resource inside `Suspense`…) or pass them from your configuration (`DisplayDefaults`). Otherwise the server builds URLs for the default policy. An image that failed before hydration is detected on mount with `imageFailedEarly(img)`.
-- **Images**: `width` and `height` always set (no layout shift) and `max-width: 100%; height: auto` for fluid images — `imageSource()` and `imageStyle()` take care of it —, `sizes` that match your layout.
-- **Alternative text**: `resolveAltText()` — an explicit `alt`, else the media's `altText`; empty only with `decorative`, for a purely decorative image. An image without alternative text is reported in development.
-- **Fallback**: `nextImageStage()` — derivative, then `media.url`, then the alternative text shown in place of the image (`imageErrorFrameStyle()`). Reset it when the media changes.
-- **Texts**: no hard-coded text — labels, announcements and `aria-label` go through `t()`: French by default, English, and your languages as overrides.
-- **Videos**: sources in the server's order, no autoplay — a muted looping video needs a visible pause button (WCAG 2.2.2) and respects `prefersReducedMotion()`.
+- **Server-side rendering**: one client and one context per request (a delegated token belongs to one visitor), and the project settings known **before** rendering. Read them in an initializer (Angular `provideAppInitializer`, a Solid resource inside `Suspense`…) or pass them from your configuration (`DisplayDefaults`); otherwise the server builds URLs for the default policy. An image that failed before hydration is detected on mount with `imageFailedEarly(img)`.
+- **Images**: `width` and `height` always set (no layout shift), `max-width: 100%; height: auto` for fluid images (`imageSource()` and `imageStyle()` take care of both), and `sizes` values that match your layout.
+- **Alternative text**: `resolveAltText()` returns an explicit `alt`, or else the media's `altText`; it is empty only with `decorative`, for a purely decorative image. An image without alternative text is reported in development.
+- **Fallback**: `nextImageStage()` goes from the derivative to `media.url`, then to the alternative text shown in place of the image (`imageErrorFrameStyle()`). Reset it when the media changes.
+- **Text**: nothing hard-coded. Labels, announcements and `aria-label` go through `t()`: French by default, English, and your own languages as overrides.
+- **Videos**: sources in the server's order, no autoplay. A muted looping video needs a visible pause button (WCAG 2.2.2) and respects `prefersReducedMotion()`.
 - **Status**: announce processing changes politely (`role="status"`, text hidden with `VISUALLY_HIDDEN`), only on transitions: `processingAnnouncementKey(next, previous)`. Static icons, never animated.
 - **Private media**: their URLs are signed until `urlExpiresAt`; read the media again before that time if the page stays open (`followExpiry()`, from `refreshDelay()`).
 - **Theme**: the `sm-*` classes of the official packages, so that `@surge-media/client/style.css` applies; without it, inline styles keep sizes and aspect ratios correct.

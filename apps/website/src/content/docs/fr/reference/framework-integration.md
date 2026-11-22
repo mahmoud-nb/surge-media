@@ -1,9 +1,9 @@
 ---
 title: Créer une intégration pour un framework
-description: Utilisez @surge-media/client pour écrire vos propres composants SurgeMedia dans un framework sans paquet officiel — Angular, SolidJS, Qwik, Lit… — avec les mêmes garanties que les paquets officiels.
+description: Utilisez @surge-media/client pour écrire vos propres composants SurgeMedia dans un framework sans paquet officiel (Angular, SolidJS, Qwik, Lit…), avec les mêmes garanties que les paquets officiels.
 ---
 
-Les paquets officiels couvrent Vue, et React et Svelte sont prévus (voir [SDK et composants](../sdks/)). Pour un autre framework — Angular, SolidJS, Qwik, Lit, Ember — ou pour votre propre design system, créez une petite librairie locale au-dessus de **`@surge-media/client`**. Le client porte toute la logique : appels à l’API, identifiants, URL, `srcset`, politique de transformation, sources vidéo, et celle des composants — textes en français et en anglais, icônes, attributs et styles en ligne, repli d’une image, états d’une vidéo —, ainsi que leur thème CSS. Votre librairie se contente de la relier aux composants du framework. Les paquets officiels sont construits exactement ainsi.
+Les paquets officiels couvrent Vue ; React et Svelte sont prévus (voir [SDK et composants](../sdks/)). Pour un autre framework (Angular, SolidJS, Qwik, Lit, Ember) ou pour votre propre design system, créez une petite librairie locale au-dessus de **`@surge-media/client`**. Le client porte toute la logique : appels à l’API, identifiants, URL, `srcset`, politique de transformation, sources vidéo. Il porte aussi celle des composants (textes en français et en anglais, icônes, attributs et styles en ligne, repli d’une image, états d’une vidéo) ainsi que leur thème CSS. Votre librairie se contente de la relier aux composants du framework. Les paquets officiels sont construits exactement ainsi.
 
 ## Ce que le client vous apporte
 
@@ -49,7 +49,7 @@ Les styles en ligne sont des objets aux propriétés en camelCase, acceptés tel
 
 ## Organisation d’une intégration
 
-1. **Un contexte partagé** par application — et par requête avec un rendu serveur : le client, les réglages d’affichage du projet (`DisplaySettings` : politique, formats, taille maximale, préréglages), lus une fois, et la traduction des textes. Utilisez le mécanisme du framework : fournisseurs Angular, contexte Solid, contexte Qwik…
+1. **Un contexte partagé** par application (et par requête avec un rendu serveur) : le client, les réglages d’affichage du projet (`DisplaySettings` : politique, formats, taille maximale, préréglages), lus une fois, et la traduction des textes. Utilisez le mécanisme du framework : fournisseurs Angular, contexte Solid, contexte Qwik…
 2. **La logique des composants, déjà dans le client** : `imageSource()`, `pictureSources()`, `videoPoster()`, `resolveAltText()`… transforment un objet `Media` et les réglages en attributs, textes et styles prêts à afficher. Votre librairie n’y ajoute qu’un petit cœur indépendant du framework : la lecture des réglages et les suivis dans le temps (traitement d’une vidéo, échéance d’un média privé).
 3. **Des composants fins**, qui appellent ces fonctions et affichent un simple `<img>`, `<picture>` ou `<video>` avec les classes `sm-*` du thème.
 
@@ -259,7 +259,7 @@ render(() => (
 ), document.getElementById('app')!)
 ```
 
-Le contexte porte aussi `t`, la traduction des textes des composants (`t('video.download')`, `t('processing.states.pending')`…) en français ou en anglais, avec repli sur la langue de base (`fr-CA` → `fr`). Passez vos surcharges ou d’autres langues en second argument de `createTranslate()` : `{ fr: { video: { download: 'Télécharger' } } }`. `SurgeIcon` affiche une icône du client — bouton pause d’une vidéo d’ambiance, icône de l’état du traitement (`PROCESSING_ICONS`) — avec `aria-hidden` : le sens est toujours donné par un texte.
+Le contexte porte aussi `t`, la traduction des textes des composants (`t('video.download')`, `t('processing.states.pending')`…) en français ou en anglais, avec repli sur la langue de base (`fr-CA` → `fr`). Passez vos surcharges ou d’autres langues en second argument de `createTranslate()` : `{ fr: { video: { download: 'Télécharger' } } }`. `SurgeIcon` affiche une icône du client, par exemple le bouton pause d’une vidéo d’ambiance ou l’icône de l’état du traitement (`PROCESSING_ICONS`), avec `aria-hidden` : le sens est toujours donné par un texte.
 
 ## Étape 3 : un composant Angular
 
@@ -427,8 +427,8 @@ Une vidéo s’affiche dans le lecteur natif du navigateur, avec les données du
 - `poster` tiré de `videoPoster(media, { posterWidth }, settings)` : un dérivé de 1 280 px au plus, ou l’affiche telle quelle si seuls les préréglages sont permis. `width` et `height` tirés de `videoSize(media)`, pour réserver la place ; `aria-label` de `videoLabel(media, label)` (le titre, sinon le texte alternatif) ; styles en ligne `VIDEO_FRAME_STYLE` et `VIDEO_PLAYER_STYLE`.
 - Une `<track>` par élément de `media.textTracks` (`kind`, `language`, `label`, `url`, `default`), et alors `crossorigin="anonymous"` : les pistes sont servies par le domaine de SurgeMedia. Le texte de repli est `t('video.unsupported')`.
 - Pas encore de `sources` (format converti en préparation) : à la place du lecteur, le message `t(videoMessageKey(media))`, l’état du traitement si `processingVisible(media.processing)` et un lien `t('video.download')` vers `media.url`, dans un cadre `videoEmptyStyle(width, height)`. Appelez `followProcessing()` pour recevoir le média à jour quand il sera prêt.
-- Erreur de la dernière `<source>` : `heldVideoDelay(url)` (une requête `HEAD`) indique si le serveur retient la vidéo (503 `PROCESSING_PENDING`) et dans combien de millisecondes réessayer avec `video.load()` — au plus `VIDEO_RETRY_LIMIT` fois, en annonçant `t('video.held')` (`role="status"`). `null` : la vidéo est illisible, affichez `t(videoMessageKey(media, true))`.
-- Vidéo d’ambiance (muette, en boucle) : lancée seule seulement si `prefersReducedMotion()` est faux, avec un bouton pause visible (`t('video.pause')`, icône `pause`). `whenNearViewport()` retarde le chargement d’une vidéo loin de l’écran.
+- Erreur de la dernière `<source>` : `heldVideoDelay(url)` (une requête `HEAD`) indique si le serveur retient la vidéo (503 `PROCESSING_PENDING`) et dans combien de millisecondes réessayer avec `video.load()`, au plus `VIDEO_RETRY_LIMIT` fois, en annonçant `t('video.held')` (`role="status"`). `null` : la vidéo est illisible, affichez `t(videoMessageKey(media, true))`.
+- Vidéo d’ambiance (muette, en boucle) : elle ne démarre d’elle-même que si `prefersReducedMotion()` est faux, avec un bouton pause visible (`t('video.pause')`, icône `pause`). `whenNearViewport()` retarde le chargement d’une vidéo loin de l’écran.
 
 ## Empaqueter votre librairie
 
@@ -452,12 +452,12 @@ Le framework est une **dépendance pair** (l’exemplaire de l’application) ;
 Ce que garantissent les paquets officiels, et que votre intégration doit garantir aussi :
 
 - **Identifiants** : une clé publique, ou des jetons délégués obtenus par `getToken`, émis par votre serveur avec la clé secrète. Jamais de clé secrète ni de jeton personnel dans un navigateur.
-- **Rendu serveur** : un client et un contexte par requête (un jeton délégué appartient à un seul visiteur), et les réglages du projet connus **avant** le rendu — lisez-les dans une initialisation (`provideAppInitializer` d’Angular, une ressource Solid dans `Suspense`…) ou passez-les depuis votre configuration (`DisplayDefaults`). Sinon le serveur construit les URL de la politique par défaut. Une image en échec avant l’hydratation se repère au montage avec `imageFailedEarly(img)`.
-- **Images** : `width` et `height` toujours posés (aucun décalage au chargement) et `max-width: 100%; height: auto` pour une image fluide — `imageSource()` et `imageStyle()` s’en chargent —, un `sizes` conforme à votre mise en page.
-- **Texte alternatif** : `resolveAltText()` — un `alt` explicite, sinon l’`altText` du média ; vide seulement avec `decorative`, pour une image purement décorative. Une image sans texte alternatif est signalée en développement.
-- **Repli** : `nextImageStage()` — dérivé, puis `media.url`, puis le texte alternatif affiché à la place de l’image (`imageErrorFrameStyle()`). À réinitialiser quand le média change.
-- **Textes** : aucun texte en dur — libellés, annonces et `aria-label` passent par `t()` : le français par défaut, l’anglais, et vos langues en surcharge.
-- **Vidéos** : sources dans l’ordre du serveur, aucune lecture automatique — une vidéo muette en boucle exige un bouton pause visible (WCAG 2.2.2) et respecte `prefersReducedMotion()`.
+- **Rendu serveur** : un client et un contexte par requête (un jeton délégué appartient à un seul visiteur), et les réglages du projet connus **avant** le rendu. Lisez-les dans une initialisation (`provideAppInitializer` d’Angular, une ressource Solid dans `Suspense`…) ou passez-les depuis votre configuration (`DisplayDefaults`). Sinon le serveur construit les URL de la politique par défaut. Une image en échec avant l’hydratation se repère au montage avec `imageFailedEarly(img)`.
+- **Images** : `width` et `height` toujours posés (aucun décalage au chargement), `max-width: 100%; height: auto` pour une image fluide (`imageSource()` et `imageStyle()` s’en chargent) et un `sizes` conforme à votre mise en page.
+- **Texte alternatif** : `resolveAltText()` retient un `alt` explicite, sinon l’`altText` du média ; le texte n’est vide qu’avec `decorative`, pour une image purement décorative. Une image sans texte alternatif est signalée en développement.
+- **Repli** : `nextImageStage()` enchaîne le dérivé, puis `media.url`, puis le texte alternatif affiché à la place de l’image (`imageErrorFrameStyle()`). À réinitialiser quand le média change.
+- **Textes** : aucun texte en dur. Libellés, annonces et `aria-label` passent par `t()` : le français par défaut, l’anglais, et vos langues en surcharge.
+- **Vidéos** : sources dans l’ordre du serveur, aucune lecture automatique. Une vidéo muette en boucle exige un bouton pause visible (WCAG 2.2.2) et respecte `prefersReducedMotion()`.
 - **État** : annoncez les changements du traitement poliment (`role="status"`, texte masqué par `VISUALLY_HIDDEN`), seulement aux transitions : `processingAnnouncementKey(next, previous)`. Des icônes fixes, jamais animées.
 - **Médias privés** : leurs URL sont signées jusqu’à `urlExpiresAt` ; relisez le média avant cette échéance si la page reste ouverte (`followExpiry()`, d’après `refreshDelay()`).
 - **Thème** : les classes `sm-*` des paquets officiels, pour que `@surge-media/client/style.css` s’applique ; sans lui, les styles en ligne gardent les tailles et les rapports corrects.

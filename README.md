@@ -18,9 +18,9 @@
 [![Conventional Commits](https://img.shields.io/badge/Conventional_Commits-1.0.0-fe5196?logo=conventionalcommits&logoColor=white)](https://www.conventionalcommits.org)
 
 **Self-hosted media platform**: store, transform and deliver your images and videos from your own servers, under
-your own domain, through one secure headless API — an administration interface for your teams, a REST API for your
-applications, on-the-fly image transformations and video processing, with no per-transformation bill and no media
-leaving your infrastructure.
+your own domain, through one secure headless API. It provides an administration interface for your teams and a REST
+API for your applications, with on-the-fly image transformations and video processing, no per-transformation bill and
+no media leaving your infrastructure.
 
 [Website and documentation](https://mahmoud-nb.github.io/surge-media/) ·
 [Live demo](https://demo.usesurgemedia.com) ·
@@ -30,18 +30,18 @@ leaving your infrastructure.
 
 ## Features
 
-- **Administration** — one Media page across the shared library and your projects, folders and tags, projects, users
-  with platform and project roles, two-factor
-  authentication (TOTP), audit log; English and French, light and dark themes, designed for WCAG 2.2 AA.
-- **REST API v1** — publishable and secret project keys, personal and delegated tokens, scopes, expiry and rotation,
+- **Administration**: one Media page across the shared library and your projects, folders and tags, projects, users
+  with platform and project roles, two-factor authentication (TOTP), audit log; English and French, light and dark
+  themes, designed for WCAG 2.2 AA.
+- **REST API v1**: publishable and secret project keys, personal and delegated tokens, scopes, expiry and rotation,
   per-project CORS origins, rate limiting, OpenAPI 3.1 specification and interactive documentation.
-- **Images** — resize, crop, focal point, rotate and convert (JPEG, PNG, WebP, AVIF) by changing the delivery URL,
-  presets, signed URLs for private media, metadata (EXIF, GPS) always removed.
-- **Videos** — direct delivery, posters and subtitles; optional ffmpeg processing (H.264 and AV1 renditions) in
+- **Images**: resize, crop, focal point, rotate and convert (JPEG, PNG, WebP, AVIF) by changing the delivery URL,
+  presets, signed URLs for private media, metadata (EXIF, GPS) always stripped.
+- **Videos**: direct delivery, posters and subtitles; optional ffmpeg processing (H.264 and AV1 renditions) in
   workers, outside the request path.
-- **Your infrastructure** — SQLite, PostgreSQL or MySQL/MariaDB; local disk or any S3-compatible storage; npm
+- **Your infrastructure**: SQLite, PostgreSQL or MySQL/MariaDB; local disk or any S3-compatible storage; npm
   package or Docker image (amd64, arm64); nothing is ever sent to the publisher.
-- **Operations** — a `surge-media` command line to set up, migrate and diagnose an installation (`surge-media
+- **Operations**: a `surge-media` command line to set up, migrate and diagnose an installation (`surge-media
   diagnose` prints a support report without secrets).
 
 ## Packages
@@ -76,7 +76,7 @@ npx surge-media start
 ```
 
 Then sign in at `http://localhost:3000/login`. With npm 12 or later, approve the native modules' install scripts
-first, and see the [installation guide](setup.md) for production: HTTPS reverse proxy, storage, video processing,
+first. For production, see the [installation guide](setup.md): HTTPS reverse proxy, storage, video processing,
 backups, updates and troubleshooting. Compose examples are in [`docker/`](docker).
 
 ## Developing

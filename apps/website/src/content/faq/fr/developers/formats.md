@@ -4,7 +4,7 @@ order: 7
 status: available
 keywords: ["format","jpeg","png","webp","avif","gif","mp4","mov","webm","svg","heic","audio","pdf"]
 ---
-- **Images** : JPEG, PNG, WebP, AVIF et GIF, jusqu’à 100 mégapixels.
+- **Images** : JPEG, PNG, WebP, AVIF et GIF, jusqu’à 100 mégapixels.
 - **Vidéos** : MP4, MOV et WebM ; avec FFmpeg activé, aussi MKV, AVI, 3GP, MPEG-TS, OGV et WMV.
 - **Sous-titres** : WebVTT et SRT.
 
