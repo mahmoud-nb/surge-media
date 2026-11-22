@@ -10,7 +10,7 @@ contacts its publisher.
 - Product overview, API usage and front-end components: [`apps/core/README.md`](apps/core/README.md) and the
   [documentation website](https://mahmoud-nb.github.io/surge-media/).
 - Security policy and vulnerability reporting: [`SECURITY.md`](SECURITY.md).
-- License: [`LICENSE`](LICENSE) (Business Source License 1.1, summarised in § 19).
+- License: [`LICENSE`](LICENSE) (Business Source License 1.1, summarized in § 19).
 
 > SurgeMedia is in pre-release (0.x). Until 1.0, a minor version may contain breaking changes, always listed in
 > the [changelog](apps/core/CHANGELOG.md). Start with a pilot project and read the changelog before each update.
@@ -43,7 +43,7 @@ environment variables, read once at startup.
 | ffmpeg and ffprobe | 6 or later, with the `libx264` and `aac` encoders | Only for video processing; included in the full Docker image (ffmpeg 7.1) |
 | Reverse proxy | nginx, Caddy, Traefik, or a load balancer | Required in production for HTTPS (§ 11) |
 
-**Sizing — starting points, to measure on your own hardware.** In load tests, one busy server process used
+**Sizing: starting points, to be measured on your own hardware.** In load tests, one busy server process used
 about 570 MB of memory. A 1080p H.264 encode costs about 1.7 CPU-seconds per second of video and 0.4 to
 0.75 GiB of memory.
 
@@ -132,7 +132,7 @@ Variables can also live in a `docker/.env` file next to the Compose files. Usefu
 | `SURGE_MEDIA_IMAGE` | `ghcr.io/mahmoud-nb/surge-media:latest` | Image to run, for instance a pinned version or a local build |
 | `NUXT_VIDEO_PROCESSING` | `off` (SQLite file), `external` (PostgreSQL file) | Video processing mode (§ 10) |
 
-Add any other variable of § 7 to the `environment` section of the services. In the PostgreSQL file, the web
+Add any other variable from § 7 to the `environment` section of the services. In the PostgreSQL file, the web
 server and the worker share the same variables and the same data volume.
 
 **MySQL or MariaDB:** replace the `postgres` service with, for instance, `mariadb:11`, and set
@@ -190,7 +190,7 @@ npm install-scripts approve better-sqlite3 @prisma/engines prisma
 npm rebuild better-sqlite3 @prisma/engines
 ```
 
-Initialise the installation:
+Initialize the installation:
 
 ```bash
 npx surge-media init
@@ -198,7 +198,7 @@ npx surge-media init
 
 `init` asks for the database (SQLite by default), the web server port (3000, or the next free port) and the
 public URL, writes `.env`, applies the migrations and generates the session, signing and two-factor encryption secrets.
-It then recalls the license terms and asks how the instance will be used (evaluation, Community production or
+It then reminds you of the license terms and asks how the instance will be used (evaluation, Community production or
 production under a commercial license, § 7.10): a statement you can skip with "Later", never a blocker, and nothing
 is sent. Non-interactive form:
 
@@ -289,7 +289,7 @@ or emailed when SMTP is configured (§ 7.8).
 **Two-factor authentication (TOTP).** Each account can turn it on from **My account** (`/admin/account`) with any
 authenticator app (Google or Microsoft Authenticator, 1Password, Bitwarden, Aegis…) and receives ten single-use
 recovery codes. In **Settings › Security**, an administrator can make it required for administrators or for everyone:
-accounts concerned set it up during their next sign-in, before reaching the administration. A browser trusted at the
+the accounts concerned set it up during their next sign-in, before reaching the administration. A browser trusted at the
 code step skips the code for `NUXT_PUBLIC_TRUSTED_DEVICE_DAYS` days. An administrator can reset another account's
 two-factor authentication from its page; the server operator can do it with `surge-media user mfa-reset` (§ 5.3).
 Account holders are notified by email of every change when SMTP is configured.
@@ -368,7 +368,7 @@ afterwards.
 
 | Variable | Default | Role |
 | --- | --- | --- |
-| `NUXT_VIDEO_PROCESSING` | `off` | `off`, `embedded` (the web server runs the jobs) or `external` (separate workers) — § 10 |
+| `NUXT_VIDEO_PROCESSING` | `off` | `off`, `embedded` (the web server runs the jobs) or `external` (separate workers), see § 10 |
 | `NUXT_SERVER_ROLE` | `web` | `worker` for a worker process (set by `surge-media worker` and the image's `worker` command) |
 | `NUXT_FFMPEG_PATH`, `NUXT_FFPROBE_PATH` | `ffmpeg`, `ffprobe` | Binaries, from the `PATH` or as full paths |
 | `NUXT_VIDEO_CONCURRENCY` | `1` | Simultaneous jobs per process (1 to 16) |
@@ -489,11 +489,11 @@ In demo mode:
   advice: have them reviewed for your jurisdiction. Write a phone number with spaces or a `+` prefix
   (`+33 1 23 45 67 89`): a value made of digits only is read as a number and loses its leading zero.
 
-**Reset.** At each slot, the web server stops by itself (graceful shutdown). With `docker/compose.demo.yaml`,
+**Reset.** At each reset time, the web server stops by itself (graceful shutdown). With `docker/compose.demo.yaml`,
 Docker restarts the container (`restart: unless-stopped`) and the image restores `SURGE_MEDIA_DEMO_SNAPSHOT`
 before migrating and starting: the demo is unavailable for 10 to 20 seconds. Without Docker, a supervisor does the
 same, for instance systemd with `Restart=always` and `ExecStartPre=npx surge-media demo restore --from <file> --yes`.
-To reset at once (reported content), restart the container.
+To reset immediately (reported content), restart the container.
 
 **Preparing the reference content.** `docker/compose.demo.yaml` has a `prepare` service: an ordinary instance on
 its own volume and port 3001.
@@ -588,7 +588,7 @@ URLs.
 | `tags` | Tag slugs separated by `\|` (created with `--create-tags`) |
 | `filename` | File name to record (default: the last segment of `source`) |
 
-**What a run does.** For each line: read the file (a URL is downloaded to a temporary directory), recognise its
+**What a run does.** For each line: read the file (a URL is downloaded to a temporary directory), recognize its
 type, skip it when its reference is already on the server, attach it to an existing media item when the project
 already holds the same contents (`--no-dedupe` to upload anyway), otherwise upload it. Two files are written next
 to the manifest, with mode 0600:
@@ -618,7 +618,7 @@ For an S3-compatible service, add `--s3-endpoint https://…` and, where the ser
 `--s3-path-style`; the region defaults to `us-east-1` (`auto` for R2, the configured `s3_region` for Garage), and
 the command says so when the service refuses the region. `SURGE_MEDIA_IMPORT_S3_SESSION_TOKEN` is read for temporary
 credentials. The manifest then holds `s3://bucket/key` sources; `plan` reads the first kilobyte of each object to
-recognise its type, `run` downloads each object to a temporary directory before uploading it.
+recognize its type, `run` downloads each object to a temporary directory before uploading it.
 
 **Redirecting the former addresses.** If the domain that served the files is yours, `import redirects` turns the
 mapping table into 301 redirects to install on that server or CDN:
@@ -645,9 +645,9 @@ check the result before loading it (`nginx -t`, `caddy validate`, `apachectl con
 
 **Good to know.**
 
-- Uploads are limited to 60 per minute and per credential by default, and a file costs up to three requests
+- Uploads are limited to 60 per minute per credential by default, and a file costs up to three requests
   (lookup by reference, lookup by contents, upload). For a large import, raise both `NUXT_API_RATE_LIMIT_UPLOADS`
-  and `NUXT_API_RATE_LIMIT_SECRET` (`NUXT_API_RATE_LIMIT_PERSONAL` with a personal token) for the time of the import
+  and `NUXT_API_RATE_LIMIT_SECRET` (`NUXT_API_RATE_LIMIT_PERSONAL` with a personal token) for the duration of the import
   (§ 7.7), then set them back. The command waits when the server asks it to, and names the limit that slowed it down.
   Order of magnitude measured on a laptop (SQLite, local storage): 5,000 images, 5.9 GB, about 84 min at the
   default limits, 12 min with the upload limit raised, 7 min with both.
@@ -694,7 +694,7 @@ takes about 30 seconds on 4 cores; AV1 about 1.5 times more), 0.4 to 0.75 GiB of
 space in `TMPDIR` for the outputs plus a copy of the original when the storage is S3, and one more file per
 rendition in the storage.
 
-**Hardening** — recommended when third parties can upload videos (API, delegated tokens): run workers as a
+**Hardening**, recommended when third parties can upload videos (API, delegated tokens): run workers as a
 non-root user, with a read-only root file system except `TMPDIR` (on a disk volume large enough for the videos,
 not an in-memory `tmpfs`) and, with local storage, the media directory; drop all capabilities
 (`--cap-drop=ALL --security-opt no-new-privileges`); publish no port; limit their network to the database and
@@ -755,7 +755,7 @@ Traefik also appends `X-Forwarded-For` by default; raise its timeouts and body s
   `NUXT_TRUST_PROXY=true`, proxies on loopback and private networks are trusted. A proxy or CDN on a public
   address must be listed: `NUXT_TRUST_PROXY="private,203.0.113.0/24"`. Without any proxy, set `false`.
 - A **CDN or cache in front of `/m/`** is recommended in production, especially for video: public media URLs are
-  immutable (a replaced file gets a new version) and set no cookie. Making a public media private, or deleting
+  immutable (a replaced file gets a new version) and set no cookie. Making a public media item private, or deleting
   it, does not purge copies already cached by browsers or the CDN.
 - Behind a CDN, all requests come from a few addresses: list them in `NUXT_TRUST_PROXY`, and raise
   `NUXT_MEDIA_TRANSFORM_RATE_LIMIT` and `NUXT_API_RATE_LIMIT_PUBLISHABLE`, or the CDN's addresses hit the limits.
@@ -778,13 +778,13 @@ Traefik also appends `X-Forwarded-For` by default; raise its timeouts and body s
 - [ ] `/api/health` monitored; logs collected (§ 14).
 - [ ] Video processing: ffmpeg up to date, workers supervised and hardened (§ 10).
 - [ ] A retention policy for the audit log: there is no automatic purge yet.
-- [ ] Users invited with the least role they need; API secret keys only on your servers.
+- [ ] Users invited with the minimum role they need; API secret keys only on your servers.
 - [ ] System clock synchronized (NTP): two-factor codes, signed links and the commercial license depend on it.
 - [ ] Use of the instance declared, and a commercial license installed if a Business Source License exclusion
       applies to you (**Settings › License**, § 7.10 and § 19).
 - [ ] `NUXT_DEMO_MODE` not set: demo mode is for a public demo instance only (§ 7.11).
 
-Not available yet, to take into account in your security assessment: single sign-on (SSO) for the
+Not available yet (factor this into your security assessment): single sign-on (SSO) for the
 administration, a password recovery command when every administrator has forgotten their password (a lost second
 factor is covered by `surge-media user mfa-reset`), and shared rate limits across instances (each process counts
 its own).
@@ -822,7 +822,7 @@ Measure on your own hardware before sizing.
 }
 ```
 
-- It reveals neither host nor version and can serve as the probe of Docker (built in), Kubernetes or a load
+- It reveals neither host nor version and can serve as the health probe for Docker (built in), Kubernetes or a load
   balancer. `videoProcessing` never changes the status (`null` values in `off` mode).
 - Logs go to the standard output: `docker logs`, `journalctl`, or your log collector. Some server messages are
   in French only.
@@ -861,7 +861,7 @@ docker run --rm -v surge-media-data:/data -v "$PWD":/backup debian:13-slim \
 docker start surge-media
 ```
 
-Back up the database first, then the media: files added in between are only unreferenced. For a strictly
+Back up the database first, then the media: files added in between are merely left unreferenced. For a strictly
 consistent copy, stop the server or snapshot the volume. To restore, install the **same SurgeMedia version** as
 the backup, restore the database, the media and the secrets, then start it. Test a restore regularly.
 
@@ -940,7 +940,7 @@ writes nothing (except `--out`) and sends nothing: review the report, then attac
 | Private image broken on an external page after a secret change | Old links were signed with the previous secret: set it in `NUXT_MEDIA_PREVIOUS_SIGNING_SECRET` for 7 days |
 | Upload refused with 415 | Format not accepted (HEIC, TIFF, SVG…), or MKV/AVI/… while video processing is inactive |
 | "Video processing disabled: ffmpeg not found or unusable" at startup | Install ffmpeg 6+ with `libx264` and `aac`, or set `NUXT_FFMPEG_PATH`/`NUXT_FFPROBE_PATH`, then restart |
-| Settings: "no worker able to process has reported in 5 minutes" | No worker running, a worker on another database, or a worker stopped (see its log); allow 30 s after a worker starts |
+| Settings: "no worker able to process has reported in the last 5 minutes" | No worker running, a worker on another database, or a worker stopped (see its log); allow 30 s after a worker starts |
 | Worker log: "media files not found in the configured storage" | Storage not shared with the web server: same bucket and prefix, or same disk at the same path |
 | Video returns 503 `PROCESSING_PENDING` for a few seconds | Normal while a GPS data track is removed; if it lasts, no worker processes the queue |
 | "Cannot allocate memory" in a video job | `NUXT_VIDEO_MEMORY_LIMIT` reached (4K, 8K, HDR): raise it or lower `NUXT_VIDEO_THREADS` |
@@ -981,7 +981,7 @@ license:
 - production use is free, except when the organization using it (with its affiliates) had more than
   **USD 500,000** of gross revenue in its last completed fiscal year, when SurgeMedia is offered to third
   parties as a competing hosted service, or when a feature that requires a license key is used in production
-  without a valid key — these cases require a commercial license;
+  without a valid key (these cases require a commercial license);
 - each version becomes available under the Apache License 2.0 three years after its first release.
 
 No feature requires a license key yet. Features reserved for paid plans (single sign-on, audit log export to a

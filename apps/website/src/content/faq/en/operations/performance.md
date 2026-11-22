@@ -3,7 +3,7 @@ question: "What performance can I expect?"
 order: 2
 keywords: ["performance","throughput","latency","benchmark","load","requests per second"]
 ---
-From a single Node.js process, measured on an 8-core laptop, SurgeMedia serves about:
+Measured on an 8-core laptop, a single SurgeMedia Node.js process serves about:
 
 - 15,000 revalidations per second (`304` responses);
 - more than 6,000 already-generated transformed images per second;

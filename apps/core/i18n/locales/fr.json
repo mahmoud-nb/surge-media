@@ -129,7 +129,7 @@
       "recoveryCode": "Code de secours",
       "useRecovery": "Utiliser un code de secours",
       "useApp": "Utiliser l'application",
-      "trustDeviceHint": "Ce navigateur ne vous demandera plus le code à la connexion, ni le mot de passe avant les actions sensibles. Ne cochez pas sur un ordinateur partagé.",
+      "trustDeviceHint": "Ce navigateur ne vous demandera plus le code à la connexion, ni le mot de passe avant les actions sensibles. Ne cochez pas cette case sur un ordinateur partagé.",
       "submit": "Vérifier",
       "submitting": "Vérification en cours…",
       "back": "Revenir à la connexion",
@@ -187,7 +187,7 @@
         "title": "Appareil de confiance",
         "trusted": "Cet appareil est de confiance jusqu'au {date} : les actions sensibles n'y redemandent pas votre mot de passe.",
         "notTrusted": "Cet appareil n'est pas de confiance : votre mot de passe est redemandé pour les actions sensibles. Cochez « Faire confiance à cet appareil » lors d'une confirmation pour ne plus le saisir pendant {days} jour. | Cet appareil n'est pas de confiance : votre mot de passe est redemandé pour les actions sensibles. Cochez « Faire confiance à cet appareil » lors d'une confirmation pour ne plus le saisir pendant {days} jours.",
-        "others": "Aucun autre appareil de confiance. | Un autre appareil vous fait confiance. | {count} autres appareils vous font confiance.",
+        "others": "Aucun autre appareil de confiance. | Vous avez un autre appareil de confiance. | Vous avez {count} autres appareils de confiance.",
         "forget": "Ne plus faire confiance à cet appareil",
         "forgetAll": "Retirer la confiance de tous mes appareils | Retirer la confiance de mon appareil | Retirer la confiance de mes {count} appareils",
         "forgotten": "Cet appareil n'est plus de confiance : votre mot de passe sera redemandé pour les actions sensibles.",
@@ -257,7 +257,7 @@
         "expiringKeys": "{count} clé secrète expire d'ici {days} jours | {count} clés secrètes expirent d'ici {days} jours",
         "keyLine": "{name} ({environment}) · {project}",
         "invitations": "{count} invitation en attente | {count} invitations en attente",
-        "invitationsExpired": "dont {count} dont le lien a expiré : générez-en un nouveau | dont {count} dont le lien a expiré : générez-en de nouveaux",
+        "invitationsExpired": "dont {count} avec un lien expiré : générez-en un nouveau | dont {count} avec un lien expiré : générez-en de nouveaux",
         "manageInvitations": "Voir les invitations en attente",
         "trash": "{count} média en corbeille | {count} médias en corbeille",
         "trashSpace": "{space} ({count})",
@@ -273,7 +273,7 @@
         "clock": {
           "days": "L'horloge de ce serveur retarde d'environ {count} jour sur la date la plus récente connue. | L'horloge de ce serveur retarde d'environ {count} jours sur la date la plus récente connue.",
           "hours": "L'horloge de ce serveur retarde d'environ {count} heure sur la date la plus récente connue. | L'horloge de ce serveur retarde d'environ {count} heures sur la date la plus récente connue.",
-          "advice": "La licence est jugée à cette date, et la double authentification comme les liens signés peuvent échouer. Corrigez l'heure du système (synchronisation NTP)."
+          "advice": "La validité de la licence est évaluée à cette date, et la double authentification comme les liens signés peuvent échouer. Corrigez l'heure du système (synchronisation NTP)."
         },
         "licenseUsage": {
           "undeclared": "L'usage de cette instance n'est pas déclaré : indiquez s'il s'agit d'une évaluation, d'une production Community ou d'une production sous licence commerciale.",
@@ -809,7 +809,7 @@
         },
         "captions": {
           "title": "Pas de sous-titres",
-          "text": "Cette vidéo a du son mais aucune piste de sous-titres : ajoutez-en (ci-dessous) pour les personnes sourdes ou malentendantes, et pour les lectures sans le son (WCAG 1.2.2)."
+          "text": "Cette vidéo a du son, mais aucune piste de sous-titres : ajoutez-en (ci-dessous) pour les personnes sourdes ou malentendantes, et pour les lectures sans le son (WCAG 1.2.2)."
         },
         "compatPending": {
           "title": "Version compatible en préparation",
@@ -1193,7 +1193,7 @@
       },
       "run": "Traiter la vidéo",
       "rerun": "Relancer le traitement",
-      "rerunReadyHint": "Refait les versions compatibles avec les réglages actuels du serveur ; l'original n'est pas modifié.",
+      "rerunReadyHint": "Recrée les versions compatibles avec les réglages actuels du serveur ; l'original n'est pas modifié.",
       "rerunNoRenditionHint": "Aucune version compatible n'a été produite pour cette vidéo. Relancer le traitement applique les réglages actuels du serveur ; l'original n'est pas modifié.",
       "requesting": "Demande en cours…",
       "requested": "Traitement demandé : la vidéo est dans la file d'attente.",
@@ -1283,7 +1283,7 @@
       "description": "Description",
       "descriptionHint": "Facultative. Par exemple l'application et les environnements concernés.",
       "publicListing": "Liste publique",
-      "publicListingHint": "Autorise la clé publique à lister et chercher les médias publics du projet (galerie sur un site). Désactivée, elle ne lit un média que par son identifiant."
+      "publicListingHint": "Autorise la clé publique à lister et chercher les médias publics du projet (galerie sur un site). Si la liste est désactivée, la clé ne lit un média que par son identifiant."
     },
     "create": {
       "meta": {
@@ -1431,7 +1431,7 @@
     "incorrect": "Mot de passe incorrect.",
     "tooManyAttempts": "Trop d'essais. Réessayez dans {minutes} min.",
     "trustDevice": "Faire confiance à cet appareil pendant {days} jour | Faire confiance à cet appareil pendant {days} jours",
-    "trustDeviceHint": "Les actions sensibles ne redemanderont plus votre mot de passe dans ce navigateur. Ne cochez pas sur un ordinateur partagé."
+    "trustDeviceHint": "Les actions sensibles ne redemanderont plus votre mot de passe dans ce navigateur. Ne cochez pas cette case sur un ordinateur partagé."
   },
   "scopes": {
     "project": {
@@ -1713,7 +1713,7 @@
     },
     "revealed": {
       "title": "Jeton « {name} » créé",
-      "description": "Envoyez-le dans l'en-tête Authorization: Bearer de vos requêtes, depuis un terminal, une CI ou un script — jamais depuis une page web.",
+      "description": "Envoyez-le dans l'en-tête Authorization: Bearer de vos requêtes, depuis un terminal, une CI ou un script, jamais depuis une page web.",
       "label": "Jeton personnel"
     },
     "new": {
@@ -2068,7 +2068,7 @@
         "text": {
           "active": "Les vidéos sont traitées après l'envoi et les formats convertis (MKV, AVI…) sont acceptés.",
           "off": "Aucune vidéo n'est traitée : elles sont servies telles qu'envoyées, et seules les vidéos MP4, WebM et MOV sont acceptées.",
-          "halted": "ffmpeg est devenu inutilisable sur ce serveur : le traitement est suspendu, une nouvelle détection a lieu chaque minute. Les tâches déjà créées attendent dans la file ; les nouvelles vidéos ne sont pas mises en file et les formats convertis sont refusés.",
+          "halted": "ffmpeg est devenu inutilisable sur ce serveur : le traitement est suspendu et une nouvelle détection a lieu chaque minute. Les tâches déjà créées attendent dans la file ; les nouvelles vidéos ne sont pas mises en file et les formats convertis sont refusés.",
           "noFfmpeg": "ffmpeg n'est pas utilisable sur ce serveur (voir « ffmpeg ») : les nouvelles vidéos ne sont pas mises en file et les formats convertis sont refusés. Corrigez le problème, puis redémarrez le serveur.",
           "noWorker": "Aucun processus de travail en état de traiter ne s'est signalé depuis 5 minutes : les nouvelles vidéos ne sont pas mises en file et les formats convertis sont refusés."
         },
@@ -2093,12 +2093,12 @@
       },
       "enable": {
         "title": "Activer le traitement des vidéos",
-        "text": "Installez ffmpeg 6 ou plus récent (avec les encodeurs libx264 et aac) sur le serveur, ajoutez NUXT_VIDEO_PROCESSING=embedded à son environnement — ou external, puis lancez des processus de travail avec « surge-media worker » — et redémarrez-le. Les autres variables (NUXT_VIDEO_…) sont décrites dans la documentation d'installation."
+        "text": "Installez ffmpeg 6 ou plus récent (avec les encodeurs libx264 et aac) sur le serveur, ajoutez NUXT_VIDEO_PROCESSING=embedded à son environnement (ou external, avec des processus de travail lancés par « surge-media worker ») et redémarrez-le. Les autres variables (NUXT_VIDEO_…) sont décrites dans la documentation d'installation."
       },
       "ffmpeg": {
         "title": "ffmpeg",
         "notShownOff": "Non détecté : le traitement des vidéos est désactivé.",
-        "notShownExternal": "Ce serveur ne lance jamais ffmpeg en mode external : la version utilisée par chaque processus de travail figure dans leur liste.",
+        "notShownExternal": "Ce serveur ne lance jamais ffmpeg en mode external : la version utilisée par chaque processus de travail figure dans la liste des processus.",
         "version": "Version",
         "unknownVersion": "Inconnue",
         "state": "État",
@@ -2234,7 +2234,7 @@
         },
         "invalid": {
           "badge": "Non valable",
-          "text": "La licence installée n'est pas valable, les fonctions payantes sont désactivées."
+          "text": "La licence installée n'est pas valable : les fonctions payantes sont désactivées."
         },
         "pending": {
           "badge": "Pas encore valable",
@@ -2259,8 +2259,8 @@
       },
       "community": "Édition Community : SurgeMedia est gratuit en production pour les organisations dont le chiffre d'affaires annuel ne dépasse pas 500 000 USD, sauf pour proposer un service d'hébergement de médias concurrent (licence BUSL 1.1). Au-delà de ce seuil, ou pour les fonctions payantes (authentification unique, export vers un SIEM…), écrivez à {email}.",
       "clockTitle": "Horloge du serveur en retard",
-      "clockDays": "L'horloge de ce serveur retarde d'environ {count} jour sur la date la plus récente connue : la licence est jugée à cette date. Corrigez l'heure du système (synchronisation NTP). | L'horloge de ce serveur retarde d'environ {count} jours sur la date la plus récente connue : la licence est jugée à cette date. Corrigez l'heure du système (synchronisation NTP).",
-      "clockHours": "L'horloge de ce serveur retarde d'environ {count} heure sur la date la plus récente connue : la licence est jugée à cette date. Corrigez l'heure du système (synchronisation NTP). | L'horloge de ce serveur retarde d'environ {count} heures sur la date la plus récente connue : la licence est jugée à cette date. Corrigez l'heure du système (synchronisation NTP).",
+      "clockDays": "L'horloge de ce serveur retarde d'environ {count} jour sur la date la plus récente connue : la validité de la licence est évaluée à cette date. Corrigez l'heure du système (synchronisation NTP). | L'horloge de ce serveur retarde d'environ {count} jours sur la date la plus récente connue : la validité de la licence est évaluée à cette date. Corrigez l'heure du système (synchronisation NTP).",
+      "clockHours": "L'horloge de ce serveur retarde d'environ {count} heure sur la date la plus récente connue : la validité de la licence est évaluée à cette date. Corrigez l'heure du système (synchronisation NTP). | L'horloge de ce serveur retarde d'environ {count} heures sur la date la plus récente connue : la validité de la licence est évaluée à cette date. Corrigez l'heure du système (synchronisation NTP).",
       "licensee": "Titulaire",
       "plan": "Offre",
       "featuresLabel": "Fonctions payantes",
@@ -2580,14 +2580,14 @@
       "reset": {
         "subject": "Double authentification réinitialisée sur {app}",
         "heading": "Double authentification réinitialisée",
-        "intro": "La double authentification de votre compte {app} ({email}) a été réinitialisée par {by} le {date}. Votre application ne fonctionne plus pour ce compte : réactivez-la depuis « Mon compte », ou à votre prochaine connexion si votre organisation l’exige."
+        "intro": "La double authentification de votre compte {app} ({email}) a été réinitialisée par {by} le {date}. Votre application ne fonctionne plus pour ce compte : réactivez-la depuis « Mon compte », ou à votre prochaine connexion si votre organisation l'exige."
       },
       "recoveryUsed": {
         "subject": "Code de secours utilisé sur {app}",
         "heading": "Connexion avec un code de secours",
         "intro": "Un code de secours a servi à vous connecter à {app} ({email}) le {date}. Il vous en reste {remaining}. Si vous avez perdu votre application, réactivez la double authentification depuis « Mon compte »."
       },
-      "notYou": "Si vous n’êtes pas à l’origine de ce changement, prévenez sans attendre votre administrateur."
+      "notYou": "Si vous n'êtes pas à l'origine de ce changement, prévenez sans attendre votre administrateur."
     }
   },
   "mfa": {
@@ -2602,7 +2602,7 @@
       "submit": "Activer",
       "loading": "Préparation de la configuration…",
       "restart": "Recommencer",
-      "openLink": "Sur ce téléphone ? Ouvrir dans l’application d’authentification"
+      "openLink": "Sur ce téléphone ? Ouvrir dans l'application d'authentification"
     },
     "codes": {
       "description": "Si vous perdez votre application, ces codes vous permettront de vous connecter. Chacun ne sert qu'une fois. Ils ne seront plus affichés : copiez-les ou téléchargez-les, puis rangez-les en lieu sûr.",
@@ -2689,7 +2689,7 @@
       "contactLink": "Parlons-en"
     },
     "account": {
-      "mfa": "La double authentification ne s'active pas sur un compte de démonstration partagé. Pour l'essayer, créez votre propre compte dans Utilisateurs."
+      "mfa": "La double authentification ne s'active pas sur un compte de démonstration partagé. Pour l'essayer, créez votre propre compte dans « Utilisateurs »."
     },
     "readOnly": "En démo, ce réglage est en lecture seule.",
     "errors": {
@@ -2834,7 +2834,7 @@
       "name": "Nom",
       "slug": "Identifiant",
       "slugHint": "Proposé d'après le nom ; sert aux filtres de l'API (minuscules, chiffres et tirets).",
-      "slugEditHint": "Ne change pas quand vous renommez l'étiquette. Le modifier oblige les applications qui filtrent par cet identifiant à suivre.",
+      "slugEditHint": "Ne change pas quand vous renommez l'étiquette. Si vous le modifiez, les applications qui filtrent par cet identifiant devront suivre.",
       "color": "Couleur",
       "confidential": "Confidentielle",
       "confidentialHint": "Visible seulement par les administrateurs et les gestionnaires, dans l'administration ; jamais par l'API ni par les autres rôles."
@@ -2883,7 +2883,7 @@
       "TAG_NOT_FOUND": "Cette étiquette n'existe plus : rechargez la page.",
       "TAG_NAME_TAKEN": "Une étiquette porte déjà ce nom (sans tenir compte des majuscules ni des accents).",
       "TAG_SLUG_TAKEN": "Une étiquette utilise déjà cet identifiant.",
-      "TAG_LIMIT_REACHED": "Le nombre maximal d'étiquettes est atteint : supprimez-en avant d'en créer.",
+      "TAG_LIMIT_REACHED": "Le nombre maximal d'étiquettes est atteint : supprimez-en avant d'en créer d'autres.",
       "TAG_READ_ONLY": "Seul un administrateur peut modifier une étiquette globale.",
       "TOO_MANY_TAGS": "Un média porte au plus 50 étiquettes.",
       "usedInProjects": "Déjà utilisé dans : {names}."

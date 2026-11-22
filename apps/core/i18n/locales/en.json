@@ -38,14 +38,14 @@
     "tokenSpaceRequired": "Choose at least one project or the library.",
     "environment": "Use only lowercase unaccented letters, digits and hyphens (e.g. preview-eu).",
     "origin": "Enter a valid origin: scheme and host, without a path (e.g. https://app.example.com or https://*.example.com).",
-    "folderName": "The name cannot contain slashes or control characters, nor be “.” or “..”.",
+    "folderName": "The name cannot contain slashes or control characters, and cannot be “.” or “..”.",
     "presetName": "Use lowercase unaccented letters, digits and hyphens, starting with a letter (e.g. card, hero-large).",
     "presetNameReserved": "This name is reserved for built-in presets (preview, full, original).",
-    "presetEmpty": "Set at least one transformation: size, quality, background colour, rotation or mirror.",
+    "presetEmpty": "Set at least one transformation: size, quality, background color, rotation or mirror.",
     "integerRange": "Enter a whole number from {min} to {max}.",
-    "color": "Enter a 6-digit hexadecimal colour, for example ffffff.",
+    "color": "Enter a 6-digit hexadecimal color, for example ffffff.",
     "cropIncomplete": "Enter all four values of the area, or clear them all.",
-    "cropOutside": "The area goes beyond the image: {max} px at most here.",
+    "cropOutside": "The area extends beyond the image: {max} px maximum here.",
     "projectsRequired": "Choose at least one project.",
     "roleNotInvitable": "You cannot assign this role.",
     "projectUnavailable": "One of the chosen projects is no longer available: check the selection.",
@@ -53,7 +53,7 @@
     "tagName": "The name cannot contain control characters.",
     "tagSlug": "Use lowercase letters without accents, digits and hyphens (e.g. “summer-2026”).",
     "tagSlugRequired": "Enter an identifier: it cannot be derived from this name.",
-    "tooManyTags": "A media item carries at most {max} tags.",
+    "tooManyTags": "A media item can have at most {max} tags.",
     "tagChangesRequired": "Choose at least one tag to add or remove.",
     "tagAddRemoveOverlap": "The same tag cannot be both added and removed."
   },
@@ -63,12 +63,12 @@
   "landing": {
     "meta": {
       "title": "Self-hosted media management and processing",
-      "description": "SurgeMedia centralises your images and media, transforms them on demand and delivers them to your applications through a secure API."
+      "description": "SurgeMedia centralizes your images and media, transforms them on demand and delivers them to your applications through a secure API."
     },
     "hero": {
       "eyebrow": "Open source · self-hosted",
       "title": "Your media, under your control.",
-      "description": "Centralise the images and videos of all your projects, crop, resize and optimise images on demand, then deliver your media to your applications through a secure API, on your own infrastructure.",
+      "description": "Centralize the images and videos of all your projects, crop, resize and optimize images on demand, then deliver your media to your applications through a secure API, on your own infrastructure.",
       "ctaLogin": "Go to the administration",
       "ctaAdmin": "Open the administration"
     },
@@ -92,7 +92,7 @@
       },
       "sdk": {
         "title": "Ready-to-use components",
-        "description": "Optimised images, galleries and uploads for Vue, React and Svelte, whatever your framework."
+        "description": "Optimized images, galleries and uploads for Vue, React and Svelte, whatever your framework."
       }
     }
   },
@@ -110,7 +110,7 @@
     },
     "submit": "Sign in",
     "submitting": "Signing in…",
-    "noAccount": "No account or forgotten password? An administrator of your organisation can send you an access link.",
+    "noAccount": "No account or forgotten password? An administrator of your organization can send you an access link.",
     "errors": {
       "invalidCredentials": "Incorrect email address or password.",
       "tooManyAttempts": "Too many sign-in attempts. Try again in {minutes} min.",
@@ -140,7 +140,7 @@
       "recoveryUsed": "You have no recovery codes left. | You have {count} recovery code left. | You have {count} recovery codes left.",
       "recoveryUsedHint": "If you lost your app, set up two-factor authentication again from “My account”: you will get new codes.",
       "continue": "Continue",
-      "expired": "The verification time ran out. Sign in again."
+      "expired": "Verification timed out. Sign in again."
     }
   },
   "admin": {
@@ -186,11 +186,11 @@
       "device": {
         "title": "Trusted device",
         "trusted": "This device is trusted until {date}: sensitive actions do not ask for your password here.",
-        "notTrusted": "This device is not trusted: your password is asked again for sensitive actions. Check “Trust this device” when confirming to skip it for {days} day. | This device is not trusted: your password is asked again for sensitive actions. Check “Trust this device” when confirming to skip it for {days} days.",
+        "notTrusted": "This device is not trusted: sensitive actions ask for your password again. Check “Trust this device” when confirming to skip it for {days} day. | This device is not trusted: sensitive actions ask for your password again. Check “Trust this device” when confirming to skip it for {days} days.",
         "others": "No other trusted device. | One other device is trusted. | {count} other devices are trusted.",
         "forget": "Stop trusting this device",
         "forgetAll": "Stop trusting all my devices | Stop trusting my device | Stop trusting my {count} devices",
-        "forgotten": "This device is no longer trusted: your password will be asked again for sensitive actions.",
+        "forgotten": "This device is no longer trusted: sensitive actions will ask for your password again.",
         "allForgotten": "No trusted device to remove. | Your device is no longer trusted. | Your {count} devices are no longer trusted."
       },
       "loadError": "The dashboard could not be loaded.",
@@ -246,7 +246,7 @@
           "info": "High traffic for an SQLite database",
           "busy": "{count} request failed because the database could not be reached in time (write lock held by another process) | {count} requests failed because the database could not be reached in time (write lock held by another process)",
           "slow": "{count} database operation took more than {ms} ms, blocking the server meanwhile | {count} database operations took more than {ms} ms, blocking the server meanwhile",
-          "loaded": "{count} minute spent more than {percent} of the time in the database | {count} minutes spent more than {percent} of the time in the database",
+          "loaded": "{count} minute with more than {percent} of the time spent in the database | {count} minutes with more than {percent} of the time spent in the database",
           "peaks": "Peaks: requests {requests}/s, writes {writes}/s, time in the database {share}.",
           "advice": "With SQLite, every database access blocks the server and writes from several processes wait for each other. For sustained traffic, several processes or several servers, switch to PostgreSQL or MySQL (setup.md, § 13 “Scaling”).",
           "seenAt": "Last observed: {date}"
@@ -273,10 +273,10 @@
         "clock": {
           "days": "This server's clock is about {count} day behind the latest known date. | This server's clock is about {count} days behind the latest known date.",
           "hours": "This server's clock is about {count} hour behind the latest known date. | This server's clock is about {count} hours behind the latest known date.",
-          "advice": "The license is assessed at that date, and two-factor authentication and signed links may fail. Fix the system time (NTP synchronization)."
+          "advice": "The license is evaluated as of that date, and two-factor authentication and signed links may fail. Fix the system time (NTP synchronization)."
         },
         "licenseUsage": {
-          "undeclared": "The use of this instance is not declared: tell us whether it is an evaluation, a Community production or a production under a commercial license.",
+          "undeclared": "The use of this instance has not been declared: tell us whether it is an evaluation, Community production or production under a commercial license.",
           "stale": "The use of this instance was declared more than a year ago: confirm it if it is still accurate.",
           "commercial": "The declared use of this instance requires a commercial license, and none is installed. Write to {email} to get a license, or a trial license.",
           "link": {
@@ -305,7 +305,7 @@
         "adminsWithout": "{count} administrator has not turned on two-factor authentication. | {count} administrators have not turned on two-factor authentication.",
         "policyLink": "Security policy",
         "enableTitle": "Protect your account",
-        "enable": "Turn on two-factor authentication: a code from your phone will be asked at every sign-in.",
+        "enable": "Turn on two-factor authentication: you will be asked for a code from your phone at every sign-in.",
         "accountLink": "My account",
         "codesLow": "You have no recovery codes left: regenerate them. | You have only one recovery code left: regenerate them. | You have only {count} recovery codes left: regenerate them."
       }
@@ -314,7 +314,7 @@
   "roles": {
     "ADMIN": {
       "label": "Administrator",
-      "description": "Every privilege: accounts, every project, library management and settings."
+      "description": "All privileges: accounts, every project, library management and settings."
     },
     "MANAGER": {
       "label": "Manager",
@@ -419,7 +419,7 @@
       "emptyFiltered": "No users match these filters.",
       "loadError": "Unable to load users.",
       "invitationsTitle": "My invitations",
-      "invitationsDescription": "Accounts you invited to your projects and the state of their invitation.",
+      "invitationsDescription": "Accounts you invited to your projects and the status of their invitation.",
       "invite": "Invite a user",
       "invitationsCaption": "Accounts you invited",
       "invitationsEmpty": "You have not invited anyone yet.",
@@ -468,8 +468,8 @@
         "inviteTitle": "Invite a user"
       },
       "title": "New user",
-      "description": "Create the account, then send the invitation link to the person concerned.",
-      "invitationNote": "No password is set here: an invitation link valid for 7 days will be generated so that the user chooses their own password.",
+      "description": "Create the account, then send the invitation link to that person.",
+      "invitationNote": "No password is set here: an invitation link valid for 7 days will be generated so the user can choose their own password.",
       "submit": "Create account",
       "success": "The account {email} has been created.",
       "inviteTitle": "Invite a user",
@@ -539,7 +539,7 @@
       "success": "The account {email} has been deleted."
     },
     "errors": {
-      "selfAction": "You cannot change the role of, deactivate or delete your own account.",
+      "selfAction": "You cannot change the role of your own account, deactivate it or delete it.",
       "lastAdmin": "Not possible: this account is the last active administrator.",
       "invitationAccepted": "This invitation was already accepted: only an administrator can reset the password."
     },
@@ -558,7 +558,7 @@
       "codesLeft": "No recovery codes left | {count} recovery code left | {count} recovery codes left",
       "reset": "Reset two-factor authentication",
       "resetTitle": "Reset two-factor authentication?",
-      "resetDescription": "The secret, recovery codes and trusted devices of {email} will be removed. The holder will set up their app again, at their next sign-in if the policy requires it; they will be told by email if sending is configured.",
+      "resetDescription": "The secret, recovery codes and trusted devices of {email} will be removed. The holder will set up their app again, at their next sign-in if the policy requires it; they will be notified by email if email sending is configured.",
       "resetConfirm": "Reset",
       "resetDone": "Two-factor authentication reset."
     }
@@ -620,7 +620,7 @@
       "loadError": "Unable to load media.",
       "results": "Results",
       "emptyFolder": "No media in this folder.",
-      "emptyFilteredFolder": "No media in this folder matches. Check “Include subfolders” to search subfolders too."
+      "emptyFilteredFolder": "No media in this folder match. Check “Include subfolders” to search subfolders too."
     },
     "overview": {
       "meta": {
@@ -730,7 +730,7 @@
       "videoTrack": "Video: {codec}",
       "audioTrack": "Sound: {codec}",
       "noAudio": "No sound",
-      "notAnalysed": "Unknown: file not analysed",
+      "notAnalysed": "Unknown: file not analyzed",
       "bitrate": "Average bitrate",
       "size": "Size",
       "version": "File version",
@@ -831,12 +831,12 @@
           "failed": "This file contains a data track from the device that recorded it, often GPS positions, which processing could not remove: anyone who downloads the video can read it. Make the video private or delete it if this data is sensitive."
         },
         "hdr": {
-          "title": "HDR colours converted",
-          "text": "This video is HDR: the colours of its compatible H.264 version were converted to SDR to display correctly on every screen. The original keeps its HDR colours."
+          "title": "HDR colors converted",
+          "text": "This video is HDR: the colors of its compatible H.264 version were converted to SDR to display correctly on every screen. The original keeps its HDR colors."
         },
         "hdrUnconverted": {
-          "title": "HDR colours not converted",
-          "text": "This video is HDR, but the server lacks the colour conversion filters: its compatible H.264 version may look dull or washed out."
+          "title": "HDR colors not converted",
+          "text": "This video is HDR, but the server lacks the color conversion filters: its compatible H.264 version may look dull or washed out."
         }
       },
       "snippet": {
@@ -848,10 +848,10 @@
         "unavailable": "No version of this video can be played by browsers: there is no player example to offer."
       },
       "prepare": {
-        "title": "Optimise the video",
+        "title": "Optimize the video",
         "description": "Moves the index to the start of the file and removes the original metadata (shooting location, device), without re-encoding or quality loss. Creates a new version: old addresses redirect to the new one.",
-        "button": "Optimise the video",
-        "done": "Video optimised: version {version}.",
+        "button": "Optimize the video",
+        "done": "Video optimized: version {version}.",
         "unchanged": "Nothing to change: the video is already ready for online playback."
       }
     },
@@ -919,11 +919,11 @@
       "tagModes": {
         "add": {
           "label": "Add",
-          "description": "The chosen tags are added to those of the media."
+          "description": "The chosen tags are added to the selected media."
         },
         "remove": {
           "label": "Remove",
-          "description": "The chosen tags are removed from the media that carry them."
+          "description": "The chosen tags are removed from the media that have them."
         }
       },
       "tagChoice": "Tags",
@@ -978,7 +978,7 @@
       "invalid": "Fix the highlighted fields to update the preview and the address.",
       "result": "Preview: {width} × {height} px, {format}, {size}.",
       "reduced": "The original image is smaller than the requested size: the result is reduced while keeping the requested ratio (never enlarged).",
-      "previewNote": "Computed for this preview without creating a file: the file is generated on the first visit of the address.",
+      "previewNote": "Computed for this preview without creating a file: the file is generated the first time the address is requested.",
       "refusedTitle": "Address refused by this space",
       "refused": "This space only accepts presets: an address with free parameters would be refused. Choose a preset, or create one with these parameters.",
       "managePresets": "Manage presets",
@@ -1028,19 +1028,19 @@
       "formats": {
         "webp": {
           "label": "WebP — recommended",
-          "hint": "A good balance between weight and quality, read by every current browser."
+          "hint": "A good balance between file size and quality, supported by every current browser."
         },
         "avif": {
-          "label": "AVIF — the lightest",
-          "hint": "The lightest files; slightly longer to generate on the first visit."
+          "label": "AVIF — smallest files",
+          "hint": "The smallest files; slightly slower to generate on the first request."
         },
         "jpg": {
           "label": "JPEG — maximum compatibility",
-          "hint": "Read everywhere, including old software; no transparency (white background by default)."
+          "hint": "Supported everywhere, including old software; no transparency (white background by default)."
         },
         "png": {
           "label": "PNG — lossless",
-          "hint": "Perfect quality and transparency; heavier files (logos, screenshots)."
+          "hint": "Perfect quality and transparency; larger files (logos, screenshots)."
         }
       },
       "durationHint": "The media item is private: the address is signed and stops working when it expires.",
@@ -1084,7 +1084,7 @@
     },
     "tracks": {
       "title": "Subtitles and text tracks",
-      "description": "Tracks offered by the player (captions button): WebVTT or SRT files, 1 MB at most, {max} tracks at most. Each file is checked then rewritten as WebVTT.",
+      "description": "Tracks offered by the player (captions button): WebVTT or SRT files (1 MB max), up to {max} tracks. Each file is checked then rewritten as WebVTT.",
       "none": "No track yet.",
       "default": "Default",
       "cues": "{count} cue | {count} cue | {count} cues",
@@ -1094,7 +1094,7 @@
       "replace": "Replace the file",
       "add": "Add a track",
       "addTitle": "Add a text track",
-      "addDescription": "WebVTT (.vtt) or SubRip (.srt) file; an SRT file is converted to WebVTT, accents of old Windows files are recognised.",
+      "addDescription": "WebVTT (.vtt) or SubRip (.srt) file; an SRT file is converted to WebVTT, and accented characters in old Windows files are recognized.",
       "editTitle": "Edit the track",
       "added": "Track added.",
       "updated": "Track updated.",
@@ -1152,7 +1152,7 @@
       "interrupted": "Processing interrupted: the media item is in the trash. It will resume if the media item is restored.",
       "currentStep": "Current step: {step}",
       "steps": {
-        "probe": "Analysing the file",
+        "probe": "Analyzing the file",
         "sanitize": "Removing data tracks",
         "repair": "Repairing the index (WebM)",
         "transcode": "H.264 conversion",
@@ -1163,7 +1163,7 @@
       "previousError": "Previous attempt failed. {message}",
       "errors": {
         "NO_VIDEO_TRACK": "The file contains no video track.",
-        "UNREADABLE": "The file is unreadable or damaged: it could not be analysed.",
+        "UNREADABLE": "The file is unreadable or damaged: it could not be analyzed.",
         "CONVERSION_FAILED": "The conversion failed, or the version produced did not pass verification.",
         "TOO_LONG": "The video exceeds the maximum processing duration set on the server: no compatible version was produced.",
         "TIMEOUT": "Processing exceeded the allowed time.",
@@ -1181,8 +1181,8 @@
       "cancelledAt": "Interrupted on",
       "warningsTitle": "Notes",
       "warnings": {
-        "hdr_converted": "HDR colours converted to SDR for the compatible version.",
-        "hdr_unconverted": "HDR colours not converted: the conversion filters are missing on the server.",
+        "hdr_converted": "HDR colors converted to SDR for the compatible version.",
+        "hdr_unconverted": "HDR colors not converted: the conversion filters are missing on the server.",
         "poster_failed": "The poster image could not be extracted: choose one under “Poster image”."
       },
       "renditions": {
@@ -1193,7 +1193,7 @@
       },
       "run": "Process the video",
       "rerun": "Run processing again",
-      "rerunReadyHint": "Redoes the compatible versions with the server's current settings; the original is not modified.",
+      "rerunReadyHint": "Regenerates the compatible versions with the server's current settings; the original is not modified.",
       "rerunNoRenditionHint": "No compatible version was produced for this video. Running processing again applies the server's current settings; the original is not modified.",
       "requesting": "Requesting…",
       "requested": "Processing requested: the video is in the queue.",
@@ -1467,7 +1467,7 @@
       "manage": {
         "label": "Manage project tags",
         "short": "Tags",
-        "description": "Create, rename and delete the tags of the project (neither global nor confidential ones)."
+        "description": "Create, rename and delete project tags (not global or confidential ones)."
       }
     }
   },
@@ -1616,7 +1616,7 @@
       "description": "Choose the key type according to where it will be used.",
       "type": "Key type",
       "name": "Name",
-      "nameHint": "To recognise it: the application or service using it (e.g. Marketing site).",
+      "nameHint": "To recognize it: the application or service using it (e.g. Marketing site).",
       "environment": "Environment",
       "environmentHint": "One key per environment: they can be revoked separately.",
       "environmentOther": "Other…",
@@ -1713,7 +1713,7 @@
     },
     "revealed": {
       "title": "Token “{name}” created",
-      "description": "Send it in the Authorization: Bearer header of your requests, from a terminal, CI or script — never from a web page.",
+      "description": "Send it in the Authorization: Bearer header of your requests, from a terminal, CI or script, never from a web page.",
       "label": "Personal token"
     },
     "new": {
@@ -1725,7 +1725,7 @@
       "description": "Give it only the access it needs; you can revoke it at any time.",
       "spacesError": "Unable to load your projects.",
       "name": "Name",
-      "nameHint": "To recognise it: its intended use (e.g. Import script, CI).",
+      "nameHint": "To recognize it: its intended use (e.g. Import script, CI).",
       "lifetime": "Lifetime",
       "lifetimeHint": "A personal token always expires; create a new one when it does.",
       "lifetimes": {
@@ -1757,7 +1757,7 @@
         "noProjects": "You do not have access to any active project.",
         "library": "Include the organization library",
         "libraryHint": "The token can also act on media in the library.",
-        "libraryReadHint": "The token will also read the library media (your role only allows browsing it)."
+        "libraryReadHint": "The token will also have read access to library media (your role only allows browsing it)."
       },
       "notice": "The token will be shown only once. You may be asked for your password.",
       "submit": "Create token",
@@ -1865,7 +1865,7 @@
         "updated": "Settings updated",
         "license_installed": "License installed",
         "license_removed": "License removed",
-        "license_clock_reset": "License time mark brought back",
+        "license_clock_reset": "License date marker reset",
         "license_usage_declared": "Instance use declared"
       },
       "tag": {
@@ -1899,7 +1899,7 @@
       "processingBackfillPartial": "Stopped by an error: the remaining videos were not queued",
       "mfaPolicy": "Two-factor authentication: {from} → {to}",
       "license": "{plan} · no. {id}",
-      "licenseClock": "Mark: {from} → {to}",
+      "licenseClock": "Marker: {from} → {to}",
       "licenseUsageConfirmed": "Confirmed: {usage}",
       "licenseUsageNone": "not declared",
       "tagLevel": {
@@ -2008,13 +2008,13 @@
       "label": "Publishable key injected into the reference",
       "option": "{project} — {name} ({environment})",
       "none": "None (enter one in the reference)",
-      "hint": "A publishable key reads the public media of its project, from this page as from your sites.",
+      "hint": "A publishable key reads the public media of its project, from this page just as from your sites.",
       "empty": "No publishable key available: create one in the API keys of a project you manage, or enter a credential in the reference.",
       "secretNotice": "Secret keys and personal tokens are rejected from a browser (SECRET_IN_BROWSER): use them from your server or a terminal, with the code samples of the reference. To try a write here, enter a delegated token issued by your server."
     },
     "env": {
       "title": "Environment variables",
-      "description": "To put in the .env file of your application, with the real values of your projects.",
+      "description": "For your application's .env file, with the real values of your projects.",
       "project": "Project",
       "environment": "Environment",
       "noProject": "No active project: create a project to get its credentials.",
@@ -2070,7 +2070,7 @@
           "off": "No video is processed: videos are served as uploaded, and only MP4, WebM and MOV videos are accepted.",
           "halted": "ffmpeg became unusable on this server: processing is suspended and detection runs again every minute. Jobs already created wait in the queue; new videos are not queued and converted formats are refused.",
           "noFfmpeg": "ffmpeg is not usable on this server (see “ffmpeg”): new videos are not queued and converted formats are refused. Fix the problem, then restart the server.",
-          "noWorker": "No worker able to process has reported in the last 5 minutes: new videos are not queued and converted formats are refused."
+          "noWorker": "No worker able to process videos has reported in the last 5 minutes: new videos are not queued and converted formats are refused."
         },
         "mode": "Mode",
         "modesLabel": "Available modes (NUXT_VIDEO_PROCESSING variable)",
@@ -2093,7 +2093,7 @@
       },
       "enable": {
         "title": "Enable video processing",
-        "text": "Install ffmpeg 6 or later (with the libx264 and aac encoders) on the server, add NUXT_VIDEO_PROCESSING=embedded to its environment — or external, then start workers with “surge-media worker” — and restart it. The other variables (NUXT_VIDEO_…) are described in the installation guide."
+        "text": "Install ffmpeg 6 or later (with the libx264 and aac encoders) on the server, add NUXT_VIDEO_PROCESSING=embedded to its environment (or external, then start workers with “surge-media worker”), and restart it. The other variables (NUXT_VIDEO_…) are described in the installation guide."
       },
       "ffmpeg": {
         "title": "ffmpeg",
@@ -2106,9 +2106,9 @@
         "unusable": "Unusable",
         "encoders": "Useful encoders found",
         "noEncoders": "None",
-        "hdr": "HDR colour conversion",
+        "hdr": "HDR color conversion",
         "hdrAvailable": "Available: HDR videos are converted to SDR for the H.264 version.",
-        "hdrMissing": "Unavailable (zscale and tonemap filters missing): HDR videos are converted without colour correction.",
+        "hdrMissing": "Unavailable (zscale and tonemap filters missing): HDR videos are converted without color correction.",
         "av1": "AV1 version",
         "av1Available": "Possible (libsvtav1 and libopus found).",
         "av1Missing": "Impossible: the libsvtav1 and libopus encoders are required.",
@@ -2169,7 +2169,7 @@
         "running": "Running",
         "done": "Done",
         "failed": "Failed",
-        "cancelled": "Cancelled"
+        "cancelled": "Canceled"
       },
       "backfill": {
         "title": "Process existing videos",
@@ -2234,7 +2234,7 @@
         },
         "invalid": {
           "badge": "Not valid",
-          "text": "The installed license is not valid, paid features are disabled."
+          "text": "The installed license is not valid: paid features are disabled."
         },
         "pending": {
           "badge": "Not yet valid",
@@ -2259,8 +2259,8 @@
       },
       "community": "Community edition: SurgeMedia is free in production for organizations whose annual revenue does not exceed USD 500,000, except to offer a competing media hosting service (BUSL 1.1 license). Above that threshold, or for paid features (single sign-on, SIEM export…), write to {email}.",
       "clockTitle": "Server clock behind",
-      "clockDays": "This server's clock is about {count} day behind the latest known date: the license is assessed at that date. Fix the system time (NTP synchronization). | This server's clock is about {count} days behind the latest known date: the license is assessed at that date. Fix the system time (NTP synchronization).",
-      "clockHours": "This server's clock is about {count} hour behind the latest known date: the license is assessed at that date. Fix the system time (NTP synchronization). | This server's clock is about {count} hours behind the latest known date: the license is assessed at that date. Fix the system time (NTP synchronization).",
+      "clockDays": "This server's clock is about {count} day behind the latest known date: the license is evaluated as of that date. Fix the system time (NTP synchronization). | This server's clock is about {count} days behind the latest known date: the license is evaluated as of that date. Fix the system time (NTP synchronization).",
+      "clockHours": "This server's clock is about {count} hour behind the latest known date: the license is evaluated as of that date. Fix the system time (NTP synchronization). | This server's clock is about {count} hours behind the latest known date: the license is evaluated as of that date. Fix the system time (NTP synchronization).",
       "licensee": "Licensee",
       "plan": "Plan",
       "featuresLabel": "Paid features",
@@ -2279,7 +2279,7 @@
         "database": "License installed from this page."
       },
       "instanceId": "This installation's identifier",
-      "instanceIdHint": "Give it to support and in the yearly statement of your production instances. SurgeMedia never sends it anywhere.",
+      "instanceIdHint": "Provide it to support and include it in the annual declaration of your production instances. SurgeMedia never sends it anywhere.",
       "usage": {
         "title": "Use of this instance",
         "intro": "Tell us how this instance is used. It is only a statement: SurgeMedia checks nothing and sends nothing. It is used to remind you of the license terms at the right time.",
@@ -2339,7 +2339,7 @@
       "removeConfirm": "Remove the license",
       "removed": "License removed: this installation is back to the Community edition.",
       "envTitle": "License provided by the server configuration",
-      "envText": "The NUXT_LICENSE_KEY variable is set: the license is changed in the server configuration, then on restart.",
+      "envText": "The NUXT_LICENSE_KEY variable is set: change the license in the server configuration, then restart the server.",
       "plans": {
         "pro": "Pro",
         "business": "Business",
@@ -2450,8 +2450,8 @@
         "fit": "Fit",
         "gravity": "Crop anchor",
         "quality": "Quality",
-        "background": "Background colour",
-        "backgroundHint": "Six hexadecimal digits (ffffff = white). Colours the “Contain” bars and replaces transparency in JPEG; empty = transparent, or white in JPEG.",
+        "background": "Background color",
+        "backgroundHint": "Six hexadecimal digits (ffffff = white). Colors the “Contain” bars and replaces transparency in JPEG; empty = transparent, or white in JPEG.",
         "rotate": "Rotation",
         "flip": "Mirror",
         "widthHint": "Empty: derived from the height, proportions kept. {max} px at most.",
@@ -2468,8 +2468,8 @@
       "outside": "Cover the frame without cropping"
     },
     "gravity": {
-      "focal": "Focal point (centre by default)",
-      "center": "Centre",
+      "focal": "Focal point (center by default)",
+      "center": "Center",
       "north": "Top",
       "northeast": "Top right",
       "east": "Right",
@@ -2523,8 +2523,8 @@
       "orientation": "Orientation"
     },
     "fitHelp": {
-      "cover": "The image fills the whole frame; what goes beyond is cut around the anchor.",
-      "contain": "The whole image fits in the frame; the empty bars take the background colour.",
+      "cover": "The image fills the whole frame; anything outside it is cropped around the anchor.",
+      "contain": "The whole image fits in the frame; the empty bars take the background color.",
       "fill": "The image is stretched to the exact dimensions, without keeping its proportions.",
       "inside": "The whole image fits in the frame, without bars: the result may be smaller than the frame on one side.",
       "outside": "The image covers the whole frame without being cut: the result may exceed the frame on one side."
@@ -2532,13 +2532,13 @@
     "gravityHelp": {
       "focal": "The focal point of the image stays in the frame (the center when none is set).",
       "center": "The center of the image stays in the frame.",
-      "attention": "The most striking area (contrast, vivid colours), detected automatically.",
+      "attention": "The most striking area (contrast, vivid colors), detected automatically.",
       "entropy": "The most detailed area, detected automatically.",
       "edge": "The crop keeps this part of the image: {position}."
     },
     "qualityHelp": {
-      "format": "1 to 100. Empty: default quality for {format} ({quality}). Lower = lighter file.",
-      "png": "PNG: lossless when empty; a quality (1 to 100) reduces the colour palette for a lighter file.",
+      "format": "1 to 100. Empty: default quality for {format} ({quality}). Lower = smaller file.",
+      "png": "PNG: lossless when empty; a quality (1 to 100) reduces the color palette for a smaller file.",
       "any": "1 to 100. Empty: default quality of the format (80 for JPEG and WebP, 50 for AVIF; lossless PNG)."
     }
   },
@@ -2616,7 +2616,7 @@
     },
     "errors": {
       "MFA_CODE_INVALID": "Incorrect or already used code. Check your phone's clock and try again.",
-      "MFA_CHALLENGE_EXPIRED": "The verification time ran out. Sign in again.",
+      "MFA_CHALLENGE_EXPIRED": "Verification timed out. Sign in again.",
       "MFA_SETUP_EXPIRED": "The setup expired. Start over.",
       "MFA_UNAVAILABLE": "Two-factor authentication is unavailable on this server (encryption key missing or changed). Tell the operator.",
       "MFA_ALREADY_ENABLED": "Two-factor authentication is already on.",
@@ -2640,7 +2640,7 @@
     },
     "mfa": {
       "title": "Two-factor authentication",
-      "description": "A code from your authenticator app is asked at every sign-in, on top of your password.",
+      "description": "At every sign-in, you are asked for a code from your authenticator app in addition to your password.",
       "statusOn": "Turned on {date}",
       "statusOff": "Off",
       "required": "Your organization requires two-factor authentication for your account.",
@@ -2834,10 +2834,10 @@
       "name": "Name",
       "slug": "Identifier",
       "slugHint": "Suggested from the name; used by API filters (lowercase letters, digits and hyphens).",
-      "slugEditHint": "Does not change when you rename the tag. Changing it means applications that filter by this identifier must follow.",
+      "slugEditHint": "Does not change when you rename the tag. If you change it, applications that filter by this identifier must be updated to match.",
       "color": "Color",
       "confidential": "Confidential",
-      "confidentialHint": "Visible only to administrators and managers, in the administration; never through the API nor to other roles."
+      "confidentialHint": "Visible only to administrators and managers, in the administration; never through the API or to other roles."
     },
     "input": {
       "placeholder": "Search for a tag…",
@@ -2875,8 +2875,8 @@
       "delete": "Delete",
       "deleteLabel": "Delete the “{name}” tag",
       "deleteTitle": "Delete the “{name}” tag?",
-      "deleteDescription": "No media item carries it. | It will be removed from one media item. | It will be removed from {count} media items.",
-      "deleteDescriptionUnknown": "It will be removed from every media item that carries it.",
+      "deleteDescription": "No media item has this tag. | It will be removed from one media item. | It will be removed from {count} media items.",
+      "deleteDescriptionUnknown": "It will be removed from every media item that has it.",
       "deleted": "“{name}” tag deleted."
     },
     "errors": {
@@ -2885,7 +2885,7 @@
       "TAG_SLUG_TAKEN": "A tag already uses this identifier.",
       "TAG_LIMIT_REACHED": "The maximum number of tags has been reached: delete some before creating more.",
       "TAG_READ_ONLY": "Only an administrator can change a global tag.",
-      "TOO_MANY_TAGS": "A media item carries at most 50 tags.",
+      "TOO_MANY_TAGS": "A media item can have at most 50 tags.",
       "usedInProjects": "Already used in: {names}."
     }
   }

@@ -1,9 +1,9 @@
 ---
 title: Architecture et API
-description: Le fonctionnement de SurgeMedia — un back-end média headless avec une API REST et une diffusion par URL, sur votre propre infrastructure — et la façon dont les applications l’utilisent.
+description: Le fonctionnement de SurgeMedia (un back-end média headless avec une API REST et une diffusion par URL, sur votre propre infrastructure) et la façon dont les applications l’utilisent.
 ---
 
-SurgeMedia sépare **l’endroit où vivent vos médias** de **l’endroit où ils sont utilisés**. C’est un back-end média _headless_ : il n’impose ni front-end, ni gabarit, ni CMS. Vos sites, applications mobiles, back-offices et partenaires consomment les médias en HTTP — depuis une seule instance que vous hébergez, sous votre propre domaine.
+SurgeMedia sépare **l’endroit où vivent vos médias** de **l’endroit où ils sont utilisés**. C’est un back-end média _headless_ : il n’impose ni front-end, ni gabarit, ni CMS. Vos sites, applications mobiles, back-offices et partenaires consomment les médias en HTTP, depuis une seule instance que vous hébergez, sous votre propre domaine.
 
 ## Vue d’ensemble
 
@@ -31,7 +31,7 @@ Par défaut, un seul processus sert tout. Quand le trafic vidéo augmente, le tr
 
 | Concept | Ce que c’est | Pourquoi c’est utile |
 | --- | --- | --- |
-| **Bibliothèque** | Un espace de médias partagé, géré par les administrateurs. | Éléments de marque, logos, visuels communs — lus par toutes les équipes. |
+| **Bibliothèque** | Un espace de médias partagé, géré par les administrateurs. | Éléments de marque, logos et visuels communs, lus par toutes les équipes. |
 | **Projet** | L’espace de médias d’une application, d’un produit ou d’un client, avec ses membres, ses clés, ses origines autorisées et sa politique de transformation. | Séparation nette entre applications ; l’unité du contrôle d’accès. |
 | **Média** | Une image ou une vidéo, **versionnée** (`v1`, `v2`…). Remplacer le fichier crée une nouvelle version et de nouvelles URL. | Les caches ne servent jamais un fichier périmé, et vous n’avez jamais à purger un CDN. |
 | **Dossiers** | Une arborescence dans un projet ou la bibliothèque. | Les éditeurs rangent ; l’API filtre par dossier. |
@@ -39,7 +39,7 @@ Par défaut, un seul processus sert tout. Quand le trafic vidéo augmente, le tr
 | **Préréglages** | Des transformations nommées (`card`, `og-image`…) au niveau de l’installation ou du projet. | Changez un format partout en modifiant un seul préréglage. |
 | **Identifiants** | Clés de projet, jetons personnels et jetons délégués, chacun avec ses portées. | Chaque requête est attribuable et limitée au strict nécessaire. |
 
-Un média appartient à un seul espace : la bibliothèque ou un projet. Dans l’administration, la page **Médias** réunit pourtant la bibliothèque et tous les projets auxquels vous avez accès : vous y cherchez et filtrez partout à la fois, chaque média indiquant son espace. Pour ranger dans des dossiers, étiqueter en lot ou voir la corbeille, vous ouvrez un espace ; un envoi va toujours dans un espace précis, que vous choisissez.
+Un média appartient à un seul espace : la bibliothèque ou un projet. Dans l’administration, la page **Médias** réunit pourtant la bibliothèque et tous les projets auxquels vous avez accès : vous y cherchez et filtrez partout à la fois, chaque média indiquant son espace. Pour ranger dans des dossiers, étiqueter en lot ou voir la corbeille, vous ouvrez un espace ; un envoi va toujours dans un espace précis, que vous choisissez.
 
 ## Deux plans : gestion et diffusion
 
@@ -47,7 +47,7 @@ Un média appartient à un seul espace : la bibliothèque ou un projet. Dans l�
 
 Une API REST JSON versionnée pour lister, rechercher, envoyer, modifier, ranger et signer les médias.
 
-- **Authentification** par jeton `Bearer` dans l’en-tête `Authorization` — jamais dans l’URL.
+- **Authentification** par jeton `Bearer` dans l’en-tête `Authorization`, jamais dans l’URL.
 - **Portées** par identifiant : `project:read`, `media:read`, `media:upload`, `media:write`, `media:delete`, `tags:manage`.
 - **CORS par projet** : seules les origines que vous autorisez (`https://www.acme.fr`, `https://*.acme.fr`) peuvent appeler l’API depuis un navigateur.
 - **Prévisible** : pagination par curseur (`limit`, `cursor` → `nextCursor`), `ETag` / `304 Not Modified`, en-têtes `RateLimit`, et erreurs au format `application/problem+json` avec un `code` stable et un `X-Request-Id`.
@@ -82,7 +82,7 @@ Les exemples ci-dessous utilisent `https://media.example.com` comme instance Sur
 
 ### 1. Des fiches produit rapides partout
 
-Un site e-commerce liste les photos d’un produit et affiche des images responsives — le même code en développement, en préproduction et en production.
+Un site e-commerce liste les photos d’un produit et affiche des images responsives, avec le même code en développement, en préproduction et en production.
 
 ```ts
 // Côté serveur (Node, Next.js, Nuxt…) : la clé secrète n’atteint jamais le navigateur.
@@ -119,13 +119,13 @@ curl -X POST "https://media.example.com/api/v1/projects/$PROJECT/delegated-token
 # → 201 { "token": "sm_dt_…", "expiresAt": "…", "scopes": ["media:upload"] }
 ```
 
-Le navigateur envoie ensuite directement ses fichiers sur `POST /api/v1/projects/$PROJECT/media` avec ce jeton. Le type de fichier (détecté d’après le contenu, pas l’extension), la taille et le nombre sont vérifiés par SurgeMedia ; le jeton expire seul et devient aussitôt invalide si la clé émettrice est révoquée.
+Le navigateur envoie ensuite directement ses fichiers sur `POST /api/v1/projects/$PROJECT/media` avec ce jeton. SurgeMedia vérifie le type de fichier (détecté d’après le contenu, pas l’extension), la taille et le nombre ; le jeton expire seul et devient aussitôt invalide si la clé émettrice est révoquée.
 
 **Impact métier :** aucun trafic d’envoi sur vos serveurs applicatifs, aucun secret durable dans le navigateur, et chaque fichier rattaché au vendeur qui l’a envoyé.
 
 ### 3. Des médias privés réservés aux membres
 
-Un portail RH ou un site de contenus premium stocke ses médias en **privé**. Quand un membre ouvre une page, votre serveur demande des liens signés de courte durée — jusqu’à 100 en un seul appel :
+Un portail RH ou un site de contenus premium stocke ses médias en **privé**. Quand un membre ouvre une page, votre serveur demande des liens signés de courte durée, jusqu’à 100 en un seul appel :
 
 ```bash
 curl -X POST "https://media.example.com/api/v1/projects/$PROJECT/signed-urls" \
@@ -144,7 +144,7 @@ Chaque environnement d’une application utilise le **même projet** avec ses pr
 
 ### 5. Des vidéos qui se lisent, tout simplement
 
-Envoyez un MP4 ou un MOV : SurgeMedia place l’index en tête du fichier pour une lecture immédiate, retire les pistes de localisation GPS, extrait une image d’affiche et accepte des sous-titres WebVTT ou SRT. Avec FFmpeg activé, il produit aussi des rendus H.264 et AV1 — renvoyés dans le tableau `sources` du média, prêts pour un élément `<video>`.
+Envoyez un MP4 ou un MOV : SurgeMedia place l’index en tête du fichier pour une lecture immédiate, retire les pistes de localisation GPS, extrait une image d’affiche et accepte des sous-titres WebVTT ou SRT. Avec FFmpeg activé, il produit aussi des rendus H.264 et AV1, renvoyés dans le tableau `sources` du média, prêts pour un élément `<video>`.
 
 ## Performances et montée en charge
 
@@ -157,4 +157,4 @@ Envoyez un MP4 ou un MOV : SurgeMedia place l’index en tête du fichier pour 
 
 - [Installez SurgeMedia](../getting-started/) en quelques minutes.
 - [Sécurisez votre intégration](../security/) avec le bon identifiant pour chaque contexte.
-- [Choisissez une offre](../../pricing/) — gratuite sous 500 000 USD de chiffre d’affaires annuel.
+- [Choisissez une offre](../../pricing/) (gratuite sous 500 000 USD de chiffre d’affaires annuel).

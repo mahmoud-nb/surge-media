@@ -3,20 +3,20 @@ title: SDKs and components
 description: '@surge-media/vue and @surge-media/client: responsive images, videos and API access for Vue 3 and Nuxt, MIT-licensed. The REST API works with any language.'
 ---
 
-SurgeMedia is API-first: everything the admin does with media, your code can do through the REST API v1. The official front-end packages turn the most common integrations — responsive images, videos, uploads, pickers — into a few lines.
+SurgeMedia is API-first: everything the admin does with media, your code can do through the REST API v1. The official front-end packages reduce the most common integrations (responsive images, videos, uploads, pickers) to a few lines of code.
 
 ## Packages
 
 | Package | For | License | Status |
 | --- | --- | --- | --- |
 | `@surge-media/core` | Server: admin, REST API, delivery, processing | BUSL-1.1 | **Available** |
-| `@surge-media/client` | Any JavaScript runtime: browser, Node.js, edge | MIT | In development — first release 0.1 |
-| `@surge-media/vue` | Vue 3.5+, including Nuxt | MIT | In development — first release 0.1 |
-| `@surge-media/nuxt` | Nuxt module (auto-imports, token route) | MIT | Later — Nuxt works today with `@surge-media/vue` |
+| `@surge-media/client` | Any JavaScript runtime: browser, Node.js, edge | MIT | In development (first release: 0.1) |
+| `@surge-media/vue` | Vue 3.5+, including Nuxt | MIT | In development (first release: 0.1) |
+| `@surge-media/nuxt` | Nuxt module (auto-imports, token route) | MIT | Later. Nuxt already works with `@surge-media/vue` |
 | `@surge-media/react` | React, Next.js | MIT | Planned |
 | `@surge-media/svelte` | Svelte, SvelteKit | MIT | Planned |
 
-The display components (images, `<picture>`, videos, thumbnails, processing status) and uploads are ready; media pickers and editing (focal point, crop, poster, subtitles) follow before the first release. Watch the [GitHub repository](https://github.com/mahmoud-nb/surge-media) releases to be notified.
+The display components (images, `<picture>`, videos, thumbnails, processing status) and uploads are ready; media pickers and editing (focal point, crop, poster, subtitles) will follow before the first release. To get notified, watch releases on the [GitHub repository](https://github.com/mahmoud-nb/surge-media).
 
 ## @surge-media/vue
 
@@ -30,7 +30,7 @@ npm install @surge-media/vue
 
 ### Set up
 
-Register the plugin once, with your instance URL, the project id and a credential:
+Register the plugin once, with your instance URL, the project ID and a credential:
 
 ```ts
 // main.ts
@@ -88,11 +88,11 @@ defineProps<{ hero: Media; gallery: Media[]; trailer: Media }>()
 | --- | --- |
 | `SmImage` | `<img>` with a `srcset` by width (or by density with a fixed `width`), `width` / `height` always set (no layout shift), server crop around the focal point (`aspect`, `fit`), presets (`preset`, `presets`), `loading`, `fetchpriority` or `priority`, `objectFit` to fill a box. Alternative text from `alt` or the media; `decorative` for purely decorative images. |
 | `SmPicture` | `<picture>` with one `<source>` per format enabled on the server (AVIF, WebP) and a JPEG fallback; art direction through `sources` (a crop per media query). |
-| `SmVideo` | The browser's native player with the server's playback `sources`, a sized poster, text tracks, `lazy` loading. No autoplay: `ambient` loops a muted video with a pause button. While the server prepares a video, shows its status and a link to the original. |
+| `SmVideo` | The browser's native player with the server's playback `sources`, a sized poster, text tracks, `lazy` loading. No autoplay: `ambient` loops a muted video with a pause button. While the server is preparing a video, it shows its status and a link to the original. |
 | `SmMedia` | Picks `SmImage` or `SmVideo` from the media kind. |
 | `SmThumbnail` | Square thumbnail cropped around the focal point, video duration, processing badge. |
 | `SmProcessingStatus` | Processing status of a video, with a progress bar and polite announcements for screen readers. |
-| `SmUploader` | Uploads images and videos with delegated tokens: native file input, drag and drop, paste, checks before sending, progress, cancel, retry, poster capture — see [Upload files](#upload-files). |
+| `SmUploader` | Uploads images and videos with delegated tokens: native file input, drag and drop, paste, checks before sending, progress, cancel, retry, poster capture (see [Upload files](#upload-files)). |
 
 The components follow the project's transformation policy: with **presets only**, they build their `srcset` from presets; with **signed only**, from presets too, unless the media is private (its URLs are already signed). If a derivative fails to load, the image falls back to the original file, then to its alternative text.
 
@@ -120,7 +120,7 @@ function onUploaded(media: Media) {
 - **Checked before sending**: accepted types, maximum size per type and uploads left come from the token (`GET /me`); a refused file is explained at once, such as “This file is too large. Maximum size: 25 MB.” The server still checks the contents.
 - **Queue**: two uploads at a time, progress per file, cancel, retry; automatic retry after a `429`, a `503` or a network error, 3 times at most.
 - **Videos**: a poster frame is captured in the browser during the upload, then attached to the video.
-- **`details`**: title and alternative text are typed before the upload — an upload token cannot edit a media item afterwards. Without it, files leave as soon as they are chosen.
+- **`details`**: the title and alternative text are entered before the upload, because an upload token cannot edit a media item afterwards. Without it, files leave as soon as they are chosen.
 - `visibility`, `chooseVisibility` and `folderId` set where files go, unless the token enforces them; `capture` (`user` or `environment`) opens the camera on phones. Events: `uploaded`, `error`, `done`.
 - Accessible: a native file input with a visible button (drag and drop and paste only add to it), constraints linked to the input, one announcement per finished file.
 
@@ -166,13 +166,13 @@ curl -X POST \
 
 ### Theme and languages
 
-- `@surge-media/vue/style.css`, the client's theme (`@surge-media/client/style.css`) reused as is, is optional: without it, sizes, aspect ratios and screen reader texts stay correct. It defines `--sm-*` tokens (`--sm-color-primary`, `--sm-color-surface`, `--sm-radius`…) in light and dark — dark follows the system preference, unless an ancestor has `.light` or `[data-theme="light"]`, or when it has `.dark` or `[data-theme="dark"]`. Everything lives in the `surge-media` CSS layer, so your styles always win.
+- `@surge-media/vue/style.css`, the client's theme (`@surge-media/client/style.css`) reused as is, is optional: without it, sizes, aspect ratios and screen reader texts stay correct. It defines `--sm-*` tokens (`--sm-color-primary`, `--sm-color-surface`, `--sm-radius`…) for light and dark modes. Dark mode follows the system preference unless an ancestor has `.light` or `[data-theme="light"]`, and always applies when an ancestor has `.dark` or `[data-theme="dark"]`. Everything lives in the `surge-media` CSS layer, so your styles always win.
 - French (default) and English are built in. Pass `locale` (a string or a ref) and override or add texts with `messages: { en: { video: { download: 'Download' } } }`.
 - The components target WCAG 2.2 AA: native elements, keyboard access, no autoplay, contrast checked in both themes.
 
 ## @surge-media/client
 
-The framework-free layer the components are built on — use it directly in plain JavaScript, on a server or in another framework:
+This is the framework-free layer the components are built on. Use it directly in plain JavaScript, on a server or in another framework:
 
 ```ts
 import {
@@ -200,7 +200,7 @@ const srcset = srcsetAttribute(widthCandidates(items[0], {
 }))
 ```
 
-It handles ETag revalidation, delegated token renewal and translated errors (`SurgeApiError`), and builds canonical transformation URLs — the exact form the server expects, so no redirect. `imageSourceSet()` computes all the attributes of an image (`src`, `srcset`, `sizes`, `width`, `height`) from the project's policy, and `imageSource()` derives them from a component's props and the project settings: it is the heart of every image component.
+It handles ETag revalidation, delegated token renewal and translated errors (`SurgeApiError`), and builds canonical transformation URLs in the exact form the server expects, which avoids a redirect. `imageSourceSet()` computes all the attributes of an image (`src`, `srcset`, `sizes`, `width`, `height`) from the project's policy, and `imageSource()` derives them from a component's props and the project settings: it is the heart of every image component.
 
 For uploads, `client.media.upload()` sends a file (with progress in browsers), `client.uploadRules()` reads the rules of the token, `checkFile()` and `acceptAttribute()` apply them, and `createUploadQueue()` is the framework-free queue behind `SmUploader`. On your server, `@surge-media/client/server` issues delegated tokens.
 
@@ -210,14 +210,14 @@ No package for your framework yet (Angular, SolidJS, Qwik…)? [Build a framewor
 
 ## Any language
 
-The API is described by an **OpenAPI 3.1** document served by your instance at `/api/v1/openapi.json` (`?lang=en` or `fr`). Generate a typed client with the tool of your choice — for example, in TypeScript:
+The API is described by an **OpenAPI 3.1** document served by your instance at `/api/v1/openapi.json` (`?lang=en` or `fr`). Generate a typed client with the tool of your choice. For example, in TypeScript:
 
 ```bash
 npx openapi-typescript https://media.example.com/api/v1/openapi.json \
   -o surge-media.d.ts
 ```
 
-Image URLs need no SDK at all: replace `{transform}` and `{format}` in a media's `urlTemplate` — see [Image transformations](../image-transformations/).
+Image URLs need no SDK at all: replace `{transform}` and `{format}` in a media item's `urlTemplate` (see [Image transformations](../image-transformations/)).
 
 ## Nuxt
 

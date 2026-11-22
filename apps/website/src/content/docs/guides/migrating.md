@@ -21,7 +21,7 @@ From step 1 on, new uploads already go to SurgeMedia (admin, API, upload compone
 
 ## 1. Prepare
 
-- **A project** to import into. The API reaches projects only: to put media in the shared library, import them into a project, then move them from the admin.
+- **A project** to import into. The API only works with projects: to put media in the shared library, import them into a project, then move them from the admin.
 - **A secret key** of that project with the `media:upload` scope, plus `media:write` if the import creates folders and `tags:manage` if it creates tags. A personal token with the same scopes works too; it then needs `--project <slug>`.
 - **The address of your instance**, such as `https://media.example.com`, and the command itself: `npx surge-media` from the npm package, or the same command in the Docker container.
 
@@ -29,7 +29,7 @@ The key is read from the `SURGE_MEDIA_API_KEY` environment variable or from a fi
 
 ### Rate limits for a large import
 
-By default the API accepts **60 uploads per minute** per key, and each file costs up to three requests (a lookup by reference, a lookup by contents, the upload). For more than a few hundred files, raise both limits on the server for the time of the import, restart it, then set them back:
+By default the API accepts **60 uploads per minute** per key, and each file costs up to three requests (a lookup by reference, a lookup by contents, the upload). For more than a few hundred files, raise both limits on the server for the duration of the import, restart the server, then set them back:
 
 ```bash
 NUXT_API_RATE_LIMIT_UPLOADS="100000"
@@ -40,13 +40,13 @@ As an order of magnitude, measured on a laptop with SQLite and local storage: 5,
 
 ## 2. Plan
 
-`import plan` lists the files of a directory or of a bucket and writes a **manifest**, one line per file, with the type detected from the contents. It needs no SurgeMedia server.
+`import plan` lists the files in a directory or a bucket and writes a **manifest**, one line per file, with the type detected from the contents. It needs no SurgeMedia server.
 
 ```bash
 npx surge-media import plan --from /var/www/uploads --folders-from-path --out uploads.csv
 ```
 
-From an S3 bucket (AWS S3, Cloudflare R2, MinIO, Scaleway, OVHcloud…), with credentials of **that** bucket, which only need to list and read:
+From an S3 bucket (AWS S3, Cloudflare R2, MinIO, Scaleway, OVHcloud…), using credentials for **that** bucket, which only need list and read access:
 
 ```bash
 export SURGE_MEDIA_IMPORT_S3_ACCESS_KEY_ID=…
@@ -56,7 +56,7 @@ npx surge-media import plan --from s3://old-media/uploads/ --s3-region eu-west-3
 
 For an S3-compatible service, add `--s3-endpoint https://…` and, where the service needs it (MinIO, Garage), `--s3-path-style`.
 
-`plan` reports the total volume, the estimated duration and the files it leaves out (in `uploads.rejected.csv`): SVG, HEIC and TIFF are not accepted, and MKV, AVI and similar videos only when video processing is enabled. `--folders-from-path` turns the directory tree into project folders.
+`plan` reports the total volume, the estimated duration and the files it leaves out (in `uploads.rejected.csv`): SVG, HEIC and TIFF are not accepted, and MKV, AVI and similar videos are accepted only when video processing is enabled. `--folders-from-path` turns the directory tree into project folders.
 
 ### Write or enrich the manifest
 
@@ -86,7 +86,7 @@ export SURGE_MEDIA_API_KEY=sm_sk_…
 npx surge-media import run uploads.csv --root /var/www/uploads --url https://media.example.com --create-folders --dry-run
 ```
 
-The dry run does everything but upload: it reads every file, applies the rules of your server (accepted types, maximum sizes), finds files already imported and duplicates, and counts the folders and tags to create. Nothing is written on the server.
+The dry run does everything but upload: it reads every file, applies your server's rules (accepted types, maximum sizes), detects files already imported and duplicates, and counts the folders and tags to create. Nothing is written to the server.
 
 ## 4. Import
 
@@ -96,12 +96,12 @@ Run the same command without `--dry-run`:
 npx surge-media import run uploads.csv --root /var/www/uploads --url https://media.example.com --create-folders
 ```
 
-For each line the command reads the file (a URL or an `s3://` object is downloaded to a temporary directory first), skips it when its reference is already on the server, attaches it to the existing media item when the project already holds the same contents (`--no-dedupe` to upload anyway), and otherwise uploads it.
+For each line, the command reads the file (a URL or an `s3://` object is downloaded to a temporary directory first), skips it if its reference is already on the server, attaches it to the existing media item if the project already holds the same contents (pass `--no-dedupe` to upload anyway), and otherwise uploads it.
 
 - **Interrupt and resume.** Press Ctrl+C once: the uploads in progress finish, the mapping table is written, and the command exits with code `2`. Run the same command again to continue where it stopped. Even if the progress file is lost, nothing is duplicated: the server refuses a reference it already holds.
 - **Exit codes.** `0`: every line is settled, permanent refusals included. `2`: some lines failed or remain, run the command again. `1`: the command could not run (address, key, manifest).
 - **Videos** are processed in the background at a lower priority than your regular uploads, so a long import never delays the work of your editors.
-- **Options.** `--concurrency` (2 by default, 8 at most), `--visibility`, `--create-tags`, `--public-url` (see below), `--retry-rejected` after a server setting changed, `--json` for a script.
+- **Options.** `--concurrency` (2 by default, 8 at most), `--visibility`, `--create-tags`, `--public-url` (see below), `--retry-rejected` after changing a server setting, `--json` for a script.
 
 ## 5. Rewrite your URLs
 
@@ -117,7 +117,7 @@ Next to the manifest, the import writes **`uploads.mapping.csv`**, one line per 
 | `url` | Delivery URL of the original, such as `https://media.example.com/m/<id>/v1/photo.jpg` |
 | `code` | Error code of a rejected or failed line |
 
-Load it in your database and update your rows. **Store the media ID** rather than only the URL: with the ID, your application always shows the current version after a file is replaced, builds resized and converted images, and reads private media through signed URLs. The URL of a private media item is given without its temporary signature, and does not work on its own.
+Load it into your database and update your rows. **Store the media ID** rather than only the URL: with the ID, your application always shows the current version after a file is replaced, builds resized and converted images, and reads private media through signed URLs. The URL of a private media item is given without its temporary signature and does not work on its own.
 
 ### PostgreSQL
 
@@ -177,12 +177,12 @@ SET    i.surge_media_id = m.media_id,
 WHERE  m.status IN ('created', 'exists', 'deduplicated');
 ```
 
-`LOAD DATA LOCAL` needs `local_infile` on the server and the client (`mysql --local-infile=1`). The binary collation compares references exactly, as SurgeMedia does: the default collations of MySQL ignore case and accents.
+`LOAD DATA LOCAL` needs `local_infile` on both the server and the client (`mysql --local-infile=1`). The binary collation compares references exactly, as SurgeMedia does: MySQL's default collations ignore case and accents.
 
 Then display media by ID, for example with the [JavaScript client and the Vue components](../../reference/sdks/): `client.media.get(id)` returns the media item that `SmImage` renders with its `srcset`.
 
-:::tip[Public domain in the mapping table]
-The URLs of the table use the public address of your instance (`NUXT_MEDIA_PUBLIC_URL`, else `NUXT_SITE_URL`). If neither is set, for example when you run the import on the server itself, pass `--public-url https://media.example.com`.
+:::tip[Public address in the mapping table]
+The URLs in the table use the public address of your instance (`NUXT_MEDIA_PUBLIC_URL`, otherwise `NUXT_SITE_URL`). If neither is set, for example when you run the import on the server itself, pass `--public-url https://media.example.com`.
 :::
 
 ## 6. Redirect the old addresses
@@ -196,18 +196,18 @@ npx surge-media import redirects uploads.mapping.csv --format nginx --prefix /up
 | `--format` | Output |
 | --- | --- |
 | `nginx` | A `map` table to include in the `http` block, plus one `if … return 301` line in the old `server` block |
-| `caddy` | A `map {path}` table followed by `redir`, to import in the old site block |
+| `caddy` | A `map {path}` table followed by `redir`, to import into the old site block |
 | `apache` | One `RedirectMatch 301` line per address, for the VirtualHost or `.htaccess` |
 | `cloudflare` | The CSV of Bulk Redirects (needs `--origin https://www.example.com`) |
 | `json` | The raw list, for any other tool |
 
-The old address of a file is the path of its URL when `source` is a URL; for a path or an `s3://` key, it is `--prefix` followed by the path, or by the whole key (`s3://old-media/uploads/a.jpg` gives `uploads/a.jpg`: leave `--prefix` out if the bucket was served from its root). Rules match the exact path, case included, and ignore the query string (Apache passes it on to the new URL, which ignores it). Addresses holding characters that the configuration syntax interprets are left out and listed. Always test the file before loading it (`nginx -t`, `caddy validate`, `apachectl configtest`).
+The old address of a file is the path of its URL when `source` is a URL; for a path or an `s3://` key, it is `--prefix` followed by the path, or by the whole key (`s3://old-media/uploads/a.jpg` gives `uploads/a.jpg`: leave `--prefix` out if the bucket was served from its root). Rules match the exact path, case included, and ignore the query string (Apache passes it on to the new URL, which ignores it). Addresses containing characters that have a special meaning in the configuration syntax are left out and listed. Always test the file before loading it (`nginx -t`, `caddy validate`, `apachectl configtest`).
 
 If the old URLs belong to a service you are leaving (a CDN or a SaaS media platform), you cannot redirect them: keep the old service running read-only until your database and your pages only hold the new URLs.
 
 ## 7. Decommission
 
-1. Check that no page, email template or application still calls the old addresses: watch the logs of the old server, or the hits of the redirects.
+1. Check that no page, email template or application still calls the old addresses: watch the old server's logs, or the hits on the redirects.
 2. Keep the redirects as long as external links may point to the old URLs; they cost nothing.
 3. Remove the old files, or the bucket, and revoke the credentials used for the import: the bucket's read key, and the SurgeMedia key if it was created for this purpose only. Set the rate limits back to their defaults.
 

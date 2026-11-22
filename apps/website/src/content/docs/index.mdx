@@ -1,13 +1,13 @@
 ---
 title: Self-hosted media platform
-description: SurgeMedia stores, transforms and delivers your images and videos from your own servers, under your own domain, through one secure headless API — for every environment from dev to production.
+description: SurgeMedia stores, transforms and delivers your images and videos from your own servers, under your own domain, through one secure headless API, in every environment from dev to production.
 template: splash
 editUrl: false
 lastUpdated: false
 eyebrow: Self-hosted · Headless · Source-available
 hero:
   title: Media infrastructure <span class="sm-gradient">you actually own</span>.
-  tagline: Store, transform and deliver every image and video through one secure API — on your servers, under your domain, for every environment from dev to production. No per-transformation bill. No media leaving your infrastructure.
+  tagline: Store, transform and deliver every image and video through one secure API. On your servers, under your domain, in every environment from dev to production. No per-transformation bill. No media leaving your infrastructure.
   actions:
     - text: Get started in 5 minutes
       link: /guides/getting-started/
@@ -78,19 +78,19 @@ import CtaBand from '../../components/landing/CtaBand.astro';
       `npx surge-media init` or a single Docker image. The CLI sets up your database, applies migrations and generates secrets. No build step, no third-party account to create.
     </Feature>
     <Feature icon="server" title="Self-hosted, end to end">
-      Your servers, your domain (`media.your-company.com`), your disk or S3-compatible bucket. Media never transits through a third party — ideal for GDPR and data-residency requirements.
+      Your servers, your domain (`media.your-company.com`), your disk or S3-compatible bucket. Media never passes through a third party, which makes it ideal for GDPR and data-residency requirements.
     </Feature>
     <Feature icon="database" title="The database you already run">
-      SQLite out of the box for small teams and quick starts. PostgreSQL or MySQL / MariaDB for production at enterprise scale — same package, same image, one variable.
+      SQLite out of the box for small teams and quick starts. PostgreSQL or MySQL / MariaDB for production at enterprise scale. Same package, same image, one variable.
     </Feature>
     <Feature icon="random" title="One source of truth for every environment">
       Dev, staging and production read the same media library. Environment-tagged API keys per project: no more re-uploading assets or syncing buckets between stages.
     </Feature>
     <Feature icon="setting" title="Processing on demand">
-      Resize, crop, focal point, AVIF and WebP — just by changing a URL, powered by Sharp. Video renditions (H.264, AV1), posters and subtitles with FFmpeg, off the request path.
+      Resize, crop, focal point, AVIF and WebP: just change the URL, and Sharp does the work. Video renditions (H.264, AV1), posters and subtitles with FFmpeg, off the request path.
     </Feature>
     <Feature icon="padlock" title="APIs locked down by design">
-      Publishable and secret keys, scopes, expiry and rotation, CORS allow-lists, signed URLs and short-lived upload tokens — all managed by project owners, without a ticket to ops.
+      Publishable and secret keys, scopes, expiry and rotation, CORS allow-lists, signed URLs and short-lived upload tokens. Project owners manage all of it, without filing a ticket with ops.
     </Feature>
     <Feature icon="list-format" title="Roles that match your organization">
       Admin, Manager, Developer and Editor across the platform; Owner, Developer and Editor per project. Everyone gets exactly the access they need, two-factor authentication can be required, and sensitive actions are audited.
@@ -99,7 +99,7 @@ import CtaBand from '../../components/landing/CtaBand.astro';
       Upload, organize in folders, tag, filter, set focal points, generate URLs and HTML snippets. Light and dark themes, English and French, built to WCAG 2.2 AA.
     </Feature>
     <Feature icon="open-book" title="An API documented from the code">
-      OpenAPI 3.1 specification generated from the routes, an interactive reference in the admin, and stable error codes in `application/problem+json`.
+      An OpenAPI 3.1 specification generated from the routes, an interactive reference in the admin, and stable error codes in `application/problem+json`.
     </Feature>
   </FeatureGrid>
 </Section>
@@ -111,7 +111,7 @@ import CtaBand from '../../components/landing/CtaBand.astro';
   lead="Stop copying uploads from production to staging and losing them in between. Every environment of every application consumes the same media, each with its own keys."
 >
   <EnvironmentsDiagram
-    caption="Your applications call one SurgeMedia instance, which runs on — and stores into — your own infrastructure."
+    caption="Your applications call one SurgeMedia instance, which runs on and stores to your own infrastructure."
     appsLabel="Your applications"
     apps={[
       { name: 'Development', detail: 'localhost:5173' },
@@ -184,7 +184,7 @@ https://media.example.com/m/k7d2m9qz/v3/w_800,h_450,g_focal,q_70/hero.avif
 }
 ```
 
-Fill in `{transform}` and `{format}` client-side to build any `srcset` — no extra request.
+Fill in `{transform}` and `{format}` client-side to build any `srcset`, with no extra request.
 
 </TabItem>
 </Tabs>
@@ -195,7 +195,7 @@ Fill in `{transform}` and `{format}` client-side to build any `srcset` — no ex
   id="install"
   eyebrow="Installation"
   title="Install it your way"
-  lead="One npm package, one Docker image. Pick the database that fits today — switch to PostgreSQL or MySQL when you grow."
+  lead="One npm package, one Docker image. Pick the database that fits today, and switch to PostgreSQL or MySQL as you grow."
 >
 
 <Tabs syncKey="install">
@@ -254,12 +254,12 @@ POSTGRES_PASSWORD='change-me' docker compose -f docker/compose.postgres.yaml up 
   />
   <LinkCard
     title="Roles and responsibilities"
-    description="Admins run the platform, managers run their projects, developers handle keys and integrations, editors handle content — with a role per project on top of the platform role."
+    description="Admins run the platform, managers run their projects, developers handle keys and integrations, editors handle content. Each user also gets a role per project, on top of their platform role."
     href="guides/roles/"
   />
   <LinkCard
     title="Private media and signed URLs"
-    description="Public or private per media. Private files are served only through expiring signed links or authenticated requests."
+    description="Each media file can be public or private. Private files are served only through expiring signed links or authenticated requests."
     href="guides/security/#private-media-and-signed-urls"
   />
   <LinkCard
@@ -279,11 +279,11 @@ POSTGRES_PASSWORD='change-me' docker compose -f docker/compose.postgres.yaml up 
 >
 
 <CardGrid>
-  <LinkCard title="@surge-media/vue" description="In development — responsive images, videos, uploads and pickers for Vue 3 and Nuxt. MIT." href="reference/sdks/" />
-  <LinkCard title="@surge-media/client" description="In development — the framework-free client for browsers, Node.js and edge runtimes. MIT." href="reference/sdks/#surge-mediaclient" />
-  <LinkCard title="@surge-media/react" description="Planned — the same components for React and Next.js." href="reference/sdks/" />
-  <LinkCard title="@surge-media/svelte" description="Planned — the same components for Svelte and SvelteKit." href="reference/sdks/" />
-  <LinkCard title="REST API v1" description="Available now — OpenAPI 3.1, any language, any framework." href="guides/architecture/" />
+  <LinkCard title="@surge-media/vue" description="In development: responsive images, videos, uploads and pickers for Vue 3 and Nuxt. MIT." href="reference/sdks/" />
+  <LinkCard title="@surge-media/client" description="In development: the framework-free client for browsers, Node.js and edge runtimes. MIT." href="reference/sdks/#surge-mediaclient" />
+  <LinkCard title="@surge-media/react" description="Planned: the same components for React and Next.js." href="reference/sdks/" />
+  <LinkCard title="@surge-media/svelte" description="Planned: the same components for Svelte and SvelteKit." href="reference/sdks/" />
+  <LinkCard title="REST API v1" description="Available now: OpenAPI 3.1, any language, any framework." href="guides/architecture/" />
 </CardGrid>
 
 </Section>
@@ -305,7 +305,7 @@ POSTGRES_PASSWORD='change-me' docker compose -f docker/compose.postgres.yaml up 
 
 <CtaBand
   title="Own your media pipeline, starting today."
-  text="Install SurgeMedia on your infrastructure in minutes. Free for development, testing and evaluation — for everyone."
+  text="Install SurgeMedia on your infrastructure in minutes. Development, testing and evaluation are free for everyone."
   primary={{ label: 'Get started', href: '/guides/getting-started/' }}
   secondary={{ label: 'Compare plans', href: '/pricing/' }}
 />
