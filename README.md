@@ -112,5 +112,11 @@ It is not an open source license. In short:
 This summary has no legal value: the [LICENSE](LICENSE) file is the only binding text. Commercial licenses and
 support: Surge Up, [licensing@surgeup.org](mailto:licensing@surgeup.org).
 
+**Using SurgeMedia for free?** We would love to hear about it. This is a request, not a condition of the license:
+tell us who you are (the optional **Register this instance** button in **Settings › License** prepares the e-mail
+for you), or mention SurgeMedia, with a link to this repository, where you credit the tools you use. In return you
+are notified of security advisories and major releases, your feedback weighs on the roadmap, and, only with your
+written agreement, your organization can be listed among SurgeMedia users.
+
 The front-end libraries `@surge-media/client` and `@surge-media/vue` are under the **MIT license** (the `LICENSE`
 file of each package): they are not part of the work covered by the Business Source License.
