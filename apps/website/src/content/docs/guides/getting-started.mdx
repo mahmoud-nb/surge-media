@@ -46,7 +46,7 @@ You can start on SQLite and move to PostgreSQL later: the database is selected b
    npm rebuild better-sqlite3 @prisma/engines
    ```
 
-3. Run the interactive setup. It asks for the database (SQLite, PostgreSQL or MySQL / MariaDB), the web server port (3000, or the next free port if another application already uses it) and the public URL, applies the migrations and generates the secrets into `.env`. It then asks how the instance will be used (evaluation, Community production or production under a commercial license): only a statement, nothing is sent, and “Later” skips it.
+3. Run the interactive setup. It asks for the database (SQLite, PostgreSQL or MySQL / MariaDB), the web server port (3000, or the next free port if another application already uses it) and the public URL, applies the migrations and generates the secrets in `.env`. It then asks how the instance will be used (evaluation, Community production or production under a commercial license). This is only a statement: nothing is sent, and “Later” skips the question.
 
    ```bash
    npx surge-media init
@@ -95,7 +95,7 @@ NUXT_SITE_URL=https://media.example.com \
 docker compose -f docker/compose.postgres.yaml up -d
 ```
 
-For MySQL or MariaDB, replace the `postgres` service and set `DATABASE_URL` to `mysql://…`. To publish another host port than 3000, add `SURGE_MEDIA_PORT=8080`.
+For MySQL or MariaDB, replace the `postgres` service and set `DATABASE_URL` to `mysql://…`. To publish a host port other than 3000, add `SURGE_MEDIA_PORT=8080`.
 
 </TabItem>
 </Tabs>
@@ -106,9 +106,9 @@ For MySQL or MariaDB, replace the `postgres` service and set `DATABASE_URL` to `
 
 1. Open the admin at your site URL and sign in with the bootstrap account (`NUXT_BOOTSTRAP_ADMIN_EMAIL` / `NUXT_BOOTSTRAP_ADMIN_PASSWORD`). It becomes the first **Admin**.
 2. Remove the bootstrap variables once the account exists, and invite your team from **Users**.
-3. Turn on **two-factor authentication** from **My account** (any authenticator app), then require it at least for administrators in **Settings › Security**. In **Settings › License**, check the declared use of the instance (a Docker installation declares it there).
-4. Create a **project** for your application, add its **allowed origins** (`https://www.acme.com`) and create its **API keys** — a publishable key for the browser, a secret key for your server.
-5. Upload a few media and copy their URLs, or call the API from your application.
+3. Turn on **two-factor authentication** from **My account** (any authenticator app), then require it at least for administrators in **Settings › Security**. In **Settings › License**, check the declared use of the instance (on a Docker installation, this is where you declare it).
+4. Create a **project** for your application, add its **allowed origins** (`https://www.acme.com`) and create its **API keys**: a publishable key for the browser, a secret key for your server.
+5. Upload a few media files and copy their URLs, or call the API from your application.
 
 </Steps>
 
@@ -131,10 +131,10 @@ The admin's **API documentation** page generates this `.env` snippet for your pr
 - **Your domain and TLS**: put SurgeMedia behind your reverse proxy (Nginx, Caddy, Traefik…) on a domain such as `media.your-company.com`, and set `NUXT_SITE_URL` to it. Behind a proxy, set `NUXT_TRUST_PROXY` so rate limits and audit logs see real client IPs.
 - **A CDN in front of `/m/`** (optional): public media are served with immutable cache headers.
 - **Backups**: back up the database and the media storage together (with Docker, the `/app/data` volume holds both for SQLite and local storage).
-- **Updates**: `npm install @surge-media/core@latest` then `npx surge-media db migrate`, or pull the new Docker image — migrations run at startup.
+- **Updates**: `npm install @surge-media/core@latest` then `npx surge-media db migrate`, or pull the new Docker image (migrations run at startup).
 
 <Aside type="tip" title="Licensing">
-  Development, testing and evaluation are free for everyone. Production use is free for organizations under USD 500,000 in annual revenue — see [pricing](../../pricing/).
+  Development, testing and evaluation are free for everyone. Production use is free for organizations under USD 500,000 in annual revenue. See [pricing](../../pricing/).
 </Aside>
 
 ## Next steps

@@ -6,7 +6,7 @@ related:
   - label: "Getting started"
     href: "/guides/getting-started/"
 ---
-Without installing anything, on the [public demo](https://demo.usesurgemedia.com): its sign-in page gives two shared accounts (administrator and editor), and everything is reset every two hours, so upload nothing personal.
+Without installing anything, on the [public demo](https://demo.usesurgemedia.com): its sign-in page lists two shared accounts (administrator and editor), and everything is reset every two hours, so upload nothing personal.
 
 On your own servers, in a few minutes, with Docker or npm. It is free for development, testing and evaluation, with no license key and no time limit:
 

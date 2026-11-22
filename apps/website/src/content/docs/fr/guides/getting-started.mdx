@@ -46,7 +46,7 @@ Vous pouvez commencer avec SQLite et passer à PostgreSQL plus tard : la base d
    npm rebuild better-sqlite3 @prisma/engines
    ```
 
-3. Lancez la configuration interactive. Elle demande la base de données (SQLite, PostgreSQL ou MySQL / MariaDB), le port du serveur web (3000, ou le prochain port libre si une autre application l’utilise déjà) et l’URL publique, applique les migrations et génère les secrets dans `.env`. Elle demande ensuite l’usage de l’instance (évaluation, production Community ou production sous licence commerciale) : une simple déclaration, rien n’est envoyé, et « Plus tard » la passe.
+3. Lancez la configuration interactive. Elle demande la base de données (SQLite, PostgreSQL ou MySQL / MariaDB), le port du serveur web (3000, ou le prochain port libre si une autre application l’utilise déjà) et l’URL publique, applique les migrations et génère les secrets dans `.env`. Elle demande ensuite l’usage de l’instance (évaluation, production Community ou production sous licence commerciale) : une simple déclaration, rien n’est envoyé, et « Plus tard » permet de passer la question.
 
    ```bash
    npx surge-media init
@@ -106,8 +106,8 @@ Pour MySQL ou MariaDB, remplacez le service `postgres` et donnez à `DATABASE_UR
 
 1. Ouvrez l’administration à l’adresse de votre site et connectez-vous avec le compte d’amorçage (`NUXT_BOOTSTRAP_ADMIN_EMAIL` / `NUXT_BOOTSTRAP_ADMIN_PASSWORD`). Il devient le premier **Administrateur**.
 2. Retirez les variables d’amorçage une fois le compte créé, puis invitez votre équipe depuis **Utilisateurs**.
-3. Activez la **double authentification** depuis **Mon compte** (avec n’importe quelle application d’authentification), puis rendez-la obligatoire au moins pour les administrateurs dans **Réglages › Sécurité**. Dans **Réglages › Licence**, vérifiez l’usage déclaré de l’instance (une installation Docker le déclare là).
-4. Créez un **projet** pour votre application, ajoutez ses **origines autorisées** (`https://www.acme.fr`) et créez ses **clés d’API** — une clé publique pour le navigateur, une clé secrète pour votre serveur.
+3. Activez la **double authentification** depuis **Mon compte** (avec n’importe quelle application d’authentification), puis rendez-la obligatoire au moins pour les administrateurs dans **Réglages › Sécurité**. Dans **Réglages › Licence**, vérifiez l’usage déclaré de l’instance (avec Docker, c’est là que vous le déclarez).
+4. Créez un **projet** pour votre application, ajoutez ses **origines autorisées** (`https://www.acme.fr`) et créez ses **clés d’API** (une clé publique pour le navigateur, une clé secrète pour votre serveur).
 5. Envoyez quelques médias et copiez leurs URL, ou appelez l’API depuis votre application.
 
 </Steps>
@@ -131,10 +131,10 @@ La page **Documentation de l’API** de l’administration génère ce fichier `
 - **Votre domaine et TLS** : placez SurgeMedia derrière votre mandataire inverse (Nginx, Caddy, Traefik…) sur un domaine comme `media.votre-entreprise.fr`, et renseignez-le dans `NUXT_SITE_URL`. Derrière un mandataire, réglez `NUXT_TRUST_PROXY` pour que les limites de débit et le journal d’audit voient les vraies adresses IP des clients.
 - **Un CDN devant `/m/`** (facultatif) : les médias publics sont servis avec des en-têtes de cache immuables.
 - **Sauvegardes** : sauvegardez ensemble la base de données et le stockage des médias (avec Docker, le volume `/app/data` contient les deux pour SQLite et le stockage local).
-- **Mises à jour** : `npm install @surge-media/core@latest` puis `npx surge-media db migrate`, ou récupérez la nouvelle image Docker — les migrations s’exécutent au démarrage.
+- **Mises à jour** : `npm install @surge-media/core@latest` puis `npx surge-media db migrate`, ou récupérez la nouvelle image Docker (les migrations s’exécutent alors au démarrage).
 
 <Aside type="tip" title="Licence">
-  Le développement, les tests et l’évaluation sont gratuits pour tout le monde. La production est gratuite pour les organisations sous 500 000 USD de chiffre d’affaires annuel — voir les [tarifs](../../pricing/).
+  Le développement, les tests et l’évaluation sont gratuits pour tout le monde. La production est gratuite pour les organisations sous 500 000 USD de chiffre d’affaires annuel. Voir les [tarifs](../../pricing/).
 </Aside>
 
 ## Et ensuite ?

@@ -12,7 +12,7 @@ Toute image se transforme par son URL de diffusion. La variante est générée �
 ```
 
 - **`<segment>`** est soit le nom d’un **préréglage** (`preview`, `full`, ou l’un des vôtres), soit une liste de **paramètres** `clé_valeur` séparés par des virgules.
-- **`<format>`** — l’extension — est le format de sortie : `jpg`, `png`, `webp` ou `avif` (`jpeg` redirige vers `jpg`).
+- **`<format>`** (l’extension) est le format de sortie : `jpg`, `png`, `webp` ou `avif` (`jpeg` redirige vers `jpg`).
 - **`<nom>`** est une version lisible du titre du média ; il n’influe pas sur le résultat.
 
 ```text
@@ -50,7 +50,7 @@ Les opérations s’exécutent toujours dans le même ordre : orientation EXIF 
 
 ## Préréglages
 
-Un préréglage donne un nom à une transformation (`card` = `w_600,h_400,q_75`). Les préréglages se définissent au niveau de l’installation (tous les projets) ou par projet, depuis l’administration. Modifier la définition d’un préréglage met à jour toutes les pages qui l’utilisent — sans changement de code ni redéploiement.
+Un préréglage donne un nom à une transformation (`card` = `w_600,h_400,q_75`). Les préréglages se définissent au niveau de l’installation (tous les projets) ou par projet, depuis l’administration. Modifier la définition d’un préréglage met à jour toutes les pages qui l’utilisent, sans changement de code ni redéploiement.
 
 ## Politiques et limites
 
@@ -70,4 +70,4 @@ Chaque projet choisit ce que les paramètres libres peuvent faire : `OPEN` (par
 | `403` | `TRANSFORM_NOT_ALLOWED` | La politique du projet refuse les paramètres libres pour cette requête. |
 | `404` | `PRESET_NOT_FOUND` | Préréglage inconnu. |
 | `429` | `TRANSFORM_QUOTA` | Trop de variantes pour ce média, ou trop de générations depuis cette adresse IP (`Retry-After`). |
-| `503` | `SERVER_BUSY` | File de traitement pleine — réessayez après `Retry-After` secondes. |
+| `503` | `SERVER_BUSY` | File de traitement pleine : réessayez après `Retry-After` secondes. |
