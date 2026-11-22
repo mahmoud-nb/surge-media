@@ -3,16 +3,16 @@ title: SDK et composants
 description: '@surge-media/vue et @surge-media/client : images responsives, vidéos et accès à l’API pour Vue 3 et Nuxt, sous licence MIT. L’API REST fonctionne avec tous les langages.'
 ---
 
-SurgeMedia est conçu « API d’abord » : tout ce que l’administration fait avec les médias, votre code peut le faire avec l’API REST v1. Les paquets front-end officiels réduisent les intégrations les plus courantes — images responsives, vidéos, envois, sélecteurs — à quelques lignes.
+SurgeMedia est conçu « API d’abord » : tout ce que l’administration fait avec les médias, votre code peut le faire avec l’API REST v1. Les paquets front-end officiels ramènent à quelques lignes les intégrations les plus courantes (images responsives, vidéos, envois, sélecteurs).
 
 ## Paquets
 
 | Paquet | Pour | Licence | État |
 | --- | --- | --- | --- |
 | `@surge-media/core` | Serveur : administration, API REST, diffusion, traitements | BUSL-1.1 | **Disponible** |
-| `@surge-media/client` | Tout environnement JavaScript : navigateur, Node.js, edge | MIT | En développement — première version 0.1 |
-| `@surge-media/vue` | Vue 3.5+, Nuxt compris | MIT | En développement — première version 0.1 |
-| `@surge-media/nuxt` | Module Nuxt (auto-imports, route des jetons) | MIT | Plus tard — Nuxt fonctionne dès aujourd’hui avec `@surge-media/vue` |
+| `@surge-media/client` | Tout environnement JavaScript : navigateur, Node.js, edge | MIT | En développement (première version 0.1) |
+| `@surge-media/vue` | Vue 3.5+, Nuxt compris | MIT | En développement (première version 0.1) |
+| `@surge-media/nuxt` | Module Nuxt (auto-imports, route des jetons) | MIT | Plus tard (Nuxt fonctionne dès aujourd’hui avec `@surge-media/vue`) |
 | `@surge-media/react` | React, Next.js | MIT | Prévu |
 | `@surge-media/svelte` | Svelte, SvelteKit | MIT | Prévu |
 
@@ -93,9 +93,9 @@ defineProps<{ hero: Media; gallery: Media[]; trailer: Media }>()
 | `SmMedia` | Choisit `SmImage` ou `SmVideo` selon le genre du média. |
 | `SmThumbnail` | Vignette carrée recadrée autour du point d’intérêt, durée d’une vidéo, pastille d’état du traitement. |
 | `SmProcessingStatus` | État du traitement d’une vidéo, avec barre de progression et annonces polies pour les lecteurs d’écran. |
-| `SmUploader` | Envoi d’images et de vidéos avec des jetons délégués : champ de fichier natif, dépôt, collage, contrôle avant l’envoi, progression, annulation, nouvel essai, capture de l’affiche — voir [Envoyer des fichiers](#envoyer-des-fichiers). |
+| `SmUploader` | Envoi d’images et de vidéos avec des jetons délégués : champ de fichier natif, dépôt, collage, contrôle avant l’envoi, progression, annulation, nouvel essai, capture de l’affiche (voir [Envoyer des fichiers](#envoyer-des-fichiers)). |
 
-Les composants respectent la politique de transformation du projet : en **préréglages seulement**, ils construisent leur `srcset` à partir des préréglages ; en **signées seulement**, aussi, sauf pour un média privé (ses URL sont déjà signées). Si un dérivé ne se charge pas, l’image se replie sur le fichier original, puis sur son texte alternatif.
+Les composants respectent la politique de transformation du projet : en **préréglages seulement**, ils construisent leur `srcset` à partir des préréglages ; en **signées seulement**, également à partir des préréglages, sauf pour un média privé (ses URL sont déjà signées). Si un dérivé ne se charge pas, l’image se replie sur le fichier original, puis sur son texte alternatif.
 
 `useMedia(id)` charge un média dans le navigateur, renouvelle les URL signées d’un média privé avant leur échéance et suit le traitement d’une vidéo jusqu’à ce qu’elle soit prête.
 
@@ -121,7 +121,7 @@ function onUploaded(media: Media) {
 - **Contrôle avant l’envoi** : types acceptés, taille maximale par type et envois restants viennent du jeton (`GET /me`) ; un fichier refusé est expliqué aussitôt, par exemple « Ce fichier est trop volumineux. Taille maximale : 25 Mo. ». Le serveur vérifie toujours le contenu.
 - **File d’envoi** : deux envois à la fois, progression par fichier, annulation, nouvel essai ; nouvel essai automatique après un `429`, un `503` ou une erreur réseau, 3 fois au plus.
 - **Vidéos** : une image d’affiche est capturée dans le navigateur pendant l’envoi, puis jointe à la vidéo.
-- **`details`** : titre et texte alternatif sont saisis avant l’envoi — un jeton d’envoi ne peut pas modifier un média ensuite. Sans cette option, les fichiers partent dès qu’ils sont choisis.
+- **`details`** : le titre et le texte alternatif sont saisis avant l’envoi, car un jeton d’envoi ne peut pas modifier un média ensuite. Sans cette option, les fichiers partent dès qu’ils sont choisis.
 - `visibility`, `chooseVisibility` et `folderId` décident où vont les fichiers, sauf si le jeton les impose ; `capture` (`user` ou `environment`) ouvre l’appareil photo sur mobile. Événements : `uploaded`, `error`, `done`.
 - Accessible : un champ de fichier natif avec un bouton visible (le dépôt et le collage ne font que s’y ajouter), contraintes reliées au champ, une annonce par fichier terminé.
 
@@ -167,13 +167,13 @@ curl -X POST \
 
 ### Thème et langues
 
-- `@surge-media/vue/style.css`, le thème du client (`@surge-media/client/style.css`) repris tel quel, est facultatif : sans lui, tailles, rapports et textes réservés aux lecteurs d’écran restent corrects. Il définit des jetons `--sm-*` (`--sm-color-primary`, `--sm-color-surface`, `--sm-radius`…) en clair et en sombre — le sombre suit la préférence du système, sauf si un ancêtre porte `.light` ou `[data-theme="light"]`, ou dès qu’il porte `.dark` ou `[data-theme="dark"]`. Tout est rangé dans la couche CSS `surge-media` : vos styles l’emportent toujours.
+- `@surge-media/vue/style.css`, le thème du client (`@surge-media/client/style.css`) repris tel quel, est facultatif : sans lui, tailles, rapports et textes réservés aux lecteurs d’écran restent corrects. Il définit des jetons `--sm-*` (`--sm-color-primary`, `--sm-color-surface`, `--sm-radius`…) en clair et en sombre. Le thème sombre suit la préférence du système, sauf si un ancêtre porte `.light` ou `[data-theme="light"]` ; il s’applique aussi dès qu’un ancêtre porte `.dark` ou `[data-theme="dark"]`. Tout est rangé dans la couche CSS `surge-media` : vos styles l’emportent toujours.
 - Le français (par défaut) et l’anglais sont intégrés. Passez `locale` (chaîne ou ref) et surchargez ou ajoutez des textes avec `messages: { fr: { video: { download: 'Télécharger' } } }`.
 - Les composants visent le niveau WCAG 2.2 AA : éléments natifs, accès au clavier, aucune lecture automatique, contrastes vérifiés dans les deux thèmes.
 
 ## @surge-media/client
 
-La couche sans framework sur laquelle reposent les composants — à utiliser directement en JavaScript, sur un serveur ou dans un autre framework :
+La couche sans framework sur laquelle reposent les composants. Utilisez-la directement en JavaScript, sur un serveur ou dans un autre framework :
 
 ```ts
 import {
@@ -201,7 +201,7 @@ const srcset = srcsetAttribute(widthCandidates(items[0], {
 }))
 ```
 
-Il gère la revalidation par ETag, le renouvellement des jetons délégués et les erreurs traduites (`SurgeApiError`), et construit les URL de transformation sous forme canonique — exactement celle qu’attend le serveur, donc sans redirection. `imageSourceSet()` calcule tous les attributs d’une image (`src`, `srcset`, `sizes`, `width`, `height`) d’après la politique du projet, et `imageSource()` les tire des propriétés d’un composant et des réglages du projet : c’est le cœur de tout composant d’image.
+Il gère la revalidation par ETag, le renouvellement des jetons délégués et les erreurs traduites (`SurgeApiError`), et construit les URL de transformation sous forme canonique (exactement celle qu’attend le serveur, donc sans redirection). `imageSourceSet()` calcule tous les attributs d’une image (`src`, `srcset`, `sizes`, `width`, `height`) d’après la politique du projet, et `imageSource()` les tire des propriétés d’un composant et des réglages du projet : c’est le cœur de tout composant d’image.
 
 Pour l’envoi, `client.media.upload()` envoie un fichier (avec sa progression dans un navigateur), `client.uploadRules()` lit les règles du jeton, `checkFile()` et `acceptAttribute()` les appliquent, et `createUploadQueue()` est la file sans framework sur laquelle repose `SmUploader`. Sur votre serveur, `@surge-media/client/server` émet les jetons délégués.
 
@@ -211,14 +211,14 @@ Pas encore de paquet pour votre framework (Angular, SolidJS, Qwik…) ? [Créez
 
 ## Tous les langages
 
-L’API est décrite par un document **OpenAPI 3.1** servi par votre instance sur `/api/v1/openapi.json` (`?lang=fr` ou `en`). Générez un client typé avec l’outil de votre choix — par exemple, en TypeScript :
+L’API est décrite par un document **OpenAPI 3.1** servi par votre instance sur `/api/v1/openapi.json` (`?lang=fr` ou `en`). Générez un client typé avec l’outil de votre choix, par exemple en TypeScript :
 
 ```bash
 npx openapi-typescript https://media.example.com/api/v1/openapi.json \
   -o surge-media.d.ts
 ```
 
-Les URL d’images ne demandent aucun SDK : remplacez `{transform}` et `{format}` dans le `urlTemplate` d’un média — voir [Transformations d’images](../image-transformations/).
+Les URL d’images ne demandent aucun SDK : remplacez `{transform}` et `{format}` dans le `urlTemplate` d’un média (voir [Transformations d’images](../image-transformations/)).
 
 ## Nuxt
 

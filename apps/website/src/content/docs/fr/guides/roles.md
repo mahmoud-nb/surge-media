@@ -1,9 +1,9 @@
 ---
 title: Rôles et responsabilités
-description: Rôles de plateforme (Administrateur, Gestionnaire, Développeur, Éditeur) et rôles de projet (Propriétaire, Développeur, Éditeur) — qui peut faire quoi dans SurgeMedia.
+description: Qui peut faire quoi dans SurgeMedia, avec les rôles de plateforme (Administrateur, Gestionnaire, Développeur, Éditeur) et les rôles de projet (Propriétaire, Développeur, Éditeur).
 ---
 
-SurgeMedia distingue deux niveaux de rôles : un **rôle de plateforme** pour chaque utilisateur, et un **rôle de projet** pour chaque projet dont il est membre. Ensemble, ils donnent à chacun exactement les accès dont il a besoin — et rien de plus.
+SurgeMedia distingue deux niveaux de rôles : un **rôle de plateforme** pour chaque utilisateur, et un **rôle de projet** pour chaque projet dont il est membre. Ensemble, ils donnent à chacun exactement les accès dont il a besoin, et rien de plus.
 
 ## Rôles de plateforme
 
@@ -22,10 +22,10 @@ SurgeMedia distingue deux niveaux de rôles : un **rôle de plateforme** pour c
 | Journal d’audit | ✓ | | | |
 | Réglages de l’installation (transformations, vidéo) | ✓ | | | |
 
-- **Administrateur** — pilote la plateforme : utilisateurs, bibliothèque, réglages, audit. Il est propriétaire de tous les projets.
-- **Gestionnaire** — pilote ses projets et ses équipes : crée des projets, invite des développeurs et des éditeurs, et est toujours propriétaire des projets dont il est membre.
-- **Développeur** — intègre : clés d’API, origines et médias des projets dont il est membre.
-- **Éditeur** — le rôle par défaut, au moindre privilège : envoie, range et décrit les médias.
+- L’**Administrateur** pilote la plateforme : utilisateurs, bibliothèque, réglages, audit. Il est propriétaire de tous les projets.
+- Le **Gestionnaire** pilote ses projets et ses équipes : il crée des projets, invite des développeurs et des éditeurs, et est toujours propriétaire des projets dont il est membre.
+- Le **Développeur** s’occupe de l’intégration : clés d’API, origines et médias des projets dont il est membre.
+- L’**Éditeur** a le rôle par défaut, celui du moindre privilège : il envoie, range et décrit les médias.
 
 ## Rôles de projet
 
@@ -42,9 +42,9 @@ Le rôle de plateforme fixe le **plafond** du rôle de projet : un Éditeur res
 
 ## Organisations types
 
-- **Équipe interne** — un Administrateur à la DSI, un Gestionnaire par gamme de produits, des Développeurs sur le projet de chaque produit, des Éditeurs au marketing.
-- **Agence** — l’Administrateur de l’agence, un projet par client, les équipes du client invitées comme Éditeurs sur leur seul projet.
-- **Groupe multimarque** — les éléments de marque communs dans la bibliothèque (lue par tous), un projet par marque ou par site.
+- **Équipe interne**. Un Administrateur à la DSI, un Gestionnaire par gamme de produits, des Développeurs sur le projet de chaque produit, des Éditeurs au marketing.
+- **Agence**. L’Administrateur de l’agence, un projet par client, les équipes du client invitées comme Éditeurs sur leur seul projet.
+- **Groupe multimarque**. Les éléments de marque communs dans la bibliothèque (lue par tous), un projet par marque ou par site.
 
 ## Voir aussi
 

@@ -12,4 +12,4 @@ A single Node.js application exposes three surfaces:
 - `/api/v1`: the REST API for your apps, authenticated with tokens;
 - `/m/…`: delivery of originals and transformations, cookie-free and CDN-ready.
 
-Video conversions run in separate worker processes, started from the same image. All the state lives in your SQL database and your storage: instances are interchangeable.
+Video conversions run in separate worker processes, started from the same image. All state lives in your SQL database and your storage: instances are interchangeable.

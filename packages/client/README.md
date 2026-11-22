@@ -12,16 +12,16 @@ upload files.
 
 - **Credentials**: a publishable key (`sm_pk_…`, public media) or delegated tokens (`sm_dt_…`) issued by your
   back end, renewed automatically before they expire. Secret keys never belong in a browser.
-- **Reads** with ETag revalidation (`304`), translated errors (`SurgeApiError`, French and English messages).
+- **Reads**: ETag revalidation (`304`) and translated errors (`SurgeApiError`, French and English messages).
 - **URLs**: canonical transformations (no redirect), `srcset` with the real size of each derivative, `<picture>`
   formats enabled on the server, focal point, video sources, posters and text tracks.
-- **Uploads**: the rules of the token (`uploadRules()`: accepted types, maximum sizes, uploads left), checks before
+- **Uploads**: the token's rules (`uploadRules()`: accepted types, maximum sizes, uploads left), checks before
   sending (`checkFile()`, `acceptAttribute()`), `media.upload()` with progress in browsers, and `createUploadQueue()`,
   a framework-free queue (concurrency, cancel, retry, poster captured from the video during the upload).
 - **Server entry** `@surge-media/client/server`: `createDelegatedToken()` issues delegated tokens with your secret
   key (`DISPLAY_SCOPES`, `UPLOAD_SCOPES`); it refuses to run in a browser and the main entry never imports it.
 - **Component logic** shared by every component library (Vue today, React and Svelte next, or your own): French
-  (default) and English texts (`createTranslate()`), icon paths (`ICONS`), image attributes and inline styles
+  (default) and English strings (`createTranslate()`), icon paths (`ICONS`), image attributes and inline styles
   (`imageSource()`, `pictureSources()`, `thumbnailSource()`, `imageStyle()`), alternative text and fallback steps,
   video poster and retry after a `503`, processing status, upload help and actions. Inline styles are camelCase
   objects (Vue and React) or text with `cssText()`.

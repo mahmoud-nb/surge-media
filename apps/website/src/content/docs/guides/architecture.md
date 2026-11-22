@@ -1,9 +1,9 @@
 ---
 title: Architecture & APIs
-description: How SurgeMedia works — a headless media back end with a REST API and URL-based delivery, running on your own infrastructure — and how real applications use it.
+description: How SurgeMedia works (a headless media back end with a REST API and URL-based delivery, running on your own infrastructure) and how real applications use it.
 ---
 
-SurgeMedia separates **where your media lives** from **where your media is used**. It is a _headless_ media back end: it imposes no front end, no template and no CMS. Your websites, mobile apps, back-offices and partners consume media over HTTP — from one instance you host, under your own domain.
+SurgeMedia separates **where your media lives** from **where your media is used**. It is a _headless_ media back end: it imposes no front end, no template and no CMS. Your websites, mobile apps, back-offices and partners consume media over HTTP, from a single instance that you host under your own domain.
 
 ## The big picture
 
@@ -31,7 +31,7 @@ One process serves everything by default. When video traffic grows, video proces
 
 | Concept | What it is | Why it matters |
 | --- | --- | --- |
-| **Library** | A shared media space managed by administrators. | Brand assets, logos, shared visuals — read by every team. |
+| **Library** | A shared media space managed by administrators. | Brand assets, logos and shared visuals, read by every team. |
 | **Project** | A media space for one application, product or client, with its members, keys, allowed origins and transformation policy. | Clean separation between applications; the unit of access control. |
 | **Media** | An image or a video, **versioned** (`v1`, `v2`…). Replacing the file creates a new version and new URLs. | Caches never serve a stale file, and you never need to purge a CDN. |
 | **Folders** | A tree inside a project or the library. | Editors organize; the API filters by folder. |
@@ -39,7 +39,7 @@ One process serves everything by default. When video traffic grows, video proces
 | **Presets** | Named transformations (`card`, `og-image`…) at installation or project level. | Change a format everywhere by editing one preset. |
 | **Credentials** | Project keys, personal tokens and delegated tokens, each with scopes. | Every request is attributable and limited to what it needs. |
 
-A media item belongs to exactly one space: the library or a project. In the admin, the **Media** page still brings together the library and every project you can access: you search and filter across all of them at once, and each item shows its space. To file into folders, tag in bulk or see the trash, you open a space; an upload always goes to a specific space that you choose.
+A media item belongs to exactly one space: the library or a project. The **Media** page in the admin, however, brings together the library and every project you can access: you can search and filter across all of them at once, and each item shows which space it belongs to. To organize media into folders, tag in bulk or view the trash, you open a space. An upload always goes to a specific space that you choose.
 
 ## Two planes: management and delivery
 
@@ -47,7 +47,7 @@ A media item belongs to exactly one space: the library or a project. In the admi
 
 A versioned JSON REST API to list, search, upload, update, organize and sign media.
 
-- **Authentication** with a `Bearer` token in the `Authorization` header — never in the URL.
+- **Authentication** with a `Bearer` token in the `Authorization` header, never in the URL.
 - **Scopes** per credential: `project:read`, `media:read`, `media:upload`, `media:write`, `media:delete`, `tags:manage`.
 - **CORS per project**: only the origins you allow (`https://www.acme.com`, `https://*.acme.com`) can call the API from a browser.
 - **Predictable**: cursor pagination (`limit`, `cursor` → `nextCursor`), `ETag` / `304 Not Modified`, `RateLimit` headers, and errors in `application/problem+json` with a stable `code` and an `X-Request-Id`.
@@ -55,7 +55,7 @@ A versioned JSON REST API to list, search, upload, update, organize and sign med
 
 ### The delivery plane — `/m/…`
 
-Every media has stable, cookieless, CDN-friendly URLs:
+Every media item has stable, cookieless, CDN-friendly URLs:
 
 ```text
 /m/<id>/v<version>/<name>.<ext>                       the original
@@ -82,7 +82,7 @@ The examples below use `https://media.example.com` as the SurgeMedia instance an
 
 ### 1. Product pages that load fast everywhere
 
-An e-commerce site lists the photos of a product and renders responsive images — the same code in development, staging and production.
+An e-commerce site lists the photos of a product and renders responsive images, with the same code in development, staging and production.
 
 ```ts
 // Server side (Node, Next.js, Nuxt…): the secret key never reaches the browser.
@@ -119,13 +119,13 @@ curl -X POST "https://media.example.com/api/v1/projects/$PROJECT/delegated-token
 # → 201 { "token": "sm_dt_…", "expiresAt": "…", "scopes": ["media:upload"] }
 ```
 
-The browser then uploads directly to `POST /api/v1/projects/$PROJECT/media` with that token. File type (detected from the content, not the extension), size and count are enforced by SurgeMedia; the token expires on its own and dies immediately if the issuing key is revoked.
+The browser then uploads directly to `POST /api/v1/projects/$PROJECT/media` with that token. SurgeMedia enforces the file type (detected from the content, not the extension), size and count. The token expires on its own and stops working immediately if the issuing key is revoked.
 
 **Business impact:** no upload traffic through your application servers, no long-lived secret in the browser, and every file traceable to the seller who sent it.
 
 ### 3. Private media for members only
 
-An HR portal or a premium content site stores media as **private**. When a member opens a page, your server requests short-lived signed links — up to 100 in one call:
+An HR portal or a premium content site stores media as **private**. When a member opens a page, your server requests short-lived signed links, up to 100 in one call:
 
 ```bash
 curl -X POST "https://media.example.com/api/v1/projects/$PROJECT/signed-urls" \
@@ -144,17 +144,17 @@ Every environment of an application uses the **same project** with its own keys,
 
 ### 5. Video that just plays
 
-Upload an MP4 or a MOV: SurgeMedia moves the index to the front for instant playback, removes GPS location tracks, extracts a poster image and accepts WebVTT or SRT subtitles. With FFmpeg enabled, it also produces H.264 and AV1 renditions — returned in the `sources` array of the media, ready for a `<video>` element.
+Upload an MP4 or a MOV: SurgeMedia moves the index to the front for instant playback, removes GPS location tracks, extracts a poster image and accepts WebVTT or SRT subtitles. With FFmpeg enabled, it also produces H.264 and AV1 renditions. They are returned in the media item's `sources` array, ready for a `<video>` element.
 
 ## Performance and scaling
 
 - **Generated once, served forever**: a transformation runs on the first request, then the file is stored and served with immutable caching. Equivalent requests share the same file.
 - **Bounded work**: image processing runs in a bounded queue; under pressure, SurgeMedia answers `503` with `Retry-After` instead of collapsing.
-- **Horizontal video processing**: FFmpeg jobs live in a persistent queue processed by one or more workers, out of the request path.
+- **Horizontal video processing**: FFmpeg jobs live in a persistent queue processed by one or more workers, off the request path.
 - **Database of your choice**: SQLite for a single server, PostgreSQL or MySQL / MariaDB for several instances behind a load balancer.
 
 ## Next steps
 
 - [Install SurgeMedia](../getting-started/) in a few minutes.
 - [Secure your integration](../security/) with the right credential for each context.
-- [Choose a plan](../../pricing/) — free under USD 500k annual revenue.
+- [Choose a plan](../../pricing/): free under USD 500k in annual revenue.

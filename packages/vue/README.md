@@ -11,18 +11,18 @@ Vue 3 components for [SurgeMedia](https://github.com/mahmoud-nb/surge-media), th
 
 - **`SmImage`** and **`SmPicture`**: responsive images (`srcset` with real widths or densities, AVIF / WebP with a
   fallback), server-side crop around the focal point, presets when the project only allows presets, fallback to the
-  original file then to the alternative text.
+  original file, then to the alternative text.
 - **`SmVideo`**: the browser's native player with the server's playback sources (AV1, H.264, original), poster and
   captions, no autoplay (an `ambient` mode loops a muted video with a pause button), processing status while the
   server prepares the video.
-- **`SmUploader`**: uploads with delegated tokens (`media:upload`) — native file input, drag and drop, paste, checks
-  before sending from the rules of the token, progress, cancel, retry, poster captured from videos, title and
-  alternative text typed before the upload (`details`); `useUploadQueue()` and `useUploadRules()` for your own UI.
+- **`SmUploader`**: uploads with delegated tokens (`media:upload`). Native file input, drag and drop, paste, checks
+  against the token's rules before sending, progress, cancel, retry, poster captured from videos, title and
+  alternative text entered before the upload (`details`); `useUploadQueue()` and `useUploadRules()` for your own UI.
 - **`SmMedia`**, **`SmThumbnail`**, **`SmProcessingStatus`**, `useMedia()`.
-- Server-side rendering, French (default) and English texts, WCAG 2.2 AA, optional theme (`--sm-*` tokens, light
+- Server-side rendering, French (default) and English strings, WCAG 2.2 AA, optional theme (`--sm-*` tokens, light
   and dark) in a CSS layer your styles always override.
 - Built on [`@surge-media/client`](https://www.npmjs.com/package/@surge-media/client), which holds the
-  framework-free logic (texts, URLs, inline styles, states) and the theme: the same base for your own components.
+  framework-free logic (strings, URLs, inline styles, states) and the theme: the same base for your own components.
 
 Requires Vue 3.5 or later.
 

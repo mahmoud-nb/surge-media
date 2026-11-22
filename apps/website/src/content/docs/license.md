@@ -27,6 +27,19 @@ SurgeMedia is distributed under the **Business Source License 1.1** (SPDX identi
 
 The front-end packages **`@surge-media/client`** and **`@surge-media/vue`** are distributed under the **MIT License**: use, modify and ship them in any project, commercial or not, whatever your revenue. They are not part of the Licensed Work covered by the Business Source License, which applies to the SurgeMedia server (`@surge-media/core`) they connect to.
 
+## Free use: a request, not a condition
+
+If you use SurgeMedia for free, we would love to hear about it. It is what keeps the project going. **This is not a condition of the license**: forgetting it, or not being able to do it (confidentiality, internal tools…), never affects your right to use SurgeMedia.
+
+- **Tell us who you are.** The optional **Register this instance** button in **Settings › License** prepares an e-mail that you review and send yourself; SurgeMedia never sends anything on its own. You can also simply [write to us](mailto:licensing@surgeup.org?subject=We%20use%20SurgeMedia).
+- **Mention SurgeMedia** wherever you credit the tools you use (credits page, documentation, blog post, conference talk), with a link to [usesurgemedia.com](https://usesurgemedia.com/).
+
+In return:
+
+- you are notified of **security advisories and major releases**;
+- your feedback **weighs on the roadmap**;
+- with your **written agreement only**, your organization can be listed among SurgeMedia users. We never publish a name or a logo without it.
+
 ## Questions
 
 The [pricing FAQ](../pricing/#faq) answers the most common questions. For alternative licensing arrangements, [contact us](mailto:licensing@surgeup.org?subject=SurgeMedia%20license).

@@ -9,4 +9,4 @@ related:
 ---
 With the `surge-media import` command, included for free. It reads your files from a directory, an S3 bucket (AWS, R2, MinIO, Scaleway…) or a list of URLs exported from your database, and uploads them to a project through the API: same checks, same previews, same video processing as any upload.
 
-The import is resumable and never creates the same media item twice. It writes a mapping table (old address → media ID → new URL) to rewrite the URLs stored in your database, and can generate the 301 redirects of the old addresses for nginx, Caddy, Apache or Cloudflare. Files are copied, never moved: your former storage stays untouched until you decide to remove it.
+The import is resumable and never creates the same media item twice. It writes a mapping table (old address → media ID → new URL) to rewrite the URLs stored in your database, and can generate 301 redirects from the old addresses for nginx, Caddy, Apache or Cloudflare. Files are copied, never moved: your former storage stays untouched until you decide to remove it.

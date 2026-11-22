@@ -1,13 +1,13 @@
 ---
 title: Sécurité et contrôle d’accès
-description: Identifiants, portées, origines autorisées, URL signées, politiques de transformation et journal d’audit — comment SurgeMedia garde vos médias et votre API sous contrôle.
+description: Identifiants, portées, origines autorisées, URL signées, politiques de transformation et journal d’audit, ou comment SurgeMedia garde vos médias et votre API sous contrôle.
 ---
 
 SurgeMedia est conçu pour que **chaque requête soit attribuable et limitée au strict nécessaire**. Les responsables de projet gèrent eux-mêmes les accès depuis l’administration, sans toucher à la configuration du serveur.
 
 ## Identifiants
 
-Chaque identifiant appartient à un projet (ou à un utilisateur, pour les jetons personnels), porte des **portées**, et peut être révoqué à tout moment — avec effet immédiat.
+Chaque identifiant appartient à un projet (ou à un utilisateur, pour les jetons personnels), porte des **portées**, et peut être révoqué à tout moment, avec effet immédiat.
 
 | Identifiant | Préfixe | À utiliser pour | À ne jamais utiliser pour |
 | --- | --- | --- | --- |
@@ -32,7 +32,7 @@ Les identifiants n’obtiennent jamais d’autres portées de gestion : membres
 
 ### Cycle de vie
 
-- **Échéance** : les clés secrètes durent 30, 90 ou 365 jours, ou n’expirent jamais — selon votre politique.
+- **Échéance** : les clés secrètes durent 30, 90 ou 365 jours, ou n’expirent jamais, selon votre politique.
 - **Rotation** : une nouvelle clé remplace l’ancienne avec le même nom, le même environnement et les mêmes portées ; l’ancienne peut continuer à fonctionner pendant une **période de chevauchement**, le temps de déployer.
 - **Révocation** : immédiate, elle invalide aussi tous les jetons délégués émis par la clé.
 - **Environnements** : chaque clé porte une étiquette d’environnement (`production`, `staging`, `development`…), affichée et regroupée dans l’administration.
@@ -68,7 +68,7 @@ Pour maîtriser ce qui peut être généré sur vos serveurs, chaque projet (et 
 | --- | --- | --- |
 | `OPEN` (par défaut) | Acceptées, dans les limites | Sites publics qui construisent leurs `srcset` côté client. |
 | `SIGNED` | Seulement avec une URL signée ou un identifiant d’API | Installations exposées à fort trafic. |
-| `PRESETS` | Refusées — préréglages nommés uniquement | Contrôle exact des fichiers générés. |
+| `PRESETS` | Refusées (préréglages nommés uniquement) | Contrôle exact des fichiers générés. |
 
 Dans tous les cas, les sorties sont plafonnées (4 096 px par défaut), les images ne sont jamais agrandies, le nombre de variantes par version de média est limité et les générations non signées sont limitées par adresse IP.
 
@@ -82,7 +82,7 @@ Dans tous les cas, les sorties sont plafonnées (4 096 px par défaut), les imag
 
 ## Journal d’audit
 
-Les administrateurs disposent d’un **journal d’audit** filtrable des actions sensibles — changements de projets et de membres, création, rotation et révocation des clés et jetons, réglages des transformations, changements de visibilité des médias, déplacements et suppressions définitives — avec l’auteur, le projet, l’identifiant utilisé et le contexte. Les médias envoyés par l’API conservent la trace de l’identifiant et de l’utilisateur final (`subject`) qui les a envoyés.
+Les administrateurs disposent d’un **journal d’audit** filtrable des actions sensibles (changements de projets et de membres, création, rotation et révocation des clés et jetons, réglages des transformations, changements de visibilité des médias, déplacements et suppressions définitives), avec l’auteur, le projet, l’identifiant utilisé et le contexte. Les médias envoyés par l’API conservent la trace de l’identifiant et de l’utilisateur final (`subject`) qui les a envoyés.
 
 ## Limites de débit et résilience
 
@@ -93,9 +93,9 @@ Les administrateurs disposent d’un **journal d’audit** filtrable des actions
 
 ## Chaîne d’approvisionnement
 
-- Les dépendances sont auditées à chaque modification, chaque lundi et avant chaque version, et l’image Docker est analysée avant d’être publiée : une faille élevée ou critique dans ce qui est livré bloque la publication, sauf exception écrite et limitée dans le temps qui explique pourquoi elle ne s’applique pas.
+- Les dépendances sont auditées à chaque modification, chaque lundi et avant chaque version, et l’image Docker est analysée avant d’être publiée : une faille de gravité élevée ou critique dans ce qui est livré bloque la publication, sauf exception écrite et limitée dans le temps qui explique pourquoi elle ne s’applique pas.
 - Les GitHub Actions tierces sont épinglées par empreinte de commit, les nouveaux commits sont examinés à la recherche de secrets, et les workflows de publication ne partagent aucun cache de build avec les autres.
-- Chaque version est accompagnée de SBOM (images et paquet npm) et d’empreintes. Les vérifier : la [politique de sécurité](https://github.com/mahmoud-nb/surge-media/blob/main/SECURITY.md#supply-chain).
+- Chaque version est accompagnée de SBOM (images et paquet npm) et d’empreintes. Comment les vérifier : la [politique de sécurité](https://github.com/mahmoud-nb/surge-media/blob/main/SECURITY.md#supply-chain).
 
 ## Voir aussi
 
