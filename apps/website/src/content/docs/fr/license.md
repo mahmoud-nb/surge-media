@@ -31,8 +31,8 @@ Les paquets front-end **`@surge-media/client`** et **`@surge-media/vue`** sont d
 
 Si vous utilisez SurgeMedia gratuitement, nous aimerions le savoir : c’est ce qui fait vivre le projet. **Ce n’est pas une condition de la licence** : l’oublier, ou ne pas pouvoir le faire (confidentialité, outil interne…), ne remet jamais en cause votre droit d’utiliser SurgeMedia.
 
-- **Faites-vous connaître** — le bouton facultatif **Enregistrer cette instance**, dans **Réglages › Licence**, prépare un e-mail que vous relisez et envoyez vous-même ; SurgeMedia n’envoie jamais rien de lui-même. Vous pouvez aussi simplement [nous écrire](mailto:licensing@surgeup.org?subject=Nous%20utilisons%20SurgeMedia).
-- **Mentionnez SurgeMedia** — là où vous citez les outils que vous utilisez (page de crédits, documentation, article, conférence), avec un lien vers [usesurgemedia.com](https://usesurgemedia.com/).
+- **Faites-vous connaître.** Le bouton facultatif **Enregistrer cette instance**, dans **Réglages › Licence**, prépare un e-mail que vous relisez et envoyez vous-même ; SurgeMedia n’envoie jamais rien de lui-même. Vous pouvez aussi simplement [nous écrire](mailto:licensing@surgeup.org?subject=Nous%20utilisons%20SurgeMedia).
+- **Mentionnez SurgeMedia** là où vous citez les outils que vous utilisez (page de crédits, documentation, article, conférence), avec un lien vers [usesurgemedia.com](https://usesurgemedia.com/).
 
 En retour :
 

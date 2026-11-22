@@ -29,10 +29,10 @@ The front-end packages **`@surge-media/client`** and **`@surge-media/vue`** are 
 
 ## Free use: a request, not a condition
 
-If you use SurgeMedia for free, we would love to hear about it — it is what keeps the project going. **This is not a condition of the license**: forgetting it, or not being able to do it (confidentiality, internal tools…), never affects your right to use SurgeMedia.
+If you use SurgeMedia for free, we would love to hear about it. It is what keeps the project going. **This is not a condition of the license**: forgetting it, or not being able to do it (confidentiality, internal tools…), never affects your right to use SurgeMedia.
 
-- **Tell us who you are** — the optional **Register this instance** button in **Settings › License** prepares an e-mail that you review and send yourself; SurgeMedia never sends anything on its own. You can also simply [write to us](mailto:licensing@surgeup.org?subject=We%20use%20SurgeMedia).
-- **Mention SurgeMedia** — where you credit the tools you use (credits page, documentation, blog post, conference talk), with a link to [usesurgemedia.com](https://usesurgemedia.com/).
+- **Tell us who you are.** The optional **Register this instance** button in **Settings › License** prepares an e-mail that you review and send yourself; SurgeMedia never sends anything on its own. You can also simply [write to us](mailto:licensing@surgeup.org?subject=We%20use%20SurgeMedia).
+- **Mention SurgeMedia** wherever you credit the tools you use (credits page, documentation, blog post, conference talk), with a link to [usesurgemedia.com](https://usesurgemedia.com/).
 
 In return:
 
